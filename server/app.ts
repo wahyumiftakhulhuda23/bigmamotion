@@ -7,7 +7,7 @@ dotenv.config();
 export function getClient(apiKey?: string) {
   const key = (apiKey && apiKey.trim().length > 0) ? apiKey.trim() : process.env.GEMINI_API_KEY;
   if (!key) {
-    throw new Error("API Key tidak ditemukan. Mohon atur GEMINI_API_KEY di Secrets/Environment Variables atau masukkan API Key di menu Header.");
+    throw new Error("API Key tidak ditemukan. Mohon masukkan API Key Anda di menu Header (ikon Kunci).");
   }
   return new GoogleGenAI({
     apiKey: key,
@@ -141,231 +141,236 @@ export function extractHTMLFromMarkdown(text: string): string {
   return cleanHTML.trim();
 }
 
-export function createApiRouter(): Router {
-  const router = Router();
-
-  // Health / Status Check
-  router.get("/health", (_req: Request, res: Response) => {
-    res.json({
-      status: "ok",
-      hasServerKey: !!process.env.GEMINI_API_KEY,
-      defaultModel: "gemini-2.5-flash"
-    });
-  });
-
-  // Test API Keys
-  router.post("/gemini/test-keys", async (req: Request, res: Response) => {
+export function parseSafeBody(req: Request | any): any {
+  if (!req) return {};
+  if (typeof req.body === "object" && req.body !== null) {
+    return req.body;
+  }
+  if (typeof req.body === "string" && req.body.trim().length > 0) {
     try {
-      const { keys } = req.body;
-      if (!Array.isArray(keys) || keys.length === 0) {
-        return res.status(400).json({ error: "Daftar API key kosong" });
-      }
-
-      const results = await Promise.all(
-        keys.map(async (rawKey: string) => {
-          const key = (rawKey || "").trim();
-          const maskedKey =
-            key.length > 10
-              ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}`
-              : key;
-          const start = Date.now();
-
-          if (!key) {
-            return {
-              key,
-              maskedKey: "(kosong)",
-              valid: false,
-              error: "Key tidak boleh kosong",
-              latencyMs: 0,
-            };
-          }
-
-          if (!key.startsWith("AIza") && key.length < 25) {
-            return {
-              key,
-              maskedKey,
-              valid: false,
-              error: "Format salah (umumnya diawali 'AIza...')",
-              latencyMs: Date.now() - start,
-            };
-          }
-
-          try {
-            const ai = new GoogleGenAI({
-              apiKey: key,
-              httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-            });
-
-            const countPromise = ai.models.countTokens({
-              model: "gemini-2.5-flash",
-              contents: "ping",
-            });
-
-            const timeoutPromise = new Promise((_, reject) =>
-              setTimeout(() => reject(new Error("Timeout (koneksi lambat > 3.5s)")), 3500)
-            );
-
-            await Promise.race([countPromise, timeoutPromise]);
-            return {
-              key,
-              maskedKey,
-              valid: true,
-              latencyMs: Date.now() - start,
-            };
-          } catch (e: any) {
-            let msg = e.message || "Gagal verifikasi";
-            if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid")) {
-              msg = "API Key tidak valid atau salah";
-            } else if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-              msg = "Rate limit / kuota habis";
-            } else if (msg.includes("PERMISSION_DENIED")) {
-              msg = "Izin ditolak untuk project ini";
-            }
-            return {
-              key,
-              maskedKey,
-              valid: false,
-              error: msg,
-              latencyMs: Date.now() - start,
-            };
-          }
-        })
-      );
-
-      const validCount = results.filter((r) => r.valid).length;
-      res.json({ results, validCount, total: keys.length });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || "Gagal menguji API key" });
+      return JSON.parse(req.body);
+    } catch {
+      return {};
     }
-  });
+  }
+  return {};
+}
 
-  // Generate Microstock Prompts
-  router.post("/gemini/generate-prompts", async (req: Request, res: Response) => {
-    try {
-      const { apiKey, model, type = "icon", subCategory = "teknologi", style = "minimalist", count = 3 } = req.body;
-      const ai = getClient(apiKey);
-      const targetModel = sanitizeModel(model);
+// Logic for testing a list of API keys
+export async function handleTestKeysLogic(keysInput: any) {
+  let keys: string[] = [];
+  if (Array.isArray(keysInput)) {
+    keys = keysInput;
+  } else if (typeof keysInput === "string") {
+    keys = [keysInput];
+  }
 
-      let typeInstruction = '';
-      if (type === 'icon') {
-        typeInstruction = 'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision.';
-      } else if (type === 'text') {
-        typeInstruction = "Every prompt must include a bold catchy main text slogan with glowing aura effects, particles, and energy lines.";
-      } else if (type === 'bg') {
-        typeInstruction = 'Every prompt must describe an elegant looping motion background concept (no text), harmonious gradients, particles or geometric waves.';
+  if (keys.length === 0) {
+    return { results: [], validCount: 0, total: 0 };
+  }
+
+  const results = await Promise.all(
+    keys.map(async (rawKey: string) => {
+      const key = (rawKey || "").trim();
+      const maskedKey =
+        key.length > 10
+          ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}`
+          : key;
+      const start = Date.now();
+
+      if (!key) {
+        return {
+          key,
+          maskedKey: "(kosong)",
+          valid: false,
+          error: "Key tidak boleh kosong",
+          latencyMs: 0,
+        };
       }
 
-      const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
+      if (!key.startsWith("AIza") && key.length < 25) {
+        return {
+          key,
+          maskedKey,
+          valid: false,
+          error: "Format salah (umumnya diawali 'AIza...')",
+          latencyMs: Date.now() - start,
+        };
+      }
+
+      try {
+        const ai = new GoogleGenAI({
+          apiKey: key,
+          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+        });
+
+        let timerId: any = null;
+        const timeoutPromise = new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 6s)")), 6000);
+        });
+
+        // Use countTokens as lightweight verification, catch internally to avoid unhandled rejection
+        const verifyPromise = ai.models.countTokens({
+          model: "gemini-2.5-flash",
+          contents: "ping",
+        });
+
+        try {
+          await Promise.race([verifyPromise, timeoutPromise]);
+          return {
+            key,
+            maskedKey,
+            valid: true,
+            latencyMs: Date.now() - start,
+          };
+        } finally {
+          if (timerId) clearTimeout(timerId);
+        }
+      } catch (e: any) {
+        let msg = cleanErrorMessage(e) || "Gagal verifikasi";
+        if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid")) {
+          msg = "API Key tidak valid atau salah";
+        } else if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
+          msg = "Rate limit / kuota habis";
+        } else if (msg.includes("PERMISSION_DENIED")) {
+          msg = "Izin ditolak untuk project ini";
+        }
+        return {
+          key,
+          maskedKey,
+          valid: false,
+          error: msg,
+          latencyMs: Date.now() - start,
+        };
+      }
+    })
+  );
+
+  const validCount = results.filter((r) => r.valid).length;
+  return { results, validCount, total: keys.length };
+}
+
+// Logic for generating prompts
+export async function handleGeneratePromptsLogic(body: any) {
+  const { apiKey, model, type = "icon", subCategory = "teknologi", style = "minimalist", count = 3 } = body;
+  const ai = getClient(apiKey);
+  const targetModel = sanitizeModel(model);
+
+  let typeInstruction = '';
+  if (type === 'icon') {
+    typeInstruction = 'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision.';
+  } else if (type === 'text') {
+    typeInstruction = "Every prompt must include a bold catchy main text slogan with glowing aura effects, particles, and energy lines.";
+  } else if (type === 'bg') {
+    typeInstruction = 'Every prompt must describe an elegant looping motion background concept (no text), harmonious gradients, particles or geometric waves.';
+  }
+
+  const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
 Category: ${subCategory}
 Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}
 Special Directive: ${typeInstruction}
 Requirement: Focus strictly on the central geometric object, color palette (neon/glow/cyber/gold), and smooth motion.`;
 
-      const { response } = await generateContentWithFallback(
-        ai,
-        targetModel,
-        (currentModel) => {
-          const config: any = {
-            temperature: 0.75,
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.STRING,
-              },
-            },
-          };
-          const thinkingConfig = getFastThinkingConfig(currentModel);
-          if (thinkingConfig) {
-            config.thinkingConfig = thinkingConfig;
-          }
-          return { contents: promptContent, config };
-        }
-      );
-
-      const rawText = (response.text || "").trim();
-      let prompts: string[] = [];
-
-      try {
-        const parsed = JSON.parse(rawText);
-        if (Array.isArray(parsed)) {
-          prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
-        }
-      } catch {
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            prompts = JSON.parse(jsonMatch[0]);
-          } catch {
-            prompts = rawText
-              .split('\n')
-              .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-              .filter((p) => p.length > 4);
-          }
-        } else {
-          prompts = rawText
-            .split('\n')
-            .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-            .filter((p) => p.length > 4);
-        }
+  const { response } = await generateContentWithFallback(
+    ai,
+    targetModel,
+    (currentModel) => {
+      const config: any = {
+        temperature: 0.75,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.STRING,
+          },
+        },
+      };
+      const thinkingConfig = getFastThinkingConfig(currentModel);
+      if (thinkingConfig) {
+        config.thinkingConfig = thinkingConfig;
       }
-
-      if (prompts.length === 0) {
-        prompts = [
-          `Glowing neon ${subCategory} ${type} with smooth pulse`,
-          `Dynamic cyber ${style} ${subCategory} animation loop`,
-          `Minimalist geometric ${subCategory} motion with particle trails`,
-        ];
-      }
-
-      res.json({ prompts: prompts.slice(0, count) });
-    } catch (err: any) {
-      console.error("Error generating prompts:", err);
-      res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menghasilkan prompt" });
+      return { contents: promptContent, config };
     }
-  });
+  );
 
-  // Generate Single HTML5 Animation Code
-  router.post("/gemini/generate-animation", async (req: Request, res: Response) => {
-    try {
-      const {
-        apiKey,
-        model,
-        promptTopic,
-        type = "icon",
-        subCategory = "teknologi",
-        style = "minimalist",
-        index = 1,
-        total = 1,
-      } = req.body;
+  const rawText = (response.text || "").trim();
+  let prompts: string[] = [];
 
-      if (!promptTopic) {
-        return res.status(400).json({ error: "Prompt topic wajib diisi" });
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) {
+      prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
+    }
+  } catch {
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      try {
+        prompts = JSON.parse(jsonMatch[0]);
+      } catch {
+        prompts = rawText
+          .split('\n')
+          .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
+          .filter((p) => p.length > 4);
       }
+    } else {
+      prompts = rawText
+        .split('\n')
+        .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
+        .filter((p) => p.length > 4);
+    }
+  }
 
-      const ai = getClient(apiKey);
-      const targetModel = sanitizeModel(model);
+  if (prompts.length === 0) {
+    prompts = [
+      `Glowing neon ${subCategory} ${type} with smooth pulse`,
+      `Dynamic cyber ${style} ${subCategory} animation loop`,
+      `Minimalist geometric ${subCategory} motion with particle trails`,
+    ];
+  }
 
-      let typeInstructions = '';
-      if (type === 'icon') {
-        typeInstructions = `
+  return { prompts: prompts.slice(0, count) };
+}
+
+// Logic for generating animation HTML
+export async function handleGenerateAnimationLogic(body: any) {
+  const {
+    apiKey,
+    model,
+    promptTopic,
+    type = "icon",
+    subCategory = "teknologi",
+    style = "minimalist",
+    index = 1,
+    total = 1,
+  } = body;
+
+  if (!promptTopic) {
+    throw new Error("Prompt topic wajib diisi");
+  }
+
+  const ai = getClient(apiKey);
+  const targetModel = sanitizeModel(model);
+
+  let typeInstructions = '';
+  if (type === 'icon') {
+    typeInstructions = `
 ATURAN UTAMA ICON MOTION:
 - Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat.
 - DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur (misal: perisai, cap kelulusan, roket, cloud, chart bar).`;
-      } else if (type === 'text') {
-        typeInstructions = `
+  } else if (type === 'text') {
+    typeInstructions = `
 ATURAN UTAMA TEXT EFFECT:
 - Tampilkan Teks Utama yang tebal & terdistribusi rapi di tengah canvas.
 - Tambahkan efek latar belakang & aura seperti glowing pulse, running highlight, atau partikel energi halus.`;
-      } else if (type === 'bg') {
-        typeInstructions = `
+  } else if (type === 'bg') {
+    typeInstructions = `
 ATURAN UTAMA BACKGROUND MOTION:
 - Animasi latar belakang bergerak penuh (motion background grid, flowing liquid mesh gradient, ambient bokeh, sinewaves).
 - DILARANG TEKS/HURUF. Warna harmonis, mewah, dan bergerak dengan ritme konstan.`;
-      }
+  }
 
-      const systemPrompt = `Anda adalah Senior HTML5 Motion Designer Spesialis Microstock (Shutterstock/Envato Standard).
+  const systemPrompt = `Anda adalah Senior HTML5 Motion Designer Spesialis Microstock (Shutterstock/Envato Standard).
 Tugas: Buat 1 file HTML animasi menggunakan Canvas 2D API & Vanilla JS.
 
 KUALITAS VISUAL & TREN MODERN (MANDATORY):
@@ -434,56 +439,126 @@ ${typeInstructions}
 
 Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
-      const { response } = await generateContentWithFallback(
-        ai,
-        targetModel,
-        (currentModel) => {
-          const animConfig: any = {
-            temperature: 0.6,
-          };
-          const animThinking = getFastThinkingConfig(currentModel);
-          if (animThinking) {
-            animConfig.thinkingConfig = animThinking;
-          }
-          return { contents: systemPrompt, config: animConfig };
-        }
-      );
-
-      let rawText = response.text || "";
-      let cleanHTML = extractHTMLFromMarkdown(rawText);
-
-      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-          cleanHTML = extractHTMLFromMarkdown(rawText);
-        } else {
-          throw new Error('Kode dari AI terpotong sebelum selesai');
-        }
+  const { response } = await generateContentWithFallback(
+    ai,
+    targetModel,
+    (currentModel) => {
+      const animConfig: any = {
+        temperature: 0.6,
+      };
+      const animThinking = getFastThinkingConfig(currentModel);
+      if (animThinking) {
+        animConfig.thinkingConfig = animThinking;
       }
+      return { contents: systemPrompt, config: animConfig };
+    }
+  );
 
-      res.json({
-        id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
-        title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
-        type,
-        style,
-        subCategory,
-        html: cleanHTML
-      });
+  let rawText = response.text || "";
+  let cleanHTML = extractHTMLFromMarkdown(rawText);
+
+  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+      cleanHTML = extractHTMLFromMarkdown(rawText);
+    } else {
+      throw new Error('Kode dari AI terpotong sebelum selesai');
+    }
+  }
+
+  return {
+    id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+    title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+    type,
+    style,
+    subCategory,
+    html: cleanHTML
+  };
+}
+
+export function createApiRouter(): Router {
+  const router = Router();
+
+  // Health / Status Check
+  const healthHandler = (_req: Request, res: Response) => {
+    res.json({
+      status: "ok",
+      hasServerKey: !!process.env.GEMINI_API_KEY,
+      defaultModel: "gemini-2.5-flash"
+    });
+  };
+  router.get("/health", healthHandler);
+  router.get("/api/health", healthHandler);
+
+  // Test API Keys
+  const testKeysHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const keys = body.keys || req.body?.keys || [];
+      const result = await handleTestKeysLogic(keys);
+      res.json(result);
     } catch (err: any) {
-      console.error("Error generating animation:", err);
+      console.error("[TestKeys] Error:", err);
+      res.status(200).json({
+        results: [],
+        validCount: 0,
+        total: 0,
+        error: cleanErrorMessage(err) || "Gagal menguji API key",
+      });
+    }
+  };
+  router.post("/gemini/test-keys", testKeysHandler);
+  router.post("/api/gemini/test-keys", testKeysHandler);
+
+  // Generate Microstock Prompts
+  const generatePromptsHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const result = await handleGeneratePromptsLogic(body);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[GeneratePrompts] Error:", err);
+      res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menghasilkan prompt" });
+    }
+  };
+  router.post("/gemini/generate-prompts", generatePromptsHandler);
+  router.post("/api/gemini/generate-prompts", generatePromptsHandler);
+
+  // Generate Single HTML5 Animation Code
+  const generateAnimationHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const result = await handleGenerateAnimationLogic(body);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[GenerateAnimation] Error:", err);
       res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menghasilkan kode animasi" });
     }
-  });
+  };
+  router.post("/gemini/generate-animation", generateAnimationHandler);
+  router.post("/api/gemini/generate-animation", generateAnimationHandler);
 
   return router;
 }
 
 export function createExpressApp() {
   const app = express();
+
+  // Enable CORS & JSON parsing
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   app.use(express.json({ limit: "10mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
   const apiRouter = createApiRouter();
-  // Support both /api/* and direct route matching for maximum deployment compatibility (Vercel & Express)
   app.use("/api", apiRouter);
   app.use("/", apiRouter);
 
