@@ -1,0 +1,8 @@
+{
+  "name": "BigMA - Motion Graphic AI Optimation",
+  "description": "Aplikasi generator animasi motion graphic microstock bertenaga AI dengan HTML5 Canvas 60 FPS, multi-key rotation, batch auto pilot, dan konversi video.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
