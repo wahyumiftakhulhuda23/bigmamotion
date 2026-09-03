@@ -123,7 +123,7 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
         return next;
       });
 
-      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted})`, 'success');
+      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted})${result.engineUsed === 'webcodecs' ? ' [H.264 FastStart]' : ' [Universal Recorder]'}`, 'success');
     } catch (err: any) {
       console.error(err);
       addLog(`[Gagal] ${fileObj.name}: ${err.message}`, 'error');
