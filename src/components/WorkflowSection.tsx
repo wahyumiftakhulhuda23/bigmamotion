@@ -10,6 +10,10 @@ interface WorkflowSectionProps {
   onSelectStyle: (style: VisualStyle) => void;
   promptCount: number;
   onChangePromptCount: (count: number) => void;
+  isGreenScreen?: boolean;
+  onToggleGreenScreen?: (val: boolean) => void;
+  keywordsText?: string;
+  onChangeKeywordsText?: (text: string) => void;
   onGeneratePrompts: () => void;
   isGeneratingPrompts: boolean;
   generatedPrompts: string[];
@@ -30,6 +34,10 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onSelectStyle,
   promptCount,
   onChangePromptCount,
+  isGreenScreen = false,
+  onToggleGreenScreen,
+  keywordsText = '',
+  onChangeKeywordsText,
   onGeneratePrompts,
   isGeneratingPrompts,
   generatedPrompts,
@@ -43,6 +51,11 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   const [manualText, setManualText] = useState('');
 
   const manualLines = manualText
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+
+  const keywordLines = (keywordsText || '')
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
@@ -153,6 +166,45 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </select>
         </div>
 
+        {/* Green Screen Chroma Key Option */}
+        <div
+          onClick={() => onToggleGreenScreen && onToggleGreenScreen(!isGreenScreen)}
+          className={`p-3.5 rounded-xl border transition cursor-pointer select-none ${
+            isGreenScreen
+              ? 'bg-emerald-950/40 border-emerald-500/60 shadow-lg shadow-emerald-950/40'
+              : 'bg-gray-900/40 border-gray-800 hover:border-gray-700'
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <div
+              className={`w-5 h-5 rounded mt-0.5 flex items-center justify-center border transition shrink-0 ${
+                isGreenScreen
+                  ? 'bg-emerald-500 border-emerald-400 text-black font-bold shadow-md shadow-emerald-500/40'
+                  : 'border-gray-700 bg-gray-800 text-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-check text-[11px]"></i>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-100 flex items-center gap-1.5">
+                  <i className="fa-solid fa-film text-emerald-400"></i> Mode Green Screen
+                </span>
+                <span className={`text-[10px] px-2 py-0.2 rounded font-bold uppercase tracking-wider ${
+                  isGreenScreen
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-gray-800 text-gray-400 border border-gray-700'
+                }`}>
+                  Chroma Key
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
+                Jika diceklis, seluruh tipe animasi akan digenerate dengan background hijau solid (<span className="text-emerald-400 font-mono font-semibold">#00FF00</span>) agar mudah diekstrak (chroma key) saat video editing.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* 3. Prompt Count Input */}
         <div className="space-y-2">
           <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
@@ -173,6 +225,30 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
           <p className="text-[11px] text-gray-400 italic">
             Berapapun jumlah prompt yang ditentukan akan dibuat oleh AI terlebih dahulu.
+          </p>
+        </div>
+
+        {/* Isian Keyword Khusus (Opsional) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+              <i className="fa-solid fa-tags text-sky-400"></i> Keyword / Topik Khusus <span className="text-gray-500 font-normal normal-case">(Opsional)</span>
+            </label>
+            {keywordLines.length > 0 && (
+              <span className="text-[10px] bg-sky-900/40 text-sky-300 border border-sky-700/50 px-2 py-0.5 rounded font-bold">
+                {keywordLines.length} Keyword
+              </span>
+            )}
+          </div>
+          <textarea
+            rows={3}
+            value={keywordsText}
+            onChange={(e) => onChangeKeywordsText && onChangeKeywordsText(e.target.value)}
+            placeholder="Isi keyword dipisahkan oleh baris (Opsional)...&#10;Contoh:&#10;artificial intelligence&#10;cyber security shield&#10;cloud server sync"
+            className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono resize-y"
+          ></textarea>
+          <p className="text-[11px] text-gray-400 italic">
+            Opsional: Pisahkan tiap keyword dengan baris baru (Enter) sebelum klik tombol Generate Prompt AI.
           </p>
         </div>
 

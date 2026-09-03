@@ -202,6 +202,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 <span className="text-[10px] bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded capitalize">
                   {latestAnimation.style}
                 </span>
+                {(latestAnimation.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(latestAnimation.html)) && (
+                  <span className="text-[10px] bg-emerald-900/50 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded font-bold flex items-center gap-1">
+                    <i className="fa-solid fa-circle text-[7px] text-emerald-400"></i> Green Screen
+                  </span>
+                )}
                 {latestAnimation.account && latestAnimation.account !== 'Manual' && (
                   <span className="text-[10px] bg-amber-900/40 text-amber-400 border border-amber-800/50 px-2 py-0.5 rounded flex items-center gap-1">
                     <i className="fa-solid fa-robot"></i> {latestAnimation.account}

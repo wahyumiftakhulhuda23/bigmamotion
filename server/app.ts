@@ -252,7 +252,16 @@ export async function handleTestKeysLogic(keysInput: any) {
 
 // Logic for generating prompts
 export async function handleGeneratePromptsLogic(body: any) {
-  const { apiKey, model, type = "icon", subCategory = "teknologi", style = "minimalist", count = 3 } = body;
+  const {
+    apiKey,
+    model,
+    type = "icon",
+    subCategory = "teknologi",
+    style = "minimalist",
+    count = 3,
+    keywords = [],
+    isGreenScreen = false,
+  } = body;
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
 
@@ -265,11 +274,26 @@ export async function handleGeneratePromptsLogic(body: any) {
     typeInstruction = 'Every prompt must describe an elegant looping motion background concept (no text), harmonious gradients, particles or geometric waves.';
   }
 
+  let keywordsDirective = '';
+  const parsedKeywords: string[] = Array.isArray(keywords)
+    ? keywords.map((k: any) => String(k).trim()).filter((k: string) => k.length > 0)
+    : typeof keywords === 'string'
+    ? keywords.split('\n').map((k) => k.trim()).filter((k) => k.length > 0)
+    : [];
+
+  if (parsedKeywords.length > 0) {
+    keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${parsedKeywords.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: You must strictly incorporate these specific user keywords/topics into the generated animation prompts.)`;
+  }
+
+  const greenScreenDirective = isGreenScreen
+    ? '\nGreen Screen / Chroma Key: ACTIVE. Ensure the animation concept will have high-contrast, clean visual edges ideal for green screen chroma key extraction.'
+    : '';
+
   const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
 Category: ${subCategory}
 Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}
-Special Directive: ${typeInstruction}
+Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 Requirement: Focus strictly on the central geometric object, color palette (neon/glow/cyber/gold), and smooth motion.`;
 
   const { response } = await generateContentWithFallback(
@@ -343,6 +367,7 @@ export async function handleGenerateAnimationLogic(body: any) {
     style = "minimalist",
     index = 1,
     total = 1,
+    isGreenScreen = false,
   } = body;
 
   if (!promptTopic) {
@@ -370,13 +395,25 @@ ATURAN UTAMA BACKGROUND MOTION:
 - DILARANG TEKS/HURUF. Warna harmonis, mewah, dan bergerak dengan ritme konstan.`;
   }
 
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'rgba(8, 12, 20, 0.25)'";
+
+  const greenScreenDirective = isGreenScreen
+    ? `
+MANDATORY GREEN SCREEN / CHROMA KEY RULES:
+- Background HARUS hijau polos murni (#00ff00 / rgb(0, 255, 0)) untuk keperluan chroma key editing video.
+- DILARANG background gelap/hitam atau gradien gelap ke hijau.
+- Elemen grafis/animasi utama HARUS menggunakan warna kontras yang jelas (Cyan #00f3ff, Gold #fbbf24, Violet #a855f7, Putih #ffffff, Oranye #f97316, Merah #ef4444, Biru #3b82f6).
+- HINDARI memakai warna hijau #00ff00 pada objek utama agar tidak hilang saat di-chroma-key.`
+    : `
+3. PALET WARNA TRENDY: Cyan Cyber (#00f3ff), Vibrant Violet (#a855f7), Emerald (#10b981), Warm Gold (#fbbf24), dengan background gelap eksklusif (#080c14).`;
+
   const systemPrompt = `Anda adalah Senior HTML5 Motion Designer Spesialis Microstock (Shutterstock/Envato Standard).
 Tugas: Buat 1 file HTML animasi menggunakan Canvas 2D API & Vanilla JS.
 
 KUALITAS VISUAL & TREN MODERN (MANDATORY):
 1. BENTUK & GERAKAN AKURAT: Bentuk visual HARUS presisi sesuai deskripsi prompt. Gerakan HARUS halus menggunakan fungsi matematika (Math.sin, Math.cos, easing). DILARANG gerakan acak patah-patah!
-2. POLISH VISUAL ELEGANKAN: Gunakan efek neon glow halus (ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(...)'), gradien dinamis (createLinearGradient / createRadialGradient), dan partikel ambient lembut.
-3. PALET WARNA TRENDY: Cyan Cyber (#00f3ff), Vibrant Violet (#a855f7), Emerald (#10b981), Warm Gold (#fbbf24), dengan background gelap eksklusif (#080c14).
+2. POLISH VISUAL ELEGANKAN: Gunakan efek glow halus (ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(...)'), gradien dinamis (createLinearGradient / createRadialGradient), dan partikel ambient lembut.${greenScreenDirective}
 
 ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
 - Tulis kode prosedural yang ringkas, bersih, modular, dan efisien (target 180 - 250 baris kode).
@@ -387,7 +424,7 @@ ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
 <head>
 <meta charset="UTF-8">
 <style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: #080c14; font-family: system-ui, sans-serif; }
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, sans-serif; }
   canvas { display: block; width: 100vw; height: 100vh; }
   #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
 </style>
@@ -417,7 +454,7 @@ ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
 
   function animate(time) {
     const t = time * 0.001; // Detik untuk gerakan halus
-    ctx.fillStyle = 'rgba(8, 12, 20, 0.25)'; // Trail halus
+    ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
     // --- LOGIKA MENGGAMBAR ANIMASI PRESISI ---
@@ -434,6 +471,7 @@ Brief Animasi:
 - Tipe Animasi: ${String(type).toUpperCase()}
 - Kategori Niche: ${subCategory}
 - Gaya Visual: ${style}
+${isGreenScreen ? '- Background: Pure Green Screen #00FF00 (Chroma Key)' : ''}
 
 ${typeInstructions}
 

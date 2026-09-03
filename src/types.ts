@@ -26,6 +26,7 @@ export interface AnimationItem {
   html: string;
   account?: string;
   createdAt?: number;
+  isGreenScreen?: boolean;
 }
 
 export interface LogItem {
@@ -42,6 +43,7 @@ export interface AutoPilotAccount {
   subCategory: NicheCategory;
   style: VisualStyle;
   promptCount: number;
+  isGreenScreen?: boolean;
 }
 
 export interface VideoConverterFile {

@@ -441,6 +441,11 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                           <span className="text-[9px] bg-sky-950/80 text-sky-400 border border-sky-800/60 px-1.5 py-0.5 rounded font-bold uppercase">
                             {item.type}
                           </span>
+                          {(item.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(item.html)) && (
+                            <span className="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.5 rounded font-bold">
+                              Green Screen
+                            </span>
+                          )}
                           <span className="text-[9px] text-gray-500">•</span>
                           <span className="text-[9px] text-gray-400 font-medium">
                             {item.account || 'Manual'}

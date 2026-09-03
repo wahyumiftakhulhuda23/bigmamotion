@@ -8,6 +8,7 @@ export interface VideoRenderOptions {
   bitrate?: number; // in Mbps
   mode?: 'icon' | 'text' | 'bg';
   format?: 'mp4';
+  isGreenScreen?: boolean;
   onProgress?: (percent: number, message: string) => void;
 }
 
@@ -84,16 +85,22 @@ export function prepareHtmlForVideo(
   mode: 'icon' | 'text' | 'bg' = 'icon',
   width = 1920,
   height = 1080,
-  _fps = 60
+  _fps = 60,
+  isGreenScreen = false
 ): string {
+  const isGreen =
+    isGreenScreen ||
+    /#00ff00|#00FF00|rgb\(\s*0\s*,\s*255\s*,\s*0\s*\)/i.test(htmlContent);
+  const bgColor = isGreen ? '#00ff00' : '#000000';
+
   const injected = `
     <style>
       * {
         box-sizing: border-box !important;
       }
       html, body {
-        background-color: #000000 !important;
-        background: #000000 !important;
+        background-color: ${bgColor} !important;
+        background: ${bgColor} !important;
         margin: 0 !important;
         padding: 0 !important;
         overflow: hidden !important;
@@ -169,8 +176,14 @@ export async function renderHtmlToVideo(
     duration = 10,
     bitrate = 18,
     mode = 'icon',
+    isGreenScreen = false,
     onProgress,
   } = options;
+
+  const isGreen =
+    isGreenScreen ||
+    /#00ff00|#00FF00|rgb\(\s*0\s*,\s*255\s*,\s*0\s*\)/i.test(htmlContent);
+  const canvasBgColor = isGreen ? '#00ff00' : '#000000';
 
   const totalFrames = Math.round(fps * duration);
   const frameIntervalMs = 1000 / fps;
@@ -388,7 +401,7 @@ export async function renderHtmlToVideo(
             });
 
             // Test first frame encoding to verify encoder was created properly
-            ctx.fillStyle = '#000000';
+            ctx.fillStyle = canvasBgColor;
             ctx.fillRect(0, 0, width, height);
             if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
               ctx.drawImage(iframeCanvas, 0, 0, width, height);
@@ -409,7 +422,7 @@ export async function renderHtmlToVideo(
             for (let frame = 1; frame < totalFrames; frame++) {
               if (encodeError) throw encodeError;
 
-              ctx.fillStyle = '#000000';
+              ctx.fillStyle = canvasBgColor;
               ctx.fillRect(0, 0, width, height);
               if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
                 ctx.drawImage(iframeCanvas, 0, 0, width, height);
@@ -533,7 +546,7 @@ export async function renderHtmlToVideo(
 
     const renderLoop = () => {
       if (!isRecordingActive) return;
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = canvasBgColor;
       ctx.fillRect(0, 0, width, height);
       if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
         ctx.drawImage(iframeCanvas, 0, 0, width, height);

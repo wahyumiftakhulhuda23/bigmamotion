@@ -49,6 +49,8 @@ export default function App() {
   const [nicheCategory, setNicheCategory] = useState<NicheCategory>('marketing');
   const [visualStyle, setVisualStyle] = useState<VisualStyle>('minimalist');
   const [promptCount, setPromptCount] = useState<number>(3);
+  const [isGreenScreen, setIsGreenScreen] = useState<boolean>(false);
+  const [keywordsText, setKeywordsText] = useState<string>('');
 
   const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([]);
   const [animations, setAnimations] = useState<AnimationItem[]>([]);
@@ -167,8 +169,16 @@ export default function App() {
     setProgressShow(true);
     setProgressText(`Menghasilkan ${promptCount} Prompt via Gemini AI...`);
     setProgressPercent(15);
+
+    const keywordLines = keywordsText
+      .split('\n')
+      .map((k) => k.trim())
+      .filter((k) => k.length > 0);
+
     addLog(
-      `Meminta AI untuk generate ${promptCount} prompt animasi (${currentType.toUpperCase()} - ${nicheCategory})...`,
+      `Meminta AI untuk generate ${promptCount} prompt animasi (${currentType.toUpperCase()} - ${nicheCategory})${
+        isGreenScreen ? ' [Mode Green Screen]' : ''
+      }${keywordLines.length > 0 ? ` [${keywordLines.length} Custom Keywords]` : ''}...`,
       'info'
     );
 
@@ -179,7 +189,9 @@ export default function App() {
         currentType,
         nicheCategory,
         visualStyle,
-        promptCount
+        promptCount,
+        keywordLines,
+        isGreenScreen
       );
 
       setGeneratedPrompts(prompts);
@@ -254,12 +266,15 @@ export default function App() {
           total,
           (attempt, max, err) => {
             addLog(`[Retry ${attempt}/${max}] Animasi #${i + 1} (${err}). Mencoba ulang...`, 'warn');
-          }
+          },
+          3,
+          isGreenScreen
         );
 
         if (anim) {
           const newAnimItem: AnimationItem = {
             ...anim,
+            isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
             account: 'Manual',
             createdAt: Date.now(),
           };
@@ -447,6 +462,7 @@ export default function App() {
         duration: 10,
         format: 'mp4',
         mode: item.type,
+        isGreenScreen: item.isGreenScreen ?? isGreenScreen,
         onProgress: (pct, msg) => {
           if (pct === 50 || pct === 90) {
             addLog(`[Export MP4] ${msg}`, 'info');
@@ -507,6 +523,10 @@ export default function App() {
           onSelectStyle={setVisualStyle}
           promptCount={promptCount}
           onChangePromptCount={setPromptCount}
+          isGreenScreen={isGreenScreen}
+          onToggleGreenScreen={setIsGreenScreen}
+          keywordsText={keywordsText}
+          onChangeKeywordsText={setKeywordsText}
           onGeneratePrompts={handleGeneratePrompts}
           isGeneratingPrompts={isGeneratingPrompts}
           generatedPrompts={generatedPrompts}
