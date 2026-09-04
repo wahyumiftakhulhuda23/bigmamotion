@@ -49,6 +49,8 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   showToast,
 }) => {
   const [manualText, setManualText] = useState('');
+  const [showManualSection, setShowManualSection] = useState(false);
+  const [showKeywordSection, setShowKeywordSection] = useState(false);
 
   const manualLines = manualText
     .split('\n')
@@ -69,194 +71,191 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   };
 
   return (
-    <section className="lg:col-span-5 flex flex-col gap-6">
-      {/* STEP 1: PARAMETER SELECTION */}
-      <div className="glass-card rounded-2xl p-5 border border-gray-800 space-y-5 shadow-xl">
-        <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-          <h2 className="font-bold text-gray-100 flex items-center gap-2">
-            <i className="fa-solid fa-sliders text-sky-400"></i> Alur Generator Animasi
+    <section className="lg:col-span-5 flex flex-col gap-4">
+      {/* STEP 1: PARAMETER SELECTION COMMAND CENTER */}
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-gray-800/90 space-y-4 shadow-xl">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between pb-3 border-b border-gray-800/80">
+          <h2 className="font-extrabold text-sm text-gray-100 flex items-center gap-2">
+            <span className="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">
+              <i className="fa-solid fa-sliders"></i>
+            </span>
+            <span>Generator Parameter</span>
           </h2>
-          <span className="text-xs bg-sky-900/40 text-sky-300 border border-sky-700/50 px-2.5 py-0.5 rounded-full font-semibold">
-            Langkah 1 & 2
+          <span className="text-[10px] bg-sky-950/60 text-sky-300 border border-sky-800/60 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+            AI Workflow
           </span>
         </div>
 
-        {/* 1. Animation Type Selection */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
+        {/* 1. Animation Type Selection - Sleek Compact Tabs */}
+        <div className="space-y-1.5">
+          <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
             1. Tipe Animasi Microstock
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
               onClick={() => onSelectType('icon')}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-medium ${
+              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
                 currentType === 'icon'
-                  ? 'bg-sky-600/20 border-sky-500 text-sky-300 shadow-lg shadow-sky-500/10 font-bold'
-                  : 'border-gray-800 bg-gray-900/50 text-gray-400 hover:border-gray-700'
+                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
+                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
               }`}
             >
-              <i className="fa-solid fa-shapes text-lg"></i>
-              <span className="text-center leading-tight">Icon Motion</span>
+              <i className="fa-solid fa-shapes text-sm text-sky-400"></i>
+              <span className="text-center leading-none text-[11px]">Icon Motion</span>
             </button>
             <button
               type="button"
               onClick={() => onSelectType('text')}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-medium ${
+              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
                 currentType === 'text'
-                  ? 'bg-sky-600/20 border-sky-500 text-sky-300 shadow-lg shadow-sky-500/10 font-bold'
-                  : 'border-gray-800 bg-gray-900/50 text-gray-400 hover:border-gray-700'
+                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
+                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
               }`}
             >
-              <i className="fa-solid fa-font text-lg"></i>
-              <span className="text-center leading-tight">Text Effect</span>
+              <i className="fa-solid fa-font text-sm text-purple-400"></i>
+              <span className="text-center leading-none text-[11px]">Text Effect</span>
             </button>
             <button
               type="button"
               onClick={() => onSelectType('bg')}
-              className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition text-xs font-medium ${
+              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
                 currentType === 'bg'
-                  ? 'bg-sky-600/20 border-sky-500 text-sky-300 shadow-lg shadow-sky-500/10 font-bold'
-                  : 'border-gray-800 bg-gray-900/50 text-gray-400 hover:border-gray-700'
+                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
+                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
               }`}
             >
-              <i className="fa-solid fa-cubes-stacked text-lg"></i>
-              <span className="text-center leading-tight">Background Motion</span>
+              <i className="fa-solid fa-cubes-stacked text-sm text-amber-400"></i>
+              <span className="text-center leading-none text-[11px]">Background</span>
             </button>
           </div>
         </div>
 
-        {/* 2. Niche Category Selection */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center justify-between">
-            <span>2. Kategori Niche / Tema</span>
-            <span className="text-[10px] text-sky-400 font-normal">Sangat Disukai Market</span>
-          </label>
-          <select
-            value={nicheCategory}
-            onChange={(e) => onSelectNiche(e.target.value as NicheCategory)}
-            className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 cursor-pointer"
-          >
-            <option value="marketing">Marketing & Bisnis (Growth Chart, Bullseye, Speaker, Sale)</option>
-            <option value="teknologi">Teknologi & AI (Cloud Security, Quantum, Hologram, Circuit)</option>
-            <option value="arsitektur">Arsitektur & Properti (Blueprint, Smart Home, Modern City)</option>
-            <option value="pendidikan">Pendidikan & E-Learning (Graduation Cap, Book, Brain Idea)</option>
-            <option value="transportasi">Transportasi & Logistik (Rocket Launch, Shipping Cargo)</option>
-            <option value="kesehatan">Kesehatan & Medis (Heartbeat Pulse, Shield DNA, Medical)</option>
-            <option value="finansial">Finansial & Crypto (Bitcoin, Wallet, Vault, Cash Flow)</option>
-          </select>
-        </div>
-
-        {/* Visual Style Preset */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
-            Gaya Visual Preset
-          </label>
-          <select
-            value={visualStyle}
-            onChange={(e) => onSelectStyle(e.target.value as VisualStyle)}
-            className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 cursor-pointer"
-          >
-            <option value="minimalist">Clean Minimalist Vector (Modern & Commercial)</option>
-            <option value="cyberpunk">Cyberpunk Neon & Vivid Glow</option>
-            <option value="corporate">Modern Corporate Flat Tech</option>
-            <option value="glassmorphism">Glassmorphism & Soft 3D Shadow</option>
-            <option value="kinetic">Kinetic Typography Shifting</option>
-            <option value="fluid">Abstract Fluid Liquid Mesh Gradient</option>
-          </select>
-        </div>
-
-        {/* Green Screen Chroma Key Option */}
-        <div
-          onClick={() => onToggleGreenScreen && onToggleGreenScreen(!isGreenScreen)}
-          className={`p-3.5 rounded-xl border transition cursor-pointer select-none ${
-            isGreenScreen
-              ? 'bg-emerald-950/40 border-emerald-500/60 shadow-lg shadow-emerald-950/40'
-              : 'bg-gray-900/40 border-gray-800 hover:border-gray-700'
-          }`}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className={`w-5 h-5 rounded mt-0.5 flex items-center justify-center border transition shrink-0 ${
-                isGreenScreen
-                  ? 'bg-emerald-500 border-emerald-400 text-black font-bold shadow-md shadow-emerald-500/40'
-                  : 'border-gray-700 bg-gray-800 text-transparent'
-              }`}
+        {/* 2. Niche & Style Grid (Compact 2 Columns on medium screens) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {/* Niche Selection */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
+              2. Kategori Niche
+            </label>
+            <select
+              value={nicheCategory}
+              onChange={(e) => onSelectNiche(e.target.value as NicheCategory)}
+              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
             >
-              <i className="fa-solid fa-check text-[11px]"></i>
-            </div>
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-gray-100 flex items-center gap-1.5">
-                  <i className="fa-solid fa-film text-emerald-400"></i> Mode Green Screen
-                </span>
-                <span className={`text-[10px] px-2 py-0.2 rounded font-bold uppercase tracking-wider ${
-                  isGreenScreen
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : 'bg-gray-800 text-gray-400 border border-gray-700'
-                }`}>
-                  Chroma Key
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
-                Jika diceklis, seluruh tipe animasi akan digenerate dengan background hijau solid (<span className="text-emerald-400 font-mono font-semibold">#00FF00</span>) agar mudah diekstrak (chroma key) saat video editing.
-              </p>
-            </div>
+              <option value="marketing">Marketing & Bisnis</option>
+              <option value="teknologi">Teknologi & AI</option>
+              <option value="arsitektur">Arsitektur & Properti</option>
+              <option value="pendidikan">Pendidikan & E-Learning</option>
+              <option value="transportasi">Transportasi & Logistik</option>
+              <option value="kesehatan">Kesehatan & Medis</option>
+              <option value="finansial">Finansial & Crypto</option>
+            </select>
+          </div>
+
+          {/* Style Preset */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
+              Gaya Visual Preset
+            </label>
+            <select
+              value={visualStyle}
+              onChange={(e) => onSelectStyle(e.target.value as VisualStyle)}
+              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
+            >
+              <option value="minimalist">Minimalist Vector (Clean)</option>
+              <option value="cyberpunk">Cyberpunk Neon Glow</option>
+              <option value="corporate">Modern Corporate Flat</option>
+              <option value="glassmorphism">Glassmorphism & 3D</option>
+              <option value="kinetic">Kinetic Dynamic</option>
+              <option value="fluid">Abstract Fluid Mesh</option>
+            </select>
           </div>
         </div>
 
-        {/* 3. Prompt Count Input */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
-            3. Tentukan Jumlah Prompt
-          </label>
-          <div className="flex items-center gap-3">
+        {/* Compact Settings Row: Green Screen & Prompt Count */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+          {/* Green Screen Option */}
+          <div
+            onClick={() => onToggleGreenScreen && onToggleGreenScreen(!isGreenScreen)}
+            className={`p-2.5 rounded-xl border transition cursor-pointer select-none flex items-center gap-2.5 ${
+              isGreenScreen
+                ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md shadow-emerald-950/30'
+                : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                isGreenScreen
+                  ? 'bg-emerald-500 border-emerald-400 text-black font-bold'
+                  : 'border-gray-700 bg-gray-800 text-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-check text-[9px]"></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-gray-200">Green Screen</span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                  #00FF00
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Prompt Count */}
+          <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-800/80 p-1.5 px-2.5 rounded-xl">
+            <span className="text-xs font-bold text-gray-300 whitespace-nowrap">Jml Prompt:</span>
             <input
               type="number"
               min="1"
               max="20"
               value={promptCount}
               onChange={(e) => onChangePromptCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 focus:outline-none font-bold"
+              className="w-14 bg-gray-950/80 border border-gray-700 rounded-lg px-2 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
             />
-            <span className="px-4 py-2.5 bg-gray-800 border border-gray-700 rounded-xl text-xs font-bold text-sky-400 whitespace-nowrap">
-              Prompt AI
-            </span>
+            <span className="text-[10px] text-gray-400 font-medium">Prompt AI</span>
           </div>
-          <p className="text-[11px] text-gray-400 italic">
-            Berapapun jumlah prompt yang ditentukan akan dibuat oleh AI terlebih dahulu.
-          </p>
         </div>
 
-        {/* Isian Keyword Khusus (Opsional) */}
-        <div className="space-y-2">
+        {/* Collapsible Keyword Section */}
+        <div className="border-t border-gray-800/80 pt-2">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <i className="fa-solid fa-tags text-sky-400"></i> Keyword / Topik Khusus <span className="text-gray-500 font-normal normal-case">(Opsional)</span>
-            </label>
+            <button
+              type="button"
+              onClick={() => setShowKeywordSection(!showKeywordSection)}
+              className="text-xs font-bold text-gray-300 hover:text-sky-300 flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <i className={`fa-solid fa-chevron-${showKeywordSection ? 'down' : 'right'} text-[10px] text-sky-400`}></i>
+              <i className="fa-solid fa-tags text-sky-400 text-xs"></i>
+              <span>Keyword Khusus <span className="text-gray-500 font-normal">(Opsional)</span></span>
+            </button>
             {keywordLines.length > 0 && (
-              <span className="text-[10px] bg-sky-900/40 text-sky-300 border border-sky-700/50 px-2 py-0.5 rounded font-bold">
-                {keywordLines.length} Keyword
+              <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-800/60 px-2 py-0.2 rounded-full font-bold">
+                {keywordLines.length} keyword
               </span>
             )}
           </div>
-          <textarea
-            rows={3}
-            value={keywordsText}
-            onChange={(e) => onChangeKeywordsText && onChangeKeywordsText(e.target.value)}
-            placeholder="Isi keyword dipisahkan oleh baris (Opsional)...&#10;Contoh:&#10;artificial intelligence&#10;cyber security shield&#10;cloud server sync"
-            className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono resize-y"
-          ></textarea>
-          <p className="text-[11px] text-gray-400 italic">
-            Opsional: Pisahkan tiap keyword dengan baris baru (Enter) sebelum klik tombol Generate Prompt AI.
-          </p>
+
+          {showKeywordSection && (
+            <div className="mt-2 space-y-1.5 animate-fadeIn">
+              <textarea
+                rows={2}
+                value={keywordsText}
+                onChange={(e) => onChangeKeywordsText && onChangeKeywordsText(e.target.value)}
+                placeholder="Pisahkan per baris... Contoh:&#10;cyber security shield&#10;cloud server sync"
+                className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono resize-y"
+              ></textarea>
+            </div>
+          )}
         </div>
 
-        {/* Primary Action 1: Generate Prompts */}
+        {/* Primary Action Button: Generate Prompts */}
         <button
           onClick={onGeneratePrompts}
           disabled={isGeneratingPrompts || isGeneratingAnimations}
-          className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-sky-500 via-indigo-500 to-purple-600 hover:from-sky-400 hover:to-purple-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-sky-500/20 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
         >
           {isGeneratingPrompts ? (
             <>
@@ -271,84 +270,73 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           )}
         </button>
 
-        {/* Divider */}
-        <div className="flex items-center py-2">
-          <div className="flex-1 border-t border-gray-800"></div>
-          <span className="px-3 text-[10px] uppercase font-bold text-gray-500 tracking-wider">
-            ATAU INPUT MANUAL
-          </span>
-          <div className="flex-1 border-t border-gray-800"></div>
-        </div>
-
-        {/* 4. Manual Prompt Input */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-gray-300 uppercase tracking-wider flex justify-between items-center">
-            <span>4. Input Prompt Sendiri</span>
-            <span
-              className={`text-[10px] px-2 py-0.5 rounded font-bold transition-all border ${
-                manualLines.length > 0
-                  ? 'bg-sky-900/40 text-sky-300 border-sky-700/50'
-                  : 'bg-gray-800 text-sky-400 border-gray-700'
-              }`}
+        {/* Collapsible Manual Prompt Section */}
+        <div className="border-t border-gray-800/80 pt-2">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setShowManualSection(!showManualSection)}
+              className="text-xs font-bold text-gray-400 hover:text-gray-200 flex items-center gap-1.5 transition cursor-pointer"
             >
-              {manualLines.length} Baris / Prompt
-            </span>
-          </label>
-          <textarea
-            rows={4}
-            value={manualText}
-            onChange={(e) => setManualText(e.target.value)}
-            className="w-full glass-input rounded-xl px-3.5 py-2.5 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono"
-            placeholder="Ketik prompt Anda di sini...&#10;Satu prompt per baris...&#10;Gunakan bahasa Inggris..."
-          ></textarea>
-
-          <div className="bg-amber-950/30 border border-amber-900/50 rounded-lg p-2.5 flex items-start gap-2 mt-1">
-            <i className="fa-solid fa-circle-info text-amber-500 text-sm mt-0.5"></i>
-            <p className="text-[11px] text-amber-400/90 leading-relaxed">
-              Pastikan Anda sudah memilih <b>Tipe Animasi</b> dan <b>Gaya Visual</b> di atas. Rekomendasi:{' '}
-              <b>Maksimal 6-10 kata per baris/prompt</b> untuk hasil kalkulasi kode AI yang optimal.
-            </p>
+              <i className={`fa-solid fa-chevron-${showManualSection ? 'down' : 'right'} text-[10px] text-gray-500`}></i>
+              <i className="fa-solid fa-keyboard text-gray-400 text-xs"></i>
+              <span>Input Prompt Manual</span>
+            </button>
+            {manualLines.length > 0 && (
+              <span className="text-[10px] bg-gray-800 text-gray-300 border border-gray-700 px-2 py-0.2 rounded-full font-bold">
+                {manualLines.length} baris
+              </span>
+            )}
           </div>
 
-          <button
-            onClick={handleManualSubmit}
-            disabled={isGeneratingAnimations}
-            className="w-full py-3 px-4 mt-2 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold text-xs uppercase tracking-wider transition active:scale-[0.99] flex justify-center items-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
-          >
-            <i className="fa-solid fa-keyboard"></i> <span>Gunakan Prompt Manual</span>
-          </button>
+          {showManualSection && (
+            <div className="mt-2.5 space-y-2 animate-fadeIn">
+              <textarea
+                rows={3}
+                value={manualText}
+                onChange={(e) => setManualText(e.target.value)}
+                className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono"
+                placeholder="Ketik prompt Anda di sini... (Satu prompt per baris)"
+              ></textarea>
+              <button
+                onClick={handleManualSubmit}
+                disabled={isGeneratingAnimations}
+                className="w-full py-2.5 px-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold text-xs uppercase tracking-wider transition active:scale-[0.99] flex justify-center items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                <i className="fa-solid fa-arrow-right text-sky-400 text-xs"></i>
+                <span>Gunakan Prompt Manual</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* STEP 2: PROMPT REVIEW & GENERATE ANIMATION */}
+      {/* STEP 2: PROMPT REVIEW & RENDER TRIGGER */}
       {generatedPrompts.length > 0 && (
         <div
           id="prompts-review-card"
-          className="glass-card rounded-2xl p-5 border border-sky-500/30 space-y-4 shadow-xl animate-fadeIn"
+          className="glass-card rounded-2xl p-4 sm:p-5 border border-sky-500/40 space-y-3.5 shadow-xl animate-fadeIn"
         >
-          <div className="flex items-center justify-between pb-3 border-b border-gray-800">
+          <div className="flex items-center justify-between pb-2 border-b border-gray-800/80">
             <div>
-              <h3 className="font-bold text-gray-100 text-sm flex items-center gap-2">
-                <i className="fa-solid fa-list-check text-amber-400"></i> Daftar Prompt Hasil AI
+              <h3 className="font-extrabold text-gray-100 text-xs sm:text-sm flex items-center gap-2">
+                <i className="fa-solid fa-list-check text-amber-400"></i> Daftar Prompt Siap Render
               </h3>
-              <p className="text-[11px] text-gray-400">
-                Anda dapat meninjau atau mengedit prompt sebelum membuat animasi.
-              </p>
             </div>
-            <span className="text-xs bg-amber-900/40 text-amber-300 border border-amber-700/50 px-2.5 py-0.5 rounded-full font-bold">
+            <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full font-bold">
               {generatedPrompts.length} Prompt
             </span>
           </div>
 
-          {/* Box Container Prompt Berbatas & Scrollable */}
-          <div className="bg-gray-950/70 rounded-xl border border-gray-800/80 p-2.5 shadow-inner">
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+          {/* Scrollable list of prompts */}
+          <div className="bg-gray-950/80 rounded-xl border border-gray-800/80 p-2 shadow-inner">
+            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
               {generatedPrompts.map((promptText, idx) => (
                 <div
                   key={idx}
                   className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-900 p-2 rounded-xl border border-gray-800/80 transition"
                 >
-                  <span className="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 text-xs font-bold flex items-center justify-center shrink-0">
+                  <span className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 text-[11px] font-bold flex items-center justify-center shrink-0">
                     {idx + 1}
                   </span>
                   <input
@@ -359,7 +347,7 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                   />
                   <button
                     onClick={() => onDeletePrompt(idx)}
-                    className="text-gray-500 hover:text-red-400 p-1.5 text-xs shrink-0 transition"
+                    className="text-gray-500 hover:text-red-400 p-1 text-xs shrink-0 transition cursor-pointer"
                     title="Hapus Prompt"
                   >
                     <i className="fa-solid fa-trash"></i>
@@ -373,7 +361,7 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           <button
             onClick={onGenerateAnimations}
             disabled={isGeneratingAnimations}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 to-teal-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
             {isGeneratingAnimations ? (
               <>
@@ -383,25 +371,22 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             ) : (
               <>
                 <i className="fa-solid fa-play"></i>
-                <span>Generate Animasi (Satu Per Satu)</span>
+                <span>Generate Animasi ({generatedPrompts.length} Item)</span>
               </>
             )}
           </button>
         </div>
       )}
 
-      {/* Quick Specs Info */}
-      <div className="glass-card rounded-2xl p-4 border border-gray-800 text-xs space-y-2">
-        <div className="font-bold text-gray-300 flex items-center gap-2">
-          <i className="fa-solid fa-circle-info text-sky-400"></i> Spesifikasi Output Standar Microstock:
+      {/* Quick Specs Info - Compact Minimal Pill Card */}
+      <div className="glass-card rounded-2xl p-3 border border-gray-800/80 text-[11px] text-gray-400 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 font-bold text-gray-300">
+          <i className="fa-solid fa-circle-check text-emerald-400 text-xs"></i>
+          <span>Output Standar: 1080p 60 FPS HD Canvas & MP4 H.264</span>
         </div>
-        <ul className="text-gray-400 space-y-1 list-disc list-inside">
-          <li>Canvas Standard: <strong>16:9 Landscape HD</strong></li>
-          <li>Kecepatan Framerate: <strong>60 FPS Smooth HTML5 Canvas</strong></li>
-          <li>Ketentuan Icon Motion: <strong>Hanya Icon Sentral, Clean Vector, Tanpa Teks</strong></li>
-          <li>Ketentuan Text Effect: <strong>Teks Dinamis + Efek Grafis / Partikel</strong></li>
-          <li>Ketentuan Background: <strong>Pure Motion Background, Tanpa Teks</strong></li>
-        </ul>
+        <span className="text-[10px] bg-gray-800 text-sky-400 px-2 py-0.5 rounded font-mono font-bold">
+          Microstock Ready
+        </span>
       </div>
     </section>
   );

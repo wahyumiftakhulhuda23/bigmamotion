@@ -63,6 +63,8 @@ export interface ApiKeyTestResult {
   valid: boolean;
   error?: string;
   latencyMs?: number;
+  status?: 'pending' | 'testing' | 'valid' | 'invalid';
+  lineIndex?: number;
 }
 
 export type GeminiModel = 'gemini-2.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview';

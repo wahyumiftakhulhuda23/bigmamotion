@@ -156,6 +156,110 @@ export function parseSafeBody(req: Request | any): any {
   return {};
 }
 
+// Logic for testing a single API key
+export async function handleTestSingleKeyLogic(rawKey: string) {
+  const key = (rawKey || "").trim();
+  const maskedKey =
+    key.length > 10
+      ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}`
+      : key || "(kosong)";
+  const start = Date.now();
+
+  if (!key) {
+    return {
+      key: "",
+      maskedKey: "(kosong)",
+      valid: false,
+      error: "Key tidak boleh kosong",
+      latencyMs: 0,
+    };
+  }
+
+  if (!key.startsWith("AIza") && key.length < 20) {
+    return {
+      key,
+      maskedKey,
+      valid: false,
+      error: "Format salah (harus diawali 'AIza...')",
+      latencyMs: Date.now() - start,
+    };
+  }
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+    });
+
+    let timerId: any = null;
+    const timeoutPromise = new Promise((_, reject) => {
+      timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 4.5s)")), 4500);
+    });
+
+    const verifyPromise = (async () => {
+      try {
+        return await ai.models.countTokens({
+          model: "gemini-2.5-flash",
+          contents: "ping",
+        });
+      } catch (err: any) {
+        // Fallback lightweight probe
+        return await ai.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: "ping",
+          config: {
+            maxOutputTokens: 1,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        });
+      }
+    })();
+
+    try {
+      await Promise.race([verifyPromise, timeoutPromise]);
+      return {
+        key,
+        maskedKey,
+        valid: true,
+        latencyMs: Date.now() - start,
+      };
+    } finally {
+      if (timerId) clearTimeout(timerId);
+    }
+  } catch (e: any) {
+    let msg = cleanErrorMessage(e) || "Gagal verifikasi";
+    const lower = msg.toLowerCase();
+    if (
+      lower.includes("api_key_invalid") ||
+      lower.includes("api key not valid") ||
+      lower.includes("key is not valid") ||
+      lower.includes("invalid api key") ||
+      lower.includes("400")
+    ) {
+      msg = "API Key tidak valid / salah";
+    } else if (
+      lower.includes("resource_exhausted") ||
+      lower.includes("429") ||
+      lower.includes("quota") ||
+      lower.includes("billing")
+    ) {
+      msg = "Rate limit / kuota habis";
+    } else if (lower.includes("permission_denied") || lower.includes("403")) {
+      msg = "Izin ditolak untuk API Key ini";
+    } else if (lower.includes("timeout")) {
+      msg = "Timeout verifikasi API";
+    }
+
+    return {
+      key,
+      maskedKey,
+      valid: false,
+      error: msg,
+      latencyMs: Date.now() - start,
+    };
+  }
+}
+
 // Logic for testing a list of API keys
 export async function handleTestKeysLogic(keysInput: any) {
   let keys: string[] = [];
@@ -170,80 +274,7 @@ export async function handleTestKeysLogic(keysInput: any) {
   }
 
   const results = await Promise.all(
-    keys.map(async (rawKey: string) => {
-      const key = (rawKey || "").trim();
-      const maskedKey =
-        key.length > 10
-          ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}`
-          : key;
-      const start = Date.now();
-
-      if (!key) {
-        return {
-          key,
-          maskedKey: "(kosong)",
-          valid: false,
-          error: "Key tidak boleh kosong",
-          latencyMs: 0,
-        };
-      }
-
-      if (!key.startsWith("AIza") && key.length < 25) {
-        return {
-          key,
-          maskedKey,
-          valid: false,
-          error: "Format salah (umumnya diawali 'AIza...')",
-          latencyMs: Date.now() - start,
-        };
-      }
-
-      try {
-        const ai = new GoogleGenAI({
-          apiKey: key,
-          httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-        });
-
-        let timerId: any = null;
-        const timeoutPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 6s)")), 6000);
-        });
-
-        // Use countTokens as lightweight verification, catch internally to avoid unhandled rejection
-        const verifyPromise = ai.models.countTokens({
-          model: "gemini-2.5-flash",
-          contents: "ping",
-        });
-
-        try {
-          await Promise.race([verifyPromise, timeoutPromise]);
-          return {
-            key,
-            maskedKey,
-            valid: true,
-            latencyMs: Date.now() - start,
-          };
-        } finally {
-          if (timerId) clearTimeout(timerId);
-        }
-      } catch (e: any) {
-        let msg = cleanErrorMessage(e) || "Gagal verifikasi";
-        if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid")) {
-          msg = "API Key tidak valid atau salah";
-        } else if (msg.includes("RESOURCE_EXHAUSTED") || msg.includes("429")) {
-          msg = "Rate limit / kuota habis";
-        } else if (msg.includes("PERMISSION_DENIED")) {
-          msg = "Izin ditolak untuk project ini";
-        }
-        return {
-          key,
-          maskedKey,
-          valid: false,
-          error: msg,
-          latencyMs: Date.now() - start,
-        };
-      }
-    })
+    keys.map((rawKey: string) => handleTestSingleKeyLogic(rawKey))
   );
 
   const validCount = results.filter((r) => r.valid).length;
@@ -528,7 +559,28 @@ export function createApiRouter(): Router {
   router.get("/health", healthHandler);
   router.get("/api/health", healthHandler);
 
-  // Test API Keys
+  // Test Single API Key (Super Fast Lightweight Probe)
+  const testSingleKeyHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const key = body.key || req.body?.key || "";
+      const result = await handleTestSingleKeyLogic(key);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[TestSingleKey] Error:", err);
+      res.status(200).json({
+        key: req.body?.key || "",
+        maskedKey: "(error)",
+        valid: false,
+        error: cleanErrorMessage(err) || "Gagal menguji API key",
+        latencyMs: 0,
+      });
+    }
+  };
+  router.post("/gemini/test-single-key", testSingleKeyHandler);
+  router.post("/api/gemini/test-single-key", testSingleKeyHandler);
+
+  // Test API Keys (Batch)
   const testKeysHandler = async (req: Request, res: Response) => {
     try {
       const body = parseSafeBody(req);
@@ -575,6 +627,74 @@ export function createApiRouter(): Router {
   };
   router.post("/gemini/generate-animation", generateAnimationHandler);
   router.post("/api/gemini/generate-animation", generateAnimationHandler);
+
+  // Server Trial Registry
+  const serverTrialStore = new Map<string, { startedAt: number; expiresAt: number; used: boolean }>();
+
+  // Check Trial Status
+  const checkTrialHandler = (req: Request, res: Response) => {
+    const body = parseSafeBody(req);
+    const deviceId = body.deviceId || String(req.query.deviceId || '');
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'default_ip';
+    const key = deviceId || ip;
+
+    const record = serverTrialStore.get(key);
+    if (!record) {
+      return res.json({ hasUsedTrial: false, isActive: false, isExpired: false, remainingMs: 0 });
+    }
+
+    const now = Date.now();
+    const remainingMs = Math.max(0, record.expiresAt - now);
+    res.json({
+      hasUsedTrial: true,
+      isActive: remainingMs > 0,
+      isExpired: remainingMs <= 0,
+      startedAt: record.startedAt,
+      expiresAt: record.expiresAt,
+      remainingMs,
+    });
+  };
+  router.post("/trial/check", checkTrialHandler);
+  router.post("/api/trial/check", checkTrialHandler);
+
+  // Start 1-Day Trial
+  const startTrialHandler = (req: Request, res: Response) => {
+    const body = parseSafeBody(req);
+    const deviceId = body.deviceId || 'dev_' + Date.now();
+    const ip = req.ip || (req.headers['x-forwarded-for'] as string) || 'default_ip';
+    const key = deviceId || ip;
+
+    const existing = serverTrialStore.get(key);
+    if (existing) {
+      const now = Date.now();
+      const remainingMs = Math.max(0, existing.expiresAt - now);
+      return res.json({
+        started: false,
+        message: remainingMs > 0 ? "Trial sudah aktif di perangkat ini" : "Trial sudah pernah digunakan dan telah kedaluwarsa di perangkat ini",
+        hasUsedTrial: true,
+        isActive: remainingMs > 0,
+        isExpired: remainingMs <= 0,
+        expiresAt: existing.expiresAt,
+        remainingMs,
+      });
+    }
+
+    const now = Date.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
+    serverTrialStore.set(key, { startedAt: now, expiresAt, used: true });
+
+    res.json({
+      started: true,
+      hasUsedTrial: true,
+      isActive: true,
+      isExpired: false,
+      startedAt: now,
+      expiresAt,
+      remainingMs: 24 * 60 * 60 * 1000,
+    });
+  };
+  router.post("/trial/start", startTrialHandler);
+  router.post("/api/trial/start", startTrialHandler);
 
   return router;
 }

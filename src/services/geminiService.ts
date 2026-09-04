@@ -92,87 +92,72 @@ function extractHTML(text: string): string {
   return cleanHTML.trim();
 }
 
-// Direct test against Google Gemini API from client
-async function testSingleKeyDirect(rawKey: string): Promise<ApiKeyTestResult> {
+// Accurate and fast test for a single key via server backend proxy (No browser CORS errors)
+export async function testSingleApiKey(rawKey: string, lineIndex?: number): Promise<ApiKeyTestResult> {
   const key = (rawKey || '').trim();
   const maskedKey =
-    key.length > 10 ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : key;
+    key.length > 10 ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : key || '(kosong)';
   const start = Date.now();
 
   if (!key) {
     return {
-      key,
+      key: '',
       maskedKey: '(kosong)',
       valid: false,
       error: 'Key tidak boleh kosong',
       latencyMs: 0,
+      status: 'invalid',
+      lineIndex,
     };
   }
 
-  if (!key.startsWith('AIza') && key.length < 25) {
+  if (!key.startsWith('AIza') && key.length < 20) {
     return {
       key,
       maskedKey,
       valid: false,
-      error: "Format salah (umumnya diawali 'AIza...')",
+      error: "Format salah (harus diawali 'AIza...')",
       latencyMs: Date.now() - start,
+      status: 'invalid',
+      lineIndex,
     };
   }
 
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6500);
+    const timer = setTimeout(() => controller.abort(), 6000);
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:countTokens?key=${encodeURIComponent(
-        key
-      )}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: 'ping' }] }] }),
-        signal: controller.signal,
-      }
-    );
+    const res = await fetch('/api/gemini/test-single-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+      signal: controller.signal,
+    });
 
     clearTimeout(timer);
-    const latencyMs = Date.now() - start;
 
     if (res.ok) {
+      const data: ApiKeyTestResult = await res.json();
       return {
         key,
-        maskedKey,
-        valid: true,
-        latencyMs,
+        maskedKey: data.maskedKey || maskedKey,
+        valid: !!data.valid,
+        error: data.error,
+        latencyMs: data.latencyMs ?? (Date.now() - start),
+        status: data.valid ? 'valid' : 'invalid',
+        lineIndex,
       };
     }
 
-    const errData = await res.json().catch(() => ({}));
-    const rawMsg = errData?.error?.message || `HTTP ${res.status}`;
-    let userMsg = rawMsg;
-
-    if (
-      rawMsg.includes('API_KEY_INVALID') ||
-      rawMsg.includes('API key not valid') ||
-      res.status === 400
-    ) {
-      userMsg = 'API Key tidak valid atau salah';
-    } else if (
-      rawMsg.includes('RESOURCE_EXHAUSTED') ||
-      rawMsg.includes('quota') ||
-      res.status === 429
-    ) {
-      userMsg = 'Rate limit / kuota habis';
-    } else if (rawMsg.includes('PERMISSION_DENIED') || res.status === 403) {
-      userMsg = 'Izin ditolak untuk API Key ini';
-    }
-
+    const err = await res.json().catch(() => ({}));
     return {
       key,
       maskedKey,
       valid: false,
-      error: userMsg,
-      latencyMs,
+      error: err.error || `HTTP ${res.status}`,
+      latencyMs: Date.now() - start,
+      status: 'invalid',
+      lineIndex,
     };
   } catch (e: any) {
     const isTimeout = e.name === 'AbortError';
@@ -180,44 +165,42 @@ async function testSingleKeyDirect(rawKey: string): Promise<ApiKeyTestResult> {
       key,
       maskedKey,
       valid: false,
-      error: isTimeout ? 'Timeout (> 6.5s)' : e.message || 'Gagal terhubung ke Google API',
+      error: isTimeout ? 'Timeout (> 6s)' : e.message || 'Gagal koneksi ke server',
       latencyMs: Date.now() - start,
+      status: 'invalid',
+      lineIndex,
     };
   }
 }
 
-// 100% resilient Test All Keys
-export async function testAllApiKeys(
-  keys: string[]
+// Sequential 1-by-1 Test All Keys with live progress callback
+export async function testAllApiKeysSequential(
+  keys: string[],
+  onProgress?: (result: ApiKeyTestResult, index: number, total: number) => void
 ): Promise<{ validCount: number; total: number; results: ApiKeyTestResult[] }> {
   if (!keys || keys.length === 0) {
     return { validCount: 0, total: 0, results: [] };
   }
 
-  // Direct parallel testing against Google Gemini endpoints (Zero server 500 risk)
-  try {
-    const results = await Promise.all(keys.map((k) => testSingleKeyDirect(k)));
-    const validCount = results.filter((r) => r.valid).length;
-    return { validCount, total: keys.length, results };
-  } catch (directErr) {
-    console.warn('Direct key test warning, trying server proxy fallback...', directErr);
-    // Fallback to server endpoint if direct client fetch blocked
-    const res = await fetch('/api/gemini/test-keys', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ keys }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP Error ${res.status}`);
+  const results: ApiKeyTestResult[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    const rawKey = keys[i];
+    const singleResult = await testSingleApiKey(rawKey, i);
+    results.push(singleResult);
+    if (onProgress) {
+      onProgress(singleResult, i, keys.length);
     }
-    const data = await res.json();
-    return {
-      validCount: data.validCount || 0,
-      total: data.total || keys.length,
-      results: data.results || [],
-    };
   }
+
+  const validCount = results.filter((r) => r.valid).length;
+  return { validCount, total: keys.length, results };
+}
+
+// Backward-compatible alias
+export async function testAllApiKeys(
+  keys: string[]
+): Promise<{ validCount: number; total: number; results: ApiKeyTestResult[] }> {
+  return testAllApiKeysSequential(keys);
 }
 
 // Direct client fallback for prompt generation

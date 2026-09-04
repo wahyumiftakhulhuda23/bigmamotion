@@ -27,11 +27,12 @@ import { FullscreenModal } from './components/FullscreenModal';
 import { VideoConverterModal } from './components/VideoConverterModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
+import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
 
 const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 
 export default function App() {
-  // --- LICENSE STATE ---
+  // --- LICENSE & TRIAL STATE ---
   const [isLicenseActive, setIsLicenseActive] = useState<boolean>(() => {
     try {
       return localStorage.getItem(STORAGE_LICENSE_ACTIVE) === 'true';
@@ -39,6 +40,42 @@ export default function App() {
       return false;
     }
   });
+
+  const [isTrialActive, setIsTrialActive] = useState<boolean>(() => {
+    if (localStorage.getItem(STORAGE_LICENSE_ACTIVE) === 'true') return false;
+    const trial = checkLocalTrialStatus();
+    return trial.isActive;
+  });
+
+  const [trialExpiresAt, setTrialExpiresAt] = useState<number | null>(() => {
+    const trial = checkLocalTrialStatus();
+    return trial.expiresAt;
+  });
+
+  const [trialRemainingMs, setTrialRemainingMs] = useState<number>(() => {
+    const trial = checkLocalTrialStatus();
+    return trial.remainingMs;
+  });
+
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
+
+  // Trial Timer & Expiration Watcher
+  useEffect(() => {
+    if (isLicenseActive) return;
+
+    const interval = setInterval(() => {
+      const trial = checkLocalTrialStatus();
+      setTrialRemainingMs(trial.remainingMs);
+
+      if (isTrialActive && !trial.isActive) {
+        setIsTrialActive(false);
+        showToast('Masa percobaan Trial 1 Hari Anda telah berakhir. Silakan aktivasi Lisensi Seumur Hidup.', 'warn');
+        addLog('[Trial Selesai] Masa percobaan 1 hari telah habis. Mohon aktivasi lisensi.', 'warn');
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [isLicenseActive, isTrialActive]);
 
   // --- STATE ---
   const [apiKeys, setApiKeys] = useState<string[]>([]);
@@ -492,9 +529,25 @@ export default function App() {
 
   const latestAnimation = animations.length > 0 ? animations[0] : null;
 
-  // --- LICENSE GATE CHECK ---
-  if (!isLicenseActive) {
-    return <LicenseGate onUnlockSuccess={() => setIsLicenseActive(true)} />;
+  // --- LICENSE & TRIAL GATE CHECK ---
+  const isUnlocked = isLicenseActive || isTrialActive;
+
+  if (!isUnlocked) {
+    return (
+      <LicenseGate
+        onUnlockSuccess={() => {
+          setIsLicenseActive(true);
+          setIsTrialActive(false);
+          showToast('Selamat! Lisensi Seumur Hidup Berhasil Diaktifkan!', 'success');
+        }}
+        onUnlockTrial={(expiresAt) => {
+          setIsTrialActive(true);
+          setTrialExpiresAt(expiresAt);
+          setTrialRemainingMs(Math.max(0, expiresAt - Date.now()));
+          showToast('Mode Trial 1 Hari (24 Jam) Aktif! Selamat mencoba.', 'success');
+        }}
+      />
+    );
   }
 
   return (
@@ -505,6 +558,9 @@ export default function App() {
         hasServerKey={hasServerKey}
         animationCount={animations.length}
         selectedModel={selectedModel}
+        isTrialActive={isTrialActive && !isLicenseActive}
+        trialRemainingText={formatRemainingTime(trialRemainingMs)}
+        onOpenLicenseModal={() => setIsUpgradeModalOpen(true)}
         onOpenApiModal={() => setIsApiModalOpen(true)}
         onOpenAutoPilotModal={() => setIsAutoPilotModalOpen(true)}
         onOpenVideoConverterModal={() => setIsVideoConverterModalOpen(true)}
@@ -512,7 +568,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 lg:px-8 py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
         {/* Left Panel: Workflow */}
         <WorkflowSection
           currentType={currentType}
@@ -558,9 +614,32 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="glass-card border-t border-gray-800/80 px-4 py-4 text-center text-xs text-gray-500">
+      <footer className="glass-card border-t border-gray-800/80 px-4 py-3 text-center text-xs text-gray-500">
         <p>BigMA &copy; 2026. Motion Graphic AI Optimation.</p>
       </footer>
+
+      {/* Modals */}
+      {isUpgradeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+          <div className="relative max-w-md w-full my-auto">
+            <button
+              onClick={() => setIsUpgradeModalOpen(false)}
+              className="absolute top-2 right-2 z-20 w-8 h-8 rounded-full bg-gray-900 border border-gray-700 text-gray-300 hover:text-white flex items-center justify-center text-xs shadow-xl cursor-pointer"
+              title="Tutup"
+            >
+              <i className="fa-solid fa-xmark"></i>
+            </button>
+            <LicenseGate
+              onUnlockSuccess={() => {
+                setIsLicenseActive(true);
+                setIsTrialActive(false);
+                setIsUpgradeModalOpen(false);
+                showToast('Selamat! Lisensi Seumur Hidup Berhasil Diaktifkan!', 'success');
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       <FullscreenModal

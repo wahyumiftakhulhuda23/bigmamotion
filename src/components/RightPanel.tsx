@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { AnimationItem, LogItem } from '../types';
 
 interface RightPanelProps {
@@ -29,6 +29,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   isExportingMp4Id,
 }) => {
   const logConsoleRef = useRef<HTMLDivElement>(null);
+  const [isLogExpanded, setIsLogExpanded] = useState(true);
 
   useEffect(() => {
     if (logConsoleRef.current) {
@@ -41,7 +42,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
       case 'success':
         return 'text-emerald-400 font-bold';
       case 'error':
-        return 'text-red-400 font-bold';
+        return 'text-rose-400 font-bold';
       case 'warn':
         return 'text-amber-400';
       case 'cyan':
@@ -56,60 +57,72 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   const isRenderingMp4 = latestAnimation && isExportingMp4Id === latestAnimation.id;
 
   return (
-    <section className="lg:col-span-7 flex flex-col gap-6">
-      {/* Live System Activity Log Box */}
-      <div className="glass-card rounded-2xl p-4 border border-gray-800 space-y-3">
-        <div className="flex justify-between items-center pb-2 border-b border-gray-800">
-          <div className="flex items-center gap-2 text-xs font-bold text-gray-200">
-            <i className="fa-solid fa-terminal text-emerald-400"></i>
-            <span>System Console Log</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          </div>
+    <section className="lg:col-span-7 flex flex-col gap-4">
+      {/* Live System Activity Log Box (Collapsible & Compact) */}
+      <div className="glass-card rounded-2xl p-3.5 border border-gray-800/90 space-y-2 shadow-lg">
+        <div className="flex justify-between items-center">
           <button
-            onClick={onClearLogs}
-            className="text-[10px] text-gray-400 hover:text-gray-200 px-2 py-0.5 rounded bg-gray-800 border border-gray-700 transition cursor-pointer"
+            onClick={() => setIsLogExpanded(!isLogExpanded)}
+            className="flex items-center gap-2 text-xs font-extrabold text-gray-200 hover:text-sky-300 transition cursor-pointer"
           >
-            <i className="fa-solid fa-eraser mr-1"></i> Bersihkan Log
+            <i className={`fa-solid fa-chevron-${isLogExpanded ? 'down' : 'right'} text-[10px] text-gray-500`}></i>
+            <i className="fa-solid fa-terminal text-emerald-400"></i>
+            <span>System Console</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            {logs.length > 0 && (
+              <span className="text-[10px] text-gray-500 font-mono">({logs.length} events)</span>
+            )}
           </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={onClearLogs}
+              className="text-[10px] text-gray-400 hover:text-gray-200 px-2 py-0.5 rounded-lg bg-gray-900 border border-gray-800 transition cursor-pointer"
+            >
+              <i className="fa-solid fa-eraser mr-1"></i> Bersihkan
+            </button>
+          </div>
         </div>
-        <div
-          ref={logConsoleRef}
-          id="activity-log-console"
-          className="h-32 overflow-y-auto bg-black/80 rounded-xl p-3 font-mono text-[11px] text-gray-300 space-y-1 border border-gray-900 shadow-inner"
-        >
-          {logs.length === 0 ? (
-            <div className="text-gray-500 italic">
-              [System Ready] Silakan atur konfigurasi AI di menu atas atau langsung buat animasi...
-            </div>
-          ) : (
-            logs.map((log) => (
-              <div
-                key={log.id}
-                className={`${getLogColorClass(log.type)} py-0.5 border-b border-gray-800/40 leading-relaxed`}
-              >
-                <span className="text-gray-600 mr-1.5">[{log.timestamp}]</span>
-                {log.text}
+
+        {isLogExpanded && (
+          <div
+            ref={logConsoleRef}
+            id="activity-log-console"
+            className="h-24 overflow-y-auto bg-black/90 rounded-xl p-2.5 font-mono text-[11px] text-gray-300 space-y-1 border border-gray-900 shadow-inner"
+          >
+            {logs.length === 0 ? (
+              <div className="text-gray-500 italic text-[10px]">
+                [System Ready] Generator siap digunakan. Silakan mulai buat animasi...
               </div>
-            ))
-          )}
-        </div>
+            ) : (
+              logs.map((log) => (
+                <div
+                  key={log.id}
+                  className={`${getLogColorClass(log.type)} py-0.2 border-b border-gray-850/30 leading-snug`}
+                >
+                  <span className="text-gray-600 mr-1 text-[10px]">[{log.timestamp}]</span>
+                  {log.text}
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Progress Status Bar */}
       {progressShow && (
         <div
           id="progress-container"
-          className="glass-card rounded-2xl p-4 border border-sky-500/30 bg-sky-950/20 space-y-2 animate-fadeIn"
+          className="glass-card rounded-2xl p-3.5 border border-sky-500/30 bg-sky-950/20 space-y-1.5 animate-fadeIn"
         >
           <div className="flex justify-between text-xs font-semibold">
             <span className="text-sky-300 flex items-center gap-2">
-              <i className="fa-solid fa-spinner fa-spin"></i> {progressText}
+              <i className="fa-solid fa-spinner fa-spin text-sky-400"></i> {progressText}
             </span>
-            <span className="text-sky-400 font-bold">{progressPercent}%</span>
+            <span className="text-sky-400 font-bold font-mono">{progressPercent}%</span>
           </div>
-          <div className="w-full bg-gray-800 h-2 rounded-full overflow-hidden">
+          <div className="w-full bg-gray-800 h-1.5 rounded-full overflow-hidden">
             <div
-              className="bg-gradient-to-r from-sky-500 to-emerald-500 h-full transition-all duration-300"
+              className="bg-gradient-to-r from-sky-500 via-indigo-500 to-emerald-500 h-full transition-all duration-300"
               style={{ width: `${progressPercent}%` }}
             ></div>
           </div>
@@ -118,15 +131,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
       {/* Gallery Header */}
       <div className="flex items-center justify-between">
-        <h2 className="font-bold text-base text-gray-200 flex items-center gap-2">
-          <i className="fa-solid fa-desktop text-sky-400"></i> Preview Animasi Terbaru
+        <h2 className="font-extrabold text-sm text-gray-200 flex items-center gap-2">
+          <i className="fa-solid fa-desktop text-sky-400"></i>
+          <span>Live Preview Animasi</span>
         </h2>
         <div className="flex gap-2">
           <button
             onClick={onOpenGalleryModal}
-            className="text-xs text-sky-100 hover:text-white flex items-center gap-1.5 transition px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-lg shadow-sky-500/20 font-bold border border-sky-400/30 cursor-pointer"
+            className="text-xs text-sky-100 hover:text-white flex items-center gap-1.5 transition px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-md shadow-sky-500/20 font-bold border border-sky-400/30 cursor-pointer active:scale-95"
           >
-            <i className="fa-solid fa-images"></i> Buka Galeri Antrean
+            <i className="fa-solid fa-images"></i>
+            <span>Buka Galeri</span>
           </button>
         </div>
       </div>
@@ -135,19 +150,18 @@ export const RightPanel: React.FC<RightPanelProps> = ({
       {!latestAnimation ? (
         <div
           id="empty-state"
-          className="glass-card rounded-2xl p-12 border border-dashed border-gray-800 text-center flex flex-col items-center justify-center gap-3"
+          className="glass-card rounded-2xl p-10 border border-dashed border-gray-800 text-center flex flex-col items-center justify-center gap-2.5 shadow-md"
         >
-          <div className="w-16 h-16 rounded-2xl bg-gray-800/80 border border-gray-700 flex items-center justify-center text-gray-500 text-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-gray-900/80 border border-gray-800 flex items-center justify-center text-gray-500 text-xl shadow-inner animate-pulse">
             <i className="fa-solid fa-photo-film"></i>
           </div>
-          <h3 className="font-bold text-gray-300 text-sm">Belum Ada Animasi Ditampilkan</h3>
-          <p className="text-xs text-gray-500 max-w-sm">
-            Jalankan "Generate Prompt AI" lalu "Generate Animasi" atau gunakan "Auto Pilot" untuk melihat hasilnya di
-            sini.
+          <h3 className="font-bold text-gray-300 text-xs sm:text-sm">Belum Ada Animasi Ditampilkan</h3>
+          <p className="text-[11px] text-gray-500 max-w-sm">
+            Klik "Generate Prompt AI" lalu "Generate Animasi" untuk melihat preview 60 FPS di sini.
           </p>
         </div>
       ) : (
-        <div className="glass-card rounded-2xl overflow-hidden border border-sky-500/30 shadow-xl shadow-sky-900/20 transition hover:border-sky-500/60 flex flex-col">
+        <div className="glass-card rounded-2xl overflow-hidden border border-sky-500/30 shadow-xl shadow-sky-950/20 transition hover:border-sky-500/50 flex flex-col">
           <div className="aspect-16-9 w-full bg-slate-950 relative flex items-center justify-center group overflow-hidden">
             <iframe
               srcDoc={latestAnimation.html}
@@ -155,16 +169,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               className="w-full h-full border-0 pointer-events-none"
               sandbox="allow-scripts"
             />
-            <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 backdrop-blur-sm gap-2.5 p-4 flex-wrap">
+            {/* Hover Action Overlay */}
+            <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/65 backdrop-blur-sm gap-2 p-3 flex-wrap">
               <button
                 onClick={() => onOpenFullscreen(latestAnimation)}
-                className="px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition transform hover:scale-105 shadow-lg shadow-sky-500/50 cursor-pointer"
+                className="px-3.5 py-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition transform hover:scale-105 shadow-lg shadow-sky-500/50 cursor-pointer"
               >
                 <i className="fa-solid fa-expand"></i> Fullscreen
               </button>
               <button
                 onClick={() => onDownloadSingle(latestAnimation)}
-                className="px-4 py-2.5 bg-gray-800/90 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-2 transition border border-gray-700 shadow-lg cursor-pointer"
+                className="px-3.5 py-2 bg-gray-800/90 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition border border-gray-700 shadow-md cursor-pointer"
                 title="Unduh Kode HTML"
               >
                 <i className="fa-solid fa-code"></i> Unduh HTML
@@ -173,7 +188,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                 <button
                   onClick={() => onExportMp4Single(latestAnimation)}
                   disabled={!!isRenderingMp4}
-                  className="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-purple-500/30 cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-purple-500/30 cursor-pointer disabled:opacity-50"
                   title="Export MP4 Video (H.264)"
                 >
                   {isRenderingMp4 ? (
@@ -182,61 +197,63 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-film text-purple-300"></i> Unduh MP4 (H.264)
+                      <i className="fa-solid fa-film text-purple-300"></i> Unduh MP4
                     </>
                   )}
                 </button>
               )}
             </div>
           </div>
-          <div className="p-4 sm:p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gray-900/60">
+
+          {/* Bottom Card Bar */}
+          <div className="p-3 sm:p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-900/70 border-t border-gray-800/80">
             <div className="flex-1 min-w-0">
-              <h3 className="font-bold text-gray-100 text-base truncate w-full flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                {latestAnimation.title}
+              <h3 className="font-bold text-gray-100 text-xs sm:text-sm truncate w-full flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                <span className="truncate">{latestAnimation.title}</span>
               </h3>
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className="text-[10px] bg-sky-900/60 text-sky-400 border border-sky-800/80 px-2 py-0.5 rounded uppercase font-bold">
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <span className="text-[9px] bg-sky-950/80 text-sky-400 border border-sky-800/80 px-1.5 py-0.2 rounded uppercase font-bold">
                   {latestAnimation.type}
                 </span>
-                <span className="text-[10px] bg-gray-800 text-gray-400 border border-gray-700 px-2 py-0.5 rounded capitalize">
+                <span className="text-[9px] bg-gray-800 text-gray-400 border border-gray-700 px-1.5 py-0.2 rounded capitalize">
                   {latestAnimation.style}
                 </span>
                 {(latestAnimation.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(latestAnimation.html)) && (
-                  <span className="text-[10px] bg-emerald-900/50 text-emerald-300 border border-emerald-700/60 px-2 py-0.5 rounded font-bold flex items-center gap-1">
-                    <i className="fa-solid fa-circle text-[7px] text-emerald-400"></i> Green Screen
+                  <span className="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                    <i className="fa-solid fa-circle text-[6px] text-emerald-400"></i> Green Screen
                   </span>
                 )}
                 {latestAnimation.account && latestAnimation.account !== 'Manual' && (
-                  <span className="text-[10px] bg-amber-900/40 text-amber-400 border border-amber-800/50 px-2 py-0.5 rounded flex items-center gap-1">
+                  <span className="text-[9px] bg-amber-950/60 text-amber-400 border border-amber-800/50 px-1.5 py-0.2 rounded flex items-center gap-1">
                     <i className="fa-solid fa-robot"></i> {latestAnimation.account}
                   </span>
                 )}
-                <span className="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-800/50 px-2 py-0.5 rounded font-bold">
-                  1080p 60 FPS
+                <span className="text-[9px] bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 px-1.5 py-0.2 rounded font-bold">
+                  60 FPS HD
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => onDownloadSingle(latestAnimation)}
-                className="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold border border-gray-700 transition flex items-center gap-1.5 cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] font-semibold border border-gray-700 transition flex items-center gap-1 cursor-pointer"
               >
-                <i className="fa-solid fa-download text-sky-400"></i> HTML
+                <i className="fa-solid fa-download text-sky-400 text-[10px]"></i> HTML
               </button>
               {onExportMp4Single && (
                 <button
                   onClick={() => onExportMp4Single(latestAnimation)}
                   disabled={!!isRenderingMp4}
-                  className="px-3.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-600/30 disabled:opacity-50"
+                  className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm shadow-purple-600/30 disabled:opacity-50"
                 >
                   {isRenderingMp4 ? (
-                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
                   ) : (
-                    <i className="fa-solid fa-film"></i>
+                    <i className="fa-solid fa-film text-[10px]"></i>
                   )}
-                  <span>MP4 Video</span>
+                  <span>MP4</span>
                 </button>
               )}
             </div>
