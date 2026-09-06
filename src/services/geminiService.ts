@@ -92,7 +92,7 @@ function extractHTML(text: string): string {
   return cleanHTML.trim();
 }
 
-// Accurate and fast test for a single key via server backend proxy (No browser CORS errors)
+// Accurate, robust test for a single key (Direct Google API probe with server proxy fallback)
 export async function testSingleApiKey(rawKey: string, lineIndex?: number): Promise<ApiKeyTestResult> {
   const key = (rawKey || '').trim();
   const maskedKey =
@@ -123,18 +123,99 @@ export async function testSingleApiKey(rawKey: string, lineIndex?: number): Prom
     };
   }
 
+  // Strategy 1: Direct Google API check (Zero serverless dependency, works on any device & Vercel)
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    const directUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
+    const res = await fetch(directUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timer);
+    const latencyMs = Date.now() - start;
+
+    if (res.ok) {
+      return {
+        key,
+        maskedKey,
+        valid: true,
+        latencyMs,
+        status: 'valid',
+        lineIndex,
+      };
+    }
+
+    // Parse Google's error response safely
+    const errData = await res.json().catch(() => ({}));
+    const rawMsg = errData?.error?.message || `HTTP ${res.status}`;
+    let userMsg = rawMsg;
+
+    if (
+      rawMsg.toLowerCase().includes('api_key_invalid') ||
+      rawMsg.toLowerCase().includes('api key not valid') ||
+      rawMsg.toLowerCase().includes('key not valid') ||
+      res.status === 400
+    ) {
+      userMsg = 'API Key tidak valid atau salah';
+    } else if (
+      rawMsg.toLowerCase().includes('resource_exhausted') ||
+      rawMsg.toLowerCase().includes('quota') ||
+      res.status === 429
+    ) {
+      userMsg = 'Rate limit / kuota habis';
+    } else if (
+      rawMsg.toLowerCase().includes('permission_denied') ||
+      res.status === 403
+    ) {
+      userMsg = 'Izin ditolak untuk API Key ini';
+    }
+
+    return {
+      key,
+      maskedKey,
+      valid: false,
+      error: userMsg,
+      latencyMs,
+      status: 'invalid',
+      lineIndex,
+    };
+  } catch (directErr: any) {
+    // If direct call had a network issue (e.g. adblocker, corporate firewall), try Strategy 2: Server Fallback
+    console.warn('Direct Google API probe failed, attempting server proxy fallback...', directErr);
+  }
+
+  // Strategy 2: Server fallback via /api/gemini/test-single-key
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch('/api/gemini/test-single-key', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ key }),
       signal: controller.signal,
     });
 
     clearTimeout(timer);
+    const latencyMs = Date.now() - start;
+
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      // If server returned HTML (e.g. index.html from an unhandled rewrite or 404 page)
+      return {
+        key,
+        maskedKey,
+        valid: false,
+        error: 'Tidak dapat menjangkau server verifikasi',
+        latencyMs,
+        status: 'invalid',
+        lineIndex,
+      };
+    }
 
     if (res.ok) {
       const data: ApiKeyTestResult = await res.json();
@@ -143,7 +224,7 @@ export async function testSingleApiKey(rawKey: string, lineIndex?: number): Prom
         maskedKey: data.maskedKey || maskedKey,
         valid: !!data.valid,
         error: data.error,
-        latencyMs: data.latencyMs ?? (Date.now() - start),
+        latencyMs: data.latencyMs ?? latencyMs,
         status: data.valid ? 'valid' : 'invalid',
         lineIndex,
       };
@@ -155,17 +236,17 @@ export async function testSingleApiKey(rawKey: string, lineIndex?: number): Prom
       maskedKey,
       valid: false,
       error: err.error || `HTTP ${res.status}`,
-      latencyMs: Date.now() - start,
+      latencyMs,
       status: 'invalid',
       lineIndex,
     };
-  } catch (e: any) {
-    const isTimeout = e.name === 'AbortError';
+  } catch (serverErr: any) {
+    const isTimeout = serverErr.name === 'AbortError';
     return {
       key,
       maskedKey,
       valid: false,
-      error: isTimeout ? 'Timeout (> 6s)' : e.message || 'Gagal koneksi ke server',
+      error: isTimeout ? 'Timeout pemeriksaan (> 6s)' : serverErr.message || 'Gagal koneksi verifikasi',
       latencyMs: Date.now() - start,
       status: 'invalid',
       lineIndex,
