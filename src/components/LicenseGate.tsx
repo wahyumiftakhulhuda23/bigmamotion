@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { QrisModal } from './QrisModal';
 import {
   checkLocalTrialStatus,
   startOneDayTrial,
@@ -32,7 +31,6 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isTrialSuccess, setIsTrialSuccess] = useState(false);
-  const [isQrisOpen, setIsQrisOpen] = useState(false);
 
   // Trial state
   const [trialStatus, setTrialStatus] = useState<TrialStatus>(() => checkLocalTrialStatus());
@@ -307,23 +305,14 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
             </div>
           </div>
 
-          {/* Payment Action Buttons */}
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setIsQrisOpen(true)}
-              className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black text-[11px] tracking-wider uppercase transition shadow-md shadow-purple-600/20 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99]"
-            >
-              <i className="fa-solid fa-qrcode"></i>
-              <span>QRIS CEPAT</span>
-            </button>
-            <button
-              onClick={handleWhatsAppRedirect}
-              className="py-2.5 px-3 rounded-xl bg-white hover:bg-gray-100 text-slate-950 font-black text-[11px] tracking-wider uppercase transition shadow-md shadow-white/10 flex items-center justify-center gap-1.5 cursor-pointer active:scale-[0.99]"
-            >
-              <i className="fa-brands fa-whatsapp text-emerald-600 text-sm"></i>
-              <span>WHATSAPP</span>
-            </button>
-          </div>
+          {/* Payment Action Button */}
+          <button
+            onClick={handleWhatsAppRedirect}
+            className="w-full py-2.5 px-3 rounded-xl bg-white hover:bg-gray-100 text-slate-950 font-black text-xs tracking-wider uppercase transition shadow-md shadow-white/10 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+          >
+            <i className="fa-brands fa-whatsapp text-emerald-600 text-base"></i>
+            <span>KONFIRMASI VIA WHATSAPP (081326187769)</span>
+          </button>
 
           {/* Input & Activate Button */}
           <div className="space-y-2 pt-1">
@@ -369,9 +358,6 @@ export const LicenseGate: React.FC<LicenseGateProps> = ({
           </div>
         </div>
       </div>
-
-      {/* QRIS Modal */}
-      <QrisModal isOpen={isQrisOpen} onClose={() => setIsQrisOpen(false)} />
     </div>
   );
 };
