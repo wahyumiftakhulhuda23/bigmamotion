@@ -222,7 +222,7 @@ export async function renderHtmlToVideo(
   let isCancelled = false;
   let targetCanvas: HTMLCanvasElement | null = null;
 
-  // Lightweight high-performance overlay (no heavy backdrop-filter blur)
+  // Lightweight high-performance overlay
   const overlay = document.createElement('div');
   overlay.id = 'bigma-render-overlay';
   overlay.style.position = 'fixed';
@@ -282,6 +282,7 @@ export async function renderHtmlToVideo(
   previewBox.style.position = 'relative';
   previewBox.style.border = '1px solid #1e293b';
 
+  // Iframe to run the animation scripts
   const iframe = document.createElement('iframe');
   iframe.style.width = `${width}px`;
   iframe.style.height = `${height}px`;
@@ -290,6 +291,7 @@ export async function renderHtmlToVideo(
   iframe.style.left = '0';
   iframe.style.transformOrigin = 'top left';
   iframe.style.border = 'none';
+  iframe.style.zIndex = '1';
   iframe.sandbox.add('allow-scripts', 'allow-same-origin');
 
   previewBox.appendChild(iframe);
@@ -387,27 +389,37 @@ export async function renderHtmlToVideo(
     }
 
     // Master High-Res Target Canvas
-    // CRITICAL: We attach targetCanvas to document.body so mobile browsers (Android & iOS)
-    // keep its rendering pipeline active and emit frames via captureStream!
+    // CRITICAL:
+    // 1. Mount targetCanvas visibly inside previewBox (z-index: 10, full cover)
+    //    This guarantees that the mobile browser's compositor rasterizes it with active priority
+    //    (never culled or occluded), so captureStream() receives real, uninterrupted video frames!
+    // 2. DO NOT use desynchronized: true (which breaks captureStream() on iOS Safari & Android Chrome)!
     targetCanvas = document.createElement('canvas');
     targetCanvas.id = 'bigma-render-target-canvas';
     targetCanvas.width = width;
     targetCanvas.height = height;
-    targetCanvas.style.position = 'fixed';
-    targetCanvas.style.left = '-9999px';
-    targetCanvas.style.top = '-9999px';
-    targetCanvas.style.width = '1px';
-    targetCanvas.style.height = '1px';
-    targetCanvas.style.opacity = '0.01';
-    targetCanvas.style.pointerEvents = 'none';
-    document.body.appendChild(targetCanvas);
+    targetCanvas.style.position = 'absolute';
+    targetCanvas.style.top = '0';
+    targetCanvas.style.left = '0';
+    targetCanvas.style.width = '100%';
+    targetCanvas.style.height = '100%';
+    targetCanvas.style.objectFit = 'contain';
+    targetCanvas.style.zIndex = '10';
+    targetCanvas.style.display = 'block';
+    previewBox.appendChild(targetCanvas);
 
     const ctx = targetCanvas.getContext('2d', {
       alpha: false,
-      desynchronized: true,
       willReadFrequently: false,
     });
     if (!ctx) throw new Error('Tidak dapat membuat Canvas 2D context');
+
+    // Draw initial frame immediately so targetCanvas is populated BEFORE captureStream is hooked
+    ctx.fillStyle = canvasBgColor;
+    ctx.fillRect(0, 0, width, height);
+    if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
+      ctx.drawImage(iframeCanvas, 0, 0, width, height);
+    }
 
     // =========================================================================
     // ENGINE DECISION:
@@ -493,7 +505,7 @@ export async function renderHtmlToVideo(
           if (isCancelled) throw new Error('Render dibatalkan oleh pengguna.');
           if (encodeError) throw encodeError;
 
-          // Backpressure check (safe threshold of 6 frames prevents pipeline stalls)
+          // Backpressure check
           if (videoEncoder.encodeQueueSize > 6) {
             await new Promise<void>((res) => {
               let done = false;
@@ -581,7 +593,6 @@ export async function renderHtmlToVideo(
         if (videoEncoder) {
           try { videoEncoder.close(); } catch {}
         }
-        // Do NOT loop or retry! Move seamlessly to Universal Recorder below.
       }
     }
 
@@ -594,6 +605,7 @@ export async function renderHtmlToVideo(
     // =========================================================================
     updateUIProgress(12, isMobile ? 'Memulai Perekaman Video HP...' : 'Mengalihkan ke Universal Recorder...');
 
+    // Get stream from targetCanvas (which is mounted and visibly painting in previewBox)
     const stream = targetCanvas.captureStream
       ? targetCanvas.captureStream(fps)
       : (iframeCanvas as any)?.captureStream?.(fps);
@@ -602,7 +614,9 @@ export async function renderHtmlToVideo(
       throw new Error('Perekam video canvas tidak didukung pada browser ini.');
     }
 
-    // Video-only MIME candidates (strictly no audio codecs like mp4a to avoid audio track mismatch errors)
+    const videoTrack = stream.getVideoTracks()[0] as any;
+
+    // Video-only MIME candidates (strictly no audio codecs like mp4a)
     const mimeCandidates = [
       'video/mp4;codecs=avc1',
       'video/mp4;codecs=h264',
@@ -616,7 +630,9 @@ export async function renderHtmlToVideo(
     let mediaRecorder: MediaRecorder | null = null;
     let chosenMime = '';
 
-    const effectiveBitrate = Math.min(bitrate, isMobile ? 14 : bitrate) * 1_000_000;
+    // Conservative mobile bitrate: 6Mbps for 1080p, 10Mbps for 4K to ensure mobile SoC stability
+    const mobileBitrate = Math.min(bitrate, width > 1920 ? 10 : width > 1280 ? 6 : 4) * 1_000_000;
+    const effectiveBitrate = isMobile ? mobileBitrate : bitrate * 1_000_000;
 
     for (const m of mimeCandidates) {
       if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) {
@@ -633,11 +649,24 @@ export async function renderHtmlToVideo(
       }
     }
 
+    // Fallback without explicit bitrate if mobile encoder rejected custom bitrate
+    if (!mediaRecorder) {
+      for (const m of mimeCandidates) {
+        if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) {
+          try {
+            mediaRecorder = new MediaRecorder(stream, { mimeType: m });
+            chosenMime = m;
+            break;
+          } catch {
+            continue;
+          }
+        }
+      }
+    }
+
     if (!mediaRecorder) {
       try {
-        mediaRecorder = new MediaRecorder(stream, {
-          videoBitsPerSecond: effectiveBitrate,
-        });
+        mediaRecorder = new MediaRecorder(stream);
         chosenMime = mediaRecorder.mimeType || 'video/mp4';
       } catch (err: any) {
         throw new Error(`Browser tidak dapat memulai MediaRecorder: ${err.message}`);
@@ -651,12 +680,16 @@ export async function renderHtmlToVideo(
       }
     };
 
+    let recordResolved = false;
     const recordPromise = new Promise<Blob>((resolve, reject) => {
       if (!mediaRecorder) return reject(new Error('MediaRecorder tidak tersedia'));
 
       mediaRecorder.onstop = () => {
+        if (recordResolved) return;
+        recordResolved = true;
+
         if (chunks.length === 0) {
-          reject(new Error('Perekaman video tidak menghasilkan data. Silakan coba lagi.'));
+          reject(new Error('Perekaman video tidak menghasilkan frame. Silakan coba lagi.'));
           return;
         }
         const finalType = chosenMime.includes('webm') ? 'video/webm' : 'video/mp4';
@@ -664,15 +697,16 @@ export async function renderHtmlToVideo(
       };
 
       mediaRecorder.onerror = (e: any) => {
+        if (recordResolved) return;
+        recordResolved = true;
         reject(new Error(`Perekaman gagal: ${e?.error?.message || 'MediaRecorder error'}`));
       };
     });
 
-    // Start recording with 200ms slice intervals for steady buffer flushes
-    mediaRecorder.start(200);
+    // Start recording WITHOUT timeslice for universal iOS Safari and Android Chrome compatibility
+    mediaRecorder.start();
 
     // Active frame render loop using window.requestAnimationFrame
-    // This ensures rendering continues even if the iframe's requestAnimationFrame is throttled
     let isRecordingActive = true;
     let animId = 0;
     let lastDrawTime = 0;
@@ -688,13 +722,20 @@ export async function renderHtmlToVideo(
         if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
           ctx.drawImage(iframeCanvas, 0, 0, width, height);
         }
+
+        // Notify track explicitly of new rendered frame
+        if (videoTrack && typeof videoTrack.requestFrame === 'function') {
+          try {
+            videoTrack.requestFrame();
+          } catch {}
+        }
       }
 
       animId = window.requestAnimationFrame(renderLoop);
     };
     animId = window.requestAnimationFrame(renderLoop);
 
-    // Safety fallback interval in case mobile browser puts requestAnimationFrame on low priority
+    // Fallback interval ensures frames are constantly pushed even under mobile battery saver
     const fallbackDrawInterval = setInterval(() => {
       if (!isRecordingActive) {
         clearInterval(fallbackDrawInterval);
@@ -704,6 +745,11 @@ export async function renderHtmlToVideo(
       ctx.fillRect(0, 0, width, height);
       if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
         ctx.drawImage(iframeCanvas, 0, 0, width, height);
+      }
+      if (videoTrack && typeof videoTrack.requestFrame === 'function') {
+        try {
+          videoTrack.requestFrame();
+        } catch {}
       }
     }, 40);
 
@@ -734,17 +780,23 @@ export async function renderHtmlToVideo(
 
     if (isCancelled) throw new Error('Render dibatalkan oleh pengguna.');
 
+    updateUIProgress(95, 'Menyelesaikan perekaman video...');
+
+    // Request data flush right before stopping
     if (mediaRecorder.state === 'recording') {
+      try {
+        mediaRecorder.requestData();
+      } catch {}
       mediaRecorder.stop();
     }
 
-    updateUIProgress(96, 'Menyusun berkas video final...');
+    updateUIProgress(97, 'Menyusun berkas video final...');
 
-    // Wait for recorded blob with a safety timeout so it never hangs
+    // Generous 15-second timeout ensures mobile storage/RAM has ample time to assemble the file
     const recordedBlob = await Promise.race([
       recordPromise,
       new Promise<Blob>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout penyusunan file video MediaRecorder')), 6000)
+        setTimeout(() => reject(new Error('Timeout penyusunan file video MediaRecorder')), 15000)
       ),
     ]);
 
@@ -765,8 +817,8 @@ export async function renderHtmlToVideo(
     };
   } finally {
     window.removeEventListener('resize', updateIframeScale);
-    if (targetCanvas && document.body.contains(targetCanvas)) {
-      document.body.removeChild(targetCanvas);
+    if (targetCanvas && previewBox.contains(targetCanvas)) {
+      previewBox.removeChild(targetCanvas);
     }
     if (document.body.contains(overlay)) {
       document.body.removeChild(overlay);
