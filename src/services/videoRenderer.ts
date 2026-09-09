@@ -107,17 +107,11 @@ export function prepareHtmlForVideo(
         overflow: hidden !important;
         width: 100% !important;
         height: 100% !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
       }
       canvas {
         display: block !important;
         width: 100% !important;
         height: 100% !important;
-        max-width: 100% !important;
-        max-height: 100% !important;
-        object-fit: contain !important;
       }
     </style>
   `;
@@ -158,11 +152,6 @@ export async function renderHtmlToVideo(
   const frameDurationUs = Math.round(1_000_000 / fps);
   const frameIntervalMs = 1000 / fps;
   const targetBitrateBps = Math.round(bitrate * 1_000_000);
-
-  // Reference canvas dimensions for rendering iframe
-  // Using 1280x720 (16:9) as calibrated base so objects never shrink/zoom-out in 1080p or 4K
-  const baseWidth = 1280;
-  const baseHeight = 720;
 
   // Active rendering overlay container to prevent background tab throttling
   const overlay = document.createElement('div');
@@ -211,20 +200,22 @@ export async function renderHtmlToVideo(
     </span>
   `;
 
+  // Natural 16:9 preview box matching original HTML preview frame exactly
   const previewBox = document.createElement('div');
   previewBox.style.width = '100%';
   previewBox.style.aspectRatio = '16/9';
-  previewBox.style.backgroundColor = '#000000';
+  previewBox.style.backgroundColor = canvasBgColor;
   previewBox.style.borderRadius = '12px';
   previewBox.style.overflow = 'hidden';
   previewBox.style.position = 'relative';
   previewBox.style.border = '1px solid #1e293b';
 
+  // Iframe with natural 100% width/height so elements render 1:1 matching HTML preview (no shrink/zoom-out)
   const iframe = document.createElement('iframe');
-  iframe.style.width = `${baseWidth}px`;
-  iframe.style.height = `${baseHeight}px`;
-  iframe.style.transformOrigin = 'top left';
+  iframe.style.width = '100%';
+  iframe.style.height = '100%';
   iframe.style.border = 'none';
+  iframe.style.display = 'block';
   iframe.sandbox.add('allow-scripts', 'allow-same-origin');
 
   previewBox.appendChild(iframe);
@@ -259,13 +250,6 @@ export async function renderHtmlToVideo(
   overlay.appendChild(card);
   document.body.appendChild(overlay);
 
-  const updateIframeScale = () => {
-    const boxWidth = previewBox.clientWidth || 540;
-    const scale = boxWidth / baseWidth;
-    iframe.style.transform = `scale(${scale})`;
-  };
-  updateIframeScale();
-
   const updateUIProgress = (pct: number, msg: string) => {
     progressBar.style.width = `${pct}%`;
     statusText.innerHTML = `<span>${msg}</span><span>${pct}%</span>`;
@@ -289,7 +273,6 @@ export async function renderHtmlToVideo(
     });
 
     URL.revokeObjectURL(iframeUrl);
-    updateIframeScale();
 
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (iframeDoc && (iframeDoc as any).fonts) {
@@ -388,9 +371,70 @@ export async function renderHtmlToVideo(
 
             let encodeError: any = null;
 
+            // Target CBR Bitrate Enforcement:
+            // Calculate target bytes per frame and pad compressed frames using standard H.264 NALU type 12 (Filler Data).
+            // This guarantees that file metadata in Windows/Mac/MediaInfo strictly matches the chosen bitrate (e.g. 18 Mbps).
+            const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
+            let totalAccumulatedTargetBytes = 0;
+            let totalEmittedBytes = 0;
+
             const videoEncoder = new (window as any).VideoEncoder({
               output: (chunk: any, meta: any) => {
-                muxer.addVideoChunk(chunk, meta);
+                try {
+                  totalAccumulatedTargetBytes += targetBytesPerFrame;
+                  const currentLen = chunk.byteLength;
+                  const deficit = Math.round(totalAccumulatedTargetBytes - (totalEmittedBytes + currentLen));
+
+                  // Append H.264 NALU type 12 (Filler Data) so stream adheres exactly to chosen CBR bitrate
+                  if (deficit >= 6) {
+                    const naluPayloadLen = deficit - 4;
+                    const paddedData = new Uint8Array(currentLen + deficit);
+                    const rawData = new Uint8Array(currentLen);
+                    chunk.copyTo(rawData);
+                    paddedData.set(rawData, 0);
+
+                    const offset = currentLen;
+                    // 4-byte big-endian NALU length prefix
+                    paddedData[offset + 0] = (naluPayloadLen >>> 24) & 0xFF;
+                    paddedData[offset + 1] = (naluPayloadLen >>> 16) & 0xFF;
+                    paddedData[offset + 2] = (naluPayloadLen >>> 8) & 0xFF;
+                    paddedData[offset + 3] = naluPayloadLen & 0xFF;
+
+                    // H.264 NAL Unit Header: 0x0C (nal_ref_idc = 0, nal_unit_type = 12 = filler_data)
+                    paddedData[offset + 4] = 0x0C;
+
+                    // H.264 filler payload: 0xFF repeated (ff_byte per ISO/IEC 14496-10)
+                    paddedData.fill(0xFF, offset + 5, offset + 4 + naluPayloadLen - 1);
+
+                    // H.264 RBSP trailing bits: 0x80
+                    paddedData[offset + 4 + naluPayloadLen - 1] = 0x80;
+
+                    muxer.addVideoChunkRaw(
+                      paddedData,
+                      chunk.type,
+                      chunk.timestamp,
+                      chunk.duration ?? frameDurationUs,
+                      meta
+                    );
+                    totalEmittedBytes += paddedData.byteLength;
+                  } else {
+                    const rawData = new Uint8Array(currentLen);
+                    chunk.copyTo(rawData);
+                    muxer.addVideoChunkRaw(
+                      rawData,
+                      chunk.type,
+                      chunk.timestamp,
+                      chunk.duration ?? frameDurationUs,
+                      meta
+                    );
+                    totalEmittedBytes += currentLen;
+                  }
+                } catch (outputErr) {
+                  // Fallback to direct chunk addition if raw buffer processing fails
+                  try {
+                    muxer.addVideoChunk(chunk, meta);
+                  } catch {}
+                }
               },
               error: (e: any) => {
                 console.warn('[WebCodecs Warning]', e);
