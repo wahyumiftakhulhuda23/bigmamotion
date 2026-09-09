@@ -7,6 +7,8 @@ import {
   LogItem,
   NicheCategory,
   VisualStyle,
+  ColorMode,
+  MotionDynamics,
 } from './types';
 import {
   getStoredApiKeys,
@@ -85,6 +87,9 @@ export default function App() {
   const [currentType, setCurrentType] = useState<AnimationType>('icon');
   const [nicheCategory, setNicheCategory] = useState<NicheCategory>('marketing');
   const [visualStyle, setVisualStyle] = useState<VisualStyle>('minimalist');
+  const [colorMode, setColorMode] = useState<ColorMode>('gradient');
+  const [motionDynamics, setMotionDynamics] = useState<MotionDynamics>('flow');
+  const [neonGlow, setNeonGlow] = useState<boolean>(true);
   const [promptCount, setPromptCount] = useState<number>(3);
   const [isGreenScreen, setIsGreenScreen] = useState<boolean>(false);
   const [keywordsText, setKeywordsText] = useState<string>('');
@@ -213,7 +218,7 @@ export default function App() {
       .filter((k) => k.length > 0);
 
     addLog(
-      `Meminta AI untuk generate ${promptCount} prompt animasi (${currentType.toUpperCase()} - ${nicheCategory})${
+      `Meminta AI untuk generate ${promptCount} prompt animasi (${currentType.toUpperCase()} - ${nicheCategory} - ${colorMode.toUpperCase()})${
         isGreenScreen ? ' [Mode Green Screen]' : ''
       }${keywordLines.length > 0 ? ` [${keywordLines.length} Custom Keywords]` : ''}...`,
       'info'
@@ -228,7 +233,10 @@ export default function App() {
         visualStyle,
         promptCount,
         keywordLines,
-        isGreenScreen
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow
       );
 
       setGeneratedPrompts(prompts);
@@ -305,7 +313,10 @@ export default function App() {
             addLog(`[Retry ${attempt}/${max}] Animasi #${i + 1} (${err}). Mencoba ulang...`, 'warn');
           },
           3,
-          isGreenScreen
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
         );
 
         if (anim) {
@@ -391,7 +402,12 @@ export default function App() {
           acc.type,
           acc.subCategory,
           acc.style,
-          acc.promptCount
+          acc.promptCount,
+          undefined,
+          acc.isGreenScreen ?? false,
+          acc.colorMode ?? 'gradient',
+          acc.motionDynamics ?? 'flow',
+          acc.neonGlow ?? true
         );
         addLog(`Berhasil mendapatkan ${prompts.length} prompt untuk [${acc.name}]`, 'success');
       } catch (e: any) {
@@ -412,7 +428,13 @@ export default function App() {
             acc.subCategory,
             acc.style,
             j + 1,
-            prompts.length
+            prompts.length,
+            undefined,
+            3,
+            acc.isGreenScreen ?? false,
+            acc.colorMode ?? 'gradient',
+            acc.motionDynamics ?? 'flow',
+            acc.neonGlow ?? true
           );
 
           if (anim) {
@@ -497,6 +519,7 @@ export default function App() {
         height: 1080,
         fps: 60,
         duration: 10,
+        bitrate: 18,
         format: 'mp4',
         mode: item.type,
         isGreenScreen: item.isGreenScreen ?? isGreenScreen,
@@ -577,6 +600,12 @@ export default function App() {
           onSelectNiche={setNicheCategory}
           visualStyle={visualStyle}
           onSelectStyle={setVisualStyle}
+          colorMode={colorMode}
+          onSelectColorMode={setColorMode}
+          motionDynamics={motionDynamics}
+          onSelectMotionDynamics={setMotionDynamics}
+          neonGlow={neonGlow}
+          onToggleNeonGlow={setNeonGlow}
           promptCount={promptCount}
           onChangePromptCount={setPromptCount}
           isGreenScreen={isGreenScreen}

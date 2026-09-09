@@ -76,6 +76,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
         height: 1080,
         fps: 60,
         duration: 10,
+        bitrate: 18,
         mode: item.type,
       });
 

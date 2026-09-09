@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AnimationType, NicheCategory, VisualStyle } from '../types';
+import { AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
 
 interface WorkflowSectionProps {
   currentType: AnimationType;
@@ -8,6 +8,12 @@ interface WorkflowSectionProps {
   onSelectNiche: (cat: NicheCategory) => void;
   visualStyle: VisualStyle;
   onSelectStyle: (style: VisualStyle) => void;
+  colorMode?: ColorMode;
+  onSelectColorMode?: (mode: ColorMode) => void;
+  motionDynamics?: MotionDynamics;
+  onSelectMotionDynamics?: (dynamics: MotionDynamics) => void;
+  neonGlow?: boolean;
+  onToggleNeonGlow?: (val: boolean) => void;
   promptCount: number;
   onChangePromptCount: (count: number) => void;
   isGreenScreen?: boolean;
@@ -32,6 +38,12 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onSelectNiche,
   visualStyle,
   onSelectStyle,
+  colorMode = 'gradient',
+  onSelectColorMode,
+  motionDynamics = 'flow',
+  onSelectMotionDynamics,
+  neonGlow = true,
+  onToggleNeonGlow,
   promptCount,
   onChangePromptCount,
   isGreenScreen = false,
@@ -165,21 +177,101 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
             >
               <option value="minimalist">Minimalist Vector (Clean)</option>
+              <option value="flat_vector">Flat Vector Art (Modern Flat)</option>
               <option value="cyberpunk">Cyberpunk Neon Glow</option>
               <option value="corporate">Modern Corporate Flat</option>
               <option value="glassmorphism">Glassmorphism & 3D</option>
               <option value="kinetic">Kinetic Dynamic</option>
               <option value="fluid">Abstract Fluid Mesh</option>
+              <option value="isometric">Isometric 3D Projection</option>
+              <option value="retro_synth">Retro Synthwave 80s</option>
             </select>
           </div>
         </div>
 
-        {/* Compact Settings Row: Green Screen & Prompt Count */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+        {/* 3. Color Mode & Motion Dynamics (Variasi & Anti-Monoton) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {/* Mode Warna / Color Mode */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
+              <i className="fa-solid fa-palette text-pink-400 text-[10px]"></i>
+              <span>3. Mode Warna</span>
+            </label>
+            <select
+              value={colorMode}
+              onChange={(e) => onSelectColorMode && onSelectColorMode(e.target.value as ColorMode)}
+              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
+            >
+              <option value="gradient">Gradient Dinamis (Vibrant)</option>
+              <option value="flat">Flat Solid (Tanpa Gradien / No Gradient)</option>
+              <option value="neon">Neon Cyberpunk (Luminescence)</option>
+              <option value="monochrome">Monochrome Slate (Minimalist B&W)</option>
+              <option value="pastel">Pastel Aesthetic (Soft Colors)</option>
+              <option value="luxury">Luxury Gold & Obsidian</option>
+            </select>
+          </div>
+
+          {/* Fisika Gerakan / Motion Dynamics */}
+          <div className="space-y-1">
+            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
+              <i className="fa-solid fa-person-running text-sky-400 text-[10px]"></i>
+              <span>Fisika Gerakan (Dynamics)</span>
+            </label>
+            <select
+              value={motionDynamics}
+              onChange={(e) => onSelectMotionDynamics && onSelectMotionDynamics(e.target.value as MotionDynamics)}
+              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
+            >
+              <option value="flow">Flow & Harmonic Wave (Mengalir Lembut)</option>
+              <option value="bounce">Elastic Bounce (Membal & Squash/Stretch)</option>
+              <option value="orbital">3D Orbital Gyroscope (Putaran 3D Orbit)</option>
+              <option value="morph">Kinetic Morphing (Perubahan Bentuk Dinamis)</option>
+              <option value="cyber">Cyber Step HUD (Telemetri & Laser Scanner)</option>
+              <option value="mechanical">Mechanical Clockwork (Gigi Roda Saling Mengunci)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* 4. Compact Settings Row: Neon Glow, Green Screen, Prompt Count */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+          {/* Neon Glow Toggle */}
+          <div
+            onClick={() => onToggleNeonGlow && onToggleNeonGlow(!neonGlow)}
+            className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 ${
+              neonGlow
+                ? 'bg-purple-950/40 border-purple-500/60 shadow-md shadow-purple-950/30'
+                : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                neonGlow
+                  ? 'bg-purple-500 border-purple-400 text-white font-bold'
+                  : 'border-gray-700 bg-gray-800 text-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-check text-[9px]"></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-bold text-gray-200">Neon Glow</span>
+                <span
+                  className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase ${
+                    neonGlow
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                      : 'bg-gray-800 text-gray-400'
+                  }`}
+                >
+                  {neonGlow ? 'Aktif' : 'Off'}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Green Screen Option */}
           <div
             onClick={() => onToggleGreenScreen && onToggleGreenScreen(!isGreenScreen)}
-            className={`p-2.5 rounded-xl border transition cursor-pointer select-none flex items-center gap-2.5 ${
+            className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 ${
               isGreenScreen
                 ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md shadow-emerald-950/30'
                 : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700'
@@ -195,9 +287,9 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               <i className="fa-solid fa-check text-[9px]"></i>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-gray-200">Green Screen</span>
-                <span className="text-[9px] px-1.5 py-0.2 rounded font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-bold text-gray-200">Green Screen</span>
+                <span className="text-[8px] px-1 py-0.1 rounded font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
                   #00FF00
                 </span>
               </div>
@@ -205,17 +297,16 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
 
           {/* Prompt Count */}
-          <div className="flex items-center gap-2 bg-gray-900/40 border border-gray-800/80 p-1.5 px-2.5 rounded-xl">
-            <span className="text-xs font-bold text-gray-300 whitespace-nowrap">Jml Prompt:</span>
+          <div className="flex items-center justify-between gap-1.5 bg-gray-900/40 border border-gray-800/80 p-1 px-2 rounded-xl">
+            <span className="text-[11px] font-bold text-gray-300 whitespace-nowrap">Jml Prompt:</span>
             <input
               type="number"
               min="1"
               max="20"
               value={promptCount}
               onChange={(e) => onChangePromptCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-14 bg-gray-950/80 border border-gray-700 rounded-lg px-2 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
+              className="w-12 bg-gray-950/80 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
             />
-            <span className="text-[10px] text-gray-400 font-medium">Prompt AI</span>
           </div>
         </div>
 

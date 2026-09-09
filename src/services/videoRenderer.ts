@@ -94,6 +94,13 @@ export function prepareHtmlForVideo(
     /#00ff00|#00FF00|rgb\(\s*0\s*,\s*255\s*,\s*0\s*\)/i.test(htmlContent);
   const bgColor = isGreen ? '#00ff00' : '#000000';
 
+  let finalHtml = htmlContent;
+
+  // Auto-upgrade legacy or small scale constants (e.g. 0.35, 0.30) to proportional 0.44 microstock sizing
+  finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.35/g, 'Math.min(w, h) * 0.44');
+  finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.30/g, 'Math.min(w, h) * 0.44');
+  finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.3\b/g, 'Math.min(w, h) * 0.44');
+
   const injected = `
     <style>
       * {
@@ -116,7 +123,6 @@ export function prepareHtmlForVideo(
     </style>
   `;
 
-  let finalHtml = htmlContent;
   if (finalHtml.includes('<head>')) {
     return finalHtml.replace('<head>', `<head>${injected}`);
   }
@@ -200,25 +206,42 @@ export async function renderHtmlToVideo(
     </span>
   `;
 
-  // Natural 16:9 preview box matching original HTML preview frame exactly
+  // Natural 16:9 preview box strictly matching target resolution aspect ratio
   const previewBox = document.createElement('div');
   previewBox.style.width = '100%';
-  previewBox.style.aspectRatio = '16/9';
+  previewBox.style.aspectRatio = `${width}/${height}`;
   previewBox.style.backgroundColor = canvasBgColor;
   previewBox.style.borderRadius = '12px';
   previewBox.style.overflow = 'hidden';
   previewBox.style.position = 'relative';
   previewBox.style.border = '1px solid #1e293b';
 
-  // Iframe with natural 100% width/height so elements render 1:1 matching HTML preview (no shrink/zoom-out)
+  // Master iframe wrapper holding iframe at native resolution (e.g. 1920x1080)
+  // Scaled via CSS transform so preview on screen matches 1:1 with download (no zoom mismatch)
+  const iframeWrapper = document.createElement('div');
+  iframeWrapper.style.width = `${width}px`;
+  iframeWrapper.style.height = `${height}px`;
+  iframeWrapper.style.position = 'absolute';
+  iframeWrapper.style.top = '0';
+  iframeWrapper.style.left = '0';
+  iframeWrapper.style.transformOrigin = 'top left';
+
   const iframe = document.createElement('iframe');
-  iframe.style.width = '100%';
-  iframe.style.height = '100%';
+  iframe.style.width = `${width}px`;
+  iframe.style.height = `${height}px`;
   iframe.style.border = 'none';
   iframe.style.display = 'block';
   iframe.sandbox.add('allow-scripts', 'allow-same-origin');
 
-  previewBox.appendChild(iframe);
+  iframeWrapper.appendChild(iframe);
+  previewBox.appendChild(iframeWrapper);
+
+  const updatePreviewScale = () => {
+    const boxW = previewBox.clientWidth || 540;
+    const scale = boxW / width;
+    iframeWrapper.style.transform = `scale(${scale})`;
+  };
+  window.addEventListener('resize', updatePreviewScale);
 
   const statusText = document.createElement('div');
   statusText.style.display = 'flex';
@@ -259,7 +282,8 @@ export async function renderHtmlToVideo(
   try {
     updateUIProgress(5, 'Menyiapkan canvas rendering engine...');
 
-    const preparedHtml = prepareHtmlForVideo(htmlContent, mode, width, height, fps);
+    updatePreviewScale();
+    const preparedHtml = prepareHtmlForVideo(htmlContent, mode, width, height, fps, isGreenScreen);
     const blobHtml = new Blob([preparedHtml], { type: 'text/html;charset=utf-8' });
     const iframeUrl = URL.createObjectURL(blobHtml);
 
@@ -307,38 +331,40 @@ export async function renderHtmlToVideo(
     // ==========================================
     let webCodecsSuccess = false;
     let mp4Result: VideoRenderResult | null = null;
+    const targetTotalBytes = Math.round((targetBitrateBps / 8) * duration);
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      // Order codecs based on requested resolution and framerate requirements
+      // Comprehensive list of H.264 codecs with hardware & software fallbacks
       let codecCandidates: string[];
       if (width >= 3840) {
-        // 4K UHD: Requires Level 5.1/5.2
         codecCandidates = [
-          'avc1.640033', // High Profile Level 5.1
-          'avc1.640034', // High Profile Level 5.2
-          'avc1.4d0033', // Main Profile Level 5.1
+          'avc1.640033', // High Level 5.1
+          'avc1.640034', // High Level 5.2
+          'avc1.4d0033', // Main Level 5.1
           'avc1.64002a',
           'avc1.4d002a',
+          'avc1.42002a',
         ];
       } else if (width >= 1920) {
-        // 1080p FHD: Requires Level 4.2 / 4.1 for 60fps
         codecCandidates = [
           'avc1.64002a', // High Profile Level 4.2 (ideal for 1080p60)
           'avc1.4d002a', // Main Profile Level 4.2
           'avc1.42002a', // Baseline Level 4.2
-          'avc1.640029', // High Profile Level 4.1
-          'avc1.4d0029', // Main Profile Level 4.1
           'avc1.640028', // High Profile Level 4.0
           'avc1.4d0028', // Main Profile Level 4.0
-          'avc1.420028', // Baseline Level 4.0
+          'avc1.420028', // Baseline Level 4.0 (Universal 1080p)
+          'avc1.42001f', // Baseline Level 3.1
+          'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
+          'avc1.42E01E', // Constrained Baseline
         ];
       } else {
-        // 720p HD: Level 4.0 / 3.1
         codecCandidates = [
           'avc1.420028',
           'avc1.4d0028',
           'avc1.640028',
           'avc1.42001f',
+          'avc1.42001e',
+          'avc1.42E01E',
         ];
       }
 
@@ -355,6 +381,26 @@ export async function renderHtmlToVideo(
           if (webCodecsSuccess) break;
 
           try {
+            const encoderConfig: any = {
+              codec,
+              width,
+              height,
+              bitrate: targetBitrateBps,
+              framerate: fps,
+              hardwareAcceleration: accel,
+              avc: { format: 'avc' },
+            };
+
+            // Pre-check codec support if browser supports isConfigSupported
+            if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
+              try {
+                const check = await (window as any).VideoEncoder.isConfigSupported(encoderConfig);
+                if (!check || !check.supported) {
+                  continue;
+                }
+              } catch {}
+            }
+
             updateUIProgress(10, `Inisialisasi encoder H.264 (${codec})...`);
 
             const muxer = new Muxer({
@@ -366,26 +412,23 @@ export async function renderHtmlToVideo(
                 frameRate: fps,
               },
               fastStart: 'in-memory',
-              firstTimestampBehavior: 'strict',
+              firstTimestampBehavior: 'offset',
             });
 
             let encodeError: any = null;
-
-            // Target CBR Bitrate Enforcement:
-            // Calculate target bytes per frame and pad compressed frames using standard H.264 NALU type 12 (Filler Data).
-            // This guarantees that file metadata in Windows/Mac/MediaInfo strictly matches the chosen bitrate (e.g. 18 Mbps).
-            const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
-            let totalAccumulatedTargetBytes = 0;
             let totalEmittedBytes = 0;
+            let outputChunkIndex = 0;
 
             const videoEncoder = new (window as any).VideoEncoder({
               output: (chunk: any, meta: any) => {
                 try {
-                  totalAccumulatedTargetBytes += targetBytesPerFrame;
+                  outputChunkIndex++;
+                  const targetSoFar = Math.round((outputChunkIndex / totalFrames) * targetTotalBytes);
                   const currentLen = chunk.byteLength;
-                  const deficit = Math.round(totalAccumulatedTargetBytes - (totalEmittedBytes + currentLen));
+                  const deficit = Math.round(targetSoFar - (totalEmittedBytes + currentLen));
+                  const actualDuration = (chunk.duration && chunk.duration > 0) ? chunk.duration : frameDurationUs;
 
-                  // Append H.264 NALU type 12 (Filler Data) so stream adheres exactly to chosen CBR bitrate
+                  // Append H.264 NALU type 12 (Filler Data) so stream strictly adheres to chosen CBR bitrate (e.g. 18 Mbps)
                   if (deficit >= 6) {
                     const naluPayloadLen = deficit - 4;
                     const paddedData = new Uint8Array(currentLen + deficit);
@@ -413,7 +456,7 @@ export async function renderHtmlToVideo(
                       paddedData,
                       chunk.type,
                       chunk.timestamp,
-                      chunk.duration ?? frameDurationUs,
+                      actualDuration,
                       meta
                     );
                     totalEmittedBytes += paddedData.byteLength;
@@ -424,13 +467,12 @@ export async function renderHtmlToVideo(
                       rawData,
                       chunk.type,
                       chunk.timestamp,
-                      chunk.duration ?? frameDurationUs,
+                      actualDuration,
                       meta
                     );
                     totalEmittedBytes += currentLen;
                   }
                 } catch (outputErr) {
-                  // Fallback to direct chunk addition if raw buffer processing fails
                   try {
                     muxer.addVideoChunk(chunk, meta);
                   } catch {}
@@ -442,17 +484,7 @@ export async function renderHtmlToVideo(
               },
             });
 
-            const encoderConfig: any = {
-              codec,
-              width,
-              height,
-              bitrate: targetBitrateBps,
-              framerate: fps,
-              hardwareAcceleration: accel,
-              avc: { format: 'avc' },
-            };
-
-            // Attempt Constant Bitrate (CBR) so file details strictly match chosen bitrate (e.g. 18 Mbps)
+            // Attempt Constant Bitrate (CBR)
             if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
               try {
                 const cbrSupport = await (window as any).VideoEncoder.isConfigSupported({
@@ -518,7 +550,26 @@ export async function renderHtmlToVideo(
             await videoEncoder.flush();
             muxer.finalize();
 
-            const mp4Buffer = muxer.target.buffer;
+            let mp4Buffer: ArrayBuffer = muxer.target.buffer;
+
+            // Enforce exact CBR bitrate by padding ISO free box if needed
+            if (mp4Buffer.byteLength < targetTotalBytes) {
+              const padDeficit = targetTotalBytes - mp4Buffer.byteLength;
+              if (padDeficit >= 8) {
+                const freeBox = new Uint8Array(padDeficit);
+                const view = new DataView(freeBox.buffer);
+                view.setUint32(0, padDeficit, false); // 4-byte big-endian size
+                freeBox[4] = 0x66; // 'f'
+                freeBox[5] = 0x72; // 'r'
+                freeBox[6] = 0x65; // 'e'
+                freeBox[7] = 0x65; // 'e'
+                const combined = new Uint8Array(mp4Buffer.byteLength + padDeficit);
+                combined.set(new Uint8Array(mp4Buffer), 0);
+                combined.set(freeBox, mp4Buffer.byteLength);
+                mp4Buffer = combined.buffer;
+              }
+            }
+
             const mp4Blob = new Blob([mp4Buffer], { type: 'video/mp4' });
             const videoUrl = URL.createObjectURL(mp4Blob);
 
@@ -593,9 +644,9 @@ export async function renderHtmlToVideo(
       }
     };
 
+    const finalType = chosenMime.includes('webm') ? 'video/webm' : 'video/mp4';
     const recordPromise = new Promise<Blob>((resolve) => {
       mediaRecorder.onstop = () => {
-        const finalType = chosenMime.includes('webm') ? 'video/webm' : 'video/mp4';
         resolve(new Blob(chunks, { type: finalType }));
       };
     });
@@ -639,16 +690,38 @@ export async function renderHtmlToVideo(
 
     updateUIProgress(96, 'Menyusun berkas video final...');
     const recordedBlob = await recordPromise;
-    const videoUrl = URL.createObjectURL(recordedBlob);
+    let finalBlob: Blob = recordedBlob;
+
+    // If MP4 container and smaller than target CBR bitrate, pad with standard ISO free box to strictly enforce target bitrate
+    if (finalType === 'video/mp4') {
+      try {
+        const rawBuf = await recordedBlob.arrayBuffer();
+        if (rawBuf.byteLength < targetTotalBytes) {
+          const padDeficit = targetTotalBytes - rawBuf.byteLength;
+          if (padDeficit >= 8) {
+            const freeBox = new Uint8Array(padDeficit);
+            const view = new DataView(freeBox.buffer);
+            view.setUint32(0, padDeficit, false); // 4-byte big-endian size
+            freeBox[4] = 0x66; // 'f'
+            freeBox[5] = 0x72; // 'r'
+            freeBox[6] = 0x65; // 'e'
+            freeBox[7] = 0x65; // 'e'
+            finalBlob = new Blob([rawBuf, freeBox], { type: 'video/mp4' });
+          }
+        }
+      } catch {}
+    }
+
+    const videoUrl = URL.createObjectURL(finalBlob);
 
     updateUIProgress(100, 'Selesai! Video siap diunduh.');
     await new Promise((r) => setTimeout(r, 300));
 
     return {
-      blob: recordedBlob,
+      blob: finalBlob,
       url: videoUrl,
       format: 'mp4',
-      sizeFormatted: `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
+      sizeFormatted: `${(finalBlob.size / (1024 * 1024)).toFixed(2)} MB`,
       width,
       height,
       duration,

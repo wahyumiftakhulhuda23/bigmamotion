@@ -39,6 +39,7 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
         height: 1080,
         fps: 60,
         duration: 10,
+        bitrate: 18,
         format: 'mp4',
         mode: item.type,
       });

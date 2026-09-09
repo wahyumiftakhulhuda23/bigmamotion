@@ -1,5 +1,5 @@
 import React from 'react';
-import { AutoPilotAccount, AnimationType, NicheCategory, VisualStyle } from '../types';
+import { AutoPilotAccount, AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
 
 interface AutoPilotModalProps {
   isOpen: boolean;
@@ -37,7 +37,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-gray-100 text-base">Auto Pilot Batch Engine</h3>
-              <p className="text-xs text-gray-400">Otomatis buat prompt & render animasi secara serial / multi-akun.</p>
+              <p className="text-xs text-gray-400">Otomatis buat prompt & render animasi secara serial / multi-akun dengan variasi visual.</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-lg cursor-pointer">
@@ -74,7 +74,8 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                   </button>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-8">
+                {/* Row 1: Nama Akun, Tipe Animasi & Jml Prompt */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-8">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Nama Akun / Folder</label>
                     <input
@@ -96,9 +97,23 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                       <option value="bg">Background Motion</option>
                     </select>
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Jml Prompt</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={acc.promptCount}
+                      onChange={(e) =>
+                        onUpdateAccount(index, { promptCount: Math.max(1, parseInt(e.target.value) || 1) })
+                      }
+                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none font-bold"
+                    />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Row 2: Kategori Niche & Gaya Visual */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Kategori Niche</label>
                     <select
@@ -123,25 +138,85 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                       className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
                     >
                       <option value="minimalist">Clean Minimalist</option>
+                      <option value="flat_vector">Flat Vector Art (Modern Flat)</option>
                       <option value="cyberpunk">Cyberpunk Neon</option>
-                      <option value="corporate">Modern Corporate</option>
-                      <option value="glassmorphism">Glassmorphism</option>
+                      <option value="corporate">Modern Corporate Flat</option>
+                      <option value="glassmorphism">Glassmorphism & 3D</option>
                       <option value="kinetic">Kinetic Typography</option>
-                      <option value="fluid">Abstract Fluid</option>
+                      <option value="fluid">Abstract Fluid Mesh</option>
+                      <option value="isometric">Isometric 3D Projection</option>
+                      <option value="retro_synth">Retro Synthwave 80s</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Row 3: Mode Warna, Fisika Gerakan & Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-gray-800/60">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Jml Prompt</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="20"
-                      value={acc.promptCount}
-                      onChange={(e) =>
-                        onUpdateAccount(index, { promptCount: Math.max(1, parseInt(e.target.value) || 1) })
-                      }
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none font-bold"
-                    />
+                    <label className="text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">
+                      <i className="fa-solid fa-palette text-[9px]"></i>
+                      <span>Mode Warna</span>
+                    </label>
+                    <select
+                      value={acc.colorMode || 'gradient'}
+                      onChange={(e) => onUpdateAccount(index, { colorMode: e.target.value as ColorMode })}
+                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="gradient">Gradient Dinamis (Vibrant)</option>
+                      <option value="flat">Flat Solid (Tanpa Gradien)</option>
+                      <option value="neon">Neon Cyberpunk</option>
+                      <option value="monochrome">Monochrome Slate (B&W)</option>
+                      <option value="pastel">Pastel Aesthetic</option>
+                      <option value="luxury">Luxury Gold & Obsidian</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1">
+                      <i className="fa-solid fa-person-running text-[9px]"></i>
+                      <span>Fisika Gerakan</span>
+                    </label>
+                    <select
+                      value={acc.motionDynamics || 'flow'}
+                      onChange={(e) => onUpdateAccount(index, { motionDynamics: e.target.value as MotionDynamics })}
+                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="flow">Flow & Harmonic Wave</option>
+                      <option value="bounce">Elastic Bounce & Squash</option>
+                      <option value="orbital">3D Orbital Gyroscope</option>
+                      <option value="morph">Kinetic Morphing</option>
+                      <option value="cyber">Cyber Step HUD & Laser</option>
+                      <option value="mechanical">Mechanical Clockwork</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1 flex flex-col justify-end">
+                    <div className="flex items-center gap-2 pt-1">
+                      <label
+                        className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-gray-950/70 cursor-pointer select-none text-[10px] font-bold text-gray-300"
+                        onClick={() => onUpdateAccount(index, { neonGlow: acc.neonGlow === undefined ? false : !acc.neonGlow })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={acc.neonGlow ?? true}
+                          onChange={() => {}}
+                          className="rounded text-purple-500 focus:ring-0"
+                        />
+                        <span>Neon Glow</span>
+                      </label>
+                      <label
+                        className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-gray-950/70 cursor-pointer select-none text-[10px] font-bold text-emerald-400"
+                        onClick={() => onUpdateAccount(index, { isGreenScreen: !acc.isGreenScreen })}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={acc.isGreenScreen ?? false}
+                          onChange={() => {}}
+                          className="rounded text-emerald-500 focus:ring-0"
+                        />
+                        <span>Chroma</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -11,11 +11,30 @@ export type NicheCategory =
 
 export type VisualStyle = 
   | 'minimalist' 
+  | 'flat_vector'
   | 'cyberpunk' 
   | 'corporate' 
   | 'glassmorphism' 
   | 'kinetic' 
-  | 'fluid';
+  | 'fluid'
+  | 'isometric'
+  | 'retro_synth';
+
+export type ColorMode = 
+  | 'gradient' 
+  | 'flat' 
+  | 'neon' 
+  | 'monochrome' 
+  | 'pastel' 
+  | 'luxury';
+
+export type MotionDynamics = 
+  | 'flow' 
+  | 'bounce' 
+  | 'orbital' 
+  | 'morph' 
+  | 'cyber' 
+  | 'mechanical';
 
 export interface AnimationItem {
   id: string;
@@ -23,6 +42,9 @@ export interface AnimationItem {
   type: AnimationType;
   style: string;
   subCategory?: string;
+  colorMode?: ColorMode;
+  motionDynamics?: MotionDynamics;
+  neonGlow?: boolean;
   html: string;
   account?: string;
   createdAt?: number;
@@ -44,6 +66,9 @@ export interface AutoPilotAccount {
   style: VisualStyle;
   promptCount: number;
   isGreenScreen?: boolean;
+  neonGlow?: boolean;
+  colorMode?: ColorMode;
+  motionDynamics?: MotionDynamics;
 }
 
 export interface VideoConverterFile {

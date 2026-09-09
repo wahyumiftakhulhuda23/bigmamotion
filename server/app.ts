@@ -292,6 +292,9 @@ export async function handleGeneratePromptsLogic(body: any) {
     count = 3,
     keywords = [],
     isGreenScreen = false,
+    colorMode = "gradient",
+    motionDynamics = "flow",
+    neonGlow = true,
   } = body;
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
@@ -300,9 +303,9 @@ export async function handleGeneratePromptsLogic(body: any) {
   if (type === 'icon') {
     typeInstruction = 'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision.';
   } else if (type === 'text') {
-    typeInstruction = "Every prompt must include a bold catchy main text slogan with glowing aura effects, particles, and energy lines.";
+    typeInstruction = "Every prompt must include a bold catchy main text slogan with energetic typography and motion.";
   } else if (type === 'bg') {
-    typeInstruction = 'Every prompt must describe an elegant looping motion background concept (no text), harmonious gradients, particles or geometric waves.';
+    typeInstruction = 'Every prompt must describe an elegant looping motion background concept (no text), seamless geometry or atmospheric waves.';
   }
 
   let keywordsDirective = '';
@@ -313,19 +316,49 @@ export async function handleGeneratePromptsLogic(body: any) {
     : [];
 
   if (parsedKeywords.length > 0) {
-    keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${parsedKeywords.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: You must strictly incorporate these specific user keywords/topics into the generated animation prompts.)`;
+    keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${parsedKeywords.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: Incorporate these specific user keywords/topics into the generated animation prompts.)`;
   }
 
   const greenScreenDirective = isGreenScreen
-    ? '\nGreen Screen / Chroma Key: ACTIVE. Ensure the animation concept will have high-contrast, clean visual edges ideal for green screen chroma key extraction.'
+    ? '\nGreen Screen / Chroma Key: ACTIVE. Ensure the animation concept has high-contrast, clean visual edges ideal for green screen chroma key extraction (#00FF00 background).'
     : '';
+
+  const colorModeDirective = `\nColor Mode: ${colorMode.toUpperCase()} (${
+    colorMode === 'flat'
+      ? 'Crisp flat solid colors, NO gradients, clean modern flat vector design'
+      : colorMode === 'neon'
+      ? 'High-intensity cyber neon luminescent tones'
+      : colorMode === 'monochrome'
+      ? 'Minimalist monochrome black, white & slate shades'
+      : colorMode === 'pastel'
+      ? 'Soft aesthetic pastel tones (lavender, mint, peach, baby blue)'
+      : colorMode === 'luxury'
+      ? 'Luxury metallic gold, champagne and obsidian black'
+      : 'Vibrant dynamic gradient color transitions'
+  })`;
+
+  const glowDirective = `\nNeon Glow: ${neonGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
+
+  const motionDirective = `\nMotion Dynamics: ${motionDynamics.toUpperCase()} (${
+    motionDynamics === 'bounce'
+      ? 'Energetic elastic bounce with squash and stretch spring physics'
+      : motionDynamics === 'orbital'
+      ? '3D orbital gyroscopic rotation and planetary revolution'
+      : motionDynamics === 'morph'
+      ? 'Kinetic geometric morphing and vertex shape transitions'
+      : motionDynamics === 'cyber'
+      ? 'High-tech stepped HUD telemetry, scanning laser beams, and digital dial ratchets'
+      : motionDynamics === 'mechanical'
+      ? 'Precision mechanical clockwork, interlocking gear mesh rotation and pistons'
+      : 'Smooth organic sinusoidal waves, flowing ribbons and continuous fluid drift'
+  })`;
 
   const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
 Category: ${subCategory}
 Animation Type: ${String(type).toUpperCase()}
-Visual Style: ${style}
+Visual Style: ${style}${colorModeDirective}${glowDirective}${motionDirective}
 Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-Requirement: Focus strictly on the central geometric object, color palette (neon/glow/cyber/gold), and smooth motion.`;
+Requirement: Focus strictly on the central object, color palette, and specific motion dynamics.`;
 
   const { response } = await generateContentWithFallback(
     ai,
@@ -378,9 +411,9 @@ Requirement: Focus strictly on the central geometric object, color palette (neon
 
   if (prompts.length === 0) {
     prompts = [
-      `Glowing neon ${subCategory} ${type} with smooth pulse`,
-      `Dynamic cyber ${style} ${subCategory} animation loop`,
-      `Minimalist geometric ${subCategory} motion with particle trails`,
+      `${neonGlow ? 'Glowing neon' : 'Crisp flat'} ${subCategory} ${type} with ${motionDynamics} motion`,
+      `Dynamic ${style} ${subCategory} ${colorMode} animation loop`,
+      `Geometric ${subCategory} motion with ${motionDynamics} dynamics`,
     ];
   }
 
@@ -399,6 +432,9 @@ export async function handleGenerateAnimationLogic(body: any) {
     index = 1,
     total = 1,
     isGreenScreen = false,
+    colorMode = "gradient",
+    motionDynamics = "flow",
+    neonGlow = true,
   } = body;
 
   if (!promptTopic) {
@@ -412,56 +448,131 @@ export async function handleGenerateAnimationLogic(body: any) {
   if (type === 'icon') {
     typeInstructions = `
 ATURAN UTAMA ICON MOTION:
-- Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat.
-- DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur (misal: perisai, cap kelulusan, roket, cloud, chart bar).`;
+- Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat di tengah canvas.
+- DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur (misal: perisai, roket, gear, chip, atom, chart, gedung, diamond).`;
   } else if (type === 'text') {
     typeInstructions = `
 ATURAN UTAMA TEXT EFFECT:
-- Tampilkan Teks Utama yang tebal & terdistribusi rapi di tengah canvas.
-- Tambahkan efek latar belakang & aura seperti glowing pulse, running highlight, atau partikel energi halus.`;
+- Tampilkan Teks Utama yang tebal (font tebal seperti Impact / Trebuchet / sans-serif bold) & terdistribusi rapi di tengah canvas.
+- Tambahkan efek visual pendukung sesuai Motion Dynamics dan Style (misal: aura, border highlight, particle sweep, atau kinetic tracking).`;
   } else if (type === 'bg') {
     typeInstructions = `
 ATURAN UTAMA BACKGROUND MOTION:
-- Animasi latar belakang bergerak penuh (motion background grid, flowing liquid mesh gradient, ambient bokeh, sinewaves).
-- DILARANG TEKS/HURUF. Warna harmonis, mewah, dan bergerak dengan ritme konstan.`;
+- Animasi latar belakang bergerak penuh di seluruh canvas (waves, flowing grid, orbital field, matrix HUD, atau synthwave horizon).
+- DILARANG TEKS/HURUF. Bergerak dengan ritme harmonis tanpa jeda.`;
   }
 
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'rgba(8, 12, 20, 0.25)'";
+  // If flat color or neonGlow is false, clear with 100% solid opacity to eliminate smudges / ghosting!
+  const clearFill = isGreenScreen
+    ? "'#00ff00'"
+    : colorMode === 'flat' || !neonGlow
+    ? "'#080c14'"
+    : "'rgba(8, 12, 20, 0.22)'";
+
+  let motionGuide = '';
+  if (motionDynamics === 'bounce') {
+    motionGuide = `
+PANDUAN GERAKAN BOUNCE & SPRING:
+- Gunakan rumus elastis membal (spring physics): const bounce = Math.abs(Math.sin(t * 3.5)); const squash = 1 + 0.3 * (1 - bounce); const stretch = 1 / squash;
+- Terapkan squash & stretch saat objek mendarat atau memantul. Objek terasa elastis dan berbobot nyata!`;
+  } else if (motionDynamics === 'orbital') {
+    motionGuide = `
+PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
+- Simulasikan rotasi 3D multi-cincin atau partikel yang mengorbit dengan kedalaman z (pseudo-3D):
+  const angle = t * 1.5 + i * (Math.PI * 2 / N);
+  const x = cx + Math.cos(angle) * radiusX;
+  const y = cy + Math.sin(angle) * radiusY * Math.cos(tiltAngle);
+  const z = Math.sin(angle) * Math.sin(tiltAngle);
+  ctx.scale(1 + z * 0.3, 1 + z * 0.3); ctx.globalAlpha = 0.5 + 0.5 * (z + 1) / 2;`;
+  } else if (motionDynamics === 'morph') {
+    motionGuide = `
+PANDUAN GERAKAN KINETIC MORPHING:
+- Bentuk geometris bertransformasi secara dinamis antar bentuk (lingkaran <-> bintang <-> poligon):
+  Gunakan looping vertex: const r = baseR * (1 + 0.3 * Math.sin(angle * spikes + t * 3));
+  Hubungkan titik dengan ctx.lineTo atau bezierCurveTo untuk morphing organik yang memukau.`;
+  } else if (motionDynamics === 'cyber') {
+    motionGuide = `
+PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
+- Gerakan berpola kuantisasi tajam / stepped: const stepT = Math.floor(t * 8) / 8;
+- Elemen HUD: busur derajat berputar terkalibrasi, dial bidik melingkar, laser scanner bolak-balik melintasi canvas, kurung sudut siku [ ], dan garis garis target.`;
+  } else if (motionDynamics === 'mechanical') {
+    motionGuide = `
+PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
+- Gigi roda (gears) yang saling mengunci (intermeshing) dan berputar berlawanan arah dengan rasio putaran terkalibrasi: rotasi Gear A = t * speed; rotasi Gear B = -t * speed * (teethA / teethB);
+- Tambahkan jarum penunjuk, poros, atau piston yang bergerak maju-mundur secara mekanis presisi.`;
+  } else {
+    motionGuide = `
+PANDUAN GERAKAN ORGANIC FLOW & WAVES:
+- Gunakan gelombang harmonik berulang: const wave = Math.sin(t * 2 + i * 0.5) * Math.cos(t * 1.2 + i * 0.3);
+- Objek mengalir dan berfluktuasi lembut dengan kemiringan dinamis: ctx.rotate(Math.sin(t * 1.2) * 0.12);`;
+  }
+
+  let styleAndColorGuide = '';
+  if (colorMode === 'flat' || !neonGlow) {
+    styleAndColorGuide = `
+PANDUAN WARNA & STYLE: FLAT COLOR / NO GRADIENT / NO GLOW (WAJIB DIPATUHI):
+- ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; (DILARANG GLOW / BLUR).
+${colorMode === 'flat' ? '- DILARANG menggunakan createLinearGradient atau createRadialGradient. Gunakan 100% solid hex color (misal: #FF4757, #2ED573, #1E90FF, #FFA502, #FFFFFF, #2F3542, #70A1FF) bergaya Flat Art Vector modern!' : ''}
+- Bentuk garis tepi tajam, tebal terdefinisi (ctx.lineWidth = 3), dan bidang warna rata (flat solid fill).`;
+  } else {
+    styleAndColorGuide = `
+PANDUAN WARNA & NEON GLOW (AKTIF):
+- Terapkan efek luminescence bertingkat: ctx.shadowBlur = 18; ctx.shadowColor = primaryColor;
+${colorMode === 'neon' ? '- Palet Neon Cyber: Cyan (#00f3ff), Neon Magenta (#ff007f), Electric Lime (#39ff14), Neon Gold (#ffd700).' : ''}
+${colorMode === 'monochrome' ? '- Palet Monochrome: Putih murni (#ffffff), Slate Silver (#cbd5e1), Graphite (#475569), dengan aksen glow putih kristal.' : ''}
+${colorMode === 'pastel' ? '- Palet Pastel: Soft Lavender (#c4b5fd), Mint (#a7f3d0), Peach (#fdba74), Baby Blue (#93c5fd).' : ''}
+${colorMode === 'luxury' ? '- Palet Luxury: Imperial Gold (#d4af37), Warm Amber (#f59e0b), Champagne (#fef08a), Bronze (#cd7f32).' : ''}
+${colorMode === 'gradient' ? '- Gunakan createLinearGradient / createRadialGradient dinamis yang bergerak seiring waktu t.' : ''}`;
+  }
 
   const greenScreenDirective = isGreenScreen
     ? `
-MANDATORY GREEN SCREEN / CHROMA KEY RULES:
-- Background HARUS hijau polos murni (#00ff00 / rgb(0, 255, 0)) untuk keperluan chroma key editing video.
-- DILARANG background gelap/hitam atau gradien gelap ke hijau.
-- Elemen grafis/animasi utama HARUS menggunakan warna kontras yang jelas (Cyan #00f3ff, Gold #fbbf24, Violet #a855f7, Putih #ffffff, Oranye #f97316, Merah #ef4444, Biru #3b82f6).
-- HINDARI memakai warna hijau #00ff00 pada objek utama agar tidak hilang saat di-chroma-key.`
-    : `
-3. PALET WARNA TRENDY: Cyan Cyber (#00f3ff), Vibrant Violet (#a855f7), Emerald (#10b981), Warm Gold (#fbbf24), dengan background gelap eksklusif (#080c14).`;
+MANDATORY GREEN SCREEN RULES:
+- Background HARUS hijau polos murni (#00ff00) untuk chroma key.
+- DILARANG background gelap atau gradien hijau ke hitam.
+- Objek utama HARUS menggunakan warna kontras jelas (Cyan, Gold, Ungu, Putih, Oranye, Merah, Biru).
+- JANGAN gunakan warna hijau #00ff00 pada objek agar tidak terpotong chroma key.`
+    : '';
 
-  const systemPrompt = `Anda adalah Senior HTML5 Motion Designer Spesialis Microstock (Shutterstock/Envato Standard).
-Tugas: Buat 1 file HTML animasi menggunakan Canvas 2D API & Vanilla JS.
+  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer Spesialis Video Asset & Microstock (Shutterstock/Envato Standard).
+Tugas: Buat 1 file HTML animasi Canvas 2D yang bervariasi, dinamis, dan MINIM BUG BENTUK/GERAKAN.
 
-KUALITAS VISUAL & TREN MODERN (MANDATORY):
-1. BENTUK & GERAKAN AKURAT: Bentuk visual HARUS presisi sesuai deskripsi prompt. Gerakan HARUS halus menggunakan fungsi matematika (Math.sin, Math.cos, easing). DILARANG gerakan acak patah-patah!
-2. POLISH VISUAL ELEGANKAN: Gunakan efek glow halus (ctx.shadowBlur = 15; ctx.shadowColor = 'rgba(...)'), gradien dinamis (createLinearGradient / createRadialGradient), dan partikel ambient lembut.${greenScreenDirective}
+PARAMETER TERPILIH:
+- Subjek/Prompt: "${promptTopic}"
+- Tipe Animasi: ${String(type).toUpperCase()}
+- Kategori Niche: ${subCategory}
+- Gaya Visual: ${style}
+- Mode Warna: ${colorMode.toUpperCase()}
+- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
+- Motion Dynamics: ${motionDynamics.toUpperCase()}
+${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
 
-ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
-- Tulis kode prosedural yang ringkas, bersih, modular, dan efisien (target 180 - 250 baris kode).
-- WAJIB gunakan struktur boilerplate standar berikut tanpa mengubah skema canvas:
+${typeInstructions}
+${motionGuide}
+${styleAndColorGuide}
+${greenScreenDirective}
+
+ATURAN ANTI-BUG & KUALITAS MATEMATIKA (MANDATORY):
+1. ISOLASI CANVAS CONTEXT: Setiap elemen yang digambar WAJIB dibungkus ctx.save() dan ctx.restore() agar transformasi (translate, rotate, scale, alpha, shadow) TIDAK bocor atau menumpuk menghasilkan bug/NaN.
+2. KOORDINAT TERPUSAT & RESPONSIF: Definisikan const S = Math.min(w, h) * 0.35; Gambar selalu berpusat di cx, cy menggunakan skala S. DILARANG koordinat absolut pixel statis yang membuat gambar melenceng.
+3. ZERO GLITCH / NO SMEARS: Jangan biarkan canvas berkedip atau memiliki artefak sisa frame sebelumnya.
+4. RINGKAS & TUNTAS: Buat kode 180 - 250 baris yang langsung berfungsi penuh dan looping tanpa henti.
+
+WAJIB gunakan struktur HTML boilerplate berikut:
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, sans-serif; }
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
   canvas { display: block; width: 100vw; height: 100vh; }
   #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
 </style>
 <script>
   window.onerror = function(msg, url, line) {
-      document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
+    document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
   };
 </script>
 </head>
@@ -470,25 +581,26 @@ ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
 <script>
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
-  let w, h, cx, cy;
+  let w, h, cx, cy, S;
   
   function resize() {
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
+    S = Math.min(w, h) * 0.35;
   }
   window.addEventListener('resize', resize);
   resize();
 
-  // --- INISIALISASI ELEMEN / PARTIKEL ---
+  // --- INISIALISASI VARIABEL / ELEMEN ---
 
   function animate(time) {
-    const t = time * 0.001; // Detik untuk gerakan halus
+    const t = time * 0.001;
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // --- LOGIKA MENGGAMBAR ANIMASI PRESISI ---
+    // --- LOGIKA MENGGAMBAR ANIMASI SESUAI BRIEF ---
 
     requestAnimationFrame(animate);
   }
@@ -497,23 +609,14 @@ ATURAN UKURAN KODE (ANTI TERPOTONG / ZERO MAX TOKENS ERROR):
 </body>
 </html>
 
-Brief Animasi:
-- Subjek/Prompt: "${promptTopic}"
-- Tipe Animasi: ${String(type).toUpperCase()}
-- Kategori Niche: ${subCategory}
-- Gaya Visual: ${style}
-${isGreenScreen ? '- Background: Pure Green Screen #00FF00 (Chroma Key)' : ''}
-
-${typeInstructions}
-
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
+Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apapun:`;
 
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.6,
+        temperature: 0.65,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -541,6 +644,9 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
     type,
     style,
     subCategory,
+    colorMode,
+    motionDynamics,
+    neonGlow,
     html: cleanHTML
   };
 }
