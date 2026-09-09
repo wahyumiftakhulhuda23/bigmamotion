@@ -165,7 +165,8 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
     const a = document.createElement('a');
     a.href = fileObj.videoUrl;
     const baseName = fileObj.name.replace(/\.[^/.]+$/, '');
-    a.download = `${baseName}_1080p60fps.mp4`;
+    const resTag = resolution.width === 3840 ? '4K' : resolution.width === 1280 ? '720p' : '1080p';
+    a.download = `${baseName}_${resTag}_${fps}fps.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -214,24 +215,24 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
   return (
     <div
       id="video-converter-modal"
-      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
     >
-      <div className="glass-card rounded-2xl max-w-5xl w-full border border-gray-800 p-6 space-y-4 max-h-[92vh] flex flex-col shadow-2xl my-6">
+      <div className="glass-card rounded-2xl max-w-5xl w-full border border-gray-800 p-3.5 sm:p-6 space-y-3.5 sm:space-y-4 max-h-[96vh] sm:max-h-[92vh] flex flex-col shadow-2xl my-auto">
         {/* Header */}
         <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400">
-              <i className="fa-solid fa-film text-lg"></i>
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 shrink-0">
+              <i className="fa-solid fa-film text-base sm:text-lg"></i>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-gray-100 text-base">HTML5 Animation to MP4 Video Converter</h3>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold">
-                  H.264 Universal (FastStart)
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-gray-100 text-sm sm:text-base">HTML5 to MP4 Video Converter</h3>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[9px] sm:text-[10px] font-bold">
+                  Mode Ringan & Hemat Memori
                 </span>
               </div>
-              <p className="text-xs text-gray-400">
-                Konversi animasi Canvas HTML microstock menjadi video MP4 murni (H.264) 60 FPS yang 100% bisa diputar di Windows Media Player, QuickTime, VLC, CapCut & Adobe Premiere.
+              <p className="text-[11px] sm:text-xs text-gray-400">
+                Konversi animasi Canvas HTML menjadi video MP4 murni (H.264). Dilengkapi kontrol memori & stabil untuk PC spek rendah maupun HP.
               </p>
             </div>
           </div>
@@ -240,7 +241,7 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
               if (isProcessing) return showToast('Tunggu hingga proses selesai!', 'warn');
               onClose();
             }}
-            className="text-gray-400 hover:text-white text-lg cursor-pointer"
+            className="text-gray-400 hover:text-white text-lg p-2 cursor-pointer"
           >
             <i className="fa-solid fa-xmark"></i>
           </button>
