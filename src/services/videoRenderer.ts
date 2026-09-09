@@ -79,12 +79,13 @@ export async function findWorkingWebCodecsConfig(
 
 /**
  * Injects styling and frame synchronization into animation HTML.
+ * Eliminates artificial mode-based shrinking so all animations fill the canvas edge-to-edge.
  */
 export function prepareHtmlForVideo(
   htmlContent: string,
-  mode: 'icon' | 'text' | 'bg' = 'icon',
-  width = 1920,
-  height = 1080,
+  _mode: 'icon' | 'text' | 'bg' | 'auto' = 'auto',
+  _width = 1920,
+  _height = 1080,
   _fps = 60,
   isGreenScreen = false
 ): string {
@@ -112,48 +113,16 @@ export function prepareHtmlForVideo(
       }
       canvas {
         display: block !important;
+        width: 100% !important;
+        height: 100% !important;
         max-width: 100% !important;
         max-height: 100% !important;
+        object-fit: contain !important;
       }
     </style>
-    <script>
-      (function() {
-        function enforceCanvasSize() {
-          const canvases = document.querySelectorAll('canvas');
-          canvases.forEach(function(c) {
-            if (c.width !== ${width} || c.height !== ${height}) {
-              c.width = ${width};
-              c.height = ${height};
-            }
-          });
-        }
-        window.addEventListener('DOMContentLoaded', enforceCanvasSize);
-        window.addEventListener('load', function() {
-          enforceCanvasSize();
-          window.dispatchEvent(new Event('resize'));
-        });
-      })();
-    </script>
   `;
 
   let finalHtml = htmlContent;
-  if (mode === 'bg') {
-    const bgInject = `
-      <style>
-        canvas {
-          width: 100vw !important;
-          height: 100vh !important;
-          object-fit: cover !important;
-        }
-      </style>
-    `;
-    if (finalHtml.includes('<head>')) {
-      finalHtml = finalHtml.replace('<head>', `<head>${bgInject}`);
-    } else {
-      finalHtml = `${bgInject}${finalHtml}`;
-    }
-  }
-
   if (finalHtml.includes('<head>')) {
     return finalHtml.replace('<head>', `<head>${injected}`);
   }
@@ -162,8 +131,8 @@ export function prepareHtmlForVideo(
 
 /**
  * Universal video renderer supporting:
- * Tier 1: Hardware/Software WebCodecs H.264 FastStart MP4
- * Tier 2: Resilient MediaRecorder stream pipeline (100% compatible on all devices/browsers)
+ * Tier 1: Hardware/Software WebCodecs H.264 FastStart MP4 with exact resolution, FPS, and Bitrate adherence.
+ * Tier 2: Resilient MediaRecorder stream pipeline fallback.
  */
 export async function renderHtmlToVideo(
   htmlContent: string,
@@ -175,7 +144,7 @@ export async function renderHtmlToVideo(
     fps = 60,
     duration = 10,
     bitrate = 18,
-    mode = 'icon',
+    mode = 'auto',
     isGreenScreen = false,
     onProgress,
   } = options;
@@ -185,8 +154,15 @@ export async function renderHtmlToVideo(
     /#00ff00|#00FF00|rgb\(\s*0\s*,\s*255\s*,\s*0\s*\)/i.test(htmlContent);
   const canvasBgColor = isGreen ? '#00ff00' : '#000000';
 
-  const totalFrames = Math.round(fps * duration);
+  const totalFrames = Math.max(1, Math.round(fps * duration));
+  const frameDurationUs = Math.round(1_000_000 / fps);
   const frameIntervalMs = 1000 / fps;
+  const targetBitrateBps = Math.round(bitrate * 1_000_000);
+
+  // Reference canvas dimensions for rendering iframe
+  // Using 1280x720 (16:9) as calibrated base so objects never shrink/zoom-out in 1080p or 4K
+  const baseWidth = 1280;
+  const baseHeight = 720;
 
   // Active rendering overlay container to prevent background tab throttling
   const overlay = document.createElement('div');
@@ -227,11 +203,11 @@ export async function renderHtmlToVideo(
       </div>
       <div>
         <div style="font-weight: 800; font-size: 13px; color: #f8fafc; font-family: sans-serif;">Rendering Video MP4 H.264</div>
-        <div style="font-size: 11px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • Universal Compatible</div>
+        <div style="font-size: 11px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${bitrate} Mbps</div>
       </div>
     </div>
     <span style="font-size: 10px; font-weight: 700; color: #4ade80; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); padding: 2px 8px; border-radius: 9999px; font-family: sans-serif;">
-      60 FPS Active
+      ${fps} FPS Active
     </span>
   `;
 
@@ -245,8 +221,8 @@ export async function renderHtmlToVideo(
   previewBox.style.border = '1px solid #1e293b';
 
   const iframe = document.createElement('iframe');
-  iframe.style.width = `${width}px`;
-  iframe.style.height = `${height}px`;
+  iframe.style.width = `${baseWidth}px`;
+  iframe.style.height = `${baseHeight}px`;
   iframe.style.transformOrigin = 'top left';
   iframe.style.border = 'none';
   iframe.sandbox.add('allow-scripts', 'allow-same-origin');
@@ -285,7 +261,7 @@ export async function renderHtmlToVideo(
 
   const updateIframeScale = () => {
     const boxWidth = previewBox.clientWidth || 540;
-    const scale = boxWidth / width;
+    const scale = boxWidth / baseWidth;
     iframe.style.transform = `scale(${scale})`;
   };
   updateIframeScale();
@@ -323,18 +299,25 @@ export async function renderHtmlToVideo(
     }
     await new Promise((r) => setTimeout(r, 600));
 
-    let iframeCanvas = iframeDoc?.querySelector('canvas') as HTMLCanvasElement | null;
-    if (iframeCanvas) {
-      iframeCanvas.width = width;
-      iframeCanvas.height = height;
-    }
+    const iframeCanvas = iframeDoc?.querySelector('canvas') as HTMLCanvasElement | null;
 
-    // Master High-Res Target Canvas
+    // Master High-Res Target Canvas strictly matching requested resolution
     const targetCanvas = document.createElement('canvas');
     targetCanvas.width = width;
     targetCanvas.height = height;
     const ctx = targetCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
     if (!ctx) throw new Error('Tidak dapat membuat Canvas 2D context');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+
+    // Helper to draw current iframe canvas frame into targetCanvas scaled cleanly
+    const drawCurrentFrameToTarget = () => {
+      ctx.fillStyle = canvasBgColor;
+      ctx.fillRect(0, 0, width, height);
+      if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
+        ctx.drawImage(iframeCanvas, 0, 0, width, height);
+      }
+    };
 
     // ==========================================
     // TIER 1: Try WebCodecs H.264 FastStart MP4
@@ -343,14 +326,39 @@ export async function renderHtmlToVideo(
     let mp4Result: VideoRenderResult | null = null;
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      const codecCandidates = [
-        'avc1.420028',
-        'avc1.4d002a',
-        'avc1.64002a',
-        'avc1.640028',
-        'avc1.42001f',
-        'avc1.42E01E',
-      ];
+      // Order codecs based on requested resolution and framerate requirements
+      let codecCandidates: string[];
+      if (width >= 3840) {
+        // 4K UHD: Requires Level 5.1/5.2
+        codecCandidates = [
+          'avc1.640033', // High Profile Level 5.1
+          'avc1.640034', // High Profile Level 5.2
+          'avc1.4d0033', // Main Profile Level 5.1
+          'avc1.64002a',
+          'avc1.4d002a',
+        ];
+      } else if (width >= 1920) {
+        // 1080p FHD: Requires Level 4.2 / 4.1 for 60fps
+        codecCandidates = [
+          'avc1.64002a', // High Profile Level 4.2 (ideal for 1080p60)
+          'avc1.4d002a', // Main Profile Level 4.2
+          'avc1.42002a', // Baseline Level 4.2
+          'avc1.640029', // High Profile Level 4.1
+          'avc1.4d0029', // Main Profile Level 4.1
+          'avc1.640028', // High Profile Level 4.0
+          'avc1.4d0028', // Main Profile Level 4.0
+          'avc1.420028', // Baseline Level 4.0
+        ];
+      } else {
+        // 720p HD: Level 4.0 / 3.1
+        codecCandidates = [
+          'avc1.420028',
+          'avc1.4d0028',
+          'avc1.640028',
+          'avc1.42001f',
+        ];
+      }
+
       const accelCandidates: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
         'no-preference',
         'prefer-software',
@@ -390,24 +398,37 @@ export async function renderHtmlToVideo(
               },
             });
 
-            await videoEncoder.configure({
+            const encoderConfig: any = {
               codec,
               width,
               height,
-              bitrate: bitrate * 1_000_000,
+              bitrate: targetBitrateBps,
               framerate: fps,
               hardwareAcceleration: accel,
               avc: { format: 'avc' },
-            });
+            };
 
-            // Test first frame encoding to verify encoder was created properly
-            ctx.fillStyle = canvasBgColor;
-            ctx.fillRect(0, 0, width, height);
-            if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
-              ctx.drawImage(iframeCanvas, 0, 0, width, height);
+            // Attempt Constant Bitrate (CBR) so file details strictly match chosen bitrate (e.g. 18 Mbps)
+            if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
+              try {
+                const cbrSupport = await (window as any).VideoEncoder.isConfigSupported({
+                  ...encoderConfig,
+                  bitrateMode: 'constant',
+                });
+                if (cbrSupport && cbrSupport.supported) {
+                  encoderConfig.bitrateMode = 'constant';
+                }
+              } catch {}
             }
 
-            const testFrame = new (window as any).VideoFrame(targetCanvas, { timestamp: 0 });
+            await videoEncoder.configure(encoderConfig);
+
+            // Test first frame encoding with explicit timestamp and duration
+            drawCurrentFrameToTarget();
+            const testFrame = new (window as any).VideoFrame(targetCanvas, {
+              timestamp: 0,
+              duration: frameDurationUs,
+            });
             videoEncoder.encode(testFrame, { keyFrame: true });
             testFrame.close();
 
@@ -416,23 +437,20 @@ export async function renderHtmlToVideo(
               continue;
             }
 
-            // Encoder created & working! Proceed with complete frame rendering
-            updateUIProgress(12, `Encoding MP4 H.264 (${width}x${height} @ ${fps}fps)...`);
+            // Encoder verified & ready! Proceed with complete frame rendering
+            updateUIProgress(12, `Encoding MP4 H.264 (${width}x${height} @ ${fps}fps, ${bitrate}Mbps)...`);
 
             for (let frame = 1; frame < totalFrames; frame++) {
               if (encodeError) throw encodeError;
 
-              ctx.fillStyle = canvasBgColor;
-              ctx.fillRect(0, 0, width, height);
-              if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
-                ctx.drawImage(iframeCanvas, 0, 0, width, height);
-              }
+              drawCurrentFrameToTarget();
 
-              const timestampMicroseconds = Math.round((frame * 1_000_000) / fps);
-              const isKeyFrame = frame % (fps * 2) === 0;
+              const timestampUs = Math.round(frame * frameDurationUs);
+              const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
 
               const videoFrame = new (window as any).VideoFrame(targetCanvas, {
-                timestamp: timestampMicroseconds,
+                timestamp: timestampUs,
+                duration: frameDurationUs,
               });
 
               videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });

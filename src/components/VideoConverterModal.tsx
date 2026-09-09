@@ -11,7 +11,6 @@ interface VideoConverterModalProps {
 
 export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen, onClose, showToast }) => {
   const [files, setFiles] = useState<VideoConverterFile[]>([]);
-  const [mode, setMode] = useState<'icon' | 'text' | 'bg'>('icon');
   const [resolution, setResolution] = useState<{ width: number; height: number; label: string }>({
     width: 1920,
     height: 1080,
@@ -103,7 +102,6 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
         fps,
         duration,
         bitrate,
-        mode,
         onProgress: (percent, msg) => {
           if (percent === 10 || percent === 50 || percent === 90) {
             addLog(`    [${percent}%] ${msg}`, 'info');
@@ -165,7 +163,8 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
     const a = document.createElement('a');
     a.href = fileObj.videoUrl;
     const baseName = fileObj.name.replace(/\.[^/.]+$/, '');
-    a.download = `${baseName}_1080p60fps.mp4`;
+    const resLabel = resolution.width === 3840 ? '4K' : resolution.width === 1920 ? '1080p' : '720p';
+    a.download = `${baseName}_${resLabel}_${fps}fps_${bitrate}Mbps.mp4`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -183,9 +182,10 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
 
     try {
       const zip = new JSZip();
+      const resLabel = resolution.width === 3840 ? '4K' : resolution.width === 1920 ? '1080p' : '720p';
       doneFiles.forEach((item, idx) => {
         const baseName = item.name.replace(/\.[^/.]+$/, '');
-        const filename = `${String(idx + 1).padStart(2, '0')}_${baseName}.mp4`;
+        const filename = `${String(idx + 1).padStart(2, '0')}_${baseName}_${resLabel}_${fps}fps_${bitrate}Mbps.mp4`;
         if (item.blob) {
           zip.file(filename, item.blob);
         }
@@ -247,7 +247,7 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
         </div>
 
         {/* Configuration Row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 bg-gray-900/60 p-3.5 rounded-xl border border-gray-800 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-gray-900/60 p-3.5 rounded-xl border border-gray-800 text-xs">
           <div className="space-y-1">
             <label className="font-bold text-gray-400 uppercase text-[10px]">Resolusi Video</label>
             <select
@@ -262,19 +262,6 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
               <option value="1920x1080">1080p Full HD (1920x1080)</option>
               <option value="1280x720">720p HD (1280x720)</option>
               <option value="3840x2160">4K Ultra HD (3840x2160)</option>
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="font-bold text-gray-400 uppercase text-[10px]">Tipe Animasi</label>
-            <select
-              value={mode}
-              onChange={(e) => setMode(e.target.value as any)}
-              className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-gray-200 focus:outline-none cursor-pointer"
-            >
-              <option value="icon">Icon / Element (Black BG)</option>
-              <option value="text">Text Motion (Black BG)</option>
-              <option value="bg">Background Loop (Full BG)</option>
             </select>
           </div>
 
