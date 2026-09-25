@@ -11,6 +11,21 @@ import { generateImageToMotion } from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
 import JSZip from 'jszip';
 
+export interface AutoPilotProgressState {
+  mode: 'all_folders' | 'current_folder';
+  totalFolders: number;
+  currentFolderIndex: number; // 1-based
+  currentFolderId: string;
+  currentFolderName: string;
+  totalInCurrentFolder: number;
+  currentItemIndexInFolder: number; // 1-based
+  totalItemsOverall: number;
+  completedItemsOverall: number;
+  currentFileName: string;
+  currentStageText: string;
+  progressPercent: number;
+}
+
 interface ImageToMotionSectionProps {
   apiKeys: string[];
   selectedModel: GeminiModel;
@@ -60,7 +75,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [projectToDelete, setProjectToDelete] = useState<ImageToMotionProject | null>(null);
   const [isAutoPilotRunning, setIsAutoPilotRunning] = useState(false);
   const [autoPilotPaused, setAutoPilotPaused] = useState(false);
+  const [autoPilotStatus, setAutoPilotStatus] = useState<AutoPilotProgressState | null>(null);
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null);
+  const [queueViewMode, setQueueViewMode] = useState<'current_folder' | 'all_folders'>('current_folder');
 
   // Global settings for newly uploaded batch
   const [batchMotionDynamics, setBatchMotionDynamics] = useState<MotionDynamics>('flow');
@@ -78,6 +95,17 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const autoPilotRef = useRef<{ isRunning: boolean; isPaused: boolean }>({ isRunning: false, isPaused: false });
 
+  // References to always access fresh state inside asynchronous loops
+  const itemsRef = useRef<ImageToMotionItem[]>(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+
+  const projectsRef = useRef<ImageToMotionProject[]>(projects);
+  useEffect(() => {
+    projectsRef.current = projects;
+  }, [projects]);
+
   useEffect(() => {
     autoPilotRef.current = { isRunning: isAutoPilotRunning, isPaused: autoPilotPaused };
   }, [isAutoPilotRunning, autoPilotPaused]);
@@ -93,6 +121,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const projectItems = items.filter((item) => item.projectId === activeProject.id);
   const pendingItems = projectItems.filter((item) => item.status === 'pending' || item.status === 'error');
   const completedItems = projectItems.filter((item) => item.status === 'completed');
+
+  // Filter items across ALL projects
+  const allPendingItems = items.filter((item) => item.status === 'pending' || item.status === 'error');
+  const allCompletedItems = items.filter((item) => item.status === 'completed');
 
   // Handle Clipboard Paste (Ctrl+V image)
   useEffect(() => {
@@ -187,13 +219,38 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   };
 
   // Process a single item
-  const processSingleItem = async (item: ImageToMotionItem): Promise<boolean> => {
+  const processSingleItem = async (
+    item: ImageToMotionItem,
+    overrideProjectName?: string
+  ): Promise<boolean> => {
     setCurrentProcessingId(item.id);
+    const targetProjectName =
+      overrideProjectName ||
+      projectsRef.current.find((p) => p.id === item.projectId)?.name ||
+      item.projectName ||
+      activeProject.name;
+
     onUpdateItem(item.id, { status: 'analyzing', progress: 25, error: undefined });
-    addLog(`[Image to Motion] Menganalisa struktur gambar "${item.fileName}"...`, 'info');
+    setAutoPilotStatus((prev) =>
+      prev
+        ? {
+            ...prev,
+            currentStageText: `🔍 Menganalisis logika bentuk & anatomi "${item.fileName}"...`,
+          }
+        : null
+    );
+    addLog(`[Image to Motion] [${targetProjectName}] Menganalisa struktur gambar "${item.fileName}"...`, 'info');
 
     try {
-      onUpdateItem(item.id, { status: 'generating', progress: 50 });
+      onUpdateItem(item.id, { status: 'generating', progress: 55 });
+      setAutoPilotStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentStageText: `🎨 Membuat animasi Canvas 2D 60 FPS untuk "${item.fileName}"...`,
+            }
+          : null
+      );
 
       const animResult = await generateImageToMotion(
         apiKeys,
@@ -202,7 +259,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           imageBase64: item.imageBase64,
           mimeType: item.mimeType,
           fileName: item.fileName,
-          projectName: activeProject.name,
+          projectName: targetProjectName,
           motionDynamics: item.motionDynamics,
           colorMode: item.colorMode,
           neonGlow: item.neonGlow,
@@ -211,6 +268,14 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         },
         (attempt, max, errMsg) => {
           addLog(`[Retry ${attempt}/${max}] "${item.fileName}": ${errMsg}`, 'warn');
+          setAutoPilotStatus((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  currentStageText: `⚠️ Mencoba ulang (${attempt}/${max}) "${item.fileName}"...`,
+                }
+              : null
+          );
         }
       );
 
@@ -224,7 +289,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         motionDynamics: item.motionDynamics,
         neonGlow: item.neonGlow,
         html: animResult.html,
-        account: activeProject.name,
+        account: targetProjectName,
         createdAt: Date.now(),
         isGreenScreen: item.isGreenScreen,
       };
@@ -261,57 +326,308 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       });
 
       onPreviewAnimation(animationItem);
-      addLog(`[Image to Motion] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
+      setAutoPilotStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentStageText: `✅ Berhasil merender "${item.fileName}" 60 FPS HD!`,
+            }
+          : null
+      );
+      addLog(`[Image to Motion] [${targetProjectName}] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
       return true;
     } catch (err: any) {
       const errorMsg = err?.message || 'Gagal memproses animasi gambar';
       onUpdateItem(item.id, { status: 'error', progress: 0, error: errorMsg });
       addLog(`[Error Image to Motion] "${item.fileName}": ${errorMsg}`, 'error');
+      setAutoPilotStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentStageText: `❌ Gagal pada "${item.fileName}": ${errorMsg}`,
+            }
+          : null
+      );
       return false;
     } finally {
       setCurrentProcessingId(null);
     }
   };
 
-  // Auto Pilot sequential batch runner
-  const handleStartAutoPilot = async () => {
-    if (pendingItems.length === 0) {
-      showToast('Tidak ada antrian gambar pending di project ini.', 'warn');
+  // Auto Pilot sequential batch runner across ALL folders and items (folder teratas -> antrian teratas)
+  const handleStartAutoPilotAll = async () => {
+    const allPending = itemsRef.current.filter((it) => it.status === 'pending' || it.status === 'error');
+    if (allPending.length === 0) {
+      showToast('Semua antrian di seluruh folder sudah selesai!', 'info');
+      return;
+    }
+
+    if (isAutoPilotRunning) {
+      showToast('Auto Pilot sedang berjalan!', 'warn');
       return;
     }
 
     setIsAutoPilotRunning(true);
     setAutoPilotPaused(false);
-    showToast(`Memulai Auto Pilot Batch untuk ${pendingItems.length} gambar...`, 'info');
-    addLog(`[Auto Pilot I2M] Memulai antrian batch ${pendingItems.length} gambar di "${activeProject.name}"`, 'green');
 
-    for (let i = 0; i < pendingItems.length; i++) {
+    const totalToProcess = allPending.length;
+    let completedOverall = 0;
+
+    addLog('═══════════════════════════════════════════════════════════════', 'cyan');
+    addLog(
+      `🚀 [AUTO PILOT DIMULAI] Menjalankan ${totalToProcess} antrian gambar di ${projectsRef.current.length} folder berurutan (dari folder teratas)...`,
+      'cyan'
+    );
+    showToast(
+      `🚀 Auto Pilot Dimulai! Menjalankan ${totalToProcess} antrian berurutan mulai dari folder teratas...`,
+      'info'
+    );
+
+    // Loop through projects in order (starting from top folder)
+    for (let fIdx = 0; fIdx < projectsRef.current.length; fIdx++) {
       if (!autoPilotRef.current.isRunning) break;
+
+      const currentProj = projectsRef.current[fIdx];
+      // Get latest pending items in this folder
+      const folderPending = itemsRef.current.filter(
+        (it) => it.projectId === currentProj.id && (it.status === 'pending' || it.status === 'error')
+      );
+
+      if (folderPending.length === 0) {
+        addLog(
+          `📁 [Folder ${fIdx + 1}/${projectsRef.current.length}: "${currentProj.name}"] Tidak ada antrian pending, lanjut ke folder berikutnya...`,
+          'info'
+        );
+        continue;
+      }
+
+      // Automatically switch active project view in UI so user sees this folder
+      onSelectProject(currentProj.id);
+
+      addLog(
+        `📂 [FOLDER ${fIdx + 1}/${projectsRef.current.length}: "${currentProj.name}"] Memulai ${folderPending.length} antrian (dimulai dari antrian teratas)...`,
+        'cyan'
+      );
+      showToast(
+        `📂 [Folder ${fIdx + 1}/${projectsRef.current.length}] Masuk ke "${currentProj.name}" (${folderPending.length} antrian)...`,
+        'info'
+      );
+
+      // Loop through pending items in this folder in order (top item first)
+      for (let iIdx = 0; iIdx < folderPending.length; iIdx++) {
+        if (!autoPilotRef.current.isRunning) break;
+
+        // Check if paused
+        while (autoPilotRef.current.isPaused) {
+          await new Promise((res) => setTimeout(res, 500));
+          if (!autoPilotRef.current.isRunning) break;
+        }
+        if (!autoPilotRef.current.isRunning) break;
+
+        const currentItem = folderPending[iIdx];
+
+        // Update live status for the visual loading bar
+        const percent = Math.round((completedOverall / totalToProcess) * 100);
+        setAutoPilotStatus({
+          mode: 'all_folders',
+          totalFolders: projectsRef.current.length,
+          currentFolderIndex: fIdx + 1,
+          currentFolderId: currentProj.id,
+          currentFolderName: currentProj.name,
+          totalInCurrentFolder: folderPending.length,
+          currentItemIndexInFolder: iIdx + 1,
+          totalItemsOverall: totalToProcess,
+          completedItemsOverall: completedOverall,
+          currentFileName: currentItem.fileName,
+          currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${currentItem.fileName}"...`,
+          progressPercent: percent,
+        });
+
+        addLog(
+          `⚡ [${currentProj.name}] -> Antrian #${iIdx + 1}/${folderPending.length}: Memproses "${currentItem.fileName}"...`,
+          'info'
+        );
+        showToast(
+          `⚡ [${currentProj.name}] Antrian #${iIdx + 1}: "${currentItem.fileName}" sedang diproses...`,
+          'info'
+        );
+
+        const success = await processSingleItem(currentItem, currentProj.name);
+        completedOverall++;
+
+        const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
+        setAutoPilotStatus((prev) =>
+          prev
+            ? {
+                ...prev,
+                completedItemsOverall: completedOverall,
+                progressPercent: updatedPercent,
+                currentStageText: success
+                  ? `Berhasil merender "${currentItem.fileName}" (60 FPS HD)`
+                  : `Gagal memproses "${currentItem.fileName}"`,
+              }
+            : null
+        );
+
+        if (success) {
+          addLog(
+            `✅ [${currentProj.name}] -> Antrian #${iIdx + 1} "${currentItem.fileName}" selesai dibuat (Canvas 2D 60 FPS)!`,
+            'success'
+          );
+          showToast(
+            `✨ [${currentProj.name} #${iIdx + 1}] "${currentItem.fileName}" berhasil dibuat 60 FPS!`,
+            'success'
+          );
+        } else {
+          addLog(
+            `⚠️ [${currentProj.name}] -> Antrian #${iIdx + 1} "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
+            'warn'
+          );
+          showToast(
+            `⚠️ [${currentProj.name} #${iIdx + 1}] "${currentItem.fileName}" kendala, otomatis lanjut...`,
+            'warn'
+          );
+        }
+
+        // Brief breather
+        await new Promise((res) => setTimeout(res, 1000));
+      }
+
+      if (autoPilotRef.current.isRunning) {
+        addLog(`🎉 [SELESAI FOLDER] Seluruh antrian di folder "${currentProj.name}" tuntas diproses!`, 'green');
+        showToast(`🎉 Folder "${currentProj.name}" selesai!`, 'success');
+      }
+    }
+
+    const wasRunning = autoPilotRef.current.isRunning;
+    setIsAutoPilotRunning(false);
+    setAutoPilotPaused(false);
+    setAutoPilotStatus(null);
+
+    if (wasRunning) {
+      addLog(
+        `🏆 [AUTO PILOT SELESAI] Seluruh ${totalToProcess} antrian di semua folder telah selesai diproses berurutan!`,
+        'success'
+      );
+      addLog('═══════════════════════════════════════════════════════════════', 'cyan');
+      showToast('🎊 Auto Pilot Selesai! Semua antrian di seluruh folder berhasil digenerate!', 'success');
+    }
+  };
+
+  // Auto Pilot runner for current folder only
+  const handleStartAutoPilotCurrent = async () => {
+    const folderPending = itemsRef.current.filter(
+      (it) => it.projectId === activeProject.id && (it.status === 'pending' || it.status === 'error')
+    );
+
+    if (folderPending.length === 0) {
+      showToast(`Tidak ada antrian pending di folder "${activeProject.name}".`, 'info');
+      return;
+    }
+
+    if (isAutoPilotRunning) {
+      showToast('Auto Pilot sedang berjalan!', 'warn');
+      return;
+    }
+
+    setIsAutoPilotRunning(true);
+    setAutoPilotPaused(false);
+
+    const totalToProcess = folderPending.length;
+    let completedOverall = 0;
+
+    addLog(
+      `🚀 [AUTO PILOT FOLDER] Memulai antrian ${totalToProcess} gambar di folder "${activeProject.name}"...`,
+      'cyan'
+    );
+    showToast(`🚀 Memulai Auto Pilot untuk folder "${activeProject.name}" (${totalToProcess} antrian)...`, 'info');
+
+    for (let i = 0; i < folderPending.length; i++) {
+      if (!autoPilotRef.current.isRunning) break;
+
       while (autoPilotRef.current.isPaused) {
         await new Promise((res) => setTimeout(res, 500));
         if (!autoPilotRef.current.isRunning) break;
       }
       if (!autoPilotRef.current.isRunning) break;
 
-      const current = pendingItems[i];
-      await processSingleItem(current);
-      await new Promise((res) => setTimeout(res, 1200));
+      const current = folderPending[i];
+
+      const percent = Math.round((completedOverall / totalToProcess) * 100);
+      setAutoPilotStatus({
+        mode: 'current_folder',
+        totalFolders: 1,
+        currentFolderIndex: 1,
+        currentFolderId: activeProject.id,
+        currentFolderName: activeProject.name,
+        totalInCurrentFolder: totalToProcess,
+        currentItemIndexInFolder: i + 1,
+        totalItemsOverall: totalToProcess,
+        completedItemsOverall: completedOverall,
+        currentFileName: current.fileName,
+        currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${current.fileName}"...`,
+        progressPercent: percent,
+      });
+
+      addLog(`⚡ [${activeProject.name}] Antrian #${i + 1}/${totalToProcess}: Memproses "${current.fileName}"...`, 'info');
+      showToast(`⚡ [${activeProject.name}] Antrian #${i + 1}: "${current.fileName}"...`, 'info');
+
+      const success = await processSingleItem(current, activeProject.name);
+      completedOverall++;
+
+      const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
+      setAutoPilotStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              completedItemsOverall: completedOverall,
+              progressPercent: updatedPercent,
+              currentStageText: success
+                ? `Berhasil merender "${current.fileName}" (60 FPS HD)`
+                : `Gagal memproses "${current.fileName}"`,
+            }
+          : null
+      );
+
+      if (success) {
+        addLog(`✅ [${activeProject.name}] Antrian #${i + 1} "${current.fileName}" berhasil dibuat 60 FPS!`, 'success');
+        showToast(`✨ [${activeProject.name} #${i + 1}] "${current.fileName}" selesai dibuat 60 FPS!`, 'success');
+      } else {
+        addLog(`⚠️ [${activeProject.name}] Antrian #${i + 1} "${current.fileName}" kendala, lanjut berikutnya...`, 'warn');
+      }
+
+      await new Promise((res) => setTimeout(res, 1000));
     }
 
+    const wasRunning = autoPilotRef.current.isRunning;
     setIsAutoPilotRunning(false);
     setAutoPilotPaused(false);
-    showToast(`Auto Pilot Batch project "${activeProject.name}" selesai!`, 'success');
+    setAutoPilotStatus(null);
+
+    if (wasRunning) {
+      addLog(`🎉 [AUTO PILOT SELESAI] Antrian di folder "${activeProject.name}" selesai!`, 'success');
+      showToast(`🎊 Auto Pilot folder "${activeProject.name}" selesai!`, 'success');
+    }
   };
 
   const handlePauseAutoPilot = () => {
-    setAutoPilotPaused(!autoPilotPaused);
-    showToast(autoPilotPaused ? 'Auto Pilot dilanjutkan' : 'Auto Pilot dijeda', 'info');
+    const nextPaused = !autoPilotPaused;
+    setAutoPilotPaused(nextPaused);
+    if (nextPaused) {
+      addLog('[Auto Pilot] ⏸ Dijeda oleh pengguna.', 'warn');
+      showToast('⏸ Auto Pilot dijeda', 'info');
+    } else {
+      addLog('[Auto Pilot] ▶ Dilanjutkan kembali.', 'info');
+      showToast('▶ Auto Pilot dilanjutkan', 'info');
+    }
   };
 
   const handleStopAutoPilot = () => {
     setIsAutoPilotRunning(false);
     setAutoPilotPaused(false);
-    showToast('Auto Pilot dihentikan', 'warn');
+    setAutoPilotStatus(null);
+    addLog('[Auto Pilot] ⏹ Dihentikan oleh pengguna.', 'error');
+    showToast('⏹ Auto Pilot dihentikan', 'warn');
   };
 
   // Export all completed items as ZIP of MP4 videos
@@ -479,37 +795,49 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         </div>
 
         {/* Dedicated Folder & Project Management Bar */}
-        <div className="bg-slate-950/85 rounded-xl p-2 sm:p-2.5 border border-amber-500/25 flex items-center gap-2 flex-wrap sm:flex-nowrap shadow-inner">
-          <div className="flex items-center gap-1.5 flex-1 min-w-[140px]">
-            <div className="relative w-full">
+        <div className="bg-slate-950/85 rounded-xl p-2.5 sm:p-3 border border-amber-500/25 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shadow-inner">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center text-xs shrink-0">
+              <i className="fa-solid fa-folder"></i>
+            </div>
+            <div className="relative flex-1 min-w-0">
               <select
                 value={activeProject.id}
                 onChange={(e) => onSelectProject(e.target.value)}
-                className="w-full bg-slate-900 text-amber-200 border border-amber-500/40 text-xs rounded-lg px-2.5 py-1.5 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer pr-7 truncate"
+                className="w-full bg-slate-900 text-amber-200 border border-amber-500/40 text-xs rounded-lg pl-3 pr-8 py-2 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer truncate shadow-sm"
               >
-                {projects.map((p) => {
-                  const count = items.filter((it) => it.projectId === p.id).length;
+                {projects.map((p, idx) => {
+                  const pItems = items.filter((it) => it.projectId === p.id);
+                  const pPending = pItems.filter((it) => it.status === 'pending' || it.status === 'error').length;
                   return (
-                    <option key={p.id} value={p.id} className="bg-slate-900 text-white">
-                      📂 {p.name} ({count})
+                    <option key={p.id} value={p.id} className="bg-slate-900 text-white font-medium">
+                      Folder #{idx + 1}: {p.name} ({pPending} pending / {pItems.length} total)
                     </option>
                   );
                 })}
               </select>
-              <i className="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 pointer-events-none"></i>
+              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 pointer-events-none"></i>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            {/* Folder count badge */}
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-gray-800 text-[11px] text-gray-300 font-medium">
+              <i className="fa-solid fa-layer-group text-amber-400 text-xs"></i>
+              <span>{projects.length} Folder</span>
+              <span className="text-gray-500">•</span>
+              <span className="text-amber-300 font-bold">{allPendingItems.length} Pending</span>
+            </div>
+
             {/* Quick Add Project Button */}
             <button
               type="button"
               onClick={() => setShowAddProjectModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
               title="Buat Folder / Project Baru"
             >
               <i className="fa-solid fa-folder-plus text-xs"></i>
-              <span>Buat</span>
+              <span>+ Buat</span>
             </button>
 
             {/* Complete Project / Folder Manager Modal Button */}
@@ -519,19 +847,21 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
               title="Kelola Semua Folder & Project (Edit, Hapus, Rename)"
             >
-              <i className="fa-solid fa-folder-tree text-amber-400"></i>
+              <i className="fa-solid fa-folder-tree text-amber-400 text-xs"></i>
               <span>Kelola Folder</span>
             </button>
 
             {/* Delete Current Active Project Button */}
-            <button
-              type="button"
-              onClick={() => setProjectToDelete(activeProject)}
-              className="p-1.5 px-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
-              title={`Hapus Project "${activeProject.name}"`}
-            >
-              <i className="fa-solid fa-trash text-xs"></i>
-            </button>
+            {projects.length > 1 && (
+              <button
+                type="button"
+                onClick={() => setProjectToDelete(activeProject)}
+                className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
+                title={`Hapus Project "${activeProject.name}"`}
+              >
+                <i className="fa-solid fa-trash text-xs"></i>
+              </button>
+            )}
           </div>
         </div>
 
@@ -664,67 +994,67 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       </div>
 
       {/* 4. BATCH QUEUE & AUTO PILOT COMMAND PANEL */}
-      <div className="glass-card rounded-2xl p-4 border border-gray-800/90 space-y-3 shadow-xl">
-        {/* Queue Stats Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-gray-800">
-          <div className="flex items-center gap-2">
-            <i className="fa-solid fa-list-check text-sky-400 text-xs"></i>
-            <span className="font-extrabold text-xs text-gray-200">
-              Antrian Batch Project: <span className="text-amber-300">{activeProject.name}</span>
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-gray-800/90 space-y-4 shadow-xl">
+        {/* Header: Title, Scope Switcher & Action Tools */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-800">
+          {/* Title & Scope Tabs */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center text-xs shrink-0">
+              <i className="fa-solid fa-list-check"></i>
             </span>
-            <span className="text-[10px] bg-slate-800 text-gray-300 px-2 py-0.5 rounded-full font-mono font-bold">
-              {projectItems.length} item ({completedItems.length} selesai)
-            </span>
+            <div>
+              <h3 className="font-extrabold text-xs sm:text-sm text-gray-100 flex items-center gap-2">
+                <span>ANTRIAN & AUTO PILOT ENGINE</span>
+              </h3>
+            </div>
+
+            {/* Scope Switcher Tabs */}
+            <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
+              <button
+                type="button"
+                onClick={() => setQueueViewMode('current_folder')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  queueViewMode === 'current_folder'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <i className="fa-solid fa-folder text-[10px]"></i>
+                <span>Folder Ini ({projectItems.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setQueueViewMode('all_folders')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  queueViewMode === 'all_folders'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <i className="fa-solid fa-globe text-[10px]"></i>
+                <span>Semua Folder ({items.length})</span>
+              </button>
+            </div>
           </div>
 
-          {/* Action Button Strip */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {/* Auto Pilot Trigger */}
-            {!isAutoPilotRunning ? (
-              <button
-                onClick={handleStartAutoPilot}
-                disabled={pendingItems.length === 0}
-                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20 disabled:opacity-40 cursor-pointer active:scale-95"
-              >
-                <i className="fa-solid fa-play"></i>
-                <span>Auto Pilot ({pendingItems.length})</span>
-              </button>
-            ) : (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handlePauseAutoPilot}
-                  className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition cursor-pointer"
-                >
-                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'}`}></i>
-                  <span>{autoPilotPaused ? 'Lanjut' : 'Jeda'}</span>
-                </button>
-                <button
-                  onClick={handleStopAutoPilot}
-                  className="px-2.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition cursor-pointer"
-                >
-                  <i className="fa-solid fa-stop"></i>
-                  <span>Stop</span>
-                </button>
-              </div>
-            )}
-
-            {/* Batch ZIP Exporters */}
+          {/* Action Tools (ZIP MP4, ZIP HTML, Clear) */}
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
             {completedItems.length > 0 && (
               <>
                 <button
                   onClick={handleExportAllMp4Zip}
                   disabled={isBatchExportingMp4}
-                  className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1 transition shadow-md shadow-purple-600/20 cursor-pointer disabled:opacity-50"
-                  title="Export semua animasi yang selesai ke video MP4 (ZIP)"
+                  className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
+                  title="Export semua animasi yang selesai di folder ini ke MP4 ZIP"
                 >
                   {isBatchExportingMp4 ? (
                     <>
-                      <i className="fa-solid fa-spinner fa-spin"></i>
+                      <i className="fa-solid fa-spinner fa-spin text-xs"></i>
                       <span>MP4 ({batchExportProgress.current}/{batchExportProgress.total})</span>
                     </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-film"></i>
+                      <i className="fa-solid fa-film text-xs"></i>
                       <span>ZIP MP4</span>
                     </>
                   )}
@@ -732,17 +1062,17 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
                 <button
                   onClick={handleExportAllHtmlZip}
-                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-1 transition border border-gray-700 cursor-pointer"
-                  title="Unduh semua file HTML (ZIP)"
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition border border-gray-700 cursor-pointer shadow-sm"
+                  title="Unduh semua file HTML dalam ZIP"
                 >
-                  <i className="fa-solid fa-file-zipper text-sky-400"></i>
+                  <i className="fa-solid fa-file-zipper text-sky-400 text-xs"></i>
                   <span>ZIP HTML</span>
                 </button>
 
                 <button
                   onClick={() => onClearCompletedItems(activeProject.id)}
                   className="p-1.5 text-gray-400 hover:text-rose-400 rounded-lg bg-slate-900 border border-gray-800 transition cursor-pointer"
-                  title="Bersihkan item yang selesai"
+                  title="Bersihkan item yang sudah selesai di folder ini"
                 >
                   <i className="fa-solid fa-trash-can text-xs"></i>
                 </button>
@@ -751,198 +1081,402 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           </div>
         </div>
 
-        {/* Queue Items List */}
-        {projectItems.length === 0 ? (
-          <div className="p-8 text-center border border-dashed border-gray-800 rounded-xl space-y-2">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-gray-800 text-gray-500 flex items-center justify-center mx-auto text-base">
-              <i className="fa-solid fa-images"></i>
+        {/* Auto Pilot Command Deck */}
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 rounded-xl p-3 sm:p-3.5 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span className="text-xs font-bold text-amber-200">
+                Eksekusi Otomatis Berurutan
+              </span>
+              <span className="text-[10px] bg-slate-800 text-amber-300 font-mono px-2 py-0.5 rounded-full border border-gray-700">
+                {allPendingItems.length} antrian pending total
+              </span>
             </div>
-            <p className="text-xs font-bold text-gray-400">Belum ada gambar dalam antrian project ini</p>
-            <p className="text-[11px] text-gray-500">
-              Drag & drop beberapa gambar di atas untuk memulai batch Image to Motion.
+            <p className="text-[11px] text-gray-400 leading-tight">
+              Menjalankan semua antrian satu per satu berurutan dimulai dari folder teratas ({projects[0]?.name || 'Utama'}), dan antrian teratas.
             </p>
           </div>
-        ) : (
-          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
-            {projectItems.map((item, idx) => {
-              const isProcessing = currentProcessingId === item.id;
-              const isCompleted = item.status === 'completed';
-              const isError = item.status === 'error';
 
-              return (
-                <div
-                  key={item.id}
-                  className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 transition ${
-                    isProcessing
-                      ? 'bg-amber-950/20 border-amber-500/50 shadow-md shadow-amber-500/10'
-                      : isCompleted
-                      ? 'bg-slate-900/60 border-emerald-500/30'
-                      : isError
-                      ? 'bg-rose-950/20 border-rose-500/40'
-                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700'
+          {/* Trigger Buttons */}
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            {!isAutoPilotRunning ? (
+              <>
+                {/* Primary: Auto Pilot All Folders */}
+                <button
+                  type="button"
+                  onClick={handleStartAutoPilotAll}
+                  disabled={allPendingItems.length === 0}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-amber-500/25 disabled:opacity-40 cursor-pointer active:scale-95 border border-yellow-300/60"
+                  title="Jalankan semua antrian gambar di seluruh folder berurutan dari folder teratas"
+                >
+                  <i className="fa-solid fa-rocket text-sm"></i>
+                  <span>Auto Pilot Semua Folder ({allPendingItems.length})</span>
+                </button>
+
+                {/* Secondary: Folder Ini Saja */}
+                {pendingItems.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleStartAutoPilotCurrent}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                    title={`Hanya jalankan antrian di folder "${activeProject.name}"`}
+                  >
+                    <i className="fa-solid fa-play text-[10px]"></i>
+                    <span>Folder Ini ({pendingItems.length})</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePauseAutoPilot}
+                  className={`px-3.5 py-2 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md ${
+                    autoPilotPaused
+                      ? 'bg-emerald-600 hover:bg-emerald-500'
+                      : 'bg-amber-600 hover:bg-amber-500'
                   }`}
                 >
-                  {/* Left: Thumbnail & Info */}
-                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                    {/* Thumbnail */}
-                    <div
-                      onClick={() => setComparisonItem(item)}
-                      className="w-11 h-11 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
-                      title="Klik untuk bandingkan dengan hasil animasi"
-                    >
-                      <img
-                        src={item.imagePreviewUrl}
-                        alt={item.fileName}
-                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-                      />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px]">
-                        <i className="fa-solid fa-magnifying-glass"></i>
-                      </div>
-                    </div>
+                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'}`}></i>
+                  <span>{autoPilotPaused ? 'Lanjutkan' : 'Jeda'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleStopAutoPilot}
+                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md"
+                >
+                  <i className="fa-solid fa-stop"></i>
+                  <span>Hentikan</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
-                    {/* Metadata */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] font-mono font-bold text-gray-500">#{idx + 1}</span>
-                        <h4 className="text-xs font-bold text-gray-200 truncate" title={item.fileName}>
-                          {item.fileName}
-                        </h4>
-                      </div>
+        {/* LIVE AUTO PILOT PROGRESS BAR & STATUS CARD */}
+        {isAutoPilotRunning && autoPilotStatus && (
+          <div className="bg-gradient-to-r from-slate-950 via-amber-950/40 to-slate-950 border-2 border-amber-500/50 rounded-2xl p-4 shadow-2xl shadow-amber-500/15 space-y-3 relative overflow-hidden animate-fadeIn">
+            {/* Ambient glowing beam */}
+            <div className="absolute top-0 right-1/4 w-32 h-32 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
 
-                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-mono">
-                          {item.fileSize}
-                        </span>
-                        <span className="text-[9px] bg-amber-950/60 text-amber-300 border border-amber-800/40 px-1.5 py-0.2 rounded font-semibold capitalize">
-                          {item.motionDynamics}
-                        </span>
-                        {item.isGreenScreen && (
-                          <span className="text-[9px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded font-semibold">
-                            Green Screen
-                          </span>
-                        )}
-                        {(item.shapeAnalysis?.objectName || item.detectedSubject) && (
-                          <span
-                            onClick={() => (item.shapeAnalysis ? setAnalysisModalItem(item) : null)}
-                            className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-900/80 transition"
-                            title="Klik untuk melihat analisis logika bentuk & motion"
-                          >
-                            <i className="fa-solid fa-brain text-[8px] text-purple-400"></i>
-                            <span className="truncate max-w-[140px]">{item.shapeAnalysis?.objectName || item.detectedSubject}</span>
-                          </span>
-                        )}
-
-                        {/* Status Badges */}
-                        {item.status === 'pending' && (
-                          <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-bold">
-                            Menunggu
-                          </span>
-                        )}
-                        {item.status === 'analyzing' && (
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                            <i className="fa-solid fa-brain fa-spin text-[8px]"></i> Analisa AI...
-                          </span>
-                        )}
-                        {item.status === 'generating' && (
-                          <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                            <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Membuat Motion...
-                          </span>
-                        )}
-                        {item.status === 'completed' && (
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                            <i className="fa-solid fa-check text-[8px]"></i> 60 FPS HD
-                          </span>
-                        )}
-                        {item.status === 'error' && (
-                          <span
-                            className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-bold truncate max-w-[120px]"
-                            title={item.error}
-                          >
-                            Gagal: {item.error}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Right: Actions */}
-                  <div className="flex items-center gap-1 shrink-0">
-                    {/* Trigger Single Process */}
-                    {!isCompleted && !isProcessing && (
-                      <button
-                        onClick={() => processSingleItem(item)}
-                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
-                        title="Proses gambar ini sekarang"
-                      >
-                        <i className="fa-solid fa-play text-[9px]"></i>
-                        <span>Proses</span>
-                      </button>
-                    )}
-
-                    {/* Preview / Comparison */}
-                    {isCompleted && item.animationResult && (
-                      <>
-                        <button
-                          onClick={() => onPreviewAnimation(item.animationResult!)}
-                          className="px-2 py-1 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                          title="Preview Animasi di Layar Utama"
-                        >
-                          <i className="fa-solid fa-play text-[9px]"></i>
-                        </button>
-                        {item.shapeAnalysis && (
-                          <button
-                            onClick={() => setAnalysisModalItem(item)}
-                            className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/40 font-semibold text-[11px] rounded-lg transition cursor-pointer flex items-center gap-1"
-                            title="Lihat 3 Analisis Logika AI (Bentuk, Motion Profesional, Sintesis)"
-                          >
-                            <i className="fa-solid fa-brain text-[9px]"></i>
-                            <span className="hidden sm:inline">Logika</span>
-                          </button>
-                        )}
-                        <button
-                          onClick={() => setComparisonItem(item)}
-                          className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                          title="Bandingkan Gambar Asli vs Animasi"
-                        >
-                          <i className="fa-solid fa-code-compare text-[9px]"></i>
-                        </button>
-                        <button
-                          onClick={() => handleDownloadSingleHtml(item)}
-                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-gray-300 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                          title="Unduh HTML"
-                        >
-                          <i className="fa-solid fa-code text-[9px]"></i>
-                        </button>
-                        <button
-                          onClick={() => handleExportSingleMp4(item)}
-                          className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] rounded-lg transition cursor-pointer shadow-sm"
-                          title="Export MP4 (1080p 60 FPS)"
-                        >
-                          <i className="fa-solid fa-film text-[9px]"></i>
-                        </button>
-                      </>
-                    )}
-
-                    {/* Delete Item */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        onDeleteItem(item.id);
-                      }}
-                      disabled={isProcessing}
-                      className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer disabled:opacity-30 active:scale-90"
-                      title="Hapus gambar ini dari antrian"
-                    >
-                      <i className="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                  </div>
+            {/* Top Row: Folder indicator & Queue item indicator */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-10">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Folder indicator */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-bold shadow-sm">
+                  <i className="fa-solid fa-folder-open text-amber-400"></i>
+                  <span className="text-amber-400 font-mono">
+                    Folder [{autoPilotStatus.currentFolderIndex}/{autoPilotStatus.totalFolders}]:
+                  </span>
+                  <span className="text-white font-extrabold truncate max-w-[150px] sm:max-w-[200px]">
+                    {autoPilotStatus.currentFolderName}
+                  </span>
                 </div>
-              );
-            })}
+
+                {/* Queue Item indicator */}
+                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-200 text-xs font-bold shadow-sm">
+                  <i className="fa-solid fa-bolt text-sky-400 animate-pulse"></i>
+                  <span className="text-sky-300 font-mono">
+                    Antrian #{autoPilotStatus.currentItemIndexInFolder} dari {autoPilotStatus.totalInCurrentFolder}:
+                  </span>
+                  <span className="text-white font-mono truncate max-w-[150px] sm:max-w-[220px]">
+                    {autoPilotStatus.currentFileName}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status badge */}
+              <div className="flex items-center gap-2 shrink-0">
+                <span
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 ${
+                    autoPilotPaused
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      autoPilotPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-ping'
+                    }`}
+                  ></span>
+                  <span>{autoPilotPaused ? 'Auto Pilot Dijeda' : 'Auto Pilot Berjalan'}</span>
+                </span>
+              </div>
+            </div>
+
+            {/* Middle Row: Visual Loading Bar with Animated Gradient */}
+            <div className="space-y-1.5 relative z-10">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-300 font-semibold flex items-center gap-1.5">
+                  <i className="fa-solid fa-bars-progress text-amber-400"></i>
+                  <span>
+                    Total Selesai: <strong className="text-amber-300 font-mono">{autoPilotStatus.completedItemsOverall}</strong> / {autoPilotStatus.totalItemsOverall} Item
+                  </span>
+                </span>
+                <span className="text-amber-300 font-mono font-black text-sm">
+                  {autoPilotStatus.progressPercent}%
+                </span>
+              </div>
+
+              {/* The Glowing Loading Bar */}
+              <div className="h-3.5 w-full bg-slate-900 rounded-full overflow-hidden p-0.5 border border-amber-500/40 relative shadow-inner">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 rounded-full transition-all duration-500 relative shadow-[0_0_15px_rgba(245,158,11,0.7)]"
+                  style={{ width: `${Math.max(autoPilotStatus.progressPercent, 4)}%` }}
+                >
+                  {/* Gleam stripe animation */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Stage Description */}
+            <div className="flex items-center justify-between text-[11px] text-gray-400 pt-1 border-t border-gray-800/80 relative z-10">
+              <div className="flex items-center gap-2 truncate">
+                <i className="fa-solid fa-spinner fa-spin text-amber-400 text-xs shrink-0"></i>
+                <span className="text-amber-200/90 truncate font-medium">
+                  {autoPilotStatus.currentStageText}
+                </span>
+              </div>
+              <span className="text-[10px] text-gray-500 uppercase tracking-wider shrink-0 font-mono hidden sm:inline">
+                60 FPS Canvas Engine
+              </span>
+            </div>
           </div>
         )}
+
+        {/* Queue Items List */}
+        {(() => {
+          const displayedQueueItems = queueViewMode === 'all_folders' ? items : projectItems;
+
+          if (displayedQueueItems.length === 0) {
+            return (
+              <div className="p-8 text-center border border-dashed border-gray-800 rounded-xl space-y-2">
+                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-gray-800 text-gray-500 flex items-center justify-center mx-auto text-base">
+                  <i className="fa-solid fa-images"></i>
+                </div>
+                <p className="text-xs font-bold text-gray-400">
+                  {queueViewMode === 'all_folders'
+                    ? 'Belum ada gambar dalam antrian di semua folder'
+                    : `Belum ada gambar dalam antrian folder "${activeProject.name}"`}
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  Drag & drop gambar di atas untuk menambahkan gambar ke antrian.
+                </p>
+              </div>
+            );
+          }
+
+          return (
+            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+              {displayedQueueItems.map((item, idx) => {
+                const isProcessing = currentProcessingId === item.id;
+                const isCompleted = item.status === 'completed';
+                const isError = item.status === 'error';
+                const itemProject = projects.find((p) => p.id === item.projectId);
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                      isProcessing
+                        ? 'bg-amber-950/25 border-amber-500/70 shadow-lg shadow-amber-500/15 ring-1 ring-amber-400/40'
+                        : isCompleted
+                        ? 'bg-slate-900/60 border-emerald-500/30'
+                        : isError
+                        ? 'bg-rose-950/20 border-rose-500/40'
+                        : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700'
+                    }`}
+                  >
+                    {/* Left: Thumbnail & Info */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      {/* Thumbnail */}
+                      <div
+                        onClick={() => setComparisonItem(item)}
+                        className="w-12 h-12 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
+                        title="Klik untuk bandingkan dengan hasil animasi"
+                      >
+                        <img
+                          src={item.imagePreviewUrl}
+                          alt={item.fileName}
+                          className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px]">
+                          <i className="fa-solid fa-magnifying-glass"></i>
+                        </div>
+                      </div>
+
+                      {/* Metadata */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-mono font-bold text-gray-500">#{idx + 1}</span>
+                          <h4 className="text-xs font-bold text-gray-200 truncate" title={item.fileName}>
+                            {item.fileName}
+                          </h4>
+
+                          {/* Show Folder tag if viewing all folders */}
+                          {queueViewMode === 'all_folders' && itemProject && (
+                            <span className="text-[9px] bg-sky-950/60 text-sky-300 border border-sky-800/50 px-1.5 py-0.2 rounded font-mono truncate max-w-[120px]">
+                              📁 {itemProject.name}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-mono">
+                            {item.fileSize}
+                          </span>
+                          <span className="text-[9px] bg-amber-950/60 text-amber-300 border border-amber-800/40 px-1.5 py-0.2 rounded font-semibold capitalize">
+                            {item.motionDynamics}
+                          </span>
+                          {item.isGreenScreen && (
+                            <span className="text-[9px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded font-semibold">
+                              Green Screen
+                            </span>
+                          )}
+                          {(item.shapeAnalysis?.objectName || item.detectedSubject) && (
+                            <button
+                              type="button"
+                              onClick={() => (item.shapeAnalysis ? setAnalysisModalItem(item) : null)}
+                              className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-900/80 transition"
+                              title="Klik untuk melihat analisis logika bentuk & motion"
+                            >
+                              <i className="fa-solid fa-brain text-[8px] text-purple-400"></i>
+                              <span className="truncate max-w-[140px]">
+                                {item.shapeAnalysis?.objectName || item.detectedSubject}
+                              </span>
+                            </button>
+                          )}
+
+                          {/* Status Badges */}
+                          {item.status === 'pending' && (
+                            <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-bold">
+                              Menunggu
+                            </span>
+                          )}
+                          {item.status === 'analyzing' && (
+                            <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                              <i className="fa-solid fa-brain fa-spin text-[8px]"></i> Analisa AI...
+                            </span>
+                          )}
+                          {item.status === 'generating' && (
+                            <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                              <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Membuat Motion...
+                            </span>
+                          )}
+                          {item.status === 'completed' && (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                              <i className="fa-solid fa-check text-[8px]"></i> 60 FPS HD
+                            </span>
+                          )}
+                          {item.status === 'error' && (
+                            <span
+                              className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-bold truncate max-w-[120px]"
+                              title={item.error}
+                            >
+                              Gagal: {item.error}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Inline progress bar when active */}
+                        {isProcessing && (
+                          <div className="mt-1.5 w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-amber-500/30">
+                            <div
+                              className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse"
+                              style={{ width: `${item.progress || 50}%` }}
+                            ></div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Right: Actions */}
+                    <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                      {/* Trigger Single Process */}
+                      {!isCompleted && !isProcessing && (
+                        <button
+                          type="button"
+                          onClick={() => processSingleItem(item)}
+                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                          title="Proses gambar ini sekarang"
+                        >
+                          <i className="fa-solid fa-play text-[9px]"></i>
+                          <span>Proses</span>
+                        </button>
+                      )}
+
+                      {/* Preview / Comparison */}
+                      {isCompleted && item.animationResult && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onPreviewAnimation(item.animationResult!)}
+                            className="px-2 py-1 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                            title="Preview Animasi di Layar Utama"
+                          >
+                            <i className="fa-solid fa-play text-[9px]"></i>
+                          </button>
+                          {item.shapeAnalysis && (
+                            <button
+                              type="button"
+                              onClick={() => setAnalysisModalItem(item)}
+                              className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/40 font-semibold text-[11px] rounded-lg transition cursor-pointer flex items-center gap-1"
+                              title="Lihat 3 Analisis Logika AI (Bentuk, Motion Profesional, Sintesis)"
+                            >
+                              <i className="fa-solid fa-brain text-[9px]"></i>
+                              <span className="hidden sm:inline">Logika</span>
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setComparisonItem(item)}
+                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                            title="Bandingkan Gambar Asli vs Animasi"
+                          >
+                            <i className="fa-solid fa-code-compare text-[9px]"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadSingleHtml(item)}
+                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-gray-300 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                            title="Unduh HTML"
+                          >
+                            <i className="fa-solid fa-code text-[9px]"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExportSingleMp4(item)}
+                            className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] rounded-lg transition cursor-pointer shadow-sm"
+                            title="Export MP4 (1080p 60 FPS)"
+                          >
+                            <i className="fa-solid fa-film text-[9px]"></i>
+                          </button>
+                        </>
+                      )}
+
+                      {/* Delete Item */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          onDeleteItem(item.id);
+                        }}
+                        disabled={isProcessing}
+                        className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer disabled:opacity-30 active:scale-90"
+                        title="Hapus gambar ini dari antrian"
+                      >
+                        <i className="fa-solid fa-xmark text-xs"></i>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </div>
 
       {/* MODAL: ADD NEW PROJECT / ACCOUNT */}
