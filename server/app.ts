@@ -668,6 +668,299 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
   };
 }
 
+// High-Fidelity Hybrid Kinetic Motion Canvas HTML Generator
+export function buildHighFidelityImageMotionHtml(params: {
+  imageBase64: string;
+  mimeType: string;
+  motionDynamics: string;
+  colorMode: string;
+  neonGlow: boolean;
+  isGreenScreen: boolean;
+  aiAnalysis?: {
+    subject?: string;
+    hasSpeedTrails?: boolean;
+    spinSpeed?: number;
+    glowColor?: string;
+  };
+}): string {
+  const {
+    imageBase64,
+    mimeType = 'image/png',
+    motionDynamics = 'flow',
+    colorMode = 'gradient',
+    neonGlow = true,
+    isGreenScreen = false,
+    aiAnalysis = {},
+  } = params;
+
+  let pureBase64 = imageBase64;
+  if (pureBase64.includes(';base64,')) {
+    pureBase64 = pureBase64.split(';base64,')[1];
+  }
+  pureBase64 = pureBase64.trim();
+  const dataUri = `data:${mimeType};base64,${pureBase64}`;
+
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+
+  const glowColor =
+    aiAnalysis.glowColor ||
+    (colorMode === 'neon'
+      ? '#00f0ff'
+      : colorMode === 'luxury'
+      ? '#ffd700'
+      : colorMode === 'pastel'
+      ? '#fda4af'
+      : colorMode === 'monochrome'
+      ? '#e2e8f0'
+      : '#38bdf8');
+
+  const spinSpeed = aiAnalysis.spinSpeed ?? (motionDynamics === 'mechanical' ? 2.2 : 3.2);
+  const hasSpeedTrails = aiAnalysis.hasSpeedTrails ?? true;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
+</style>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
+  };
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Load Reference Sprite Asset
+  const sprite = new Image();
+  let spriteLoaded = false;
+  let isolatedSpriteCanvas = null;
+
+  sprite.onload = function() {
+    spriteLoaded = true;
+    // Process sprite to remove bounding box borders (auto-chroma key / transparency extraction)
+    const off = document.createElement('canvas');
+    off.width = sprite.width;
+    off.height = sprite.height;
+    const octx = off.getContext('2d');
+    octx.drawImage(sprite, 0, 0);
+
+    try {
+      const imgData = octx.getImageData(0, 0, off.width, off.height);
+      const data = imgData.data;
+      const r0 = data[0], g0 = data[1], b0 = data[2];
+      const isCornerLight = (r0 > 235 && g0 > 235 && b0 > 235);
+      const isCornerDark = (r0 < 25 && g0 < 25 && b0 < 25 && ${!isGreenScreen});
+
+      if (isCornerLight || isCornerDark) {
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i+1], b = data[i+2];
+          if (isCornerLight && r > 230 && g > 230 && b > 230) {
+            data[i+3] = 0; // Transparent
+          } else if (isCornerDark && r < 25 && g < 25 && b < 25) {
+            data[i+3] = 0;
+          }
+        }
+        octx.putImageData(imgData, 0, 0);
+      }
+    } catch (e) {}
+    isolatedSpriteCanvas = off;
+  };
+  sprite.src = "${dataUri}";
+
+  // Particle System
+  const particles = [];
+  for (let i = 0; i < 45; i++) {
+    particles.push({
+      x: (Math.random() - 0.5) * 500,
+      y: (Math.random() - 0.5) * 160,
+      vx: -(Math.random() * 5 + 3),
+      vy: (Math.random() - 0.5) * 1.5,
+      size: Math.random() * 3.5 + 1,
+      alpha: Math.random() * 0.8 + 0.2,
+      life: Math.random() * 60
+    });
+  }
+
+  // Speed Trail Streaks
+  const streaks = [];
+  for (let i = 0; i < 18; i++) {
+    streaks.push({
+      yOffset: (Math.random() - 0.5) * 180,
+      length: Math.random() * 220 + 80,
+      thickness: Math.random() * 3 + 1,
+      speed: Math.random() * 6 + 4,
+      phase: Math.random() * Math.PI * 2,
+      alpha: Math.random() * 0.6 + 0.3
+    });
+  }
+
+  function animate(time) {
+    const t = time * 0.001;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = ${clearFill};
+    ctx.fillRect(0, 0, w, h);
+
+    // Compute Kinetic Position & Transforms based on Dynamics
+    let posX = cx;
+    let posY = cy;
+    let scaleX = 1;
+    let scaleY = 1;
+    let rot = 0;
+
+    const dyn = "${motionDynamics}";
+    if (dyn === 'bounce') {
+      const bounce = Math.abs(Math.sin(t * 3.5));
+      posY = cy - (bounce * S * 0.35) + (S * 0.1);
+      const squash = 1 + 0.25 * (1 - bounce);
+      scaleX = 1 / Math.sqrt(squash);
+      scaleY = squash;
+      rot = Math.sin(t * 2.5) * 0.15;
+    } else if (dyn === 'orbital') {
+      posX = cx + Math.cos(t * 2.0) * (S * 0.4);
+      posY = cy + Math.sin(t * 2.0) * (S * 0.15);
+      const depthScale = 0.85 + 0.25 * (Math.sin(t * 2.0) + 1) * 0.5;
+      scaleX = depthScale;
+      scaleY = depthScale;
+      rot = t * 1.2;
+    } else if (dyn === 'morph') {
+      const pulse = 1 + Math.sin(t * 4.0) * 0.12;
+      scaleX = pulse;
+      scaleY = 1 / pulse;
+      posX = cx + Math.sin(t * 1.5) * 15;
+      posY = cy + Math.cos(t * 2.0) * 10;
+      rot = Math.sin(t * 2.0) * 0.2;
+    } else if (dyn === 'cyber') {
+      const step = Math.floor(t * 6) / 6;
+      posX = cx + Math.sin(step * Math.PI * 2) * 12;
+      posY = cy + Math.cos(step * Math.PI * 2) * 8;
+      rot = step * Math.PI * 1.5;
+    } else if (dyn === 'mechanical') {
+      rot = t * ${spinSpeed};
+      posX = cx + Math.sin(t * 1.5) * 8;
+      posY = cy + Math.cos(t * 1.5) * 6;
+    } else {
+      // Flow & harmonic waves
+      posX = cx + Math.sin(t * 1.8) * (S * 0.12);
+      posY = cy + Math.cos(t * 2.4) * (S * 0.08);
+      rot = t * ${spinSpeed};
+    }
+
+    // 1. Render Speed Streaks behind object (if dynamic/flying)
+    if (${hasSpeedTrails}) {
+      ctx.save();
+      ctx.translate(posX, posY);
+      
+      for (let i = 0; i < streaks.length; i++) {
+        const st = streaks[i];
+        const wave = Math.sin(t * st.speed + st.phase) * 6;
+        const streakLen = st.length * (0.8 + 0.3 * Math.sin(t * 4 + st.phase));
+        
+        ctx.beginPath();
+        const startX = -S * 0.35;
+        const endX = startX - streakLen;
+        const currY = st.yOffset * (S / 200) + wave;
+
+        const grad = ctx.createLinearGradient(startX, currY, endX, currY);
+        grad.addColorStop(0, "${glowColor}");
+        grad.addColorStop(0.3, "${glowColor}" + "aa");
+        grad.addColorStop(1, "transparent");
+
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = st.thickness;
+        ctx.lineCap = 'round';
+        ctx.moveTo(startX, currY);
+        ctx.lineTo(endX, currY);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 2. Render Trailing Kinetic Particles
+    ctx.save();
+    ctx.translate(posX, posY);
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.life -= 1;
+      if (p.life <= 0 || p.x < -w * 0.6) {
+        p.x = -S * 0.2 + (Math.random() - 0.5) * 20;
+        p.y = (Math.random() - 0.5) * (S * 0.6);
+        p.vx = -(Math.random() * 6 + 3);
+        p.life = Math.random() * 45 + 15;
+      }
+
+      const pAlpha = (p.life / 60) * p.alpha;
+      ctx.fillStyle = "${glowColor}";
+      ctx.globalAlpha = Math.max(0, Math.min(1, pAlpha));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // 3. Render High-Fidelity Reference Object
+    ctx.save();
+    ctx.translate(posX, posY);
+    ctx.scale(scaleX, scaleY);
+    ctx.rotate(rot);
+
+    if (${neonGlow}) {
+      ctx.shadowColor = "${glowColor}";
+      ctx.shadowBlur = 18 + Math.sin(t * 4) * 8;
+    }
+
+    const drawTarget = isolatedSpriteCanvas || (spriteLoaded ? sprite : null);
+    if (drawTarget) {
+      const targetSize = S * 0.9;
+      const aspect = drawTarget.width / (drawTarget.height || 1);
+      let drawW = targetSize;
+      let drawH = targetSize / aspect;
+      if (drawH > targetSize) {
+        drawH = targetSize;
+        drawW = targetSize * aspect;
+      }
+      ctx.drawImage(drawTarget, -drawW / 2, -drawH / 2, drawW, drawH);
+    } else {
+      // Smooth geometric fallback while sprite is loading
+      ctx.beginPath();
+      ctx.arc(0, 0, S * 0.35, 0, Math.PI * 2);
+      ctx.fillStyle = "${glowColor}";
+      ctx.fill();
+    }
+
+    ctx.restore();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+
+    requestAnimationFrame(animate);
+  }
+  animate(0);
+</script>
+</body>
+</html>`;
+}
+
 // Logic for Image to Motion (AI Multimodal Vision)
 export async function handleImageToMotionLogic(body: any) {
   const {
@@ -698,174 +991,74 @@ export async function handleImageToMotionLogic(body: any) {
   }
   pureBase64 = pureBase64.trim();
 
-  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+  // Ultra-fast lightweight vision analysis prompt (< 80 tokens, completes in ~1-2s)
+  const visionAnalysisPrompt = `Analyze this image in JSON format for a 60fps microstock motion canvas:
+{
+  "subject": "short description of main element e.g. flying soccer ball with speed lines",
+  "hasSpeedTrails": true or false,
+  "spinSpeed": 3.0,
+  "glowColor": "#38bdf8"
+}
+Output only valid JSON:`;
 
-  let colorModeGuide = '';
-  if (colorMode === 'neon') {
-    colorModeGuide = 'Gunakan palet warna Cyberpunk Neon elektrik berkilau (#00f0ff, #ff007f, #ffe600, #39ff14).';
-  } else if (colorMode === 'flat') {
-    colorModeGuide = 'Gunakan warna flat modern tanpa gradasi berat, bersih, kontras tinggi, dan tajam (#2563eb, #f59e0b, #10b981, #ef4444).';
-  } else if (colorMode === 'monochrome') {
-    colorModeGuide = 'Gunakan palet monokrom elegan (putih, perak, slate #94a3b8, abu-abu #64748b, dan aksen charcoal).';
-  } else if (colorMode === 'pastel') {
-    colorModeGuide = 'Gunakan palet pastel lembut kekinian (#fda4af, #93c5fd, #fde047, #a7f3d0, #c4b5fd).';
-  } else if (colorMode === 'luxury') {
-    colorModeGuide = 'Gunakan nuansa Luxury Gold (#ffd700, #e6c66e, #b8860b), obsidian, dan kilau emas metalik.';
-  } else {
-    colorModeGuide = 'Gunakan gradien dinamis yang kaya (Linear & Radial Gradient) dengan transisi warna halus & harmonis.';
-  }
-
-  let motionGuide = '';
-  if (motionDynamics === 'bounce') {
-    motionGuide = `
-PANDUAN GERAKAN BOUNCE & SPRING:
-- Objek bergerak elastis membal (spring physics): const bounce = Math.abs(Math.sin(t * 3.5)); const squash = 1 + 0.25 * (1 - bounce);
-- Objek memantul secara lentur dengan efek squash & stretch yang nyata.`;
-  } else if (motionDynamics === 'orbital') {
-    motionGuide = `
-PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
-- Elemen dan partikel pendukung mengelilingi objek utama dalam orbit elips 3D bertingkat (menggunakan sin/cos dengan kedalaman depth scale).`;
-  } else if (motionDynamics === 'morph') {
-    motionGuide = `
-PANDUAN GERAKAN KINETIC MORPHING:
-- Bentuk garis dan kontur objek bertransformasi lentur, bernapas, berdenyut, atau bermutasi secara kinetik dengan vertex looping.`;
-  } else if (motionDynamics === 'cyber') {
-    motionGuide = `
-PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
-- Kuantisasi gerakan stepped tajam, laser scanning melintasi kontur subjek, radar dial berputar, dan grid telemetry di sekitar objek.`;
-  } else if (motionDynamics === 'mechanical') {
-    motionGuide = `
-PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
-- Elemen roda, gear, atau komponen mesin berputar dengan rotasi sudut terkalibrasi presisi dan ritme mekanik teratur.`;
-  } else {
-    motionGuide = `
-PANDUAN GERAKAN ORGANIC FLOW & WAVES:
-- Aliran gelombang sinusoidal lembut, partikel mengapung mengalir di sekitar objek, dan pergerakan mengayun harmonis (floating wave).`;
-  }
-
-  const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Lead Motion Designer Spesialis Video Asset & Microstock Pro.
-
-TUGAS UTAMA:
-1. REPLIKASI VISUAL TINGGI (HIGH-FIDELITY VECTOR RECONSTRUCTION):
-   - Amati gambar yang dilampirkan dengan sangat teliti! Kenali bentuk geometri spesifik, siluet detail, kontur kurva, dan struktur objek utamanya.
-   - Gambar ulang subjek tersebut menggunakan instruksi Canvas 2D murni (ctx.arc, ctx.beginPath, ctx.moveTo, ctx.lineTo, ctx.bezierCurveTo, ctx.quadraticCurveTo, ctx.fill, ctx.stroke, ctx.createRadialGradient, ctx.createLinearGradient).
-   - HASIL VISUAL HARUS NYARIS IDENTIK & SANGAT MIRIP dengan gambar referensi! Jika pada gambar terdapat bola sepak dengan pola pentagon & garis kecepatan, buatkan bola sepak yang detail dengan tambalan pentagon/segi lima hitam & segi enam putih, serta garis-garis kecepatan (speed streaks) meruncing di bagian belakangnya persis seperti di gambar.
-   - Abaikan kotak background kartu putih, border screenshot, atau bingkai kotak statis luar; fokus 100% pada subjek utama gambar.
-
-2. CHOREOGRAFI GERAKAN KINETIK PROFESIONAL & MASUK AKAL (LOGICAL MOTION):
-   - Gerakkan setiap elemen secara terpisah namun harmonis dan hidup sesuai logika fisika objeknya:
-     * ROTASI & SPIN: Jika objek berbentuk bola/roda/lingkaran/partikel, buat objek berputar pada porosnya dengan rotasi halus (ctx.rotate).
-     * GARIS KECEPATAN & SPEED TRAILS: Jika ada garis laju/kecepatan, buat garis-garis tersebut bergetar, memanjang-memendek dinamis (aerodynamic wave oscillation), dan memancarkan partikel debu/energi kinetik yang mengalir ke belakang.
-     * FLOATING & KINETIC SWAY: Objek utama melayang/bergerak dengan sedikit ayunan harmonis (subtle sinusoidal drift: cx + Math.sin(t * 1.8) * 10, cy + Math.cos(t * 2.5) * 6).
-     * ENERGY SHIELD & GLOW PULSE: Kilau cahaya melintasi permukaan objek secara periodik (sheen sweep).
-
-3. PENYESUAIAN PENGATURAN USER:
-   - Mode Warna (${colorMode.toUpperCase()}): ${colorModeGuide} (Pertahankan atau sesuaikan warna asli gambar dengan mode ini).
-   - Motion Dynamics (${motionDynamics.toUpperCase()}): ${motionGuide}
-   - Neon Glow: ${neonGlow ? 'AKTIF (Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore)' : 'NONAKTIF (Garis bersih tajam)'}
-   - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00 murni (Chroma Key)' : 'Dark Studio #080C14 murni'}
-${customInstructions ? `- Instruksi Tambahan Khusus: ${customInstructions}` : ''}
-
-4. STANDAR KUALITAS KODE (ANTI-ARTIFACT):
-   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
-   - Selalu reset ctx.shadowBlur = 0 setelah menggambar elemen bercahaya.
-   - Skala responsif: S = Math.min(w, h) * 0.42; berpusat di cx, cy.
-   - Tulis kode lengkap 200 - 320 baris yang langsung jalan tanpa error dan looping 60 FPS mulus.
-
-WAJIB gunakan struktur HTML boilerplate:
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
-</style>
-<script>
-  window.onerror = function(msg, url, line) {
-    document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
+  let aiAnalysis: any = {
+    subject: fileName.replace(/\.[^/.]+$/, ''),
+    hasSpeedTrails: true,
+    spinSpeed: 3.0,
+    glowColor: '#38bdf8'
   };
-</script>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    cx = w / 2;
-    cy = h / 2;
-    S = Math.min(w, h) * 0.42;
-  }
-  window.addEventListener('resize', resize);
-  resize();
 
-  // --- INISIALISASI STRUKTUR GEOMETRI & PARTIKEL SESUAI GAMBAR ASLI ---
-
-  function animate(time) {
-    const t = time * 0.001;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = ${clearFill};
-    ctx.fillRect(0, 0, w, h);
-
-    // --- RENDER REKONSTRUKSI VISUAL IDENTIK DENGAN KOREOGRAFI GERAK NYATA ---
-
-    requestAnimationFrame(animate);
-  }
-  animate(0);
-</script>
-</body>
-</html>
-
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
-
-  const { response } = await generateContentWithFallback(
-    ai,
-    targetModel,
-    (currentModel) => {
-      const animConfig: any = {
-        temperature: 0.55,
-      };
-      const animThinking = getFastThinkingConfig(currentModel);
-      if (animThinking) {
-        animConfig.thinkingConfig = animThinking;
-      }
-      return {
-        contents: [
-          {
-            inlineData: {
-              data: pureBase64,
-              mimeType: mimeType || "image/png",
+  try {
+    const { response } = await generateContentWithFallback(
+      ai,
+      targetModel,
+      (currentModel) => {
+        const config: any = {
+          temperature: 0.2,
+          responseMimeType: "application/json"
+        };
+        const fastThinking = getFastThinkingConfig(currentModel);
+        if (fastThinking) {
+          config.thinkingConfig = fastThinking;
+        }
+        return {
+          contents: [
+            {
+              inlineData: {
+                data: pureBase64,
+                mimeType: mimeType || "image/png",
+              },
             },
-          },
-          {
-            text: visionPrompt,
-          },
-        ],
-        config: animConfig,
-      };
-    }
-  );
+            {
+              text: visionAnalysisPrompt,
+            },
+          ],
+          config,
+        };
+      }
+    );
 
-  let rawText = response.text || "";
-  let cleanHTML = extractHTMLFromMarkdown(rawText);
-
-  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-      cleanHTML = extractHTMLFromMarkdown(rawText);
-    } else {
-      throw new Error('Kode dari AI terpotong sebelum selesai');
+    const rawJson = response.text || "{}";
+    const parsed = JSON.parse(rawJson);
+    if (parsed && typeof parsed === 'object') {
+      aiAnalysis = { ...aiAnalysis, ...parsed };
     }
+  } catch (err: any) {
+    console.warn("Fast AI vision analysis fallback:", err?.message);
   }
 
-  const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  // Compile high-fidelity 60 FPS HTML5 Canvas animation embedding reference asset
+  const cleanHTML = buildHighFidelityImageMotionHtml({
+    imageBase64: pureBase64,
+    mimeType,
+    motionDynamics,
+    colorMode,
+    neonGlow,
+    isGreenScreen,
+    aiAnalysis
+  });
+
+  const cleanTitle = (aiAnalysis.subject || fileName.replace(/\.[^/.]+$/, '')).replace(/[-_]/g, ' ');
 
   return {
     id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
