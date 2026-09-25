@@ -427,18 +427,18 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   return (
     <section className="lg:col-span-5 flex flex-col gap-4">
       {/* 1. SPECIAL FEATURE HIGHLIGHT HEADER CARD */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900/90 to-indigo-950/40 shadow-2xl relative overflow-hidden space-y-4">
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border-2 border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900/90 to-indigo-950/40 shadow-2xl relative overflow-hidden space-y-3.5">
         {/* Glow ambient background decoration */}
         <div className="absolute top-0 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
 
-        {/* Top Header & Project Selector */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-amber-500/20">
+        {/* Top Header Title & Special Badge */}
+        <div className="flex items-start justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center text-base font-black shadow-lg shadow-amber-500/30">
+            <span className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 flex items-center justify-center text-base font-black shadow-lg shadow-amber-500/30 shrink-0">
               <i className="fa-solid fa-wand-magic-sparkles"></i>
             </span>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="font-extrabold text-sm sm:text-base text-amber-200 tracking-tight">
                   IMAGE TO MOTION
                 </h2>
@@ -446,20 +446,21 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   ⭐ AI Vision Specialist
                 </span>
               </div>
-              <p className="text-[11px] text-amber-200/70">
-                Ubah gambar JPG/PNG/WEBP menjadi animasi Canvas 2D yang nyaris identik bergerak 60 FPS
+              <p className="text-[11px] text-amber-200/75 mt-0.5 leading-snug">
+                Deteksi semantik elemen gambar & ciptakan animasi Canvas 2D 60 FPS
               </p>
             </div>
           </div>
+        </div>
 
-          {/* Project / Account Selector & Management Bar */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap">
-            {/* Project Select Dropdown */}
-            <div className="relative min-w-[140px] max-w-[200px]">
+        {/* Dedicated Folder & Project Management Bar */}
+        <div className="bg-slate-950/85 rounded-xl p-2 sm:p-2.5 border border-amber-500/25 flex items-center gap-2 flex-wrap sm:flex-nowrap shadow-inner">
+          <div className="flex items-center gap-1.5 flex-1 min-w-[140px]">
+            <div className="relative w-full">
               <select
                 value={activeProject.id}
                 onChange={(e) => onSelectProject(e.target.value)}
-                className="w-full bg-slate-900/95 text-amber-200 border border-amber-500/40 text-xs rounded-xl px-2.5 py-1.5 font-bold focus:ring-2 focus:ring-amber-400 focus:outline-none cursor-pointer pr-7 truncate"
+                className="w-full bg-slate-900 text-amber-200 border border-amber-500/40 text-xs rounded-lg px-2.5 py-1.5 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer pr-7 truncate"
               >
                 {projects.map((p) => {
                   const count = items.filter((it) => it.projectId === p.id).length;
@@ -472,23 +473,25 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               </select>
               <i className="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 pointer-events-none"></i>
             </div>
+          </div>
 
+          <div className="flex items-center gap-1.5 shrink-0">
             {/* Quick Add Project Button */}
             <button
               type="button"
               onClick={() => setShowAddProjectModal(true)}
-              className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1 shadow-sm active:scale-95"
               title="Buat Folder / Project Baru"
             >
               <i className="fa-solid fa-folder-plus text-xs"></i>
-              <span className="hidden sm:inline">Buat</span>
+              <span>Buat</span>
             </button>
 
             {/* Complete Project / Folder Manager Modal Button */}
             <button
               type="button"
               onClick={() => setShowProjectManagerModal(true)}
-              className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-amber-200 border border-amber-500/30 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
               title="Kelola Semua Folder & Project (Edit, Hapus, Rename)"
             >
               <i className="fa-solid fa-folder-tree text-amber-400"></i>
@@ -499,7 +502,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             <button
               type="button"
               onClick={() => setProjectToDelete(activeProject)}
-              className="p-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
+              className="p-1.5 px-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
               title={`Hapus Project "${activeProject.name}"`}
             >
               <i className="fa-solid fa-trash text-xs"></i>

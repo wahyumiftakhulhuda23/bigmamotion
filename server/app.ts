@@ -23,10 +23,10 @@ export function getFastThinkingConfig(targetModel: string): any {
   if (targetModel.includes("2.5")) {
     return { thinkingBudget: 0 };
   }
-  if (targetModel.includes("3.1-flash-lite") || targetModel.includes("flash-lite")) {
-    return undefined;
+  if (targetModel.includes("3.1-flash-lite")) {
+    return { thinkingLevel: ThinkingLevel.MINIMAL };
   }
-  if (targetModel.includes("pro")) {
+  if (targetModel.includes("pro") || targetModel.includes("3.1")) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
   return undefined;
@@ -633,7 +633,6 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.65,
-        maxOutputTokens: 2048,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -692,87 +691,89 @@ export async function handleImageToMotionLogic(body: any) {
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
 
-  // Clean base64 string and build exact data URL
+  // Clean base64 string
   let pureBase64 = String(imageBase64 || "");
   if (pureBase64.includes(";base64,")) {
     pureBase64 = pureBase64.split(";base64,")[1];
   }
   pureBase64 = pureBase64.trim();
 
-  const dataUrl = imageBase64.startsWith('data:')
-    ? imageBase64
-    : `data:${mimeType || 'image/png'};base64,${pureBase64}`;
-
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+
+  let colorModeGuide = '';
+  if (colorMode === 'neon') {
+    colorModeGuide = 'Gunakan palet warna Cyberpunk Neon elektrik berkilau (#00f0ff, #ff007f, #ffe600, #39ff14).';
+  } else if (colorMode === 'flat') {
+    colorModeGuide = 'Gunakan warna flat modern tanpa gradasi berat, bersih, kontras tinggi, dan tajam (#2563eb, #f59e0b, #10b981, #ef4444).';
+  } else if (colorMode === 'monochrome') {
+    colorModeGuide = 'Gunakan palet monokrom elegan (putih, perak, slate #94a3b8, abu-abu #64748b, dan aksen charcoal).';
+  } else if (colorMode === 'pastel') {
+    colorModeGuide = 'Gunakan palet pastel lembut kekinian (#fda4af, #93c5fd, #fde047, #a7f3d0, #c4b5fd).';
+  } else if (colorMode === 'luxury') {
+    colorModeGuide = 'Gunakan nuansa Luxury Gold (#ffd700, #e6c66e, #b8860b), obsidian, dan kilau emas metalik.';
+  } else {
+    colorModeGuide = 'Gunakan gradien dinamis yang kaya (Linear & Radial Gradient) dengan transisi warna halus & harmonis.';
+  }
 
   let motionGuide = '';
   if (motionDynamics === 'bounce') {
     motionGuide = `
 PANDUAN GERAKAN BOUNCE & SPRING:
-- Transformasikan gambar dengan elastisitas membal:
-  const bounce = Math.abs(Math.sin(t * 3.5));
-  const squash = 1 + 0.22 * (1 - bounce);
-  const stretch = 1 / squash;
-  const offsetY = -Math.abs(Math.sin(t * 3.5)) * S * 0.35;
-  ctx.translate(cx, cy + offsetY);
-  ctx.scale(squash, stretch);`;
+- Objek bergerak elastis membal (spring physics): const bounce = Math.abs(Math.sin(t * 3.5)); const squash = 1 + 0.25 * (1 - bounce);
+- Objek memantul secara lentur dengan efek squash & stretch yang nyata.`;
   } else if (motionDynamics === 'orbital') {
     motionGuide = `
 PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
-- Transformasikan gambar dengan kemiringan pseudo-3D dan orbit cincin partikel:
-  const tiltX = Math.sin(t * 1.5) * 0.12;
-  const tiltY = Math.cos(t * 1.8) * 0.15;
-  const floatZ = 1 + Math.sin(t * 2) * 0.08;
-  ctx.translate(cx, cy + Math.sin(t * 2) * 15);
-  ctx.rotate(tiltX);
-  ctx.scale(floatZ, floatZ);
-  // Gambar cincin orbit 3D melingkar di sekeliling gambar dengan kedalaman z`;
+- Elemen dan partikel pendukung mengelilingi objek utama dalam orbit elips 3D bertingkat (menggunakan sin/cos dengan kedalaman depth scale).`;
   } else if (motionDynamics === 'morph') {
     motionGuide = `
-PANDUAN GERAKAN KINETIC MORPH & PULSE:
-- Buat gambar berdenyut ritmis seperti detak jantung / breathing energy:
-  const pulse = 1 + Math.sin(t * 3) * 0.08 + Math.sin(t * 6) * 0.03;
-  ctx.translate(cx, cy);
-  ctx.scale(pulse, pulse);
-  // Tambahkan gelombang aura konsentris yang memancar keluar dari gambar`;
+PANDUAN GERAKAN KINETIC MORPHING:
+- Bentuk garis dan kontur objek bertransformasi lentur, bernapas, berdenyut, atau bermutasi secara kinetik dengan vertex looping.`;
   } else if (motionDynamics === 'cyber') {
     motionGuide = `
 PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
-- Gerakan stepped presisi dan laser scanner melintasi gambar:
-  const stepRot = Math.floor(Math.sin(t * 2) * 4) * 0.03;
-  ctx.translate(cx, cy);
-  ctx.rotate(stepRot);
-  // Tambahkan kurung bidik HUD [ ], laser scanner line naik-turun melintasi gambar, dan dial radar berputar`;
+- Kuantisasi gerakan stepped tajam, laser scanning melintasi kontur subjek, radar dial berputar, dan grid telemetry di sekitar objek.`;
   } else if (motionDynamics === 'mechanical') {
     motionGuide = `
 PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
-- Objek berosilasi terkalibrasi dengan roda gigi dan jarum penunjuk yang berputar:
-  const rot = Math.sin(t * 2) * 0.18;
-  ctx.translate(cx, cy);
-  ctx.rotate(rot);
-  // Tambahkan aksen gear intermeshing dan partikel percikan presisi`;
+- Elemen roda, gear, atau komponen mesin berputar dengan rotasi sudut terkalibrasi presisi dan ritme mekanik teratur.`;
   } else {
     motionGuide = `
 PANDUAN GERAKAN ORGANIC FLOW & WAVES:
-- Objek mengapung lembut seperti di air atau udara:
-  const floatY = Math.sin(t * 1.8) * 16;
-  const floatX = Math.cos(t * 1.2) * 10;
-  const floatRot = Math.sin(t * 1.4) * 0.06;
-  ctx.translate(cx + floatX, cy + floatY);
-  ctx.rotate(floatRot);
-  // Tambahkan aliran partikel bercahaya mengalir lembut di sekitar gambar`;
+- Aliran gelombang sinusoidal lembut, partikel mengapung mengalir di sekitar objek, dan pergerakan mengayun harmonis (floating wave).`;
   }
 
-  const visionPrompt = `Anda adalah Master Computer Vision & Lead HTML5 Motion Designer Spesialis Video Asset & Microstock.
-TUGAS: Analisa gambar terlampir (warna dominan HEX, aksen, glow, siluet), lalu lengkapi logika Canvas 2D untuk menggerakkan gambar ini secara 60 FPS (${motionDynamics.toUpperCase()}) dan tambahkan efek partikel/glow ambient di sekelilingnya.
+  const visionPrompt = `Anda adalah Master Computer Vision & Lead HTML5 Canvas 2D Motion Designer Spesialis Video Asset & Microstock.
 
-Objek Image asli (\`img\`) sudah dimuat di canvas. DILARANG MENYALIN BASE64 GAMBAR!
-${neonGlow ? '- Terapkan neon glow (ctx.shadowBlur, ctx.shadowColor = accentColor).' : '- Terapkan bayangan bersih tajam.'}
-${customInstructions ? `- Instruksi tambahan: ${customInstructions}` : ''}
-${motionGuide}
+TUGAS UTAMA (SEMANTIC MOTION RECONSTRUCTION):
+Analisa gambar yang dilampirkan, DETEKSI ELEMEN DAN SUBJEK UTAMA DI DALAMNYA, lalu ciptakan animasi HTML5 Canvas 2D profesional 60 FPS yang BERGERAK SECARA MASUK AKAL, HIDUP, DAN NYAMBUNG dengan sifat alami objek tersebut!
 
-Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "__IMG_DATA__";\` tanpa penjelas markdown:
+ATURAN PENTING ISOLASI OBJEK & EKSTRAKSI BENTUK:
+1. JANGAN menduplikasi kotak putih latar, border foto, screenshot persegi, atau background statis pada gambar.
+2. ISOLASI & EKSTRAKSI SUBJEK UTAMA: Ambil bentuk inti (misal: jika ada bola melesat dengan garis angin/kecepatan, roket, api, roda gigi, perisai, karakter, lambang, dll), buatkan representasi geometri Canvas 2D berkualitas tinggi untuk objek tersebut.
+3. BUAT GERAKAN MASUK AKAL & DINAMIS:
+   - Jika subjek adalah BOLA/OBJEK DENGAN GARIS KECEPATAN (Speed Lines): Bola harus berputar aktif (rotasi), garis kecepatan di belakangnya bergetar/memanjang-memendek dinamis seolah melesat kencang di udara, partikel angin/debu terhempas ke belakang, dan bola melayang mengayun dengan akselerasi halus.
+   - Jika subjek adalah API / ENERGI: Lidah api meliuk, partikel bara naik ke atas, dan pancaran cahaya berdenyut.
+   - Jika subjek adalah MESIN / GEAR: Roda berputar sinkron, jarum/indikator bergerak ritmis.
+   - Jika subjek adalah LOGO / SIMBOL: Cincin orbit mengitari objek, efek kilau laser melintas, dan aura berdenyut.
+
+PENYESUAIAN PENGATURAN DARI USER:
+- Mode Warna (${colorMode.toUpperCase()}): ${colorModeGuide}
+- Motion Dynamics (${motionDynamics.toUpperCase()}): ${motionGuide}
+- Neon Glow: ${neonGlow ? 'AKTIF (Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore)' : 'NONAKTIF (Garis tajam tanpa shadow blur)'}
+- Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00 murni (Chroma Key)' : 'Dark Studio #080C14 murni'}
+${customInstructions ? `- Instruksi Tambahan: ${customInstructions}` : ''}
+
+ATURAN WAJIB ANTI-BEKAS GERAKAN / ZERO TRAIL ARTIFACTS:
+1. HILANGKAN BEKAS GERAKAN TOTAL: Setiap frame diawali pembersihan total: ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);. DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background.
+2. ISOLASI NEON GLOW: Jika menggunakan ctx.shadowBlur & ctx.shadowColor, selalu bungkus dalam ctx.save() dan ctx.restore(), lalu segera reset ctx.shadowBlur = 0 agar tidak mengotori kanvas atau meninggalkan sisa pendaran di frame berikutnya.
+3. KOORDINAT TERPUSAT & RESPONSIF:
+   - Skala S = Math.min(w, h) * 0.44;
+   - Gambar berpusat di cx, cy.
+4. RINGKAS & TUNTAS: Buat kode mandiri 180 - 280 baris yang langsung berfungsi dan looping mulus tanpa error.
+
+WAJIB gunakan struktur HTML boilerplate:
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -782,6 +783,11 @@ Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "_
   canvas { display: block; width: 100vw; height: 100vh; }
   #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
 </style>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
+  };
+</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -790,12 +796,6 @@ Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "_
   const ctx = canvas.getContext('2d');
   let w, h, cx, cy, S;
   
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = "__IMG_DATA__";
-  let imgLoaded = false;
-  img.onload = () => { imgLoaded = true; };
-
   function resize() {
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
@@ -806,7 +806,7 @@ Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "_
   window.addEventListener('resize', resize);
   resize();
 
-  // Inisialisasi partikel / efek warna HEX dari gambar
+  // --- INISIALISASI VARIABEL PARTIKEL & OBJEK TERANALISA ---
 
   function animate(time) {
     const t = time * 0.001;
@@ -814,28 +814,23 @@ Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "_
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    if (imgLoaded && img.width > 0 && img.height > 0) {
-      const aspect = img.width / img.height;
-      let drawW = aspect >= 1 ? S * 2 : (S * 2) * aspect;
-      let drawH = aspect >= 1 ? (S * 2) / aspect : S * 2;
-
-      // Logika transformasi motion 60 FPS & efek visual
-    }
+    // --- RENDER ELEMEN OBJEK DENGAN GERAKAN MASUK AKAL & HIDUP ---
 
     requestAnimationFrame(animate);
   }
   animate(0);
 </script>
 </body>
-</html>`;
+</html>
+
+Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
 
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.4,
-        maxOutputTokens: 2048,
+        temperature: 0.55,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -860,49 +855,6 @@ Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "_
 
   let rawText = response.text || "";
   let cleanHTML = extractHTMLFromMarkdown(rawText);
-
-  // Re-inject exact base64 dataUrl into placeholder or img.src
-  if (cleanHTML.includes('__IMG_DATA__')) {
-    cleanHTML = cleanHTML.replace('__IMG_DATA__', dataUrl);
-  } else if (cleanHTML.includes('img.src')) {
-    cleanHTML = cleanHTML.replace(/img\.src\s*=\s*['"][^'"]*['"]/, `img.src = "${dataUrl}"`);
-  } else {
-    // If AI only returned script body
-    cleanHTML = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = "${dataUrl}";
-  let imgLoaded = false;
-  img.onload = () => { imgLoaded = true; };
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    cx = w / 2;
-    cy = h / 2;
-    S = Math.min(w, h) * 0.44;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  ${cleanHTML.replace(/<[^>]*>/g, '')}
-</script>
-</body>
-</html>`;
-  }
 
   if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
     if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
