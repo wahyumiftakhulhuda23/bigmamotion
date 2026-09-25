@@ -795,60 +795,56 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         </div>
 
         {/* Dedicated Folder & Project Management Bar */}
-        <div className="bg-slate-950/85 rounded-xl p-2.5 sm:p-3 border border-amber-500/25 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shadow-inner">
+        <div className="bg-slate-950/80 rounded-xl p-2 sm:p-2.5 border border-amber-500/20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shadow-inner">
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center text-xs shrink-0">
+            <span className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center text-xs shrink-0">
               <i className="fa-solid fa-folder"></i>
-            </div>
+            </span>
             <div className="relative flex-1 min-w-0">
               <select
                 value={activeProject.id}
                 onChange={(e) => onSelectProject(e.target.value)}
-                className="w-full bg-slate-900 text-amber-200 border border-amber-500/40 text-xs rounded-lg pl-3 pr-8 py-2 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer truncate shadow-sm"
+                className="w-full bg-slate-900 text-amber-200 border border-amber-500/30 text-xs rounded-lg pl-2.5 pr-7 py-1.5 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer truncate"
               >
-                {projects.map((p, idx) => {
+                {projects.map((p) => {
                   const pItems = items.filter((it) => it.projectId === p.id);
                   const pPending = pItems.filter((it) => it.status === 'pending' || it.status === 'error').length;
                   return (
                     <option key={p.id} value={p.id} className="bg-slate-900 text-white font-medium">
-                      Folder #{idx + 1}: {p.name} ({pPending} pending / {pItems.length} total)
+                      {p.name} · {pPending > 0 ? `${pPending} antrian` : 'selesai'}
                     </option>
                   );
                 })}
               </select>
-              <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 pointer-events-none"></i>
+              <i className="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-amber-400/80 pointer-events-none"></i>
             </div>
+            {/* Quick stats indicator */}
+            <span className="hidden xl:inline text-[11px] text-gray-400 shrink-0 font-medium">
+              {projects.length} folder · {allPendingItems.length} antrian
+            </span>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-            {/* Folder count badge */}
-            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-gray-800 text-[11px] text-gray-300 font-medium">
-              <i className="fa-solid fa-layer-group text-amber-400 text-xs"></i>
-              <span>{projects.length} Folder</span>
-              <span className="text-gray-500">•</span>
-              <span className="text-amber-300 font-bold">{allPendingItems.length} Pending</span>
-            </div>
-
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
             {/* Quick Add Project Button */}
             <button
               type="button"
               onClick={() => setShowAddProjectModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
               title="Buat Folder / Project Baru"
             >
               <i className="fa-solid fa-folder-plus text-xs"></i>
-              <span>+ Buat</span>
+              <span>+ Folder</span>
             </button>
 
             {/* Complete Project / Folder Manager Modal Button */}
             <button
               type="button"
               onClick={() => setShowProjectManagerModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95"
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-200 border border-gray-700 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
               title="Kelola Semua Folder & Project (Edit, Hapus, Rename)"
             >
               <i className="fa-solid fa-folder-tree text-amber-400 text-xs"></i>
-              <span>Kelola Folder</span>
+              <span>Kelola</span>
             </button>
 
             {/* Delete Current Active Project Button */}
@@ -856,8 +852,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               <button
                 type="button"
                 onClick={() => setProjectToDelete(activeProject)}
-                className="p-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
-                title={`Hapus Project "${activeProject.name}"`}
+                className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
+                title={`Hapus folder "${activeProject.name}"`}
               >
                 <i className="fa-solid fa-trash text-xs"></i>
               </button>
@@ -1004,7 +1000,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             </span>
             <div>
               <h3 className="font-extrabold text-xs sm:text-sm text-gray-100 flex items-center gap-2">
-                <span>ANTRIAN & AUTO PILOT ENGINE</span>
+                <span>ANTRIAN GAMBAR</span>
               </h3>
             </div>
 
@@ -1081,25 +1077,26 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           </div>
         </div>
 
-        {/* Auto Pilot Command Deck */}
-        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 rounded-xl p-3 sm:p-3.5 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="text-xs font-bold text-amber-200">
-                Eksekusi Otomatis Berurutan
+        {/* Streamlined Auto Pilot Bar */}
+        <div className="bg-slate-950/85 rounded-xl px-3 py-2.5 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-md">
+          {/* Status & Concise Info */}
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+            <div className="flex items-baseline gap-2 flex-wrap min-w-0">
+              <span className="text-xs font-bold text-amber-200 whitespace-nowrap">
+                Auto Pilot
               </span>
-              <span className="text-[10px] bg-slate-800 text-amber-300 font-mono px-2 py-0.5 rounded-full border border-gray-700">
-                {allPendingItems.length} antrian pending total
+              <span className="text-xs text-amber-300/90 font-mono font-medium">
+                {allPendingItems.length} antrian
+              </span>
+              <span className="text-[11px] text-gray-500 hidden md:inline truncate">
+                · Berurutan mulai folder teratas ({projects[0]?.name || 'Utama'})
               </span>
             </div>
-            <p className="text-[11px] text-gray-400 leading-tight">
-              Menjalankan semua antrian satu per satu berurutan dimulai dari folder teratas ({projects[0]?.name || 'Utama'}), dan antrian teratas.
-            </p>
           </div>
 
           {/* Trigger Buttons */}
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <div className="flex items-center gap-2 shrink-0">
             {!isAutoPilotRunning ? (
               <>
                 {/* Primary: Auto Pilot All Folders */}
@@ -1107,11 +1104,11 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   type="button"
                   onClick={handleStartAutoPilotAll}
                   disabled={allPendingItems.length === 0}
-                  className="px-4 py-2 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-amber-500/25 disabled:opacity-40 cursor-pointer active:scale-95 border border-yellow-300/60"
-                  title="Jalankan semua antrian gambar di seluruh folder berurutan dari folder teratas"
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-1.5 transition shadow shadow-amber-500/20 disabled:opacity-40 cursor-pointer active:scale-95 whitespace-nowrap"
+                  title="Jalankan semua antrian di seluruh folder berurutan dari folder teratas"
                 >
-                  <i className="fa-solid fa-rocket text-sm"></i>
-                  <span>Auto Pilot Semua Folder ({allPendingItems.length})</span>
+                  <i className="fa-solid fa-rocket text-xs"></i>
+                  <span>Auto Pilot Semua ({allPendingItems.length})</span>
                 </button>
 
                 {/* Secondary: Folder Ini Saja */}
@@ -1119,34 +1116,34 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   <button
                     type="button"
                     onClick={handleStartAutoPilotCurrent}
-                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer active:scale-95"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-semibold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
                     title={`Hanya jalankan antrian di folder "${activeProject.name}"`}
                   >
-                    <i className="fa-solid fa-play text-[10px]"></i>
+                    <i className="fa-solid fa-play text-[9px]"></i>
                     <span>Folder Ini ({pendingItems.length})</span>
                   </button>
                 )}
               </>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={handlePauseAutoPilot}
-                  className={`px-3.5 py-2 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md ${
+                  className={`px-3 py-1.5 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap ${
                     autoPilotPaused
                       ? 'bg-emerald-600 hover:bg-emerald-500'
                       : 'bg-amber-600 hover:bg-amber-500'
                   }`}
                 >
-                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'}`}></i>
+                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'} text-xs`}></i>
                   <span>{autoPilotPaused ? 'Lanjutkan' : 'Jeda'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleStopAutoPilot}
-                  className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md"
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap"
                 >
-                  <i className="fa-solid fa-stop"></i>
+                  <i className="fa-solid fa-stop text-xs"></i>
                   <span>Hentikan</span>
                 </button>
               </div>
