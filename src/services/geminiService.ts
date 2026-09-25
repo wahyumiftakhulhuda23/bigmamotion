@@ -1168,36 +1168,39 @@ async function generateImageToMotionDirect(
     colorModeGuide = 'Gunakan gradien dinamis modern (#38bdf8 ke #818cf8, atau warna dominan gambar).';
   }
 
-  const visionPrompt = `Anda adalah Master HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock.
+  const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock Motion Graphics.
 
-TUGAS UTAMA:
-1. DEKONSTRUKSI & ANALISIS BENTUK REFERENSI:
-   - Amati gambar yang diunggah dengan teliti. Identifikasi SEMUA komponen bentuk pembentuk gambar tersebut (misal: jika ada stopwatch dengan garis kecepatan di kiri -> buat frame lingkaran luar, dial dalam, tombol atas, tombol samping lap, poros tengah, jarum jam, dan garis-garis kecepatan horizontal beserta titik-titik kecepatannya).
-   - REKONSTRUKSI BENTUK YANG SAMA: Gambar ulang elemen-elemen tersebut secara murni menggunakan Canvas 2D (ctx.beginPath, ctx.arc, ctx.roundRect, ctx.moveTo, ctx.lineTo, ctx.stroke, ctx.fill) dengan proporsi, ketebalan garis, dan bentuk yang SANGAT MIRIP dengan gambar referensi.
+TUGAS UTAMA (HIGH-PRECISION VECTOR RECONSTRUCTION & LOGICAL ANIMATION):
+Analisa gambar referensi yang diunggah dengan tingkat ketelitian tinggi, lalu reka ulang SELURUH DETAIL ANATOMI BENTUKNYA menggunakan Canvas 2D murni dan animasikan dengan fisika gerak yang masuk akal!
 
-2. ATURAN MUTLAK (ANTI-ELEMEN ASING):
+1. DETAIL ANATOMI & REKONSTRUKSI GEOMETRI TINGGI (MIRIP DENGAN REFERENSI):
+   - Amati setiap komponen geometri:
+     * Proporsi & Rasio: Ukuran relatif lingkaran luar, lingkaran dalam, sudut kemiringan tombol (misal tombol atas di 12 o'clock, tombol samping lap di sudut 45°), panjang jarum jam & jarum menit, serta titik poros tengah.
+     * Garis Kecepatan & Aksen: Jika ada garis-garis kecepatan/dashes di sisi kiri atau belakang objek, hitung dan posisikan sesuai referensi lengkap dengan titik bulat (dots) dan garis lengkung penutupnya.
+     * Ketebalan & Ujung Garis: Gunakan ctx.lineWidth proporsional (S * 0.05 sampai S * 0.08), ctx.lineCap = 'round', dan ctx.lineJoin = 'round' agar garis tampil tebal, mulus, dan solid seperti ikon vektor premium.
+
+2. ATURAN ANTI-ELEMEN ASING (100% PURITY):
    - HANYA gambar elemen yang ADA pada gambar referensi!
-   - DILARANG KERAS menambahkan bentuk/elemen liar yang tidak ada di referensi (JANGAN tambahkan bola melayang, JANGAN tambahkan gelembung acak, JANGAN tambahkan laser biru panjang di luar gambar, JANGAN tambahkan partikel asing).
-   - Abaikan kotak background putih/screenshot luar, fokuskan hanya pada objek utama dan elemen grafis aslinya.
+   - DILARANG KERAS memunculkan elemen luar yang tidak ada di gambar asli (JANGAN tambahkan gelembung melayang, bola asing, laser sembarangan, atau partikel debu liar).
+   - Abaikan kotak background putih/screenshot luar, fokuskan 100% pada objek dan elemen grafis aslinya.
 
-3. ANIMASI MASUK AKAL & NYAMBUNG (LOGICAL ANIMATION):
-   - Gerakkan bagian-bagian yang memang seharusnya bergerak:
-     * Jika ada jarum jam/indikator: putar jarum jam mengelilingi porosnya secara halus (ctx.rotate).
-     * Jika ada garis kecepatan (speed dashes): buat garis-garis kecepatan tersebut berdenyut, memanjang-memendek secara horizontal (Math.sin).
-     * Jika ada tombol: buat tombol menekan/klik secara halus.
-     * Objek utama: bergerak melayang / bergetar inersia halus.
+3. KOREOGRAFI GERAKAN MASUK AKAL & HIDUP:
+   - Jarum penunjuk/jam: Berputar halus atau berdetik natural mengelilingi poros tengah (ctx.rotate).
+   - Garis-garis kecepatan (speed dashes): Berdenyut dinamis, memanjang-memendek secara horizontal (Math.sin) dengan efek gelombang aerodinamis.
+   - Tombol stopwatch/mesin: Menekan/klik secara periodik.
+   - Tubuh objek utama: Melayang atau bergetar halus dengan inersia kinetik (sinusoidal float).
 
-4. PARAMETER PENGGUNA:
+4. PARAMETER WARNA & GAYA USER:
    - Mode Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
    - Dinamika Gerak: ${motionDynamics.toUpperCase()}
-   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis bersih tanpa blur)'}
+   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam bersih)'}
    - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
-${customInstructions ? `- Catatan Khusus: ${customInstructions}` : ''}
+${customInstructions ? `- Instruksi Tambahan: ${customInstructions}` : ''}
 
-5. KUALITAS KODE:
+5. STANDAR KODE BERSIH:
    - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
-   - Pusatkan objek di (cx, cy) dengan skala S = Math.min(w, h) * 0.44;
-   - Tulis kode ringkas, efisien (130 - 220 baris), langsung jalan tanpa error dan looping 60 FPS mulus.
+   - Posisi berpusat di (cx, cy) dengan skala S = Math.min(w, h) * 0.44;
+   - Tulis kode JavaScript Canvas modular, rapi, dan looping 60 FPS mulus tanpa error.
 
 Struktur Boilerplate Wajib:
 <!DOCTYPE html>
@@ -1230,15 +1233,13 @@ Struktur Boilerplate Wajib:
   window.addEventListener('resize', resize);
   resize();
 
-  // Inisialisasi variabel elemen teranalisa
-
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // Render & animasikan elemen-elemen persis dari gambar
+    // --- REKONSTRUKSI VEKTOR DETAIL & ANIMASI LOGIS DARI GAMBAR ASLI ---
 
     requestAnimationFrame(animate);
   }
