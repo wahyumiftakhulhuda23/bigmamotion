@@ -463,12 +463,8 @@ ATURAN UTAMA BACKGROUND MOTION:
   }
 
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  // If flat color or neonGlow is false, clear with 100% solid opacity to eliminate smudges / ghosting!
-  const clearFill = isGreenScreen
-    ? "'#00ff00'"
-    : colorMode === 'flat' || !neonGlow
-    ? "'#080c14'"
-    : "'rgba(8, 12, 20, 0.22)'";
+  // Always use 100% solid background clear & fill to eliminate any motion trails, ghosting, or smudges
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
   let motionGuide = '';
   if (motionDynamics === 'bounce') {
@@ -553,11 +549,12 @@ ${motionGuide}
 ${styleAndColorGuide}
 ${greenScreenDirective}
 
-ATURAN ANTI-BUG & KUALITAS MATEMATIKA (MANDATORY):
-1. ISOLASI CANVAS CONTEXT: Setiap elemen yang digambar WAJIB dibungkus ctx.save() dan ctx.restore() agar transformasi (translate, rotate, scale, alpha, shadow) TIDAK bocor atau menumpuk menghasilkan bug/NaN.
-2. KOORDINAT TERPUSAT & RESPONSIF: Definisikan const S = Math.min(w, h) * 0.35; Gambar selalu berpusat di cx, cy menggunakan skala S. DILARANG koordinat absolut pixel statis yang membuat gambar melenceng.
-3. ZERO GLITCH / NO SMEARS: Jangan biarkan canvas berkedip atau memiliki artefak sisa frame sebelumnya.
-4. RINGKAS & TUNTAS: Buat kode 180 - 250 baris yang langsung berfungsi penuh dan looping tanpa henti.
+ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
+1. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen yang digambar WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';) agar pendaran tidak bocor atau meninggalkan jejak/bekas gerakan (ghosting artifacts) di frame berikutnya.
+2. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
+3. KOORDINAT TERPUSAT & RESPONSIF: Definisikan const S = Math.min(w, h) * ${type === 'icon' ? '0.44' : type === 'text' ? '0.48' : '0.65'}; Gambar selalu berpusat di cx, cy menggunakan skala S. DILARANG koordinat absolut pixel statis yang membuat gambar melenceng.
+4. ZERO GLITCH / NO SMEARS: Jangan biarkan canvas berkedip atau memiliki artefak sisa frame sebelumnya.
+5. RINGKAS & TUNTAS: Buat kode 180 - 250 baris yang langsung berfungsi penuh dan looping tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -588,7 +585,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
-    S = Math.min(w, h) * 0.35;
+    S = Math.min(w, h) * ${type === 'icon' ? '0.44' : type === 'text' ? '0.48' : '0.65'};
   }
   window.addEventListener('resize', resize);
   resize();
@@ -597,6 +594,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 
   function animate(time) {
     const t = time * 0.001;
+    ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
