@@ -110,6 +110,8 @@ export interface ImageToMotionItem {
   colorMode: ColorMode;
   neonGlow: boolean;
   isGreenScreen: boolean;
+  precisionLevel?: 'ultra' | 'masterpiece';
+  strokeWeight?: 'bold' | 'medium' | 'fine';
   customInstructions?: string;
   animationResult?: AnimationItem;
   error?: string;

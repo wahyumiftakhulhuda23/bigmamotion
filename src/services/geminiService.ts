@@ -1134,6 +1134,8 @@ async function generateImageToMotionDirect(
   colorMode: ColorMode = 'gradient',
   neonGlow = true,
   isGreenScreen = false,
+  precisionLevel: 'ultra' | 'masterpiece' = 'masterpiece',
+  strokeWeight: 'bold' | 'medium' | 'fine' = 'bold',
   customInstructions = ''
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
   let pureBase64 = imageBase64;
@@ -1155,7 +1157,7 @@ async function generateImageToMotionDirect(
 
   let colorModeGuide = '';
   if (colorMode === 'neon') {
-    colorModeGuide = 'Gunakan warna Cyberpunk Neon (#00f0ff, #ff007f, #ffe600, #39ff14).';
+    colorModeGuide = 'Gunakan palet warna Cyberpunk Neon elektrik berkilau (#00f0ff, #ff007f, #ffe600, #39ff14).';
   } else if (colorMode === 'flat') {
     colorModeGuide = 'Gunakan warna flat solid tegas kontras (#ffffff, #2563eb, #10b981).';
   } else if (colorMode === 'monochrome') {
@@ -1168,39 +1170,63 @@ async function generateImageToMotionDirect(
     colorModeGuide = 'Gunakan gradien dinamis modern (#38bdf8 ke #818cf8, atau warna dominan gambar).';
   }
 
-  const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock Motion Graphics.
+  const strokeGuide =
+    strokeWeight === 'bold'
+      ? 'Garis TEBAL TEGAS IKON VEKTOR (lineWidth = S * 0.065 - S * 0.08)'
+      : strokeWeight === 'fine'
+      ? 'Garis HALUS MINIMALIS (lineWidth = S * 0.035 - S * 0.045)'
+      : 'Garis SEDANG PROPORSIONAL (lineWidth = S * 0.05 - S * 0.06)';
 
-TUGAS UTAMA (HIGH-PRECISION VECTOR RECONSTRUCTION & LOGICAL ANIMATION):
-Analisa gambar referensi yang diunggah dengan tingkat ketelitian tinggi, lalu reka ulang SELURUH DETAIL ANATOMI BENTUKNYA menggunakan Canvas 2D murni dan animasikan dengan fisika gerak yang masuk akal!
+  const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock Motion Graphics Kelas Dunia.
 
-1. DETAIL ANATOMI & REKONSTRUKSI GEOMETRI TINGGI (MIRIP DENGAN REFERENSI):
-   - Amati setiap komponen geometri:
-     * Proporsi & Rasio: Ukuran relatif lingkaran luar, lingkaran dalam, sudut kemiringan tombol (misal tombol atas di 12 o'clock, tombol samping lap di sudut 45°), panjang jarum jam & jarum menit, serta titik poros tengah.
-     * Garis Kecepatan & Aksen: Jika ada garis-garis kecepatan/dashes di sisi kiri atau belakang objek, hitung dan posisikan sesuai referensi lengkap dengan titik bulat (dots) dan garis lengkung penutupnya.
-     * Ketebalan & Ujung Garis: Gunakan ctx.lineWidth proporsional (S * 0.05 sampai S * 0.08), ctx.lineCap = 'round', dan ctx.lineJoin = 'round' agar garis tampil tebal, mulus, dan solid seperti ikon vektor premium.
+TUGAS UTAMA: MASTERPIECE HIGH-PRECISION VECTOR DECONSTRUCTION & LOGICAL KINETIC ANIMATION
+Analisis gambar referensi yang diunggah secara menyeluruh. Identifikasi SETIAP ELEMEN, SUB-BENTUK, AKSEN, DAN DETAIL GEOMETRISNYA, lalu tuliskan kode HTML5 Canvas 2D murni yang MENGGAMBAR ULANG PERSIS SETIAP BAGIAN TERSEBUT dan MENGANIMASIKANNYA DENGAN FISIKA GERAK YANG NYAMBUNG & MASUK AKAL!
 
-2. ATURAN ANTI-ELEMEN ASING (100% PURITY):
+PANDUAN REKONSTRUKSI ELEMEN ULTRA-DETAIL (MENIRU PERSIS ELEMEN GAMBAR):
+1. AUDIT & DEKOMPOSISI ANATOMI ELEMEN 100% LENGKAP:
+   - Identifikasi dan gambar ulang SELURUH bagian yang ada pada gambar referensi:
+     a. FRAME & SILUET UTAMA: Kontur terluar, kontur dalam, cincin ganda/konsentris (concentric rings), bevel lingkar, atau ketebalan bodi. Gunakan rasio diameter yang presisi sesuai gambar.
+     b. AKSEN MEKANIK & TOMBOL EKSTERNAL: Amati posisi sudut dan struktur tombol!
+        * Tombol Atas (12 o'clock crown): Gambar leher batang silinder rounded + kepala kenop/bracket penekan persegi panjang rounded di atasnya.
+        * Tombol Samping (Lap Pusher di sudut miring ~45° / 315°): Gambar tangkai batang miring keluar + kepala tombol oval/rounded yang menonjol.
+        * Kuping, braket, baut, atau dudukan jika ada pada referensi.
+     c. DETAIL DIAL & JARUM (HANDS & TICKS):
+        * Poros Tengah: Gambar cincin poros (center pivot pin) dengan lubang/washer konsentris di tengah.
+        * Jarum Penunjuk: Gambar jarum jam pendek dan jarum menit panjang dengan ketebalan dan sudut awal yang mencerminkan gambar referensi.
+        * Tanda Skala / Dial Ticks: Jika pada gambar ada titik atau garis-garis skala jam/menit mengelilingi dial, GAMBAR SEMUA PENANDA TERSEBUT secara melingkar (gunakan loop for dengan rotasi sudut teratur).
+     d. GARIS KECEPATAN (SPEED TRAILS) & TITIK AERODINAMIS (SPEED DOTS):
+        * Amati JUMLAH PERSIS garis kecepatan horizontal di sisi kiri/belakang objek (misal 3, 4, atau 5 garis).
+        * Letakkan masing-masing garis pada posisi vertikal (Y) dan panjang (X) yang persis meniru referensi.
+        * Amati titik-titik bulat (dots) kecepatan di atas/tengah/bawah garis: GAMBAR TITIK-TITIK BULAT TERSEBUT pada posisi yang sama persis seperti pada gambar!
+        * Gambar pula garis lengkung penutup/aliran bodi bawah jika tampak pada gambar referensi.
+
+2. ATURAN ANTI-ELEMEN ASING MUTLAK (100% ZERO FOREIGN ARTIFACTS):
    - HANYA gambar elemen yang ADA pada gambar referensi!
-   - DILARANG KERAS memunculkan elemen luar yang tidak ada di gambar asli (JANGAN tambahkan gelembung melayang, bola asing, laser sembarangan, atau partikel debu liar).
+   - DILARANG KERAS menambahkan bentuk/elemen liar yang tidak ada di gambar (JANGAN tambahkan bola melayang sembarangan, gelembung acak, laser liar, grid sembarangan, atau partikel debu yang tidak ada di gambar).
    - Abaikan kotak background putih/screenshot luar, fokuskan 100% pada objek dan elemen grafis aslinya.
 
-3. KOREOGRAFI GERAKAN MASUK AKAL & HIDUP:
-   - Jarum penunjuk/jam: Berputar halus atau berdetik natural mengelilingi poros tengah (ctx.rotate).
-   - Garis-garis kecepatan (speed dashes): Berdenyut dinamis, memanjang-memendek secara horizontal (Math.sin) dengan efek gelombang aerodinamis.
-   - Tombol stopwatch/mesin: Menekan/klik secara periodik.
-   - Tubuh objek utama: Melayang atau bergetar halus dengan inersia kinetik (sinusoidal float).
+3. KOREOGRAFI GERAKAN YANG NYAMBUNG & MASUK AKAL (CONTEXTUAL KINETIC CHOREOGRAPHY):
+   - Setiap elemen yang telah dianalisis harus bergerak sesuai fungsi dan logika fisiknya:
+     * Jarum Penunjuk/Dial: Berputar halus mengelilingi poros tengah (jarum menit berputar lebih cepat, jarum jam berputar lebih lambat, atau detak ticking presisi: const minAngle = t * 2.2; const hrAngle = t * 0.35;).
+     * Garis Kecepatan (Speed Trails): Berdenyut dinamis memanjang-memendek secara horizontal (startX dan endX berosilasi aerodinamis dengan gelombang Math.sin(t * 8 + i * 0.8)), memberi efek kecepatan tinggi yang dinamis.
+     * Titik Kecepatan (Speed Dots): Bergetar halus dengan osilasi horizontal berfase inersia selaras dengan laju garis kecepatan.
+     * Tombol Stopwatch/Pusher: Mengalami gerakan klik lembut secara periodik (setiap beberapa detik melakukan hentakan klik 3-4px ke dalam lalu memantul kembali).
+     * Bodi Objek Utama: Melayang kinetik halus terpusat di kanvas (sinusoidal float: cx + Math.sin(t * 1.6) * 6, cy + Math.cos(t * 2.0) * 5) atau mengikuti mode dinamika pilihan user.
 
-4. PARAMETER WARNA & GAYA USER:
+4. KUALITAS VEKTOR RETINA (HiDPI) & PENGATURAN USER:
+   - Gunakan ctx.lineCap = 'round' dan ctx.lineJoin = 'round' di setiap path stroke agar garis tampak membulat mulus dan solid layaknya ikon vektor premium.
+   - Ketebalan garis proporsional: ${strokeGuide}.
+   - Mode Presisi: ${precisionLevel.toUpperCase()}
    - Mode Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
    - Dinamika Gerak: ${motionDynamics.toUpperCase()}
-   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam bersih)'}
+   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam bersih tanpa glow)'}
    - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
-${customInstructions ? `- Instruksi Tambahan: ${customInstructions}` : ''}
+${customInstructions ? `- Instruksi Tambahan Khusus: ${customInstructions}` : ''}
 
-5. STANDAR KODE BERSIH:
-   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
-   - Posisi berpusat di (cx, cy) dengan skala S = Math.min(w, h) * 0.44;
-   - Tulis kode JavaScript Canvas modular, rapi, dan looping 60 FPS mulus tanpa error.
+5. EFISIENSI TOKEN & KINERJA MAKSIMAL (60 FPS CLEAN CODE):
+   - Langsung tulis kode JavaScript Canvas yang padat, modular, dan efisien.
+   - Hindari teks pengantar markdown bertele-tele atau komentar panjang di setiap baris.
+   - Gunakan fungsi-fungsi modular (misal: drawBody, drawButtons, drawDialAndHands, drawSpeedTrailsAndDots) di dalam loop requestAnimationFrame(animate).
 
 Struktur Boilerplate Wajib:
 <!DOCTYPE html>
@@ -1224,8 +1250,15 @@ Struktur Boilerplate Wajib:
   let w, h, cx, cy, S;
   
   function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = window.innerWidth;
+    h = window.innerHeight;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
     cx = w / 2;
     cy = h / 2;
     S = Math.min(w, h) * 0.44;
@@ -1239,7 +1272,7 @@ Struktur Boilerplate Wajib:
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // --- REKONSTRUKSI VEKTOR DETAIL & ANIMASI LOGIS DARI GAMBAR ASLI ---
+    // --- REKONSTRUKSI VEKTOR MASTERPIECE DETAIL & ANIMASI LOGIS DARI GAMBAR ASLI ---
 
     requestAnimationFrame(animate);
   }
@@ -1278,7 +1311,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
             },
           ],
           generationConfig: {
-            temperature: 0.35,
+            temperature: 0.15,
           },
         }),
       });
@@ -1339,6 +1372,8 @@ export async function generateImageToMotion(
     colorMode?: ColorMode;
     neonGlow?: boolean;
     isGreenScreen?: boolean;
+    precisionLevel?: 'ultra' | 'masterpiece';
+    strokeWeight?: 'bold' | 'medium' | 'fine';
     customInstructions?: string;
   },
   onRetry?: (attempt: number, max: number, err: string) => void,
@@ -1364,6 +1399,8 @@ export async function generateImageToMotion(
             params.colorMode || 'gradient',
             params.neonGlow ?? true,
             params.isGreenScreen ?? false,
+            params.precisionLevel || 'masterpiece',
+            params.strokeWeight || 'bold',
             params.customInstructions || ''
           );
         } catch (directErr: any) {
@@ -1386,6 +1423,8 @@ export async function generateImageToMotion(
           colorMode: params.colorMode || 'gradient',
           neonGlow: params.neonGlow ?? true,
           isGreenScreen: params.isGreenScreen ?? false,
+          precisionLevel: params.precisionLevel || 'masterpiece',
+          strokeWeight: params.strokeWeight || 'bold',
           customInstructions: params.customInstructions || '',
         }),
       });
