@@ -69,8 +69,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [batchGreenScreen, setBatchGreenScreen] = useState<boolean>(false);
   const [batchCustomInstructions, setBatchCustomInstructions] = useState<string>('');
 
-  // Comparison modal
+  // Comparison modal & Analysis modal
   const [comparisonItem, setComparisonItem] = useState<ImageToMotionItem | null>(null);
+  const [analysisModalItem, setAnalysisModalItem] = useState<ImageToMotionItem | null>(null);
   const [isBatchExportingMp4, setIsBatchExportingMp4] = useState(false);
   const [batchExportProgress, setBatchExportProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
 
@@ -228,10 +229,34 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         isGreenScreen: item.isGreenScreen,
       };
 
+      let itemShapeAnalysis = animResult.shapeAnalysis;
+      if (!itemShapeAnalysis && animResult.html) {
+        try {
+          const match = animResult.html.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
+          if (match && match[1]) {
+            const parsed = JSON.parse(match[1].trim());
+            if (parsed.objectName) {
+              itemShapeAnalysis = {
+                objectName: String(parsed.objectName || ''),
+                shapeDescription: String(parsed.shapeDescription || ''),
+                detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
+                professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
+                similaritySynthesis: String(parsed.similaritySynthesis || ''),
+              };
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      const subjectName = itemShapeAnalysis?.objectName || animResult.detectedSubject || animResult.title;
+
       onUpdateItem(item.id, {
         status: 'completed',
         progress: 100,
-        detectedSubject: animResult.title,
+        detectedSubject: subjectName,
+        shapeAnalysis: itemShapeAnalysis,
         animationResult: animationItem,
       });
 
@@ -796,6 +821,16 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                             Green Screen
                           </span>
                         )}
+                        {(item.shapeAnalysis?.objectName || item.detectedSubject) && (
+                          <span
+                            onClick={() => (item.shapeAnalysis ? setAnalysisModalItem(item) : null)}
+                            className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-900/80 transition"
+                            title="Klik untuk melihat analisis logika bentuk & motion"
+                          >
+                            <i className="fa-solid fa-brain text-[8px] text-purple-400"></i>
+                            <span className="truncate max-w-[140px]">{item.shapeAnalysis?.objectName || item.detectedSubject}</span>
+                          </span>
+                        )}
 
                         {/* Status Badges */}
                         {item.status === 'pending' && (
@@ -854,6 +889,16 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                         >
                           <i className="fa-solid fa-play text-[9px]"></i>
                         </button>
+                        {item.shapeAnalysis && (
+                          <button
+                            onClick={() => setAnalysisModalItem(item)}
+                            className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/40 font-semibold text-[11px] rounded-lg transition cursor-pointer flex items-center gap-1"
+                            title="Lihat 3 Analisis Logika AI (Bentuk, Motion Profesional, Sintesis)"
+                          >
+                            <i className="fa-solid fa-brain text-[9px]"></i>
+                            <span className="hidden sm:inline">Logika</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => setComparisonItem(item)}
                           className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
@@ -1302,6 +1347,64 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               </div>
             </div>
 
+            {/* 3-Step Shape & Motion Logical Analysis Card */}
+            {comparisonItem.shapeAnalysis && (
+              <div className="bg-slate-900/90 rounded-xl p-3.5 border border-purple-500/30 space-y-2 shrink-0 text-left">
+                <div className="flex items-center justify-between text-xs font-bold text-purple-300">
+                  <span className="flex items-center gap-1.5">
+                    <i className="fa-solid fa-brain text-purple-400"></i>
+                    <span>Analisis Logika Bentuk & Motion AI</span>
+                  </span>
+                  <span className="text-[10px] bg-purple-950/80 border border-purple-800/40 px-2 py-0.5 rounded text-purple-300 font-mono">
+                    3-Step Logical Synthesis
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[11px]">
+                  {/* Step 1: Bentuk Objek & Nama */}
+                  <div className="bg-slate-950/90 rounded-lg p-2.5 border border-amber-500/20 space-y-1">
+                    <div className="font-bold text-amber-300 flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px]">1</span>
+                      <span>Bentuk Objek & Nama</span>
+                    </div>
+                    <div className="text-gray-100 font-semibold">{comparisonItem.shapeAnalysis.objectName}</div>
+                    <p className="text-gray-400 text-[10px] leading-relaxed">{comparisonItem.shapeAnalysis.shapeDescription}</p>
+                    {comparisonItem.shapeAnalysis.detectedElements?.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {comparisonItem.shapeAnalysis.detectedElements.map((el, i) => (
+                          <span key={i} className="text-[9px] bg-slate-900 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-medium">
+                            {el}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step 2: Motion Profesional */}
+                  <div className="bg-slate-950/90 rounded-lg p-2.5 border border-sky-500/20 space-y-1">
+                    <div className="font-bold text-sky-300 flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center text-[10px]">2</span>
+                      <span>Motion Profesional Referensi</span>
+                    </div>
+                    <p className="text-gray-300 text-[10px] leading-relaxed">
+                      {comparisonItem.shapeAnalysis.professionalMotionPlan}
+                    </p>
+                  </div>
+
+                  {/* Step 3: Sintesis Kemiripan */}
+                  <div className="bg-slate-950/90 rounded-lg p-2.5 border border-emerald-500/20 space-y-1">
+                    <div className="font-bold text-emerald-300 flex items-center gap-1">
+                      <span className="w-4 h-4 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-[10px]">3</span>
+                      <span>Sintesis Kemiripan 1:1</span>
+                    </div>
+                    <p className="text-gray-300 text-[10px] leading-relaxed">
+                      {comparisonItem.shapeAnalysis.similaritySynthesis}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Bottom Actions */}
             <div className="flex justify-between items-center pt-3 border-t border-gray-800 shrink-0">
               <span className="text-[11px] text-gray-400">
@@ -1336,6 +1439,129 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DETAILED 3-STEP SHAPE & MOTION LOGICAL ANALYSIS */}
+      {analysisModalItem && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-card rounded-2xl p-5 border border-purple-500/40 bg-slate-950 max-w-3xl w-full space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center pb-3 border-b border-gray-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center text-sm">
+                  <i className="fa-solid fa-brain"></i>
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm sm:text-base text-gray-100 flex items-center gap-2">
+                    <span>Analisis Logika Bentuk & Motion AI</span>
+                  </h3>
+                  <p className="text-[11px] text-gray-400">
+                    File: <span className="text-amber-300 font-mono">{analysisModalItem.fileName}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAnalysisModalItem(null)}
+                className="text-gray-400 hover:text-white p-1 cursor-pointer"
+              >
+                <i className="fa-solid fa-xmark text-base"></i>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3.5 pr-1">
+              {/* Thumbnail Mini Preview */}
+              <div className="bg-slate-900/80 rounded-xl p-3 border border-gray-800 flex items-center gap-3">
+                <img
+                  src={analysisModalItem.imagePreviewUrl}
+                  alt="Thumb"
+                  className="w-14 h-14 object-contain rounded-lg bg-black border border-gray-800 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-gray-200">
+                    {analysisModalItem.shapeAnalysis?.objectName || analysisModalItem.detectedSubject || 'Objek Teranalisis'}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400 flex-wrap">
+                    <span>Dinamika: <strong className="text-amber-300 capitalize">{analysisModalItem.motionDynamics}</strong></span>
+                    <span>•</span>
+                    <span>Warna: <strong className="text-amber-300 capitalize">{analysisModalItem.colorMode}</strong></span>
+                    <span>•</span>
+                    <span>Background: <strong className="text-emerald-400">{analysisModalItem.isGreenScreen ? '#00FF00' : 'Dark Studio'}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step 1 */}
+              <div className="bg-slate-900/90 rounded-xl p-4 border border-amber-500/30 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center text-xs font-black">1</span>
+                    <span>Bentuk Objek & Identifikasi Nama</span>
+                  </span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">Kemiripan Geometris</span>
+                </div>
+                <div className="text-sm font-extrabold text-gray-100">
+                  {analysisModalItem.shapeAnalysis?.objectName || 'Objek Teridentifikasi'}
+                </div>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {analysisModalItem.shapeAnalysis?.shapeDescription || 'Objek berhasil dianalisis struktur bentuk dan rasio anatomisnya.'}
+                </p>
+                {analysisModalItem.shapeAnalysis?.detectedElements && analysisModalItem.shapeAnalysis.detectedElements.length > 0 && (
+                  <div className="pt-2">
+                    <span className="text-[10px] font-semibold text-gray-400 block mb-1.5">Sub-Elemen Geometris Terdeteksi:</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {analysisModalItem.shapeAnalysis.detectedElements.map((el, i) => (
+                        <span key={i} className="text-[10px] bg-slate-950 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-medium">
+                          ✓ {el}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Step 2 */}
+              <div className="bg-slate-900/90 rounded-xl p-4 border border-sky-500/30 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-sky-300">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-sky-500 text-slate-950 flex items-center justify-center text-xs font-black">2</span>
+                    <span>Analisis Motion Profesional Berdasarkan Referensi</span>
+                  </span>
+                  <span className="text-[10px] text-sky-400/80 font-mono">Fisika Gerak Nyata</span>
+                </div>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {analysisModalItem.shapeAnalysis?.professionalMotionPlan ||
+                    'Setiap elemen dianimasikan secara terpisah mengikuti prinsip fisika nyata & mikro-gerak microstock (rotasi jarum pada poros, denyut aerodinamis garis kecepatan, getaran titik inersia, dan klik pusher).'}
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div className="bg-slate-900/90 rounded-xl p-4 border border-emerald-500/30 space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-300">
+                  <span className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center text-xs font-black">3</span>
+                    <span>Sintesis Kemiripan Semirip Mungkin (1:1 Vektor Murni)</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400/80 font-mono">Zero Background Artifacts</span>
+                </div>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {analysisModalItem.shapeAnalysis?.similaritySynthesis ||
+                    'Elemen digambar ulang secara murni dengan kode HTML5 Canvas 2D mempertahankan posisi koordinat dan rasio ukuran tanpa menjiplak background putih/screenshot bawaan gambar mentah.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-3 border-t border-gray-800 shrink-0">
+              <span className="text-[11px] text-gray-400">
+                Logika ini digunakan langsung oleh AI untuk menghasilkan kode Canvas 2D 60 FPS
+              </span>
+              <button
+                onClick={() => setAnalysisModalItem(null)}
+                className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold cursor-pointer"
+              >
+                Tutup
+              </button>
             </div>
           </div>
         </div>

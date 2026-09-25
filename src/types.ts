@@ -94,6 +94,14 @@ export interface ApiKeyTestResult {
 
 export type GeminiModel = 'gemini-2.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview';
 
+export interface ShapeAnalysis {
+  objectName: string;
+  shapeDescription: string;
+  detectedElements: string[];
+  professionalMotionPlan: string;
+  similaritySynthesis: string;
+}
+
 export interface ImageToMotionItem {
   id: string;
   projectId: string;
@@ -106,6 +114,7 @@ export interface ImageToMotionItem {
   status: 'pending' | 'analyzing' | 'generating' | 'completed' | 'error';
   progress?: number;
   detectedSubject?: string;
+  shapeAnalysis?: ShapeAnalysis;
   motionDynamics: MotionDynamics;
   colorMode: ColorMode;
   neonGlow: boolean;

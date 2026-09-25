@@ -1,4 +1,4 @@
-import { AnimationType, GeminiModel, ApiKeyTestResult, ColorMode, MotionDynamics } from '../types';
+import { AnimationType, GeminiModel, ApiKeyTestResult, ColorMode, MotionDynamics, ShapeAnalysis } from '../types';
 
 const STORAGE_API_KEYS = 'bigma_gemini_api_keys';
 const STORAGE_SELECTED_MODEL = 'bigma_gemini_model';
@@ -1137,7 +1137,22 @@ async function generateImageToMotionDirect(
   precisionLevel: 'ultra' | 'masterpiece' = 'masterpiece',
   strokeWeight: 'bold' | 'medium' | 'fine' = 'bold',
   customInstructions = ''
-): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
+): Promise<{
+  id: string;
+  title: string;
+  type: AnimationType;
+  style: string;
+  subCategory: string;
+  html: string;
+  isGreenScreen?: boolean;
+  colorMode?: ColorMode;
+  motionDynamics?: MotionDynamics;
+  neonGlow?: boolean;
+  projectName?: string;
+  fileName?: string;
+  detectedSubject?: string;
+  shapeAnalysis?: ShapeAnalysis;
+}> {
   let pureBase64 = imageBase64;
   if (pureBase64.includes(';base64,')) {
     pureBase64 = pureBase64.split(';base64,')[1];
@@ -1174,55 +1189,41 @@ async function generateImageToMotionDirect(
 
   const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock Motion Graphics Kelas Dunia.
 
-TUGAS UTAMA: REKONSTRUKSI VEKTOR GEOMETRIS 1:1 DARI REFERENSI & ANIMASI INDIVIDUAL PER ELEMEN
-Analisis gambar referensi yang diunggah secara teliti. Identifikasi SETIAP ELEMEN, SUB-BENTUK, KOORDINAT POSISI, DAN AKSENNYA, lalu tuliskan kode HTML5 Canvas 2D murni yang MENGGAMBAR ULANG BENTUK & POSISI SETIAP ELEMEN PERSIS SEPERTI GAMBAR ASLI, DAN MENGANIMASIKAN SETIAP ELEMEN TERSEBUT SECARA TERPISAH DENGAN FISIKA GERAK YANG SESUAI DENGAN ANALISIS ANDA!
+TUGAS UTAMA: 3 LANGKAH LOGIKA ANALISIS BENTUK & MOTION KELAS DUNIA
+Lakukan 3 langkah analisis logika berikut terhadap gambar referensi:
 
-PANDUAN KETAT REKONSTRUKSI ELEMEN & ANTI-JIPLAK BACKGROUND MENTAH:
-1. BUKAN JIPLAKAN SEBACKGROUND-BACKGROUNDNYA DARI GAMBAR MENTAH (100% PURE CANVAS VECTOR):
-   - JANGAN PERNAH meniru, menggambar ulang, atau menampilkan kotak background putih, kanvas abu-abu, atau bingkai screenshot bawaan file gambar!
-   - Background kanvas HANYA studio bersih: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}.
-   - Seluruh grafis WAJIB digambar ulang murni menggunakan path Canvas 2D (ctx.beginPath, ctx.arc, ctx.moveTo, ctx.lineTo, ctx.bezierCurveTo, ctx.stroke, ctx.fill).
-   - ${strokeGuide}.
+1. ANALISIS BENTUK OBJEK & IDENTIFIKASI NAMA (SEHINGGA BISA MENIRUNYA MENYERUPAI ASLINYA):
+   - Tentukan bentuk objek dan namanya apa secara presisi (misal: "Stopwatch / Running Chronograph Timer").
+   - Identifikasi SELURUH ANATOMI GEOMETRIS & SUB-ELEMENNYA secara mendalam:
+     * Frame & Kontur Utama: Rasio diameter luar, cincin dalam, bevel, cincin konsentris.
+     * Aksen Mekanis & Tombol Eksternal: Tombol atas (crown batang + bracket penekan), tombol samping (lap pusher miring ~45°), kuping bracket.
+     * Detail Dial & Penunjuk: Poros tengah (center pin), jarum pendek & panjang, serta titik/garis skala melingkar jika ada.
+     * Garis Kecepatan (Speed Trails) & Titik Aerodinamis (Speed Dots): Jumlah garis horizontal, letak vertikal (Y), panjang (X), dan titik-titik inersia.
+   - Dengan memahami bentuk dan namanya, Anda dapat meniru bentuk dan posisinya persis 1:1 tanpa salah tafsir.
 
-2. POSISI & BENTUK ELEMEN SAMA PERSIS 1:1 DENGAN GAMBAR REFERENSI:
-   - Amati koordinat posisi relatif (X, Y) dan rasio proporsi bentuk dari setiap sub-elemen referensi:
-     a. FRAME & SILUET UTAMA: Kontur terluar, kontur dalam, cincin ganda/konsentris (concentric rings), rasio diameter dan ketebalan bodi yang proporsional.
-     b. AKSEN MEKANIK & TOMBOL: Posisikan dan bentuk tombol persis sesuai aslinya!
-        * Tombol Atas (12 o'clock crown): Gambar leher batang silinder rounded + kepala kenop/bracket penekan rounded di atasnya.
-        * Tombol Samping (Lap Pusher di sudut miring ~45° / 315°): Gambar tangkai batang miring keluar + kepala tombol penekan rounded.
-        * Kuping baut, bracket penopang, atau dudukan jika ada pada gambar.
-     c. DETAIL DIAL & PENUNJUK (HANDS & TICKS):
-        * Poros Tengah: Gambar cincin poros (center pivot) dengan lubang konsentris di tengah.
-        * Jarum Penunjuk: Gambar jarum pendek dan jarum panjang dengan ketebalan dan sudut awal yang mencerminkan gambar referensi.
-        * Tanda Skala / Dial Ticks: Jika pada referensi terdapat titik-titik atau garis-garis skala mengelilingi dial, GAMBAR SEMUA PENANDA TERSEBUT melingkar secara teratur.
-     d. GARIS KECEPATAN (SPEED TRAILS) & TITIK AERODINAMIS (SPEED DOTS):
-        * Hitung JUMLAH PERSIS garis kecepatan horizontal di sisi kiri/belakang objek (misal 3, 4, atau 5 garis).
-        * Letakkan masing-masing garis pada posisi vertikal (Y) dan panjang (X) yang persis meniru referensi.
-        * Gambar titik-titik bulat (dots) kecepatan di atas/tengah/bawah garis pada posisi yang sama persis seperti pada gambar!
-        * Gambar garis lengkung aerodinamis penutup jika ada di referensi.
-   - ZERO FOREIGN ARTIFACTS: DILARANG KERAS menambahkan bentuk liar yang tidak ada di gambar (JANGAN tambahkan bola melayang asing, laser acak, gelembung sembarangan, atau partikel debu liar).
+2. ANALISIS BAGAIMANA MOTION PROFESIONAL BERDASARKAN GAMBAR REFERENSI:
+   - Analisis logika fisika gerak nyata & standar animasi microstock komersial profesional:
+     * Jarum Penunjuk: Berputar halus atau berdetik natural mengelilingi poros tengah (jarum menit sweep lebih cepat, jarum jam lebih lambat).
+     * Garis Kecepatan: Berdenyut memanjang-memendek secara aerodinamis (Math.sin gelombang angin).
+     * Titik Kecepatan: Meluncur / bergetar dengan osilasi horizontal berfase inersia.
+     * Tombol Mekanik: Mengalami klik tekan periodik (setiap beberapa detik tertekan lembut lalu memantul kembali).
+     * Bodi Objek: Melayang kinetik halus terpusat (${motionDynamics.toUpperCase()}).
 
-3. ANIMASI INDIVIDUAL PER ELEMEN (CONTEXTUAL KINETIC MOTION PER ELEMENT):
-   - JANGAN membuat animasi statis kaku yang hanya menggoyang seluruh gambar sebagai satu balok!
-   - SETIAP SUB-ELEMEN HARUS MEMILIKI LOGIKA GERAK SENDIRI:
-     * Jarum Penunjuk (Hands): Berputar halus atau berdetik natural mengelilingi poros tengah (jarum menit berputar dinamis, jarum jam berputar proporsional, misal: const minAngle = t * 2.5; const hrAngle = t * 0.4;).
-     * Garis Kecepatan (Speed Trails): Berdenyut dinamis memanjang-memendek secara horizontal (posisi startX dan endX berosilasi aerodinamis dengan gelombang Math.sin(t * 8 + i * 0.8)).
-     * Titik Kecepatan (Speed Dots): Bergetar lembut atau meluncur dengan osilasi horizontal berfase inersia selaras dengan kecepatan laju garis.
-     * Tombol Stopwatch/Pusher: Mengalami hentakan klik periodik (setiap beberapa detik menekan 3-4px ke dalam lalu memantul kembali).
-     * Bodi Objek Utama: Mengambang kinetik lembut di kanvas (${motionDynamics.toUpperCase()}: misal sinusoidal float halus cx + Math.sin(t * 1.5) * 5, cy + Math.cos(t * 1.8) * 4).
+3. SINTESIS KEMIRIPAN GEOMETRIS & KINETIK SEMIRIP MUNGKIN (ATAS 2 INSTRUKSI DI ATAS):
+   - Gabungkan analisis bentuk (1) dan motion profesional (2) menjadi kode Canvas 2D 60 FPS:
+     * BUKAN JIPLAKAN SEBACKGROUND-BACKGROUNDNYA DARI GAMBAR MENTAH: Jangan pernah menggambar ulang background putih/abu-abu atau bingkai foto bawaan! Background kanvas HANYA: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}.
+     * Seluruh elemen digambar ulang murni sebagai path Canvas 2D (${strokeGuide}).
+     * Posisi koordinat (X, Y) dan bentuk setiap elemen dibuat semirip mungkin dengan referensi asli.
+     * Animasi diterapkan secara individual per elemen, bukan gambar diam yang digerakkan kaku.
 
-4. GAYA & STYLE SESUAI PILIHAN USER:
-   - Palet Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
-   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam bersih tanpa glow)'}
-   - Dinamika Gerak: ${motionDynamics.toUpperCase()}
-   - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
-${customInstructions ? `- Instruksi Khusus User: ${customInstructions}` : ''}
+PENGATURAN USER:
+- Palet Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
+- Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam)'}
+- Dinamika Gerak: ${motionDynamics.toUpperCase()}
+- Background: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
+${customInstructions ? `- Instruksi Khusus: ${customInstructions}` : ''}
 
-5. KODE BERSIH & EFISIENSI TOKEN (60 FPS CLEAN CODE):
-   - Langsung tulis kode JavaScript Canvas 2D padat dan modular di dalam fungsi resize() & animate(time).
-   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
-
-Struktur Boilerplate Wajib:
+Struktur Boilerplate Wajib (Sertakan tag script shape-analysis di dalam head):
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1232,6 +1233,15 @@ Struktur Boilerplate Wajib:
   canvas { display: block; width: 100vw; height: 100vh; }
   #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
 </style>
+<script type="application/json" id="shape-analysis">
+{
+  "objectName": "Nama objek spesifik yang diidentifikasi dari gambar",
+  "shapeDescription": "Deskripsi bentuk geometris dan rasio anatomi objek",
+  "detectedElements": ["Elemen 1", "Elemen 2", "Elemen 3", "Elemen 4"],
+  "professionalMotionPlan": "Penjelasan bagaimana motion profesional diterapkan pada masing-masing elemen",
+  "similaritySynthesis": "Sintesis replikasi semirip mungkin 1:1 vektor murni tanpa background mentah"
+}
+</script>
 <script>
   window.onerror = function(msg) { document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>'; };
 </script>
@@ -1330,10 +1340,31 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
 
       const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 
+      let shapeAnalysis: ShapeAnalysis | undefined = undefined;
+      try {
+        const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
+        if (analysisMatch && analysisMatch[1]) {
+          const parsed = JSON.parse(analysisMatch[1].trim());
+          if (parsed.objectName) {
+            shapeAnalysis = {
+              objectName: String(parsed.objectName || ''),
+              shapeDescription: String(parsed.shapeDescription || ''),
+              detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
+              professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
+              similaritySynthesis: String(parsed.similaritySynthesis || ''),
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to parse shape-analysis tag:', e);
+      }
+
+      const detectedSubject = shapeAnalysis?.objectName || cleanTitle;
+
       return {
         id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
-        title: `Motion: ${cleanTitle}`,
-        type: 'icon',
+        title: `Motion: ${detectedSubject}`,
+        type: 'icon' as AnimationType,
         style: colorMode,
         subCategory: 'image-to-motion',
         colorMode,
@@ -1343,6 +1374,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
         isGreenScreen,
         projectName,
         fileName,
+        detectedSubject,
+        shapeAnalysis,
       };
     } catch (err: any) {
       lastDirectError = err;
@@ -1372,7 +1405,22 @@ export async function generateImageToMotion(
   },
   onRetry?: (attempt: number, max: number, err: string) => void,
   maxRetries = 3
-): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
+): Promise<{
+  id: string;
+  title: string;
+  type: AnimationType;
+  style: string;
+  subCategory: string;
+  html: string;
+  isGreenScreen?: boolean;
+  colorMode?: ColorMode;
+  motionDynamics?: MotionDynamics;
+  neonGlow?: boolean;
+  projectName?: string;
+  fileName?: string;
+  detectedSubject?: string;
+  shapeAnalysis?: ShapeAnalysis;
+}> {
   let lastError: any = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
