@@ -1134,7 +1134,7 @@ async function generateImageToMotionDirect(
   colorMode: ColorMode = 'gradient',
   neonGlow = true,
   isGreenScreen = false,
-  _customInstructions = ''
+  customInstructions = ''
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
   let pureBase64 = imageBase64;
   if (pureBase64.includes(';base64,')) {
@@ -1150,22 +1150,106 @@ async function generateImageToMotionDirect(
     ),
   ];
 
-  // Ultra-fast lightweight vision analysis prompt (< 80 tokens, completes in ~1-2s)
-  const visionAnalysisPrompt = `Analyze this image in JSON format for a 60fps microstock motion canvas:
-{
-  "subject": "short description of main element e.g. flying soccer ball with speed lines",
-  "hasSpeedTrails": true,
-  "spinSpeed": 3.0,
-  "glowColor": "#38bdf8"
-}
-Output only valid JSON:`;
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
-  let aiAnalysis: any = {
-    subject: fileName.replace(/\.[^/.]+$/, ''),
-    hasSpeedTrails: true,
-    spinSpeed: 3.0,
-    glowColor: '#38bdf8'
-  };
+  let colorModeGuide = '';
+  if (colorMode === 'neon') {
+    colorModeGuide = 'Gunakan warna Cyberpunk Neon (#00f0ff, #ff007f, #ffe600, #39ff14).';
+  } else if (colorMode === 'flat') {
+    colorModeGuide = 'Gunakan warna flat solid tegas kontras (#ffffff, #2563eb, #10b981).';
+  } else if (colorMode === 'monochrome') {
+    colorModeGuide = 'Gunakan warna monokrom bersih (#ffffff, #cbd5e1, #94a3b8).';
+  } else if (colorMode === 'pastel') {
+    colorModeGuide = 'Gunakan warna pastel lembut (#fda4af, #93c5fd, #fde047).';
+  } else if (colorMode === 'luxury') {
+    colorModeGuide = 'Gunakan warna Luxury Gold (#ffd700, #e6c66e, #ffffff).';
+  } else {
+    colorModeGuide = 'Gunakan gradien dinamis modern (#38bdf8 ke #818cf8, atau warna dominan gambar).';
+  }
+
+  const visionPrompt = `Anda adalah Master HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock.
+
+TUGAS UTAMA:
+1. DEKONSTRUKSI & ANALISIS BENTUK REFERENSI:
+   - Amati gambar yang diunggah dengan teliti. Identifikasi SEMUA komponen bentuk pembentuk gambar tersebut (misal: jika ada stopwatch dengan garis kecepatan di kiri -> buat frame lingkaran luar, dial dalam, tombol atas, tombol samping lap, poros tengah, jarum jam, dan garis-garis kecepatan horizontal beserta titik-titik kecepatannya).
+   - REKONSTRUKSI BENTUK YANG SAMA: Gambar ulang elemen-elemen tersebut secara murni menggunakan Canvas 2D (ctx.beginPath, ctx.arc, ctx.roundRect, ctx.moveTo, ctx.lineTo, ctx.stroke, ctx.fill) dengan proporsi, ketebalan garis, dan bentuk yang SANGAT MIRIP dengan gambar referensi.
+
+2. ATURAN MUTLAK (ANTI-ELEMEN ASING):
+   - HANYA gambar elemen yang ADA pada gambar referensi!
+   - DILARANG KERAS menambahkan bentuk/elemen liar yang tidak ada di referensi (JANGAN tambahkan bola melayang, JANGAN tambahkan gelembung acak, JANGAN tambahkan laser biru panjang di luar gambar, JANGAN tambahkan partikel asing).
+   - Abaikan kotak background putih/screenshot luar, fokuskan hanya pada objek utama dan elemen grafis aslinya.
+
+3. ANIMASI MASUK AKAL & NYAMBUNG (LOGICAL ANIMATION):
+   - Gerakkan bagian-bagian yang memang seharusnya bergerak:
+     * Jika ada jarum jam/indikator: putar jarum jam mengelilingi porosnya secara halus (ctx.rotate).
+     * Jika ada garis kecepatan (speed dashes): buat garis-garis kecepatan tersebut berdenyut, memanjang-memendek secara horizontal (Math.sin).
+     * Jika ada tombol: buat tombol menekan/klik secara halus.
+     * Objek utama: bergerak melayang / bergetar inersia halus.
+
+4. PARAMETER PENGGUNA:
+   - Mode Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
+   - Dinamika Gerak: ${motionDynamics.toUpperCase()}
+   - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis bersih tanpa blur)'}
+   - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
+${customInstructions ? `- Catatan Khusus: ${customInstructions}` : ''}
+
+5. KUALITAS KODE:
+   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
+   - Pusatkan objek di (cx, cy) dengan skala S = Math.min(w, h) * 0.44;
+   - Tulis kode ringkas, efisien (130 - 220 baris), langsung jalan tanpa error dan looping 60 FPS mulus.
+
+Struktur Boilerplate Wajib:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
+</style>
+<script>
+  window.onerror = function(msg) { document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>'; };
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Inisialisasi variabel elemen teranalisa
+
+  function animate(time) {
+    const t = time * 0.001;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = ${clearFill};
+    ctx.fillRect(0, 0, w, h);
+
+    // Render & animasikan elemen-elemen persis dari gambar
+
+    requestAnimationFrame(animate);
+  }
+  animate(0);
+</script>
+</body>
+</html>
+
+Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown apapun:`;
+
+  let lastDirectError: any = null;
 
   for (const currentModel of candidateModels) {
     try {
@@ -1187,61 +1271,58 @@ Output only valid JSON:`;
                   },
                 },
                 {
-                  text: visionAnalysisPrompt,
+                  text: visionPrompt,
                 },
               ],
             },
           ],
           generationConfig: {
-            temperature: 0.2,
-            responseMimeType: 'application/json',
+            temperature: 0.35,
           },
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        try {
-          const parsed = JSON.parse(rawText);
-          if (parsed && typeof parsed === 'object') {
-            aiAnalysis = { ...aiAnalysis, ...parsed };
-            break;
-          }
-        } catch {}
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
       }
-    } catch {
+
+      const data = await res.json();
+      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      let cleanHTML = extractHTML(rawText);
+
+      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+          cleanHTML = extractHTML(rawText);
+        } else {
+          throw new Error('Kode dari AI terpotong sebelum selesai');
+        }
+      }
+
+      const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
+      return {
+        id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
+        title: `Motion: ${cleanTitle}`,
+        type: 'icon',
+        style: colorMode,
+        subCategory: 'image-to-motion',
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        html: cleanHTML,
+        isGreenScreen,
+        projectName,
+        fileName,
+      };
+    } catch (err: any) {
+      lastDirectError = err;
       continue;
     }
   }
 
-  // Compile high-fidelity 60 FPS HTML5 Canvas animation embedding reference asset
-  const cleanHTML = buildHighFidelityImageMotionHtml({
-    imageBase64: pureBase64,
-    mimeType,
-    motionDynamics,
-    colorMode,
-    neonGlow,
-    isGreenScreen,
-    aiAnalysis
-  });
-
-  const cleanTitle = (aiAnalysis.subject || fileName.replace(/\.[^/.]+$/, '')).replace(/[-_]/g, ' ');
-
-  return {
-    id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
-    title: `Motion: ${cleanTitle}`,
-    type: 'icon',
-    style: colorMode,
-    subCategory: 'image-to-motion',
-    colorMode,
-    motionDynamics,
-    neonGlow,
-    html: cleanHTML,
-    isGreenScreen,
-    projectName,
-    fileName,
-  };
+  throw lastDirectError || new Error('Gagal menganalisa gambar dengan model vision');
 }
 
 // High-level Image To Motion Generator with Multi-Level Fallback & Auto-Retry
