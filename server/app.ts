@@ -1011,63 +1011,57 @@ export async function handleImageToMotionLogic(body: any) {
     colorModeGuide = 'Gunakan gradien dinamis modern (#38bdf8 ke #818cf8, atau warna dominan gambar).';
   }
 
-  const strokeGuide =
-    strokeWeight === 'bold'
-      ? 'Garis TEBAL TEGAS IKON VEKTOR (lineWidth = S * 0.065 - S * 0.08)'
-      : strokeWeight === 'fine'
-      ? 'Garis HALUS MINIMALIS (lineWidth = S * 0.035 - S * 0.045)'
-      : 'Garis SEDANG PROPORSIONAL (lineWidth = S * 0.05 - S * 0.06)';
+  const strokeGuide = 'Garis VEKTOR TEGAS & SOLID IKON PREMIUM (ctx.lineWidth = S * 0.055 s/d S * 0.075, ctx.lineCap = "round", ctx.lineJoin = "round")';
 
   const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Animator Spesialis Microstock Motion Graphics Kelas Dunia.
 
-TUGAS UTAMA: MASTERPIECE HIGH-PRECISION VECTOR DECONSTRUCTION & LOGICAL KINETIC ANIMATION
-Analisis gambar referensi yang diunggah secara menyeluruh. Identifikasi SETIAP ELEMEN, SUB-BENTUK, AKSEN, DAN DETAIL GEOMETRISNYA, lalu tuliskan kode HTML5 Canvas 2D murni yang MENGGAMBAR ULANG PERSIS SETIAP BAGIAN TERSEBUT dan MENGANIMASIKANNYA DENGAN FISIKA GERAK YANG NYAMBUNG & MASUK AKAL!
+TUGAS UTAMA: REKONSTRUKSI VEKTOR GEOMETRIS 1:1 DARI REFERENSI & ANIMASI INDIVIDUAL PER ELEMEN
+Analisis gambar referensi yang diunggah secara teliti. Identifikasi SETIAP ELEMEN, SUB-BENTUK, KOORDINAT POSISI, DAN AKSENNYA, lalu tuliskan kode HTML5 Canvas 2D murni yang MENGGAMBAR ULANG BENTUK & POSISI SETIAP ELEMEN PERSIS SEPERTI GAMBAR ASLI, DAN MENGANIMASIKAN SETIAP ELEMEN TERSEBUT SECARA TERPISAH DENGAN FISIKA GERAK YANG SESUAI DENGAN ANALISIS ANDA!
 
-PANDUAN REKONSTRUKSI ELEMEN ULTRA-DETAIL (MENIRU PERSIS ELEMEN GAMBAR):
-1. AUDIT & DEKOMPOSISI ANATOMI ELEMEN 100% LENGKAP:
-   - Identifikasi dan gambar ulang SELURUH bagian yang ada pada gambar referensi:
-     a. FRAME & SILUET UTAMA: Kontur terluar, kontur dalam, cincin ganda/konsentris (concentric rings), bevel lingkar, atau ketebalan bodi. Gunakan rasio diameter yang presisi sesuai gambar.
-     b. AKSEN MEKANIK & TOMBOL EKSTERNAL: Amati posisi sudut dan struktur tombol!
-        * Tombol Atas (12 o'clock crown): Gambar leher batang silinder rounded + kepala kenop/bracket penekan persegi panjang rounded di atasnya.
-        * Tombol Samping (Lap Pusher di sudut miring ~45° / 315°): Gambar tangkai batang miring keluar + kepala tombol oval/rounded yang menonjol.
-        * Kuping, braket, baut, atau dudukan jika ada pada referensi.
-     c. DETAIL DIAL & JARUM (HANDS & TICKS):
-        * Poros Tengah: Gambar cincin poros (center pivot pin) dengan lubang/washer konsentris di tengah.
-        * Jarum Penunjuk: Gambar jarum jam pendek dan jarum menit panjang dengan ketebalan dan sudut awal yang mencerminkan gambar referensi.
-        * Tanda Skala / Dial Ticks: Jika pada gambar ada titik atau garis-garis skala jam/menit mengelilingi dial, GAMBAR SEMUA PENANDA TERSEBUT secara melingkar (gunakan loop for dengan rotasi sudut teratur).
+PANDUAN KETAT REKONSTRUKSI ELEMEN & ANTI-JIPLAK BACKGROUND MENTAH:
+1. BUKAN JIPLAKAN SEBACKGROUND-BACKGROUNDNYA DARI GAMBAR MENTAH (100% PURE CANVAS VECTOR):
+   - JANGAN PERNAH meniru, menggambar ulang, atau menampilkan kotak background putih, kanvas abu-abu, atau bingkai screenshot bawaan file gambar!
+   - Background kanvas HANYA studio bersih: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}.
+   - Seluruh grafis WAJIB digambar ulang murni menggunakan path Canvas 2D (ctx.beginPath, ctx.arc, ctx.moveTo, ctx.lineTo, ctx.bezierCurveTo, ctx.stroke, ctx.fill).
+   - ${strokeGuide}.
+
+2. POSISI & BENTUK ELEMEN SAMA PERSIS 1:1 DENGAN GAMBAR REFERENSI:
+   - Amati koordinat posisi relatif (X, Y) dan rasio proporsi bentuk dari setiap sub-elemen referensi:
+     a. FRAME & SILUET UTAMA: Kontur terluar, kontur dalam, cincin ganda/konsentris (concentric rings), rasio diameter dan ketebalan bodi yang proporsional.
+     b. AKSEN MEKANIK & TOMBOL: Posisikan dan bentuk tombol persis sesuai aslinya!
+        * Tombol Atas (12 o'clock crown): Gambar leher batang silinder rounded + kepala kenop/bracket penekan rounded di atasnya.
+        * Tombol Samping (Lap Pusher di sudut miring ~45° / 315°): Gambar tangkai batang miring keluar + kepala tombol penekan rounded.
+        * Kuping baut, bracket penopang, atau dudukan jika ada pada gambar.
+     c. DETAIL DIAL & PENUNJUK (HANDS & TICKS):
+        * Poros Tengah: Gambar cincin poros (center pivot) dengan lubang konsentris di tengah.
+        * Jarum Penunjuk: Gambar jarum pendek dan jarum panjang dengan ketebalan dan sudut awal yang mencerminkan gambar referensi.
+        * Tanda Skala / Dial Ticks: Jika pada referensi terdapat titik-titik atau garis-garis skala mengelilingi dial, GAMBAR SEMUA PENANDA TERSEBUT melingkar secara teratur.
      d. GARIS KECEPATAN (SPEED TRAILS) & TITIK AERODINAMIS (SPEED DOTS):
-        * Amati JUMLAH PERSIS garis kecepatan horizontal di sisi kiri/belakang objek (misal 3, 4, atau 5 garis).
+        * Hitung JUMLAH PERSIS garis kecepatan horizontal di sisi kiri/belakang objek (misal 3, 4, atau 5 garis).
         * Letakkan masing-masing garis pada posisi vertikal (Y) dan panjang (X) yang persis meniru referensi.
-        * Amati titik-titik bulat (dots) kecepatan di atas/tengah/bawah garis: GAMBAR TITIK-TITIK BULAT TERSEBUT pada posisi yang sama persis seperti pada gambar!
-        * Gambar pula garis lengkung penutup/aliran bodi bawah jika tampak pada gambar referensi.
+        * Gambar titik-titik bulat (dots) kecepatan di atas/tengah/bawah garis pada posisi yang sama persis seperti pada gambar!
+        * Gambar garis lengkung aerodinamis penutup jika ada di referensi.
+   - ZERO FOREIGN ARTIFACTS: DILARANG KERAS menambahkan bentuk liar yang tidak ada di gambar (JANGAN tambahkan bola melayang asing, laser acak, gelembung sembarangan, atau partikel debu liar).
 
-2. ATURAN ANTI-ELEMEN ASING MUTLAK (100% ZERO FOREIGN ARTIFACTS):
-   - HANYA gambar elemen yang ADA pada gambar referensi!
-   - DILARANG KERAS menambahkan bentuk/elemen liar yang tidak ada di gambar (JANGAN tambahkan bola melayang sembarangan, gelembung acak, laser liar, grid sembarangan, atau partikel debu yang tidak ada di gambar).
-   - Abaikan kotak background putih/screenshot luar, fokuskan 100% pada objek dan elemen grafis aslinya.
+3. ANIMASI INDIVIDUAL PER ELEMEN (CONTEXTUAL KINETIC MOTION PER ELEMENT):
+   - JANGAN membuat animasi statis kaku yang hanya menggoyang seluruh gambar sebagai satu balok!
+   - SETIAP SUB-ELEMEN HARUS MEMILIKI LOGIKA GERAK SENDIRI:
+     * Jarum Penunjuk (Hands): Berputar halus atau berdetik natural mengelilingi poros tengah (jarum menit berputar dinamis, jarum jam berputar proporsional, misal: const minAngle = t * 2.5; const hrAngle = t * 0.4;).
+     * Garis Kecepatan (Speed Trails): Berdenyut dinamis memanjang-memendek secara horizontal (posisi startX dan endX berosilasi aerodinamis dengan gelombang Math.sin(t * 8 + i * 0.8)).
+     * Titik Kecepatan (Speed Dots): Bergetar lembut atau meluncur dengan osilasi horizontal berfase inersia selaras dengan kecepatan laju garis.
+     * Tombol Stopwatch/Pusher: Mengalami hentakan klik periodik (setiap beberapa detik menekan 3-4px ke dalam lalu memantul kembali).
+     * Bodi Objek Utama: Mengambang kinetik lembut di kanvas (${motionDynamics.toUpperCase()}: misal sinusoidal float halus cx + Math.sin(t * 1.5) * 5, cy + Math.cos(t * 1.8) * 4).
 
-3. KOREOGRAFI GERAKAN YANG NYAMBUNG & MASUK AKAL (CONTEXTUAL KINETIC CHOREOGRAPHY):
-   - Setiap elemen yang telah dianalisis harus bergerak sesuai fungsi dan logika fisiknya:
-     * Jarum Penunjuk/Dial: Berputar halus mengelilingi poros tengah (jarum menit berputar lebih cepat, jarum jam berputar lebih lambat, atau detak ticking presisi: const minAngle = t * 2.2; const hrAngle = t * 0.35;).
-     * Garis Kecepatan (Speed Trails): Berdenyut dinamis memanjang-memendek secara horizontal (startX dan endX berosilasi aerodinamis dengan gelombang Math.sin(t * 8 + i * 0.8)), memberi efek kecepatan tinggi yang dinamis.
-     * Titik Kecepatan (Speed Dots): Bergetar halus dengan osilasi horizontal berfase inersia selaras dengan laju garis kecepatan.
-     * Tombol Stopwatch/Pusher: Mengalami gerakan klik lembut secara periodik (setiap beberapa detik melakukan hentakan klik 3-4px ke dalam lalu memantul kembali).
-     * Bodi Objek Utama: Melayang kinetik halus terpusat di kanvas (sinusoidal float: cx + Math.sin(t * 1.6) * 6, cy + Math.cos(t * 2.0) * 5) atau mengikuti mode dinamika pilihan user.
-
-4. KUALITAS VEKTOR RETINA (HiDPI) & PENGATURAN USER:
-   - Gunakan ctx.lineCap = 'round' dan ctx.lineJoin = 'round' di setiap path stroke agar garis tampak membulat mulus dan solid layaknya ikon vektor premium.
-   - Ketebalan garis proporsional: ${strokeGuide}.
-   - Mode Presisi: ${precisionLevel.toUpperCase()}
-   - Mode Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
-   - Dinamika Gerak: ${motionDynamics.toUpperCase()}
+4. GAYA & STYLE SESUAI PILIHAN USER:
+   - Palet Warna: ${colorMode.toUpperCase()} (${colorModeGuide})
    - Neon Glow: ${neonGlow ? 'Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore' : 'Nonaktif (garis solid tajam bersih tanpa glow)'}
+   - Dinamika Gerak: ${motionDynamics.toUpperCase()}
    - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00' : 'Dark Studio #080C14'}
-${customInstructions ? `- Instruksi Tambahan Khusus: ${customInstructions}` : ''}
+${customInstructions ? `- Instruksi Khusus User: ${customInstructions}` : ''}
 
-5. EFISIENSI TOKEN & KINERJA MAKSIMAL (60 FPS CLEAN CODE):
-   - Langsung tulis kode JavaScript Canvas yang padat, modular, dan efisien.
-   - Hindari teks pengantar markdown bertele-tele atau komentar panjang di setiap baris.
-   - Gunakan fungsi-fungsi modular (misal: drawBody, drawButtons, drawDialAndHands, drawSpeedTrailsAndDots) di dalam loop requestAnimationFrame(animate).
+5. KODE BERSIH & EFISIENSI TOKEN (60 FPS CLEAN CODE):
+   - Langsung tulis kode JavaScript Canvas 2D padat dan modular di dalam fungsi resize() & animate(time).
+   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
 
 Struktur Boilerplate Wajib:
 <!DOCTYPE html>

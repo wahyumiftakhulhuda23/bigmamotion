@@ -67,8 +67,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [batchColorMode, setBatchColorMode] = useState<ColorMode>('gradient');
   const [batchNeonGlow, setBatchNeonGlow] = useState<boolean>(true);
   const [batchGreenScreen, setBatchGreenScreen] = useState<boolean>(false);
-  const [batchPrecisionLevel, setBatchPrecisionLevel] = useState<'ultra' | 'masterpiece'>('masterpiece');
-  const [batchStrokeWeight, setBatchStrokeWeight] = useState<'bold' | 'medium' | 'fine'>('bold');
   const [batchCustomInstructions, setBatchCustomInstructions] = useState<string>('');
 
   // Comparison modal
@@ -154,8 +152,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           colorMode: batchColorMode,
           neonGlow: batchNeonGlow,
           isGreenScreen: batchGreenScreen,
-          precisionLevel: batchPrecisionLevel,
-          strokeWeight: batchStrokeWeight,
           customInstructions: batchCustomInstructions,
           createdAt: Date.now(),
         });
@@ -210,8 +206,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           colorMode: item.colorMode,
           neonGlow: item.neonGlow,
           isGreenScreen: item.isGreenScreen,
-          precisionLevel: item.precisionLevel || batchPrecisionLevel,
-          strokeWeight: item.strokeWeight || batchStrokeWeight,
           customInstructions: item.customInstructions,
         },
         (attempt, max, errMsg) => {
@@ -561,7 +555,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             <span className="text-[10px] text-gray-400">Diterapkan ke batch gambar</span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {/* Motion Dynamics */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Motion Dynamics</label>
@@ -593,36 +587,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 <option value="monochrome">⬛ Monochrome</option>
                 <option value="pastel">🌸 Soft Pastel</option>
                 <option value="luxury">👑 Luxury Gold</option>
-              </select>
-            </div>
-
-            {/* Precision / Detail Level */}
-            <div className="space-y-1">
-              <label className="text-[10px] text-amber-400 font-semibold block flex items-center gap-1">
-                <span>Tingkat Detail</span>
-                <i className="fa-solid fa-sparkles text-[9px]"></i>
-              </label>
-              <select
-                value={batchPrecisionLevel}
-                onChange={(e) => setBatchPrecisionLevel(e.target.value as 'ultra' | 'masterpiece')}
-                className="w-full bg-slate-900 text-amber-200 border border-amber-500/40 text-[11px] rounded-lg px-2 py-1 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="masterpiece">💎 Masterpiece (Semua Sub-Elemen)</option>
-                <option value="ultra">🎯 Ultra Presisi (1:1 Bentuk)</option>
-              </select>
-            </div>
-
-            {/* Stroke Weight */}
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-semibold block">Garis Vektor</label>
-              <select
-                value={batchStrokeWeight}
-                onChange={(e) => setBatchStrokeWeight(e.target.value as 'bold' | 'medium' | 'fine')}
-                className="w-full bg-slate-900 text-gray-200 border border-gray-700 text-[11px] rounded-lg px-2 py-1 font-medium focus:ring-1 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="bold">✒️ Bold Solid (Microstock)</option>
-                <option value="medium">✏️ Medium Pro</option>
-                <option value="fine">🖋️ Fine Minimalis</option>
               </select>
             </div>
 
@@ -827,11 +791,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                         <span className="text-[9px] bg-amber-950/60 text-amber-300 border border-amber-800/40 px-1.5 py-0.2 rounded font-semibold capitalize">
                           {item.motionDynamics}
                         </span>
-                        {item.precisionLevel && (
-                          <span className="text-[9px] bg-sky-950/70 text-sky-300 border border-sky-800/50 px-1.5 py-0.2 rounded font-semibold">
-                            {item.precisionLevel === 'masterpiece' ? '💎 Masterpiece' : '🎯 Ultra'}
-                          </span>
-                        )}
                         {item.isGreenScreen && (
                           <span className="text-[9px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded font-semibold">
                             Green Screen
