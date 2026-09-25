@@ -903,34 +903,34 @@ PANDUAN GERAKAN ORGANIC FLOW & WAVES:
 - Aliran gelombang sinusoidal lembut, partikel mengapung mengalir di sekitar objek, dan pergerakan mengayun harmonis (floating wave).`;
   }
 
-  const visionPrompt = `Anda adalah Master Computer Vision & Lead HTML5 Canvas 2D Motion Designer Spesialis Video Asset & Microstock.
+  const visionPrompt = `Anda adalah Grandmaster HTML5 Canvas 2D Vector Artist & Lead Motion Designer Spesialis Video Asset & Microstock Pro.
 
-TUGAS UTAMA (SEMANTIC MOTION RECONSTRUCTION):
-Analisa gambar yang dilampirkan, DETEKSI ELEMEN DAN SUBJEK UTAMA DI DALAMNYA, lalu ciptakan animasi HTML5 Canvas 2D profesional 60 FPS yang BERGERAK SECARA MASUK AKAL, HIDUP, DAN NYAMBUNG dengan sifat alami objek tersebut!
+TUGAS UTAMA:
+1. REPLIKASI VISUAL TINGGI (HIGH-FIDELITY VECTOR RECONSTRUCTION):
+   - Amati gambar yang dilampirkan dengan sangat teliti! Kenali bentuk geometri spesifik, siluet detail, kontur kurva, dan struktur objek utamanya.
+   - Gambar ulang subjek tersebut menggunakan instruksi Canvas 2D murni (ctx.arc, ctx.beginPath, ctx.moveTo, ctx.lineTo, ctx.bezierCurveTo, ctx.quadraticCurveTo, ctx.fill, ctx.stroke, ctx.createRadialGradient, ctx.createLinearGradient).
+   - HASIL VISUAL HARUS NYARIS IDENTIK & SANGAT MIRIP dengan gambar referensi! Jika pada gambar terdapat bola sepak dengan pola pentagon & garis kecepatan, buatkan bola sepak yang detail dengan tambalan pentagon/segi lima hitam & segi enam putih, serta garis-garis kecepatan (speed streaks) meruncing di bagian belakangnya persis seperti di gambar.
+   - Abaikan kotak background kartu putih, border screenshot, atau bingkai kotak statis luar; fokus 100% pada subjek utama gambar.
 
-ATURAN PENTING ISOLASI OBJEK & EKSTRAKSI BENTUK:
-1. JANGAN menduplikasi kotak putih latar, border foto, screenshot persegi, atau background statis pada gambar.
-2. ISOLASI & EKSTRAKSI SUBJEK UTAMA: Ambil bentuk inti (misal: jika ada bola melesat dengan garis angin/kecepatan, roket, api, roda gigi, perisai, karakter, lambang, dll), buatkan representasi geometri Canvas 2D berkualitas tinggi untuk objek tersebut.
-3. BUAT GERAKAN MASUK AKAL & DINAMIS:
-   - Jika subjek adalah BOLA/OBJEK DENGAN GARIS KECEPATAN (Speed Lines): Bola harus berputar aktif (rotasi), garis kecepatan di belakangnya bergetar/memanjang-memendek dinamis seolah melesat kencang di udara, partikel angin/debu terhempas ke belakang, dan bola melayang mengayun dengan akselerasi halus.
-   - Jika subjek adalah API / ENERGI: Lidah api meliuk, partikel bara naik ke atas, dan pancaran cahaya berdenyut.
-   - Jika subjek adalah MESIN / GEAR: Roda berputar sinkron, jarum/indikator bergerak ritmis.
-   - Jika subjek adalah LOGO / SIMBOL: Cincin orbit mengitari objek, efek kilau laser melintas, dan aura berdenyut.
+2. CHOREOGRAFI GERAKAN KINETIK PROFESIONAL & MASUK AKAL (LOGICAL MOTION):
+   - Gerakkan setiap elemen secara terpisah namun harmonis dan hidup sesuai logika fisika objeknya:
+     * ROTASI & SPIN: Jika objek berbentuk bola/roda/lingkaran/partikel, buat objek berputar pada porosnya dengan rotasi halus (ctx.rotate).
+     * GARIS KECEPATAN & SPEED TRAILS: Jika ada garis laju/kecepatan, buat garis-garis tersebut bergetar, memanjang-memendek dinamis (aerodynamic wave oscillation), dan memancarkan partikel debu/energi kinetik yang mengalir ke belakang.
+     * FLOATING & KINETIC SWAY: Objek utama melayang/bergerak dengan sedikit ayunan harmonis (subtle sinusoidal drift: cx + Math.sin(t * 1.8) * 10, cy + Math.cos(t * 2.5) * 6).
+     * ENERGY SHIELD & GLOW PULSE: Kilau cahaya melintasi permukaan objek secara periodik (sheen sweep).
 
-PENYESUAIAN PENGATURAN DARI USER:
-- Mode Warna (${colorMode.toUpperCase()}): ${colorModeGuide}
-- Motion Dynamics (${motionDynamics.toUpperCase()}): ${motionGuide}
-- Neon Glow: ${neonGlow ? 'AKTIF (Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore)' : 'NONAKTIF (Garis tajam tanpa shadow blur)'}
-- Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00 murni (Chroma Key)' : 'Dark Studio #080C14 murni'}
-${customInstructions ? `- Instruksi Tambahan: ${customInstructions}` : ''}
+3. PENYESUAIAN PENGATURAN USER:
+   - Mode Warna (${colorMode.toUpperCase()}): ${colorModeGuide} (Pertahankan atau sesuaikan warna asli gambar dengan mode ini).
+   - Motion Dynamics (${motionDynamics.toUpperCase()}): ${motionGuide}
+   - Neon Glow: ${neonGlow ? 'AKTIF (Gunakan ctx.shadowBlur & ctx.shadowColor berisolasi save/restore)' : 'NONAKTIF (Garis bersih tajam)'}
+   - Background Kanvas: ${isGreenScreen ? 'Green Screen #00FF00 murni (Chroma Key)' : 'Dark Studio #080C14 murni'}
+${customInstructions ? `- Instruksi Tambahan Khusus: ${customInstructions}` : ''}
 
-ATURAN WAJIB ANTI-BEKAS GERAKAN / ZERO TRAIL ARTIFACTS:
-1. HILANGKAN BEKAS GERAKAN TOTAL: Setiap frame diawali pembersihan total: ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);. DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background.
-2. ISOLASI NEON GLOW: Jika menggunakan ctx.shadowBlur & ctx.shadowColor, selalu bungkus dalam ctx.save() dan ctx.restore(), lalu segera reset ctx.shadowBlur = 0 agar tidak mengotori kanvas atau meninggalkan sisa pendaran di frame berikutnya.
-3. KOORDINAT TERPUSAT & RESPONSIF:
-   - Skala S = Math.min(w, h) * 0.44;
-   - Gambar berpusat di cx, cy.
-4. RINGKAS & TUNTAS: Buat kode mandiri 180 - 280 baris yang langsung berfungsi dan looping mulus tanpa error.
+4. STANDAR KUALITAS KODE (ANTI-ARTIFACT):
+   - Bersihkan kanvas total setiap frame: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);
+   - Selalu reset ctx.shadowBlur = 0 setelah menggambar elemen bercahaya.
+   - Skala responsif: S = Math.min(w, h) * 0.42; berpusat di cx, cy.
+   - Tulis kode lengkap 200 - 320 baris yang langsung jalan tanpa error dan looping 60 FPS mulus.
 
 WAJIB gunakan struktur HTML boilerplate:
 <!DOCTYPE html>
@@ -960,12 +960,12 @@ WAJIB gunakan struktur HTML boilerplate:
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
-    S = Math.min(w, h) * 0.44;
+    S = Math.min(w, h) * 0.42;
   }
   window.addEventListener('resize', resize);
   resize();
 
-  // --- INISIALISASI VARIABEL DARI ANALISA GAMBAR ---
+  // --- INISIALISASI STRUKTUR GEOMETRI & PARTIKEL SESUAI GAMBAR ASLI ---
 
   function animate(time) {
     const t = time * 0.001;
@@ -973,7 +973,7 @@ WAJIB gunakan struktur HTML boilerplate:
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // --- REPLIKASI VISUAL & MOTION GAMBAR SESUAI ASLINYA ---
+    // --- RENDER REKONSTRUKSI VISUAL IDENTIK DENGAN KOREOGRAFI GERAK NYATA ---
 
     requestAnimationFrame(animate);
   }
