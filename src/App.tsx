@@ -9,6 +9,8 @@ import {
   VisualStyle,
   ColorMode,
   MotionDynamics,
+  ImageToMotionItem,
+  ImageToMotionProject,
 } from './types';
 import {
   getStoredApiKeys,
@@ -21,6 +23,7 @@ import {
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
 import { WorkflowSection } from './components/WorkflowSection';
+import { ImageToMotionSection } from './components/ImageToMotionSection';
 import { RightPanel } from './components/RightPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
 import { AutoPilotModal } from './components/AutoPilotModal';
@@ -32,6 +35,9 @@ import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
 
 const STORAGE_ANIMATIONS = 'bigma_saved_animations';
+const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
+const STORAGE_I2M_ITEMS = 'bigma_i2m_items';
+const STORAGE_ACTIVE_TAB = 'bigma_active_tab';
 
 export default function App() {
   // --- LICENSE & TRIAL STATE ---
@@ -60,6 +66,52 @@ export default function App() {
   });
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState<boolean>(false);
+
+  // Active Primary Tab ('prompt' vs 'image_to_motion')
+  const [activeTab, setActiveTab] = useState<'prompt' | 'image_to_motion'>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_ACTIVE_TAB);
+      if (saved === 'image_to_motion' || saved === 'prompt') return saved;
+    } catch {}
+    return 'prompt';
+  });
+
+  const handleSelectTab = (tab: 'prompt' | 'image_to_motion') => {
+    setActiveTab(tab);
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_TAB, tab);
+    } catch {}
+  };
+
+  // Image to Motion Projects & Items
+  const [i2mProjects, setI2mProjects] = useState<ImageToMotionProject[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_I2M_PROJECTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [
+      { id: 'proj_default', name: 'Akun Microstock Utama', createdAt: Date.now() },
+      { id: 'proj_cyber', name: 'Project Cyber Neon', createdAt: Date.now() },
+    ];
+  });
+
+  const [activeI2mProjectId, setActiveI2mProjectId] = useState<string>(() => {
+    return i2mProjects[0]?.id || 'proj_default';
+  });
+
+  const [i2mItems, setI2mItems] = useState<ImageToMotionItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_I2M_ITEMS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
 
   // Trial Timer & Expiration Watcher
   useEffect(() => {
@@ -550,6 +602,120 @@ export default function App() {
     }
   };
 
+  // --- HANDLERS: IMAGE TO MOTION (AI VISION) ---
+  const saveI2mProjectsToStorage = (projects: ImageToMotionProject[]) => {
+    setI2mProjects(projects);
+    try {
+      localStorage.setItem(STORAGE_I2M_PROJECTS, JSON.stringify(projects));
+    } catch (e) {
+      console.error('Failed to save i2m projects', e);
+    }
+  };
+
+  const saveI2mItemsToStorage = (items: ImageToMotionItem[]) => {
+    setI2mItems(items);
+    try {
+      localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(items.slice(0, 150)));
+    } catch (e) {
+      console.error('Failed to save i2m items', e);
+    }
+  };
+
+  const handleCreateI2mProject = (name: string) => {
+    const newProject: ImageToMotionProject = {
+      id: 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(7),
+      name: name.trim(),
+      createdAt: Date.now(),
+    };
+    const updated = [newProject, ...i2mProjects];
+    saveI2mProjectsToStorage(updated);
+    setActiveI2mProjectId(newProject.id);
+    showToast(`Project "${name}" berhasil dibuat!`, 'success');
+  };
+
+  const handleUpdateI2mProject = (projectId: string, newName: string) => {
+    if (!newName.trim()) return;
+    const trimmed = newName.trim();
+    const updated = i2mProjects.map((p) => (p.id === projectId ? { ...p, name: trimmed } : p));
+    saveI2mProjectsToStorage(updated);
+    setI2mItems((prev) => {
+      const next = prev.map((item) =>
+        item.projectId === projectId ? { ...item, projectName: trimmed } : item
+      );
+      try {
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
+      } catch (e) {}
+      return next;
+    });
+    showToast(`Nama project berhasil diubah menjadi "${trimmed}"`, 'success');
+  };
+
+  const handleDeleteI2mProject = (projectId: string) => {
+    const projectToDelete = i2mProjects.find((p) => p.id === projectId);
+    const projName = projectToDelete ? projectToDelete.name : 'Project';
+    let updated = i2mProjects.filter((p) => p.id !== projectId);
+    if (updated.length === 0) {
+      const defaultProj: ImageToMotionProject = {
+        id: 'proj_' + Date.now(),
+        name: 'Akun Microstock Utama',
+        createdAt: Date.now(),
+      };
+      updated = [defaultProj];
+    }
+    saveI2mProjectsToStorage(updated);
+    if (activeI2mProjectId === projectId) {
+      setActiveI2mProjectId(updated[0].id);
+    }
+    setI2mItems((prev) => {
+      const next = prev.filter((item) => item.projectId !== projectId);
+      try {
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
+      } catch (e) {}
+      return next;
+    });
+    showToast(`Project "${projName}" berhasil dihapus`, 'info');
+  };
+
+  const handleAddI2mItems = (newItems: ImageToMotionItem[]) => {
+    const updated = [...newItems, ...i2mItems];
+    saveI2mItemsToStorage(updated);
+  };
+
+  const handleUpdateI2mItem = (itemId: string, updates: Partial<ImageToMotionItem>) => {
+    setI2mItems((prev) => {
+      const next = prev.map((item) => {
+        if (item.id === itemId) {
+          const updatedItem = { ...item, ...updates };
+          if (updates.animationResult) {
+            // Also save to global animations gallery
+            const alreadyExists = animations.some((a) => a.id === updates.animationResult!.id);
+            if (!alreadyExists) {
+              saveAnimationsToStorage([updates.animationResult, ...animations]);
+            }
+          }
+          return updatedItem;
+        }
+        return item;
+      });
+      try {
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  const handleDeleteI2mItem = (itemId: string) => {
+    const updated = i2mItems.filter((i) => i.id !== itemId);
+    saveI2mItemsToStorage(updated);
+    showToast('Gambar dihapus dari antrian', 'info');
+  };
+
+  const handleClearCompletedI2mItems = (projectId: string) => {
+    const updated = i2mItems.filter((i) => !(i.projectId === projectId && i.status === 'completed'));
+    saveI2mItemsToStorage(updated);
+    showToast('Antrian selesai berhasil dibersihkan', 'info');
+  };
+
   const latestAnimation = animations.length > 0 ? animations[0] : null;
 
   // --- LICENSE & TRIAL GATE CHECK ---
@@ -583,6 +749,8 @@ export default function App() {
         selectedModel={selectedModel}
         isTrialActive={isTrialActive && !isLicenseActive}
         trialRemainingText={formatRemainingTime(trialRemainingMs)}
+        activeTab={activeTab}
+        onSelectTab={handleSelectTab}
         onOpenLicenseModal={() => setIsUpgradeModalOpen(true)}
         onOpenApiModal={() => setIsApiModalOpen(true)}
         onOpenAutoPilotModal={() => setIsAutoPilotModalOpen(true)}
@@ -590,38 +758,92 @@ export default function App() {
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
       />
 
+      {/* Prominent Mobile & Tablet Navigation Switcher */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-3 pb-1 md:hidden w-full">
+        <div className="grid grid-cols-2 gap-2 bg-slate-950/90 p-1.5 rounded-2xl border border-gray-800">
+          <button
+            onClick={() => handleSelectTab('prompt')}
+            className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'prompt'
+                ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-md'
+                : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            <i className="fa-solid fa-sliders text-xs"></i>
+            <span>Prompt AI</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectTab('image_to_motion')}
+            className={`py-2 px-3 rounded-xl text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              activeTab === 'image_to_motion'
+                ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-lg'
+                : 'text-amber-300 hover:text-amber-100'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <i className="fa-solid fa-wand-magic-sparkles text-xs"></i>
+            <span>IMAGE TO MOTION</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-4 sm:py-6 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
-        {/* Left Panel: Workflow */}
-        <WorkflowSection
-          currentType={currentType}
-          onSelectType={setCurrentType}
-          nicheCategory={nicheCategory}
-          onSelectNiche={setNicheCategory}
-          visualStyle={visualStyle}
-          onSelectStyle={setVisualStyle}
-          colorMode={colorMode}
-          onSelectColorMode={setColorMode}
-          motionDynamics={motionDynamics}
-          onSelectMotionDynamics={setMotionDynamics}
-          neonGlow={neonGlow}
-          onToggleNeonGlow={setNeonGlow}
-          promptCount={promptCount}
-          onChangePromptCount={setPromptCount}
-          isGreenScreen={isGreenScreen}
-          onToggleGreenScreen={setIsGreenScreen}
-          keywordsText={keywordsText}
-          onChangeKeywordsText={setKeywordsText}
-          onGeneratePrompts={handleGeneratePrompts}
-          isGeneratingPrompts={isGeneratingPrompts}
-          generatedPrompts={generatedPrompts}
-          onUpdatePrompt={handleUpdatePrompt}
-          onDeletePrompt={handleDeletePrompt}
-          onGenerateAnimations={handleGenerateAnimations}
-          isGeneratingAnimations={isGeneratingAnimations}
-          onProcessManualPrompts={handleProcessManualPrompts}
-          showToast={showToast}
-        />
+      <main className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
+        {/* Left Panel: Workflow OR Image to Motion */}
+        {activeTab === 'prompt' ? (
+          <WorkflowSection
+            currentType={currentType}
+            onSelectType={setCurrentType}
+            nicheCategory={nicheCategory}
+            onSelectNiche={setNicheCategory}
+            visualStyle={visualStyle}
+            onSelectStyle={setVisualStyle}
+            colorMode={colorMode}
+            onSelectColorMode={setColorMode}
+            motionDynamics={motionDynamics}
+            onSelectMotionDynamics={setMotionDynamics}
+            neonGlow={neonGlow}
+            onToggleNeonGlow={setNeonGlow}
+            promptCount={promptCount}
+            onChangePromptCount={setPromptCount}
+            isGreenScreen={isGreenScreen}
+            onToggleGreenScreen={setIsGreenScreen}
+            keywordsText={keywordsText}
+            onChangeKeywordsText={setKeywordsText}
+            onGeneratePrompts={handleGeneratePrompts}
+            isGeneratingPrompts={isGeneratingPrompts}
+            generatedPrompts={generatedPrompts}
+            onUpdatePrompt={handleUpdatePrompt}
+            onDeletePrompt={handleDeletePrompt}
+            onGenerateAnimations={handleGenerateAnimations}
+            isGeneratingAnimations={isGeneratingAnimations}
+            onProcessManualPrompts={handleProcessManualPrompts}
+            showToast={showToast}
+          />
+        ) : (
+          <ImageToMotionSection
+            apiKeys={apiKeys}
+            selectedModel={selectedModel}
+            projects={i2mProjects}
+            activeProjectId={activeI2mProjectId}
+            onSelectProject={setActiveI2mProjectId}
+            onCreateProject={handleCreateI2mProject}
+            onUpdateProject={handleUpdateI2mProject}
+            onDeleteProject={handleDeleteI2mProject}
+            items={i2mItems}
+            onAddItems={handleAddI2mItems}
+            onUpdateItem={handleUpdateI2mItem}
+            onDeleteItem={handleDeleteI2mItem}
+            onClearCompletedItems={handleClearCompletedI2mItems}
+            onPreviewAnimation={(anim) => {
+              saveAnimationsToStorage([anim, ...animations.filter((a) => a.id !== anim.id)]);
+            }}
+            onOpenFullscreen={(item) => setFullscreenItem(item)}
+            showToast={showToast}
+            addLog={addLog}
+          />
+        )}
 
         {/* Right Panel: Console Log & Latest Preview */}
         <RightPanel

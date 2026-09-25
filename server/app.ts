@@ -23,10 +23,10 @@ export function getFastThinkingConfig(targetModel: string): any {
   if (targetModel.includes("2.5")) {
     return { thinkingBudget: 0 };
   }
-  if (targetModel.includes("3.1-flash-lite")) {
-    return { thinkingLevel: ThinkingLevel.MINIMAL };
+  if (targetModel.includes("3.1-flash-lite") || targetModel.includes("flash-lite")) {
+    return undefined;
   }
-  if (targetModel.includes("pro") || targetModel.includes("3.1")) {
+  if (targetModel.includes("pro")) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
   return undefined;
@@ -36,7 +36,7 @@ export function sanitizeModel(model?: string): string {
   if (!model) return "gemini-2.5-flash";
   const m = model.trim().toLowerCase();
   if (m.includes("2.5") || m === "gemini-2.5-flash") return "gemini-2.5-flash";
-  if (m.includes("3.1-flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
+  if (m.includes("3.1-flash-lite") || m.includes("flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
   if (m.includes("3.1-pro") || m.includes("pro")) return "gemini-3.1-pro-preview";
   if (m === "gemini-flash-latest") return "gemini-flash-latest";
   return "gemini-2.5-flash";
@@ -63,7 +63,7 @@ export async function generateContentWithFallback(
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 2
 ): Promise<{ response: any; usedModel: string }> {
-  const fallbackOrder = ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+  const fallbackOrder = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
   const candidateModels = [
     primaryModel,
     ...fallbackOrder.filter((m) => m !== primaryModel),
@@ -87,6 +87,24 @@ export async function generateContentWithFallback(
       } catch (err: any) {
         lastError = err;
         const msg = String(err?.message || "").toLowerCase();
+
+        // If error was caused by thinkingConfig or schema incompatibility, retry immediately without thinkingConfig
+        try {
+          const { contents, config } = generateParams(model);
+          if (config && config.thinkingConfig) {
+            const safeConfig = { ...config };
+            delete safeConfig.thinkingConfig;
+            const retryResp = await ai.models.generateContent({
+              model,
+              contents,
+              config: safeConfig,
+            });
+            return { response: retryResp, usedModel: model };
+          }
+        } catch {
+          // ignore and proceed
+        }
+
         const isQuota =
           msg.includes("quota") ||
           msg.includes("exceeded") ||
@@ -615,6 +633,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.65,
+        maxOutputTokens: 2048,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -645,7 +664,270 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     colorMode,
     motionDynamics,
     neonGlow,
-    html: cleanHTML
+    html: cleanHTML,
+    isGreenScreen,
+  };
+}
+
+// Logic for Image to Motion (AI Multimodal Vision)
+export async function handleImageToMotionLogic(body: any) {
+  const {
+    apiKey,
+    model,
+    imageBase64,
+    mimeType = "image/png",
+    fileName = "image.png",
+    projectName = "Default Project",
+    motionDynamics = "flow",
+    colorMode = "gradient",
+    neonGlow = true,
+    isGreenScreen = false,
+    customInstructions = "",
+  } = body;
+
+  if (!imageBase64) {
+    throw new Error("Data gambar (base64) wajib disertakan");
+  }
+
+  const ai = getClient(apiKey);
+  const targetModel = sanitizeModel(model);
+
+  // Clean base64 string and build exact data URL
+  let pureBase64 = String(imageBase64 || "");
+  if (pureBase64.includes(";base64,")) {
+    pureBase64 = pureBase64.split(";base64,")[1];
+  }
+  pureBase64 = pureBase64.trim();
+
+  const dataUrl = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:${mimeType || 'image/png'};base64,${pureBase64}`;
+
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+
+  let motionGuide = '';
+  if (motionDynamics === 'bounce') {
+    motionGuide = `
+PANDUAN GERAKAN BOUNCE & SPRING:
+- Transformasikan gambar dengan elastisitas membal:
+  const bounce = Math.abs(Math.sin(t * 3.5));
+  const squash = 1 + 0.22 * (1 - bounce);
+  const stretch = 1 / squash;
+  const offsetY = -Math.abs(Math.sin(t * 3.5)) * S * 0.35;
+  ctx.translate(cx, cy + offsetY);
+  ctx.scale(squash, stretch);`;
+  } else if (motionDynamics === 'orbital') {
+    motionGuide = `
+PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
+- Transformasikan gambar dengan kemiringan pseudo-3D dan orbit cincin partikel:
+  const tiltX = Math.sin(t * 1.5) * 0.12;
+  const tiltY = Math.cos(t * 1.8) * 0.15;
+  const floatZ = 1 + Math.sin(t * 2) * 0.08;
+  ctx.translate(cx, cy + Math.sin(t * 2) * 15);
+  ctx.rotate(tiltX);
+  ctx.scale(floatZ, floatZ);
+  // Gambar cincin orbit 3D melingkar di sekeliling gambar dengan kedalaman z`;
+  } else if (motionDynamics === 'morph') {
+    motionGuide = `
+PANDUAN GERAKAN KINETIC MORPH & PULSE:
+- Buat gambar berdenyut ritmis seperti detak jantung / breathing energy:
+  const pulse = 1 + Math.sin(t * 3) * 0.08 + Math.sin(t * 6) * 0.03;
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);
+  // Tambahkan gelombang aura konsentris yang memancar keluar dari gambar`;
+  } else if (motionDynamics === 'cyber') {
+    motionGuide = `
+PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
+- Gerakan stepped presisi dan laser scanner melintasi gambar:
+  const stepRot = Math.floor(Math.sin(t * 2) * 4) * 0.03;
+  ctx.translate(cx, cy);
+  ctx.rotate(stepRot);
+  // Tambahkan kurung bidik HUD [ ], laser scanner line naik-turun melintasi gambar, dan dial radar berputar`;
+  } else if (motionDynamics === 'mechanical') {
+    motionGuide = `
+PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
+- Objek berosilasi terkalibrasi dengan roda gigi dan jarum penunjuk yang berputar:
+  const rot = Math.sin(t * 2) * 0.18;
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  // Tambahkan aksen gear intermeshing dan partikel percikan presisi`;
+  } else {
+    motionGuide = `
+PANDUAN GERAKAN ORGANIC FLOW & WAVES:
+- Objek mengapung lembut seperti di air atau udara:
+  const floatY = Math.sin(t * 1.8) * 16;
+  const floatX = Math.cos(t * 1.2) * 10;
+  const floatRot = Math.sin(t * 1.4) * 0.06;
+  ctx.translate(cx + floatX, cy + floatY);
+  ctx.rotate(floatRot);
+  // Tambahkan aliran partikel bercahaya mengalir lembut di sekitar gambar`;
+  }
+
+  const visionPrompt = `Anda adalah Master Computer Vision & Lead HTML5 Motion Designer Spesialis Video Asset & Microstock.
+TUGAS: Analisa gambar terlampir (warna dominan HEX, aksen, glow, siluet), lalu lengkapi logika Canvas 2D untuk menggerakkan gambar ini secara 60 FPS (${motionDynamics.toUpperCase()}) dan tambahkan efek partikel/glow ambient di sekelilingnya.
+
+Objek Image asli (\`img\`) sudah dimuat di canvas. DILARANG MENYALIN BASE64 GAMBAR!
+${neonGlow ? '- Terapkan neon glow (ctx.shadowBlur, ctx.shadowColor = accentColor).' : '- Terapkan bayangan bersih tajam.'}
+${customInstructions ? `- Instruksi tambahan: ${customInstructions}` : ''}
+${motionGuide}
+
+Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "__IMG_DATA__";\` tanpa penjelas markdown:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = "__IMG_DATA__";
+  let imgLoaded = false;
+  img.onload = () => { imgLoaded = true; };
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Inisialisasi partikel / efek warna HEX dari gambar
+
+  function animate(time) {
+    const t = time * 0.001;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = ${clearFill};
+    ctx.fillRect(0, 0, w, h);
+
+    if (imgLoaded && img.width > 0 && img.height > 0) {
+      const aspect = img.width / img.height;
+      let drawW = aspect >= 1 ? S * 2 : (S * 2) * aspect;
+      let drawH = aspect >= 1 ? (S * 2) / aspect : S * 2;
+
+      // Logika transformasi motion 60 FPS & efek visual
+    }
+
+    requestAnimationFrame(animate);
+  }
+  animate(0);
+</script>
+</body>
+</html>`;
+
+  const { response } = await generateContentWithFallback(
+    ai,
+    targetModel,
+    (currentModel) => {
+      const animConfig: any = {
+        temperature: 0.4,
+        maxOutputTokens: 2048,
+      };
+      const animThinking = getFastThinkingConfig(currentModel);
+      if (animThinking) {
+        animConfig.thinkingConfig = animThinking;
+      }
+      return {
+        contents: [
+          {
+            inlineData: {
+              data: pureBase64,
+              mimeType: mimeType || "image/png",
+            },
+          },
+          {
+            text: visionPrompt,
+          },
+        ],
+        config: animConfig,
+      };
+    }
+  );
+
+  let rawText = response.text || "";
+  let cleanHTML = extractHTMLFromMarkdown(rawText);
+
+  // Re-inject exact base64 dataUrl into placeholder or img.src
+  if (cleanHTML.includes('__IMG_DATA__')) {
+    cleanHTML = cleanHTML.replace('__IMG_DATA__', dataUrl);
+  } else if (cleanHTML.includes('img.src')) {
+    cleanHTML = cleanHTML.replace(/img\.src\s*=\s*['"][^'"]*['"]/, `img.src = "${dataUrl}"`);
+  } else {
+    // If AI only returned script body
+    cleanHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = "${dataUrl}";
+  let imgLoaded = false;
+  img.onload = () => { imgLoaded = true; };
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  ${cleanHTML.replace(/<[^>]*>/g, '')}
+</script>
+</body>
+</html>`;
+  }
+
+  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+      cleanHTML = extractHTMLFromMarkdown(rawText);
+    } else {
+      throw new Error('Kode dari AI terpotong sebelum selesai');
+    }
+  }
+
+  const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
+  return {
+    id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
+    title: `Motion: ${cleanTitle}`,
+    type: 'icon',
+    style: colorMode,
+    subCategory: 'image-to-motion',
+    colorMode,
+    motionDynamics,
+    neonGlow,
+    html: cleanHTML,
+    isGreenScreen,
+    projectName,
+    fileName,
   };
 }
 
@@ -732,6 +1014,20 @@ export function createApiRouter(): Router {
   router.post("/gemini/generate-animation", generateAnimationHandler);
   router.post("/api/gemini/generate-animation", generateAnimationHandler);
 
+  // Generate Image to Motion (Special AI Vision)
+  const imageToMotionHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const result = await handleImageToMotionLogic(body);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[ImageToMotion] Error:", err);
+      res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menganalisa gambar dan membuat animasi" });
+    }
+  };
+  router.post("/gemini/image-to-motion", imageToMotionHandler);
+  router.post("/api/gemini/image-to-motion", imageToMotionHandler);
+
   // Server Trial Registry
   const serverTrialStore = new Map<string, { startedAt: number; expiresAt: number; used: boolean }>();
 
@@ -817,8 +1113,8 @@ export function createExpressApp() {
     next();
   });
 
-  app.use(express.json({ limit: "10mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+  app.use(express.json({ limit: "50mb" }));
+  app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
   const apiRouter = createApiRouter();
   app.use("/api", apiRouter);

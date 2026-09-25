@@ -8,6 +8,8 @@ interface HeaderProps {
   selectedModel?: GeminiModel;
   isTrialActive?: boolean;
   trialRemainingText?: string;
+  activeTab?: 'prompt' | 'image_to_motion';
+  onSelectTab?: (tab: 'prompt' | 'image_to_motion') => void;
   onOpenLicenseModal?: () => void;
   onOpenApiModal: () => void;
   onOpenAutoPilotModal: () => void;
@@ -22,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   selectedModel = 'gemini-2.5-flash',
   isTrialActive = false,
   trialRemainingText = '',
+  activeTab = 'prompt',
+  onSelectTab,
   onOpenLicenseModal,
   onOpenApiModal,
   onOpenAutoPilotModal,
@@ -74,6 +78,39 @@ export const Header: React.FC<HeaderProps> = ({
             <p className="text-[10px] text-gray-400 font-medium hidden sm:block">Motion Graphic AI Optimation</p>
           </div>
         </div>
+
+        {/* Center: Primary Mode Switcher (Highlighting Image to Motion) */}
+        {onSelectTab && (
+          <div className="hidden md:flex items-center bg-slate-950/80 p-1 rounded-2xl border border-gray-800/80 shadow-inner">
+            <button
+              onClick={() => onSelectTab('prompt')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'prompt'
+                  ? 'bg-gradient-to-r from-sky-600 to-indigo-600 text-white shadow-md shadow-sky-500/20'
+                  : 'text-gray-400 hover:text-gray-200 hover:bg-slate-900'
+              }`}
+            >
+              <i className="fa-solid fa-sliders text-xs"></i>
+              <span>Prompt AI</span>
+            </button>
+
+            <button
+              onClick={() => onSelectTab('image_to_motion')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer relative ${
+                activeTab === 'image_to_motion'
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-lg shadow-amber-500/30'
+                  : 'text-amber-300 hover:text-amber-100 hover:bg-amber-500/10'
+              }`}
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+              <i className="fa-solid fa-wand-magic-sparkles text-xs"></i>
+              <span>IMAGE TO MOTION</span>
+              <span className="text-[9px] bg-slate-950 text-amber-300 px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider ml-0.5">
+                Special
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Action Controls - Compressed and optimized */}
         <div className="flex items-center space-x-1.5 sm:space-x-2.5">

@@ -284,7 +284,7 @@ export async function testAllApiKeys(
   return testAllApiKeysSequential(keys);
 }
 
-// Direct client fallback for prompt generation
+// Direct client fallback for prompt generation with multi-model fallback
 async function generatePromptsDirect(
   apiKey: string,
   model: string,
@@ -298,7 +298,14 @@ async function generatePromptsDirect(
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
 ): Promise<string[]> {
-  const targetModel = sanitizeModel(model);
+  const primaryModel = sanitizeModel(model);
+  const candidateModels = [
+    primaryModel,
+    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+      (m) => m !== primaryModel
+    ),
+  ];
+
   let typeInstruction = '';
   if (type === 'icon') {
     typeInstruction =
@@ -361,59 +368,64 @@ Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 Requirement: Focus strictly on the central geometric object, color palette, and specific motion dynamics.
 Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(
-    apiKey
-  )}`;
+  let lastDirectError: any = null;
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: promptContent }] }],
-      generationConfig: {
-        temperature: 0.75,
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
+  for (const currentModel of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
+        apiKey
+      )}`;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-  }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: promptContent }] }],
+          generationConfig: {
+            temperature: 0.75,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
 
-  const data = await res.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  let prompts: string[] = [];
-
-  try {
-    const parsed = JSON.parse(rawText);
-    if (Array.isArray(parsed)) {
-      prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
-    }
-  } catch {
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      try {
-        prompts = JSON.parse(jsonMatch[0]);
-      } catch {
-        prompts = rawText
-          .split('\n')
-          .map((p: string) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-          .filter((p: string) => p.length > 4);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
       }
+
+      const data = await res.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      let prompts: string[] = [];
+
+      try {
+        const parsed = JSON.parse(rawText);
+        if (Array.isArray(parsed)) {
+          prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
+        }
+      } catch {
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          try {
+            prompts = JSON.parse(jsonMatch[0]);
+          } catch {
+            prompts = rawText
+              .split('\n')
+              .map((p: string) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
+              .filter((p: string) => p.length > 4);
+          }
+        }
+      }
+
+      if (prompts.length > 0) {
+        return prompts.slice(0, count);
+      }
+    } catch (err: any) {
+      lastDirectError = err;
+      continue;
     }
   }
 
-  if (prompts.length === 0) {
-    prompts = [
-      `${neonGlow ? 'Glowing neon' : 'Crisp flat'} ${subCategory} ${type} with ${motionDynamics} motion`,
-      `Dynamic ${style} ${subCategory} ${colorMode} animation loop`,
-      `Geometric ${subCategory} motion with ${motionDynamics} dynamics`,
-    ];
-  }
-
-  return prompts.slice(0, count);
+  throw lastDirectError || new Error('Gagal menghasilkan prompt dari model Google Gemini');
 }
 
 // Generate Prompts with Auto Fallback
@@ -658,51 +670,71 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 
 Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(
-    apiKey
-  )}`;
+  const primaryModel = sanitizeModel(model);
+  const candidateModels = [
+    primaryModel,
+    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+      (m) => m !== primaryModel
+    ),
+  ];
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: systemPrompt }] }],
-      generationConfig: {
-        temperature: 0.65,
-      },
-    }),
-  });
+  let lastDirectError: any = null;
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-  }
+  for (const currentModel of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
+        apiKey
+      )}`;
 
-  const data = await res.json();
-  let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  let cleanHTML = extractHTML(rawText);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: systemPrompt }] }],
+          generationConfig: {
+            temperature: 0.65,
+            maxOutputTokens: 2048,
+          },
+        }),
+      });
 
-  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-      cleanHTML = extractHTML(rawText);
-    } else {
-      throw new Error('Kode dari AI terpotong sebelum selesai');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
+      }
+
+      const data = await res.json();
+      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      let cleanHTML = extractHTML(rawText);
+
+      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+          cleanHTML = extractHTML(rawText);
+        } else {
+          throw new Error('Kode dari AI terpotong sebelum selesai');
+        }
+      }
+
+      return {
+        id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+        title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+        type,
+        style,
+        subCategory,
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        html: cleanHTML,
+        isGreenScreen,
+      };
+    } catch (err: any) {
+      lastDirectError = err;
+      continue;
     }
   }
 
-  return {
-    id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
-    title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
-    type,
-    style,
-    subCategory,
-    colorMode,
-    motionDynamics,
-    neonGlow,
-    html: cleanHTML,
-    isGreenScreen,
-  };
+  throw lastDirectError || new Error('Gagal menghasilkan animasi Canvas');
 }
 
 // Generate Single Animation Code with Multi-Level Fallback
@@ -796,4 +828,362 @@ export async function generateSingleAnimationCode(
   }
 
   throw new Error(`Gagal memproses setelah ${maxRetries} percobaan: ${lastError?.message || 'Unknown error'}`);
+}
+
+// Direct multimodal image to motion call with model fallback
+async function generateImageToMotionDirect(
+  apiKey: string,
+  model: GeminiModel,
+  imageBase64: string,
+  mimeType: string,
+  fileName: string,
+  projectName: string,
+  motionDynamics: MotionDynamics = 'flow',
+  colorMode: ColorMode = 'gradient',
+  neonGlow = true,
+  isGreenScreen = false,
+  customInstructions = ''
+): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
+  let pureBase64 = imageBase64;
+  if (pureBase64.includes(';base64,')) {
+    pureBase64 = pureBase64.split(';base64,')[1];
+  }
+  pureBase64 = pureBase64.trim();
+
+  const dataUrl = imageBase64.startsWith('data:')
+    ? imageBase64
+    : `data:${mimeType || 'image/png'};base64,${pureBase64}`;
+
+  const primaryModel = sanitizeModel(model);
+  const candidateModels = [
+    primaryModel,
+    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+      (m) => m !== primaryModel
+    ),
+  ];
+
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+
+  let motionGuide = '';
+  if (motionDynamics === 'bounce') {
+    motionGuide = `
+PANDUAN GERAKAN BOUNCE & SPRING:
+- Transformasikan gambar dengan elastisitas membal:
+  const bounce = Math.abs(Math.sin(t * 3.5));
+  const squash = 1 + 0.22 * (1 - bounce);
+  const stretch = 1 / squash;
+  const offsetY = -Math.abs(Math.sin(t * 3.5)) * S * 0.35;
+  ctx.translate(cx, cy + offsetY);
+  ctx.scale(squash, stretch);`;
+  } else if (motionDynamics === 'orbital') {
+    motionGuide = `
+PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
+- Transformasikan gambar dengan kemiringan pseudo-3D dan orbit cincin partikel:
+  const tiltX = Math.sin(t * 1.5) * 0.12;
+  const tiltY = Math.cos(t * 1.8) * 0.15;
+  const floatZ = 1 + Math.sin(t * 2) * 0.08;
+  ctx.translate(cx, cy + Math.sin(t * 2) * 15);
+  ctx.rotate(tiltX);
+  ctx.scale(floatZ, floatZ);`;
+  } else if (motionDynamics === 'morph') {
+    motionGuide = `
+PANDUAN GERAKAN KINETIC MORPH & PULSE:
+- Buat gambar berdenyut ritmis seperti detak jantung / breathing energy:
+  const pulse = 1 + Math.sin(t * 3) * 0.08 + Math.sin(t * 6) * 0.03;
+  ctx.translate(cx, cy);
+  ctx.scale(pulse, pulse);`;
+  } else if (motionDynamics === 'cyber') {
+    motionGuide = `
+PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
+- Gerakan stepped presisi dan laser scanner melintasi gambar:
+  const stepRot = Math.floor(Math.sin(t * 2) * 4) * 0.03;
+  ctx.translate(cx, cy);
+  ctx.rotate(stepRot);`;
+  } else if (motionDynamics === 'mechanical') {
+    motionGuide = `
+PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
+- Objek berosilasi terkalibrasi dengan roda gigi dan jarum penunjuk yang berputar:
+  const rot = Math.sin(t * 2) * 0.18;
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);`;
+  } else {
+    motionGuide = `
+PANDUAN GERAKAN ORGANIC FLOW & WAVES:
+- Objek mengapung lembut seperti di air atau udara:
+  const floatY = Math.sin(t * 1.8) * 16;
+  const floatX = Math.cos(t * 1.2) * 10;
+  const floatRot = Math.sin(t * 1.4) * 0.06;
+  ctx.translate(cx + floatX, cy + floatY);
+  ctx.rotate(floatRot);`;
+  }
+
+  const visionPrompt = `Anda adalah Master Computer Vision & Lead HTML5 Motion Designer Spesialis Video Asset & Microstock.
+TUGAS: Analisa gambar terlampir (warna dominan HEX, aksen, glow, siluet), lalu lengkapi logika Canvas 2D untuk menggerakkan gambar ini secara 60 FPS (${motionDynamics.toUpperCase()}) dan tambahkan efek partikel/glow ambient di sekelilingnya.
+
+Objek Image asli (\`img\`) sudah dimuat di canvas. DILARANG MENYALIN BASE64 GAMBAR!
+${neonGlow ? '- Terapkan neon glow (ctx.shadowBlur, ctx.shadowColor = accentColor).' : '- Terapkan bayangan bersih tajam.'}
+${customInstructions ? `- Instruksi tambahan: ${customInstructions}` : ''}
+${motionGuide}
+
+Lengkapi dan outputkan HANYA file HTML lengkap dengan placeholder \`img.src = "__IMG_DATA__";\` tanpa penjelas markdown:
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = "__IMG_DATA__";
+  let imgLoaded = false;
+  img.onload = () => { imgLoaded = true; };
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Inisialisasi partikel / efek warna HEX dari gambar
+
+  function animate(time) {
+    const t = time * 0.001;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = ${clearFill};
+    ctx.fillRect(0, 0, w, h);
+
+    if (imgLoaded && img.width > 0 && img.height > 0) {
+      const aspect = img.width / img.height;
+      let drawW = aspect >= 1 ? S * 2 : (S * 2) * aspect;
+      let drawH = aspect >= 1 ? (S * 2) / aspect : S * 2;
+
+      // Logika transformasi motion 60 FPS & efek visual
+    }
+
+    requestAnimationFrame(animate);
+  }
+  animate(0);
+</script>
+</body>
+</html>`;
+
+  let lastDirectError: any = null;
+
+  for (const currentModel of candidateModels) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
+        apiKey
+      )}`;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inline_data: {
+                    mime_type: mimeType || 'image/png',
+                    data: pureBase64,
+                  },
+                },
+                {
+                  text: visionPrompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.4,
+            maxOutputTokens: 2048,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
+      }
+
+      const data = await res.json();
+      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      let cleanHTML = extractHTML(rawText);
+
+      // Re-inject exact base64 dataUrl into placeholder or img.src
+      if (cleanHTML.includes('__IMG_DATA__')) {
+        cleanHTML = cleanHTML.replace('__IMG_DATA__', dataUrl);
+      } else if (cleanHTML.includes('img.src')) {
+        cleanHTML = cleanHTML.replace(/img\.src\s*=\s*['"][^'"]*['"]/, `img.src = "${dataUrl}"`);
+      } else {
+        cleanHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = "${dataUrl}";
+  let imgLoaded = false;
+  img.onload = () => { imgLoaded = true; };
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = Math.min(w, h) * 0.44;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  ${cleanHTML.replace(/<[^>]*>/g, '')}
+</script>
+</body>
+</html>`;
+      }
+
+      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+          cleanHTML = extractHTML(rawText);
+        } else {
+          throw new Error('Kode dari AI terpotong sebelum selesai');
+        }
+      }
+
+      const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+
+      return {
+        id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
+        title: `Motion: ${cleanTitle}`,
+        type: 'icon',
+        style: colorMode,
+        subCategory: 'image-to-motion',
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        html: cleanHTML,
+        isGreenScreen,
+        projectName,
+        fileName,
+      };
+    } catch (err: any) {
+      lastDirectError = err;
+      continue;
+    }
+  }
+
+  throw lastDirectError || new Error('Gagal menganalisa gambar dengan model vision');
+}
+
+// High-level Image To Motion Generator with Multi-Level Fallback & Auto-Retry
+export async function generateImageToMotion(
+  apiKeys: string[],
+  model: GeminiModel,
+  params: {
+    imageBase64: string;
+    mimeType: string;
+    fileName: string;
+    projectName: string;
+    motionDynamics?: MotionDynamics;
+    colorMode?: ColorMode;
+    neonGlow?: boolean;
+    isGreenScreen?: boolean;
+    customInstructions?: string;
+  },
+  onRetry?: (attempt: number, max: number, err: string) => void,
+  maxRetries = 3
+): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean; projectName?: string; fileName?: string }> {
+  let lastError: any = null;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const apiKey = getRotatedKey(apiKeys);
+
+      // Direct client call
+      if (apiKey) {
+        try {
+          return await generateImageToMotionDirect(
+            apiKey,
+            model,
+            params.imageBase64,
+            params.mimeType,
+            params.fileName,
+            params.projectName,
+            params.motionDynamics || 'flow',
+            params.colorMode || 'gradient',
+            params.neonGlow ?? true,
+            params.isGreenScreen ?? false,
+            params.customInstructions || ''
+          );
+        } catch (directErr: any) {
+          console.warn('Direct Image-To-Motion failed, trying server endpoint fallback...', directErr);
+        }
+      }
+
+      // Server proxy call
+      const res = await fetch('/api/gemini/image-to-motion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          model: model || 'gemini-2.5-flash',
+          imageBase64: params.imageBase64,
+          mimeType: params.mimeType,
+          fileName: params.fileName,
+          projectName: params.projectName,
+          motionDynamics: params.motionDynamics || 'flow',
+          colorMode: params.colorMode || 'gradient',
+          neonGlow: params.neonGlow ?? true,
+          isGreenScreen: params.isGreenScreen ?? false,
+          customInstructions: params.customInstructions || '',
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `HTTP Error ${res.status}`);
+      }
+
+      const data = await res.json();
+      if (!data.html || data.html.trim().length === 0) {
+        throw new Error('AI mengembalikan kode kosong.');
+      }
+
+      return data;
+    } catch (err: any) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        if (onRetry) onRetry(attempt, maxRetries, err.message);
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    }
+  }
+
+  throw new Error(`Gagal memproses gambar setelah ${maxRetries} percobaan: ${lastError?.message || 'Unknown error'}`);
 }

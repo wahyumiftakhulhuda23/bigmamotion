@@ -93,3 +93,32 @@ export interface ApiKeyTestResult {
 }
 
 export type GeminiModel = 'gemini-2.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview';
+
+export interface ImageToMotionItem {
+  id: string;
+  projectId: string;
+  projectName: string;
+  fileName: string;
+  fileSize?: string;
+  imagePreviewUrl: string; // base64 or blob URL
+  imageBase64: string; // pure base64 string
+  mimeType: string;
+  status: 'pending' | 'analyzing' | 'generating' | 'completed' | 'error';
+  progress?: number;
+  detectedSubject?: string;
+  motionDynamics: MotionDynamics;
+  colorMode: ColorMode;
+  neonGlow: boolean;
+  isGreenScreen: boolean;
+  customInstructions?: string;
+  animationResult?: AnimationItem;
+  error?: string;
+  createdAt: number;
+}
+
+export interface ImageToMotionProject {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: number;
+}
