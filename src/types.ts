@@ -133,3 +133,24 @@ export interface ImageToMotionProject {
   description?: string;
   createdAt: number;
 }
+
+export interface ReferenceImageUpload {
+  id: string;
+  fileName: string;
+  fileSize: string;
+  previewUrl: string;
+  imageBase64: string;
+  mimeType: string;
+}
+
+export interface ImageToMotionAutoPilotAccount {
+  id: string;
+  projectId?: string;
+  name: string;
+  motionDynamics: MotionDynamics;
+  colorMode: ColorMode;
+  neonGlow: boolean;
+  isGreenScreen: boolean;
+  customInstructions: string;
+  referenceImages: ReferenceImageUpload[];
+}

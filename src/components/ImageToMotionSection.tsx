@@ -6,9 +6,11 @@ import {
   ColorMode,
   AnimationItem,
   GeminiModel,
+  ImageToMotionAutoPilotAccount,
 } from '../types';
 import { generateImageToMotion } from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
+import { ImageToMotionAutoPilotModal } from './ImageToMotionAutoPilotModal';
 import JSZip from 'jszip';
 
 export interface AutoPilotProgressState {
@@ -44,6 +46,8 @@ interface ImageToMotionSectionProps {
   onOpenFullscreen: (item: AnimationItem) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
   addLog: (text: string, type?: 'info' | 'success' | 'error' | 'warn' | 'cyan' | 'green') => void;
+  isExternalAutoPilotModalOpen?: boolean;
+  onCloseExternalAutoPilotModal?: () => void;
 }
 
 export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
@@ -64,6 +68,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   onOpenFullscreen,
   showToast,
   addLog,
+  isExternalAutoPilotModalOpen = false,
+  onCloseExternalAutoPilotModal,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -78,6 +84,15 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [autoPilotStatus, setAutoPilotStatus] = useState<AutoPilotProgressState | null>(null);
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null);
   const [queueViewMode, setQueueViewMode] = useState<'current_folder' | 'all_folders'>('current_folder');
+  const [internalAutoPilotModalOpen, setInternalAutoPilotModalOpen] = useState(false);
+
+  const isAutoPilotModalOpen = isExternalAutoPilotModalOpen || internalAutoPilotModalOpen;
+  const handleCloseAutoPilotModal = () => {
+    setInternalAutoPilotModalOpen(false);
+    if (onCloseExternalAutoPilotModal) {
+      onCloseExternalAutoPilotModal();
+    }
+  };
 
   // Global settings for newly uploaded batch
   const [batchMotionDynamics, setBatchMotionDynamics] = useState<MotionDynamics>('flow');
@@ -610,6 +625,67 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     }
   };
 
+  // Auto Pilot Multi-Account Reference Image Runner
+  const handleStartAutoPilotMultiAccount = async (incomingAccounts: ImageToMotionAutoPilotAccount[]) => {
+    const newItemsToQueue: ImageToMotionItem[] = [];
+
+    // Ensure all accounts have a project in projects list and build queue items
+    incomingAccounts.forEach((acc) => {
+      if (acc.referenceImages.length === 0) return;
+
+      let targetProject = projectsRef.current.find(
+        (p) => p.id === acc.projectId || p.name.trim().toLowerCase() === acc.name.trim().toLowerCase()
+      );
+
+      let targetProjectId = targetProject?.id;
+      if (!targetProject) {
+        targetProjectId = 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+        onCreateProject(acc.name.trim());
+      }
+
+      acc.referenceImages.forEach((img) => {
+        newItemsToQueue.push({
+          id: 'i2m_item_' + Date.now() + '_' + Math.random().toString(36).substring(7),
+          projectId: targetProjectId || acc.projectId || activeProject.id,
+          projectName: acc.name.trim(),
+          fileName: img.fileName,
+          fileSize: img.fileSize,
+          imagePreviewUrl: img.previewUrl,
+          imageBase64: img.imageBase64,
+          mimeType: img.mimeType,
+          status: 'pending',
+          progress: 0,
+          motionDynamics: acc.motionDynamics,
+          colorMode: acc.colorMode,
+          neonGlow: acc.neonGlow,
+          isGreenScreen: acc.isGreenScreen,
+          customInstructions: acc.customInstructions,
+          createdAt: Date.now(),
+        });
+      });
+    });
+
+    if (newItemsToQueue.length === 0) {
+      showToast('Tidak ada gambar referensi yang dipilih untuk diproses.', 'warn');
+      return;
+    }
+
+    onAddItems(newItemsToQueue);
+    showToast(
+      `🚀 Berhasil memuat ${newItemsToQueue.length} gambar referensi dari multi-akun ke antrian! Memulai Auto Pilot...`,
+      'success'
+    );
+    addLog(
+      `🚀 [Auto Pilot Multi-Akun] Memuat ${newItemsToQueue.length} gambar referensi dari ${incomingAccounts.length} akun.`,
+      'cyan'
+    );
+
+    // Wait slightly for state sync, then trigger sequential Auto Pilot execution
+    setTimeout(() => {
+      handleStartAutoPilotAll();
+    }, 350);
+  };
+
   const handlePauseAutoPilot = () => {
     const nextPaused = !autoPilotPaused;
     setAutoPilotPaused(nextPaused);
@@ -825,6 +901,17 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+            {/* Auto Pilot Multi-Account Modal Trigger Button */}
+            <button
+              type="button"
+              onClick={() => setInternalAutoPilotModalOpen(true)}
+              className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/25 to-yellow-500/25 hover:from-amber-500/40 hover:to-yellow-500/40 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
+              title="Buka Auto Pilot Multi-Akun (Drag & drop referensi gambar untuk banyak akun)"
+            >
+              <i className="fa-solid fa-robot text-amber-400 text-xs animate-pulse"></i>
+              <span>Auto Pilot Multi-Akun</span>
+            </button>
+
             {/* Quick Add Project Button */}
             <button
               type="button"
@@ -1097,6 +1184,17 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
           {/* Trigger Buttons */}
           <div className="flex items-center gap-2 shrink-0">
+            {/* Auto Pilot Multi-Account Modal Config Trigger */}
+            <button
+              type="button"
+              onClick={() => setInternalAutoPilotModalOpen(true)}
+              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
+              title="Buka konfigurasi Auto Pilot Multi-Akun & Drag Drop Referensi Gambar"
+            >
+              <i className="fa-solid fa-robot text-xs text-amber-400"></i>
+              <span>Multi-Akun</span>
+            </button>
+
             {!isAutoPilotRunning ? (
               <>
                 {/* Primary: Auto Pilot All Folders */}
@@ -2097,6 +2195,16 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           </div>
         </div>
       )}
+
+      {/* MODAL: IMAGE TO MOTION AUTO PILOT (MULTI-ACCOUNT & REFERENCE IMAGES DRAG & DROP) */}
+      <ImageToMotionAutoPilotModal
+        isOpen={isAutoPilotModalOpen}
+        projects={projects}
+        onClose={handleCloseAutoPilotModal}
+        onStartAutoPilot={handleStartAutoPilotMultiAccount}
+        isAutoPilotRunning={isAutoPilotRunning}
+        showToast={showToast}
+      />
     </section>
   );
 };

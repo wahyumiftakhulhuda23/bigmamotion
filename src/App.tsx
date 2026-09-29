@@ -164,6 +164,7 @@ export default function App() {
   // Modals
   const [isApiModalOpen, setIsApiModalOpen] = useState<boolean>(false);
   const [isAutoPilotModalOpen, setIsAutoPilotModalOpen] = useState<boolean>(false);
+  const [isI2mAutoPilotModalOpen, setIsI2mAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isVideoConverterModalOpen, setIsVideoConverterModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
@@ -753,7 +754,13 @@ export default function App() {
         onSelectTab={handleSelectTab}
         onOpenLicenseModal={() => setIsUpgradeModalOpen(true)}
         onOpenApiModal={() => setIsApiModalOpen(true)}
-        onOpenAutoPilotModal={() => setIsAutoPilotModalOpen(true)}
+        onOpenAutoPilotModal={() => {
+          if (activeTab === 'image_to_motion') {
+            setIsI2mAutoPilotModalOpen(true);
+          } else {
+            setIsAutoPilotModalOpen(true);
+          }
+        }}
         onOpenVideoConverterModal={() => setIsVideoConverterModalOpen(true)}
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
       />
@@ -842,6 +849,8 @@ export default function App() {
             onOpenFullscreen={(item) => setFullscreenItem(item)}
             showToast={showToast}
             addLog={addLog}
+            isExternalAutoPilotModalOpen={isI2mAutoPilotModalOpen}
+            onCloseExternalAutoPilotModal={() => setIsI2mAutoPilotModalOpen(false)}
           />
         )}
 
