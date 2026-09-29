@@ -1,28 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   ImageToMotionItem,
-  ImageToMotionProject,
   MotionDynamics,
   ColorMode,
   AnimationItem,
   GeminiModel,
-  ImageToMotionAutoPilotAccount,
 } from '../types';
 import { generateImageToMotion } from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
-import { ImageToMotionAutoPilotModal } from './ImageToMotionAutoPilotModal';
 import JSZip from 'jszip';
 
 export interface AutoPilotProgressState {
-  mode: 'all_folders' | 'current_folder';
-  totalFolders: number;
-  currentFolderIndex: number; // 1-based
-  currentFolderId: string;
-  currentFolderName: string;
-  totalInCurrentFolder: number;
-  currentItemIndexInFolder: number; // 1-based
   totalItemsOverall: number;
   completedItemsOverall: number;
+  currentItemIndex: number; // 1-based
   currentFileName: string;
   currentStageText: string;
   progressPercent: number;
@@ -31,68 +22,39 @@ export interface AutoPilotProgressState {
 interface ImageToMotionSectionProps {
   apiKeys: string[];
   selectedModel: GeminiModel;
-  projects: ImageToMotionProject[];
-  activeProjectId: string;
-  onSelectProject: (projectId: string) => void;
-  onCreateProject: (name: string) => void;
-  onUpdateProject?: (projectId: string, newName: string) => void;
-  onDeleteProject: (projectId: string) => void;
   items: ImageToMotionItem[];
   onAddItems: (newItems: ImageToMotionItem[]) => void;
   onUpdateItem: (itemId: string, updates: Partial<ImageToMotionItem>) => void;
   onDeleteItem: (itemId: string) => void;
-  onClearCompletedItems: (projectId: string) => void;
+  onClearAllItems?: () => void;
+  onClearCompletedItems?: () => void;
+  onAddAnimation: (item: AnimationItem) => void;
   onPreviewAnimation: (item: AnimationItem) => void;
   onOpenFullscreen: (item: AnimationItem) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
   addLog: (text: string, type?: 'info' | 'success' | 'error' | 'warn' | 'cyan' | 'green') => void;
-  isExternalAutoPilotModalOpen?: boolean;
-  onCloseExternalAutoPilotModal?: () => void;
 }
 
 export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   apiKeys,
   selectedModel,
-  projects,
-  activeProjectId,
-  onSelectProject,
-  onCreateProject,
-  onUpdateProject,
-  onDeleteProject,
   items,
   onAddItems,
   onUpdateItem,
   onDeleteItem,
+  onClearAllItems,
   onClearCompletedItems,
+  onAddAnimation,
   onPreviewAnimation,
   onOpenFullscreen,
   showToast,
   addLog,
-  isExternalAutoPilotModalOpen = false,
-  onCloseExternalAutoPilotModal,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [newProjectName, setNewProjectName] = useState('');
-  const [showAddProjectModal, setShowAddProjectModal] = useState(false);
-  const [showProjectManagerModal, setShowProjectManagerModal] = useState(false);
-  const [managerNewProjectName, setManagerNewProjectName] = useState('');
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState('');
-  const [projectToDelete, setProjectToDelete] = useState<ImageToMotionProject | null>(null);
   const [isAutoPilotRunning, setIsAutoPilotRunning] = useState(false);
   const [autoPilotPaused, setAutoPilotPaused] = useState(false);
   const [autoPilotStatus, setAutoPilotStatus] = useState<AutoPilotProgressState | null>(null);
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null);
-  const [queueViewMode, setQueueViewMode] = useState<'current_folder' | 'all_folders'>('current_folder');
-  const [internalAutoPilotModalOpen, setInternalAutoPilotModalOpen] = useState(false);
-
-  const isAutoPilotModalOpen = isExternalAutoPilotModalOpen || internalAutoPilotModalOpen;
-  const handleCloseAutoPilotModal = () => {
-    setInternalAutoPilotModalOpen(false);
-    if (onCloseExternalAutoPilotModal) {
-      onCloseExternalAutoPilotModal();
-    }
-  };
 
   // Global settings for newly uploaded batch
   const [batchMotionDynamics, setBatchMotionDynamics] = useState<MotionDynamics>('flow');
@@ -116,30 +78,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     itemsRef.current = items;
   }, [items]);
 
-  const projectsRef = useRef<ImageToMotionProject[]>(projects);
-  useEffect(() => {
-    projectsRef.current = projects;
-  }, [projects]);
-
   useEffect(() => {
     autoPilotRef.current = { isRunning: isAutoPilotRunning, isPaused: autoPilotPaused };
   }, [isAutoPilotRunning, autoPilotPaused]);
 
-  // Current active project
-  const activeProject = projects.find((p) => p.id === activeProjectId) || projects[0] || {
-    id: 'default_project',
-    name: 'Akun Microstock Utama',
-    createdAt: Date.now(),
-  };
-
-  // Filter items for current active project
-  const projectItems = items.filter((item) => item.projectId === activeProject.id);
-  const pendingItems = projectItems.filter((item) => item.status === 'pending' || item.status === 'error');
-  const completedItems = projectItems.filter((item) => item.status === 'completed');
-
-  // Filter items across ALL projects
-  const allPendingItems = items.filter((item) => item.status === 'pending' || item.status === 'error');
-  const allCompletedItems = items.filter((item) => item.status === 'completed');
+  const pendingItems = items.filter((item) => item.status === 'pending' || item.status === 'error');
+  const completedItems = items.filter((item) => item.status === 'completed');
 
   // Handle Clipboard Paste (Ctrl+V image)
   useEffect(() => {
@@ -157,13 +101,13 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       if (imageFiles.length > 0) {
         processFiles(imageFiles);
-        showToast(`${imageFiles.length} gambar dari clipboard berhasil ditambahkan!`, 'success');
+        showToast(`${imageFiles.length} gambar dari clipboard berhasil ditambahkan ke antrian!`, 'success');
       }
     };
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [activeProject, batchMotionDynamics, batchColorMode, batchNeonGlow, batchGreenScreen, batchCustomInstructions]);
+  }, [batchMotionDynamics, batchColorMode, batchNeonGlow, batchGreenScreen, batchCustomInstructions]);
 
   // Read files and convert to ImageToMotion items
   const processFiles = (files: FileList | File[]) => {
@@ -187,8 +131,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
         newItems.push({
           id: 'i2m_item_' + Date.now() + '_' + Math.random().toString(36).substring(7),
-          projectId: activeProject.id,
-          projectName: activeProject.name,
+          projectId: 'default_queue',
+          projectName: 'Antrian Gambar',
           fileName: file.name,
           fileSize: formattedSize,
           imagePreviewUrl: base64Data,
@@ -207,8 +151,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         loadedCount++;
         if (loadedCount === validImageFiles.length) {
           onAddItems(newItems);
-          showToast(`Berhasil menambahkan ${newItems.length} gambar ke antrian ${activeProject.name}!`, 'success');
-          addLog(`[Image to Motion] Menambahkan ${newItems.length} gambar ke project "${activeProject.name}"`, 'cyan');
+          showToast(`Berhasil menambahkan ${newItems.length} gambar ke antrian!`, 'success');
+          addLog(`[Image to Motion] Menambahkan ${newItems.length} gambar ke Antrian Gambar`, 'cyan');
         }
       };
       reader.readAsDataURL(file);
@@ -234,16 +178,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   };
 
   // Process a single item
-  const processSingleItem = async (
-    item: ImageToMotionItem,
-    overrideProjectName?: string
-  ): Promise<boolean> => {
+  const processSingleItem = async (item: ImageToMotionItem): Promise<boolean> => {
     setCurrentProcessingId(item.id);
-    const targetProjectName =
-      overrideProjectName ||
-      projectsRef.current.find((p) => p.id === item.projectId)?.name ||
-      item.projectName ||
-      activeProject.name;
 
     onUpdateItem(item.id, { status: 'analyzing', progress: 25, error: undefined });
     setAutoPilotStatus((prev) =>
@@ -254,7 +190,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           }
         : null
     );
-    addLog(`[Image to Motion] [${targetProjectName}] Menganalisa struktur gambar "${item.fileName}"...`, 'info');
+    addLog(`[Image to Motion] Menganalisa struktur gambar "${item.fileName}"...`, 'info');
 
     try {
       onUpdateItem(item.id, { status: 'generating', progress: 55 });
@@ -274,7 +210,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           imageBase64: item.imageBase64,
           mimeType: item.mimeType,
           fileName: item.fileName,
-          projectName: targetProjectName,
+          projectName: 'Image to Motion',
           motionDynamics: item.motionDynamics,
           colorMode: item.colorMode,
           neonGlow: item.neonGlow,
@@ -304,7 +240,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         motionDynamics: item.motionDynamics,
         neonGlow: item.neonGlow,
         html: animResult.html,
-        account: targetProjectName,
+        account: 'Image to Motion',
         createdAt: Date.now(),
         isGreenScreen: item.isGreenScreen,
       };
@@ -325,9 +261,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               };
             }
           }
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
 
       const subjectName = itemShapeAnalysis?.objectName || animResult.detectedSubject || animResult.title;
@@ -340,7 +274,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         animationResult: animationItem,
       });
 
+      // Crucial: Add to gallery state immediately so all generated animations are permanently saved!
+      onAddAnimation(animationItem);
       onPreviewAnimation(animationItem);
+
       setAutoPilotStatus((prev) =>
         prev
           ? {
@@ -349,7 +286,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             }
           : null
       );
-      addLog(`[Image to Motion] [${targetProjectName}] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
+      addLog(`[Image to Motion] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
       return true;
     } catch (err: any) {
       const errorMsg = err?.message || 'Gagal memproses animasi gambar';
@@ -369,11 +306,11 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     }
   };
 
-  // Auto Pilot sequential batch runner across ALL folders and items (dari atas ke bawah satu persatu)
-  const handleStartAutoPilotAll = async () => {
+  // Auto Pilot sequential batch runner (menjalankan satu per satu berurutan dari antrian paling atas ke bawah)
+  const handleStartAutoPilot = async () => {
     const allPending = itemsRef.current.filter((it) => it.status === 'pending' || it.status === 'error');
     if (allPending.length === 0) {
-      showToast('Semua antrian di seluruh folder sudah selesai!', 'info');
+      showToast('Semua antrian gambar sudah selesai dibuat!', 'info');
       return;
     }
 
@@ -382,7 +319,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       return;
     }
 
-    // Set synchronous ref flag and React state
+    // Set synchronous ref flag and state immediately
     autoPilotRef.current = { isRunning: true, isPaused: false };
     setIsAutoPilotRunning(true);
     setAutoPilotPaused(false);
@@ -392,22 +329,22 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
     addLog(
-      `🚀 [AUTO PILOT DIMULAI] Menjalankan ${totalToProcess} antrian gambar satu persatu berurutan dari antrian teratas...`,
+      `🚀 [AUTO PILOT DIMULAI] Menjalankan ${totalToProcess} antrian gambar satu per satu berurutan dari atas ke bawah...`,
       'cyan'
     );
     showToast(
-      `🚀 Auto Pilot Dimulai! Memproses ${totalToProcess} antrian satu persatu dari urutan teratas...`,
+      `🚀 Auto Pilot Dimulai! Memproses ${totalToProcess} antrian satu per satu dari atas...`,
       'info'
     );
 
-    // Loop through all pending items sequentially from top (index 0) to bottom
+    // Loop through pending items sequentially from top (index 0) downwards
     for (let i = 0; i < allPending.length; i++) {
       if (!autoPilotRef.current.isRunning) {
         addLog('[Auto Pilot] Proses dihentikan oleh pengguna.', 'warn');
         break;
       }
 
-      // Check if paused
+      // Handle Pause
       while (autoPilotRef.current.isPaused) {
         await new Promise((res) => setTimeout(res, 400));
         if (!autoPilotRef.current.isRunning) break;
@@ -415,28 +352,19 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       if (!autoPilotRef.current.isRunning) break;
 
       const currentItem = allPending[i];
-      const targetProject = projectsRef.current.find((p) => p.id === currentItem.projectId);
-      const targetProjectName = targetProject?.name || currentItem.projectName || activeProject.name || 'Microstock';
-
-      // Update live status for the visual loading bar
       const percent = Math.round((completedOverall / totalToProcess) * 100);
+
       setAutoPilotStatus({
-        mode: 'all_folders',
-        totalFolders: projectsRef.current.length || 1,
-        currentFolderIndex: 1,
-        currentFolderId: currentItem.projectId,
-        currentFolderName: targetProjectName,
-        totalInCurrentFolder: allPending.length,
-        currentItemIndexInFolder: i + 1,
         totalItemsOverall: totalToProcess,
         completedItemsOverall: completedOverall,
+        currentItemIndex: i + 1,
         currentFileName: currentItem.fileName,
         currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${currentItem.fileName}"...`,
         progressPercent: percent,
       });
 
       addLog(
-        `⚡ [Antrian #${i + 1}/${totalToProcess}] (${targetProjectName}) Memproses "${currentItem.fileName}" (dari atas)...`,
+        `⚡ [Antrian #${i + 1}/${totalToProcess}] Memproses "${currentItem.fileName}" dari atas...`,
         'info'
       );
       showToast(
@@ -444,7 +372,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         'info'
       );
 
-      const success = await processSingleItem(currentItem, targetProjectName);
+      const success = await processSingleItem(currentItem);
       completedOverall++;
 
       const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
@@ -463,20 +391,16 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       if (success) {
         addLog(
-          `✅ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" selesai dibuat (Canvas 2D 60 FPS)!`,
+          `✅ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" selesai dibuat 60 FPS HD!`,
           'success'
         );
         showToast(
-          `✨ [Antrian #${i + 1}] "${currentItem.fileName}" berhasil dibuat 60 FPS!`,
+          `✨ [Antrian #${i + 1}] "${currentItem.fileName}" selesai dibuat 60 FPS!`,
           'success'
         );
       } else {
         addLog(
           `⚠️ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
-          'warn'
-        );
-        showToast(
-          `⚠️ [Antrian #${i + 1}] "${currentItem.fileName}" kendala, lanjut berikutnya...`,
           'warn'
         );
       }
@@ -495,173 +419,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     if (wasRunning) {
       addLog(
-        `🏆 [AUTO PILOT SELESAI] Seluruh ${totalToProcess} antrian gambar telah selesai diproses berurutan dari atas ke bawah!`,
+        `🏆 [AUTO PILOT SELESAI] Seluruh ${totalToProcess} antrian gambar telah selesai diproses berurutan!`,
         'success'
       );
       addLog('═══════════════════════════════════════════════════════════════', 'cyan');
       showToast('🎊 Auto Pilot Selesai! Semua antrian berhasil digenerate satu per satu!', 'success');
     }
-  };
-
-  // Auto Pilot runner for current folder only
-  const handleStartAutoPilotCurrent = async () => {
-    const folderPending = itemsRef.current.filter(
-      (it) => it.projectId === activeProject.id && (it.status === 'pending' || it.status === 'error')
-    );
-
-    if (folderPending.length === 0) {
-      showToast(`Tidak ada antrian pending di folder "${activeProject.name}".`, 'info');
-      return;
-    }
-
-    if (autoPilotRef.current.isRunning || isAutoPilotRunning) {
-      showToast('Auto Pilot sedang berjalan!', 'warn');
-      return;
-    }
-
-    autoPilotRef.current = { isRunning: true, isPaused: false };
-    setIsAutoPilotRunning(true);
-    setAutoPilotPaused(false);
-
-    const totalToProcess = folderPending.length;
-    let completedOverall = 0;
-
-    addLog(
-      `🚀 [AUTO PILOT FOLDER] Memulai antrian ${totalToProcess} gambar di folder "${activeProject.name}"...`,
-      'cyan'
-    );
-    showToast(`🚀 Memulai Auto Pilot untuk folder "${activeProject.name}" (${totalToProcess} antrian)...`, 'info');
-
-    for (let i = 0; i < folderPending.length; i++) {
-      if (!autoPilotRef.current.isRunning) break;
-
-      while (autoPilotRef.current.isPaused) {
-        await new Promise((res) => setTimeout(res, 400));
-        if (!autoPilotRef.current.isRunning) break;
-      }
-      if (!autoPilotRef.current.isRunning) break;
-
-      const current = folderPending[i];
-
-      const percent = Math.round((completedOverall / totalToProcess) * 100);
-      setAutoPilotStatus({
-        mode: 'current_folder',
-        totalFolders: 1,
-        currentFolderIndex: 1,
-        currentFolderId: activeProject.id,
-        currentFolderName: activeProject.name,
-        totalInCurrentFolder: totalToProcess,
-        currentItemIndexInFolder: i + 1,
-        totalItemsOverall: totalToProcess,
-        completedItemsOverall: completedOverall,
-        currentFileName: current.fileName,
-        currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${current.fileName}"...`,
-        progressPercent: percent,
-      });
-
-      addLog(`⚡ [${activeProject.name}] Antrian #${i + 1}/${totalToProcess}: Memproses "${current.fileName}"...`, 'info');
-      showToast(`⚡ [${activeProject.name}] Antrian #${i + 1}: "${current.fileName}"...`, 'info');
-
-      const success = await processSingleItem(current, activeProject.name);
-      completedOverall++;
-
-      const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
-      setAutoPilotStatus((prev) =>
-        prev
-          ? {
-              ...prev,
-              completedItemsOverall: completedOverall,
-              progressPercent: updatedPercent,
-              currentStageText: success
-                ? `Berhasil merender "${current.fileName}" (60 FPS HD)`
-                : `Gagal memproses "${current.fileName}"`,
-            }
-          : null
-      );
-
-      if (success) {
-        addLog(`✅ [${activeProject.name}] Antrian #${i + 1} "${current.fileName}" berhasil dibuat 60 FPS!`, 'success');
-        showToast(`✨ [${activeProject.name} #${i + 1}] "${current.fileName}" selesai dibuat 60 FPS!`, 'success');
-      } else {
-        addLog(`⚠️ [${activeProject.name}] Antrian #${i + 1} "${current.fileName}" kendala, lanjut berikutnya...`, 'warn');
-      }
-
-      if (autoPilotRef.current.isRunning && i < folderPending.length - 1) {
-        await new Promise((res) => setTimeout(res, 800));
-      }
-    }
-
-    const wasRunning = autoPilotRef.current.isRunning;
-    autoPilotRef.current = { isRunning: false, isPaused: false };
-    setIsAutoPilotRunning(false);
-    setAutoPilotPaused(false);
-    setAutoPilotStatus(null);
-
-    if (wasRunning) {
-      addLog(`🎉 [AUTO PILOT SELESAI] Antrian di folder "${activeProject.name}" selesai!`, 'success');
-      showToast(`🎊 Auto Pilot folder "${activeProject.name}" selesai!`, 'success');
-    }
-  };
-
-  // Auto Pilot Multi-Account Reference Image Runner
-  const handleStartAutoPilotMultiAccount = async (incomingAccounts: ImageToMotionAutoPilotAccount[]) => {
-    const newItemsToQueue: ImageToMotionItem[] = [];
-
-    // Ensure all accounts have a project in projects list and build queue items
-    incomingAccounts.forEach((acc) => {
-      if (acc.referenceImages.length === 0) return;
-
-      let targetProject = projectsRef.current.find(
-        (p) => p.id === acc.projectId || p.name.trim().toLowerCase() === acc.name.trim().toLowerCase()
-      );
-
-      let targetProjectId = targetProject?.id;
-      if (!targetProject) {
-        targetProjectId = 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(7);
-        onCreateProject(acc.name.trim());
-      }
-
-      acc.referenceImages.forEach((img) => {
-        newItemsToQueue.push({
-          id: 'i2m_item_' + Date.now() + '_' + Math.random().toString(36).substring(7),
-          projectId: targetProjectId || acc.projectId || activeProject.id,
-          projectName: acc.name.trim(),
-          fileName: img.fileName,
-          fileSize: img.fileSize,
-          imagePreviewUrl: img.previewUrl,
-          imageBase64: img.imageBase64,
-          mimeType: img.mimeType,
-          status: 'pending',
-          progress: 0,
-          motionDynamics: acc.motionDynamics,
-          colorMode: acc.colorMode,
-          neonGlow: acc.neonGlow,
-          isGreenScreen: acc.isGreenScreen,
-          customInstructions: acc.customInstructions,
-          createdAt: Date.now(),
-        });
-      });
-    });
-
-    if (newItemsToQueue.length === 0) {
-      showToast('Tidak ada gambar referensi yang dipilih untuk diproses.', 'warn');
-      return;
-    }
-
-    onAddItems(newItemsToQueue);
-    showToast(
-      `🚀 Berhasil memuat ${newItemsToQueue.length} gambar referensi dari multi-akun ke antrian! Memulai Auto Pilot...`,
-      'success'
-    );
-    addLog(
-      `🚀 [Auto Pilot Multi-Akun] Memuat ${newItemsToQueue.length} gambar referensi dari ${incomingAccounts.length} akun.`,
-      'cyan'
-    );
-
-    // Wait slightly for state sync, then trigger sequential Auto Pilot execution
-    setTimeout(() => {
-      handleStartAutoPilotAll();
-    }, 350);
   };
 
   const handlePauseAutoPilot = () => {
@@ -689,7 +452,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   // Export all completed items as ZIP of MP4 videos
   const handleExportAllMp4Zip = async () => {
     if (completedItems.length === 0) {
-      showToast('Belum ada animasi yang selesai dibuat di project ini.', 'warn');
+      showToast('Belum ada animasi yang selesai dibuat.', 'warn');
       return;
     }
 
@@ -699,7 +462,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     try {
       const zip = new JSZip();
-      const folder = zip.folder(`motion_${activeProject.name.replace(/[^a-z0-9]/gi, '_')}`) || zip;
+      const folder = zip.folder('motion_graphics_mp4') || zip;
 
       for (let i = 0; i < completedItems.length; i++) {
         const item = completedItems[i];
@@ -732,14 +495,14 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       const downloadUrl = URL.createObjectURL(zipBlob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `Batch_MP4_${activeProject.name.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.zip`;
+      a.download = `Batch_MP4_ImageToMotion_${Date.now()}.zip`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
 
       showToast(`Batch export MP4 selesai! Berhasil mengunduh ZIP.`, 'success');
-      addLog(`[Batch Export MP4] Selesai mengunduh ZIP untuk project "${activeProject.name}"`, 'success');
+      addLog(`[Batch Export MP4] Selesai mengunduh ZIP`, 'success');
     } catch (e: any) {
       showToast(`Gagal export batch ZIP: ${e.message}`, 'error');
     } finally {
@@ -750,12 +513,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   // Export all completed HTML as ZIP
   const handleExportAllHtmlZip = async () => {
     if (completedItems.length === 0) {
-      showToast('Belum ada animasi yang selesai dibuat di project ini.', 'warn');
+      showToast('Belum ada animasi yang selesai dibuat.', 'warn');
       return;
     }
 
     const zip = new JSZip();
-    const folder = zip.folder(`html_motion_${activeProject.name.replace(/[^a-z0-9]/gi, '_')}`) || zip;
+    const folder = zip.folder('html_motion_canvas') || zip;
 
     completedItems.forEach((item, index) => {
       if (item.animationResult) {
@@ -768,7 +531,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     const downloadUrl = URL.createObjectURL(zipBlob);
     const a = document.createElement('a');
     a.href = downloadUrl;
-    a.download = `Batch_HTML_${activeProject.name.replace(/[^a-z0-9]/gi, '_')}_${Date.now()}.zip`;
+    a.download = `Batch_HTML_ImageToMotion_${Date.now()}.zip`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -844,87 +607,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-amber-200/75 mt-0.5 leading-snug">
-                Deteksi semantik elemen gambar & ciptakan animasi Canvas 2D 60 FPS
+                Deteksi semantik elemen gambar referensi & ciptakan animasi Canvas 2D 60 FPS akurat
               </p>
             </div>
-          </div>
-        </div>
-
-        {/* Dedicated Folder & Project Management Bar */}
-        <div className="bg-slate-950/80 rounded-xl p-2 sm:p-2.5 border border-amber-500/20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 shadow-inner">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="w-7 h-7 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center text-xs shrink-0">
-              <i className="fa-solid fa-folder"></i>
-            </span>
-            <div className="relative flex-1 min-w-0">
-              <select
-                value={activeProject.id}
-                onChange={(e) => onSelectProject(e.target.value)}
-                className="w-full bg-slate-900 text-amber-200 border border-amber-500/30 text-xs rounded-lg pl-2.5 pr-7 py-1.5 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none cursor-pointer truncate"
-              >
-                {projects.map((p) => {
-                  const pItems = items.filter((it) => it.projectId === p.id);
-                  const pPending = pItems.filter((it) => it.status === 'pending' || it.status === 'error').length;
-                  return (
-                    <option key={p.id} value={p.id} className="bg-slate-900 text-white font-medium">
-                      {p.name} · {pPending > 0 ? `${pPending} antrian` : 'selesai'}
-                    </option>
-                  );
-                })}
-              </select>
-              <i className="fa-solid fa-chevron-down absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-amber-400/80 pointer-events-none"></i>
-            </div>
-            {/* Quick stats indicator */}
-            <span className="hidden xl:inline text-[11px] text-gray-400 shrink-0 font-medium">
-              {projects.length} folder · {allPendingItems.length} antrian
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-            {/* Auto Pilot Multi-Account Modal Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setInternalAutoPilotModalOpen(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-amber-500/25 to-yellow-500/25 hover:from-amber-500/40 hover:to-yellow-500/40 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
-              title="Buka Auto Pilot Multi-Akun (Drag & drop referensi gambar untuk banyak akun)"
-            >
-              <i className="fa-solid fa-robot text-amber-400 text-xs animate-pulse"></i>
-              <span>Auto Pilot Multi-Akun</span>
-            </button>
-
-            {/* Quick Add Project Button */}
-            <button
-              type="button"
-              onClick={() => setShowAddProjectModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
-              title="Buat Folder / Project Baru"
-            >
-              <i className="fa-solid fa-folder-plus text-xs"></i>
-              <span>+ Folder</span>
-            </button>
-
-            {/* Complete Project / Folder Manager Modal Button */}
-            <button
-              type="button"
-              onClick={() => setShowProjectManagerModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-200 border border-gray-700 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-95 whitespace-nowrap"
-              title="Kelola Semua Folder & Project (Edit, Hapus, Rename)"
-            >
-              <i className="fa-solid fa-folder-tree text-amber-400 text-xs"></i>
-              <span>Kelola</span>
-            </button>
-
-            {/* Delete Current Active Project Button */}
-            {projects.length > 1 && (
-              <button
-                type="button"
-                onClick={() => setProjectToDelete(activeProject)}
-                className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 text-xs transition cursor-pointer active:scale-95"
-                title={`Hapus folder "${activeProject.name}"`}
-              >
-                <i className="fa-solid fa-trash text-xs"></i>
-              </button>
-            )}
           </div>
         </div>
 
@@ -955,7 +640,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
           <div>
             <span className="text-xs font-bold text-gray-100 block">
-              Drag & Drop Gambar ke Sini atau <span className="text-amber-400 underline decoration-amber-400/50">Klik untuk Browse</span>
+              Drag & Drop Gambar Referensi ke Sini atau <span className="text-amber-400 underline decoration-amber-400/50">Klik untuk Browse</span>
             </span>
             <span className="text-[11px] text-gray-400 block mt-0.5">
               Mendukung Batch Multi-Upload JPG, PNG, WEBP, SVG • Bisa juga <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-300 text-[10px]">Ctrl + V</kbd> untuk Paste
@@ -970,7 +655,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               <i className="fa-solid fa-sliders text-amber-400"></i>
               <span>Pengaturan Dinamika Gerak & Visual</span>
             </span>
-            <span className="text-[10px] text-gray-400">Diterapkan ke batch gambar</span>
+            <span className="text-[10px] text-gray-400">Diterapkan ke antrian gambar</span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1049,75 +734,42 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               type="text"
               value={batchCustomInstructions}
               onChange={(e) => setBatchCustomInstructions(e.target.value)}
-              placeholder="Instruksi khusus tambahan (misal: buat logo berdenyut, tambahkan partikel orbit halus)..."
+              placeholder="Instruksi peniruan khusus (misal: buat jarum berputar cepat, denyut aerodinamis halus)..."
               className="w-full bg-slate-900 text-xs text-gray-200 border border-gray-800 rounded-lg px-2.5 py-1.5 placeholder-gray-500 focus:ring-1 focus:ring-amber-400 focus:outline-none"
             />
           </div>
         </div>
       </div>
 
-      {/* 4. BATCH QUEUE & AUTO PILOT COMMAND PANEL */}
+      {/* 4. ANTRIAN GAMBAR & AUTO PILOT COMMAND PANEL */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-gray-800/90 space-y-4 shadow-xl">
-        {/* Header: Title, Scope Switcher & Action Tools */}
+        {/* Header: Title & Action Tools */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-800">
-          {/* Title & Scope Tabs */}
-          <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Title & Counter */}
+          <div className="flex items-center gap-2.5">
             <span className="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-400 flex items-center justify-center text-xs shrink-0">
               <i className="fa-solid fa-list-check"></i>
             </span>
-            <div>
-              <h3 className="font-extrabold text-xs sm:text-sm text-gray-100 flex items-center gap-2">
-                <span>ANTRIAN GAMBAR</span>
+            <div className="flex items-center gap-2">
+              <h3 className="font-extrabold text-xs sm:text-sm text-gray-100 uppercase">
+                ANTRIAN GAMBAR
               </h3>
+              <span className="text-[11px] font-mono bg-slate-900 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg font-bold">
+                {items.length} Gambar
+              </span>
             </div>
-
-            {/* Scope Switcher Tabs */}
-            {projectItems.length > 0 ? (
-              <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
-                <button
-                  type="button"
-                  onClick={() => setQueueViewMode('current_folder')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                    queueViewMode === 'current_folder'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <i className="fa-solid fa-folder text-[10px]"></i>
-                  <span>Folder Ini ({projectItems.length})</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQueueViewMode('all_folders')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                    queueViewMode === 'all_folders'
-                      ? 'bg-amber-500 text-slate-950 shadow-sm'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  <i className="fa-solid fa-globe text-[10px]"></i>
-                  <span>Semua Folder ({items.length})</span>
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
-                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1.5">
-                  <i className="fa-solid fa-globe text-[10px]"></i>
-                  <span>Semua Folder ({items.length})</span>
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Action Tools (ZIP MP4, ZIP HTML, Clear) */}
-          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+          <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center flex-wrap">
             {completedItems.length > 0 && (
               <>
                 <button
+                  type="button"
                   onClick={handleExportAllMp4Zip}
                   disabled={isBatchExportingMp4}
                   className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer disabled:opacity-50"
-                  title="Export semua animasi yang selesai di folder ini ke MP4 ZIP"
+                  title="Export semua animasi yang selesai ke MP4 ZIP"
                 >
                   {isBatchExportingMp4 ? (
                     <>
@@ -1133,6 +785,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleExportAllHtmlZip}
                   className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition border border-gray-700 cursor-pointer shadow-sm"
                   title="Unduh semua file HTML dalam ZIP"
@@ -1141,76 +794,63 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   <span>ZIP HTML</span>
                 </button>
 
-                <button
-                  onClick={() => onClearCompletedItems(activeProject.id)}
-                  className="p-1.5 text-gray-400 hover:text-rose-400 rounded-lg bg-slate-900 border border-gray-800 transition cursor-pointer"
-                  title="Bersihkan item yang sudah selesai di folder ini"
-                >
-                  <i className="fa-solid fa-trash-can text-xs"></i>
-                </button>
+                {onClearCompletedItems && (
+                  <button
+                    type="button"
+                    onClick={onClearCompletedItems}
+                    className="p-1.5 text-gray-400 hover:text-rose-400 rounded-lg bg-slate-900 border border-gray-800 transition cursor-pointer"
+                    title="Bersihkan item yang sudah selesai"
+                  >
+                    <i className="fa-solid fa-broom text-xs"></i>
+                  </button>
+                )}
               </>
+            )}
+
+            {items.length > 0 && onClearAllItems && (
+              <button
+                type="button"
+                onClick={onClearAllItems}
+                className="p-1.5 text-gray-400 hover:text-rose-400 rounded-lg bg-slate-900 border border-gray-800 transition cursor-pointer"
+                title="Hapus semua antrian gambar"
+              >
+                <i className="fa-solid fa-trash-can text-xs"></i>
+              </button>
             )}
           </div>
         </div>
 
-        {/* Streamlined Auto Pilot Bar */}
-        <div className="bg-slate-950/85 rounded-xl px-3 py-2.5 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-md">
+        {/* Streamlined Direct Auto Pilot Bar */}
+        <div className="bg-slate-950/85 rounded-xl px-3.5 py-2.5 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-md">
           {/* Status & Concise Info */}
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
             <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-              <span className="text-xs font-bold text-amber-200 whitespace-nowrap">
+              <span className="text-xs font-extrabold text-amber-200 whitespace-nowrap">
                 Auto Pilot
               </span>
-              <span className="text-xs text-amber-300/90 font-mono font-medium">
-                {allPendingItems.length} antrian
+              <span className="text-xs text-amber-300 font-mono font-bold">
+                {pendingItems.length} antrian
               </span>
-              <span className="text-[11px] text-gray-500 hidden md:inline truncate">
-                · Berurutan mulai folder teratas ({projects[0]?.name || 'Utama'})
+              <span className="text-[11px] text-gray-400 hidden sm:inline truncate">
+                · Dijalankan satu per satu berurutan dari antrian teratas
               </span>
             </div>
           </div>
 
           {/* Trigger Buttons */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Auto Pilot Multi-Account Modal Config Trigger */}
-            <button
-              type="button"
-              onClick={() => setInternalAutoPilotModalOpen(true)}
-              className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap shadow-sm"
-              title="Buka konfigurasi Auto Pilot Multi-Akun & Drag Drop Referensi Gambar"
-            >
-              <i className="fa-solid fa-robot text-xs text-amber-400"></i>
-              <span>Multi-Akun</span>
-            </button>
-
             {!isAutoPilotRunning ? (
-              <>
-                {/* Primary: Auto Pilot All Folders */}
-                <button
-                  type="button"
-                  onClick={handleStartAutoPilotAll}
-                  disabled={allPendingItems.length === 0}
-                  className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-extrabold text-xs rounded-lg flex items-center gap-1.5 transition shadow shadow-amber-500/20 disabled:opacity-40 cursor-pointer active:scale-95 whitespace-nowrap"
-                  title="Jalankan semua antrian di seluruh folder berurutan dari folder teratas"
-                >
-                  <i className="fa-solid fa-rocket text-xs"></i>
-                  <span>Auto Pilot Semua ({allPendingItems.length})</span>
-                </button>
-
-                {/* Secondary: Folder Ini Saja */}
-                {pendingItems.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleStartAutoPilotCurrent}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 font-semibold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer active:scale-95 whitespace-nowrap"
-                    title={`Hanya jalankan antrian di folder "${activeProject.name}"`}
-                  >
-                    <i className="fa-solid fa-play text-[9px]"></i>
-                    <span>Folder Ini ({pendingItems.length})</span>
-                  </button>
-                )}
-              </>
+              <button
+                type="button"
+                onClick={handleStartAutoPilot}
+                disabled={pendingItems.length === 0}
+                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition shadow-md shadow-amber-500/25 disabled:opacity-40 cursor-pointer active:scale-95 whitespace-nowrap"
+                title="Jalankan semua antrian gambar satu per satu berurutan dari atas ke bawah"
+              >
+                <i className="fa-solid fa-rocket text-xs"></i>
+                <span>Jalankan Auto Pilot ({pendingItems.length})</span>
+              </button>
             ) : (
               <div className="flex items-center gap-1.5">
                 <button
@@ -1244,27 +884,15 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             {/* Ambient glowing beam */}
             <div className="absolute top-0 right-1/4 w-32 h-32 bg-amber-400/10 rounded-full blur-2xl pointer-events-none"></div>
 
-            {/* Top Row: Folder indicator & Queue item indicator */}
+            {/* Top Row: Active item indicator & status */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 relative z-10">
               <div className="flex items-center gap-2 flex-wrap">
-                {/* Folder indicator */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs font-bold shadow-sm">
-                  <i className="fa-solid fa-folder-open text-amber-400"></i>
-                  <span className="text-amber-400 font-mono">
-                    Folder [{autoPilotStatus.currentFolderIndex}/{autoPilotStatus.totalFolders}]:
-                  </span>
-                  <span className="text-white font-extrabold truncate max-w-[150px] sm:max-w-[200px]">
-                    {autoPilotStatus.currentFolderName}
-                  </span>
-                </div>
-
-                {/* Queue Item indicator */}
                 <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-500/20 border border-sky-500/40 text-sky-200 text-xs font-bold shadow-sm">
                   <i className="fa-solid fa-bolt text-sky-400 animate-pulse"></i>
                   <span className="text-sky-300 font-mono">
-                    Antrian #{autoPilotStatus.currentItemIndexInFolder} dari {autoPilotStatus.totalInCurrentFolder}:
+                    Antrian #{autoPilotStatus.currentItemIndex} dari {autoPilotStatus.totalItemsOverall}:
                   </span>
-                  <span className="text-white font-mono truncate max-w-[150px] sm:max-w-[220px]">
+                  <span className="text-white font-mono truncate max-w-[200px] sm:max-w-[280px]">
                     {autoPilotStatus.currentFileName}
                   </span>
                 </div>
@@ -1284,7 +912,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                       autoPilotPaused ? 'bg-amber-400' : 'bg-emerald-400 animate-ping'
                     }`}
                   ></span>
-                  <span>{autoPilotPaused ? 'Auto Pilot Dijeda' : 'Auto Pilot Berjalan'}</span>
+                  <span>{autoPilotPaused ? 'Auto Pilot Dijeda' : 'Sedang Memproses 60 FPS'}</span>
                 </span>
               </div>
             </div>
@@ -1324,582 +952,230 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 </span>
               </div>
               <span className="text-[10px] text-gray-500 uppercase tracking-wider shrink-0 font-mono hidden sm:inline">
-                60 FPS Canvas Engine
+                Canvas 2D 60 FPS Engine
               </span>
             </div>
           </div>
         )}
 
         {/* Queue Items List */}
-        {(() => {
-          const displayedQueueItems = queueViewMode === 'all_folders' ? items : projectItems;
+        {items.length === 0 ? (
+          <div className="p-8 text-center border border-dashed border-gray-800 rounded-xl space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-slate-900 border border-gray-800 text-gray-500 flex items-center justify-center mx-auto text-base">
+              <i className="fa-solid fa-images"></i>
+            </div>
+            <p className="text-xs font-bold text-gray-300">
+              Antrian gambar masih kosong
+            </p>
+            <p className="text-[11px] text-gray-500">
+              Drag & drop atau paste gambar referensi di atas untuk menambahkannya ke antrian.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            {items.map((item, idx) => {
+              const isProcessing = currentProcessingId === item.id;
+              const isCompleted = item.status === 'completed';
+              const isError = item.status === 'error';
 
-          if (displayedQueueItems.length === 0) {
-            return (
-              <div className="p-8 text-center border border-dashed border-gray-800 rounded-xl space-y-2">
-                <div className="w-10 h-10 rounded-xl bg-slate-900 border border-gray-800 text-gray-500 flex items-center justify-center mx-auto text-base">
-                  <i className="fa-solid fa-images"></i>
-                </div>
-                <p className="text-xs font-bold text-gray-400">
-                  {queueViewMode === 'all_folders'
-                    ? 'Belum ada gambar dalam antrian di semua folder'
-                    : `Belum ada gambar dalam antrian folder "${activeProject.name}"`}
-                </p>
-                <p className="text-[11px] text-gray-500">
-                  Drag & drop gambar di atas untuk menambahkan gambar ke antrian.
-                </p>
-              </div>
-            );
-          }
-
-          return (
-            <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
-              {displayedQueueItems.map((item, idx) => {
-                const isProcessing = currentProcessingId === item.id;
-                const isCompleted = item.status === 'completed';
-                const isError = item.status === 'error';
-                const itemProject = projects.find((p) => p.id === item.projectId);
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
-                      isProcessing
-                        ? 'bg-amber-950/25 border-amber-500/70 shadow-lg shadow-amber-500/15 ring-1 ring-amber-400/40'
-                        : isCompleted
-                        ? 'bg-slate-900/60 border-emerald-500/30'
-                        : isError
-                        ? 'bg-rose-950/20 border-rose-500/40'
-                        : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700'
-                    }`}
-                  >
-                    {/* Left: Thumbnail & Info */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                      {/* Thumbnail */}
-                      <div
-                        onClick={() => setComparisonItem(item)}
-                        className="w-12 h-12 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
-                        title="Klik untuk bandingkan dengan hasil animasi"
-                      >
-                        <img
-                          src={item.imagePreviewUrl}
-                          alt={item.fileName}
-                          className="w-full h-full object-contain group-hover:scale-110 transition-transform"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px]">
-                          <i className="fa-solid fa-magnifying-glass"></i>
-                        </div>
-                      </div>
-
-                      {/* Metadata */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-mono font-bold text-gray-500">#{idx + 1}</span>
-                          <h4 className="text-xs font-bold text-gray-200 truncate" title={item.fileName}>
-                            {item.fileName}
-                          </h4>
-
-                          {/* Show Folder tag if viewing all folders */}
-                          {queueViewMode === 'all_folders' && itemProject && (
-                            <span className="text-[9px] bg-sky-950/60 text-sky-300 border border-sky-800/50 px-1.5 py-0.2 rounded font-mono truncate max-w-[120px]">
-                              📁 {itemProject.name}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-mono">
-                            {item.fileSize}
-                          </span>
-                          <span className="text-[9px] bg-amber-950/60 text-amber-300 border border-amber-800/40 px-1.5 py-0.2 rounded font-semibold capitalize">
-                            {item.motionDynamics}
-                          </span>
-                          {item.isGreenScreen && (
-                            <span className="text-[9px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded font-semibold">
-                              Green Screen
-                            </span>
-                          )}
-                          {(item.shapeAnalysis?.objectName || item.detectedSubject) && (
-                            <button
-                              type="button"
-                              onClick={() => (item.shapeAnalysis ? setAnalysisModalItem(item) : null)}
-                              className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-900/80 transition"
-                              title="Klik untuk melihat analisis logika bentuk & motion"
-                            >
-                              <i className="fa-solid fa-brain text-[8px] text-purple-400"></i>
-                              <span className="truncate max-w-[140px]">
-                                {item.shapeAnalysis?.objectName || item.detectedSubject}
-                              </span>
-                            </button>
-                          )}
-
-                          {/* Status Badges */}
-                          {item.status === 'pending' && (
-                            <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-bold">
-                              Menunggu
-                            </span>
-                          )}
-                          {item.status === 'analyzing' && (
-                            <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                              <i className="fa-solid fa-brain fa-spin text-[8px]"></i> Analisa AI...
-                            </span>
-                          )}
-                          {item.status === 'generating' && (
-                            <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                              <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Membuat Motion...
-                            </span>
-                          )}
-                          {item.status === 'completed' && (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                              <i className="fa-solid fa-check text-[8px]"></i> 60 FPS HD
-                            </span>
-                          )}
-                          {item.status === 'error' && (
-                            <span
-                              className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-bold truncate max-w-[120px]"
-                              title={item.error}
-                            >
-                              Gagal: {item.error}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Inline progress bar when active */}
-                        {isProcessing && (
-                          <div className="mt-1.5 w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-amber-500/30">
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse"
-                              style={{ width: `${item.progress || 50}%` }}
-                            ></div>
-                          </div>
-                        )}
+              return (
+                <div
+                  key={item.id}
+                  className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
+                    isProcessing
+                      ? 'bg-amber-950/25 border-amber-500/70 shadow-lg shadow-amber-500/15 ring-1 ring-amber-400/40'
+                      : isCompleted
+                      ? 'bg-slate-900/60 border-emerald-500/30'
+                      : isError
+                      ? 'bg-rose-950/20 border-rose-500/40'
+                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700'
+                  }`}
+                >
+                  {/* Left: Thumbnail & Info */}
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    {/* Thumbnail */}
+                    <div
+                      onClick={() => setComparisonItem(item)}
+                      className="w-12 h-12 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
+                      title="Klik untuk bandingkan dengan hasil animasi"
+                    >
+                      <img
+                        src={item.imagePreviewUrl}
+                        alt={item.fileName}
+                        className="w-full h-full object-contain group-hover:scale-110 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px]">
+                        <i className="fa-solid fa-magnifying-glass"></i>
                       </div>
                     </div>
 
-                    {/* Right: Actions */}
-                    <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
-                      {/* Trigger Single Process */}
-                      {!isCompleted && !isProcessing && (
-                        <button
-                          type="button"
-                          onClick={() => processSingleItem(item)}
-                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
-                          title="Proses gambar ini sekarang"
-                        >
-                          <i className="fa-solid fa-play text-[9px]"></i>
-                          <span>Proses</span>
-                        </button>
-                      )}
+                    {/* Metadata */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-mono font-bold text-gray-500">#{idx + 1}</span>
+                        <h4 className="text-xs font-bold text-gray-200 truncate" title={item.fileName}>
+                          {item.fileName}
+                        </h4>
+                      </div>
 
-                      {/* Preview / Comparison */}
-                      {isCompleted && item.animationResult && (
-                        <>
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-mono">
+                          {item.fileSize}
+                        </span>
+                        <span className="text-[9px] bg-amber-950/60 text-amber-300 border border-amber-800/40 px-1.5 py-0.2 rounded font-semibold capitalize">
+                          {item.motionDynamics}
+                        </span>
+                        {item.isGreenScreen && (
+                          <span className="text-[9px] bg-emerald-950 text-emerald-400 px-1.5 py-0.2 rounded font-semibold">
+                            Green Screen
+                          </span>
+                        )}
+                        {(item.shapeAnalysis?.objectName || item.detectedSubject) && (
                           <button
                             type="button"
-                            onClick={() => onPreviewAnimation(item.animationResult!)}
-                            className="px-2 py-1 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                            title="Preview Animasi di Layar Utama"
+                            onClick={() => (item.shapeAnalysis ? setAnalysisModalItem(item) : null)}
+                            className="text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/60 px-1.5 py-0.2 rounded font-semibold flex items-center gap-1 cursor-pointer hover:bg-purple-900/80 transition"
+                            title="Klik untuk melihat analisis logika bentuk & motion"
                           >
-                            <i className="fa-solid fa-play text-[9px]"></i>
+                            <i className="fa-solid fa-brain text-[8px] text-purple-400"></i>
+                            <span className="truncate max-w-[140px]">
+                              {item.shapeAnalysis?.objectName || item.detectedSubject}
+                            </span>
                           </button>
-                          {item.shapeAnalysis && (
-                            <button
-                              type="button"
-                              onClick={() => setAnalysisModalItem(item)}
-                              className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/40 font-semibold text-[11px] rounded-lg transition cursor-pointer flex items-center gap-1"
-                              title="Lihat 3 Analisis Logika AI (Bentuk, Motion Profesional, Sintesis)"
-                            >
-                              <i className="fa-solid fa-brain text-[9px]"></i>
-                              <span className="hidden sm:inline">Logika</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setComparisonItem(item)}
-                            className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                            title="Bandingkan Gambar Asli vs Animasi"
-                          >
-                            <i className="fa-solid fa-code-compare text-[9px]"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadSingleHtml(item)}
-                            className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-gray-300 font-semibold text-[11px] rounded-lg transition cursor-pointer"
-                            title="Unduh HTML"
-                          >
-                            <i className="fa-solid fa-code text-[9px]"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleExportSingleMp4(item)}
-                            className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] rounded-lg transition cursor-pointer shadow-sm"
-                            title="Export MP4 (1080p 60 FPS)"
-                          >
-                            <i className="fa-solid fa-film text-[9px]"></i>
-                          </button>
-                        </>
-                      )}
+                        )}
 
-                      {/* Delete Item */}
+                        {/* Status Badges */}
+                        {item.status === 'pending' && (
+                          <span className="text-[9px] bg-slate-800 text-gray-400 px-1.5 py-0.2 rounded font-bold">
+                            Menunggu
+                          </span>
+                        )}
+                        {item.status === 'analyzing' && (
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                            <i className="fa-solid fa-brain fa-spin text-[8px]"></i> Analisa AI...
+                          </span>
+                        )}
+                        {item.status === 'generating' && (
+                          <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                            <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Membuat Motion...
+                          </span>
+                        )}
+                        {item.status === 'completed' && (
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
+                            <i className="fa-solid fa-check text-[8px]"></i> 60 FPS HD
+                          </span>
+                        )}
+                        {item.status === 'error' && (
+                          <span
+                            className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-bold truncate max-w-[120px]"
+                            title={item.error}
+                          >
+                            Gagal: {item.error}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Inline progress bar when active */}
+                      {isProcessing && (
+                        <div className="mt-1.5 w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-amber-500/30">
+                          <div
+                            className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse"
+                            style={{ width: `${item.progress || 50}%` }}
+                          ></div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right: Actions */}
+                  <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                    {/* Trigger Single Process */}
+                    {!isCompleted && !isProcessing && (
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onDeleteItem(item.id);
-                        }}
-                        disabled={isProcessing}
-                        className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer disabled:opacity-30 active:scale-90"
-                        title="Hapus gambar ini dari antrian"
+                        onClick={() => processSingleItem(item)}
+                        className="px-2.5 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                        title="Proses gambar ini sekarang"
                       >
-                        <i className="fa-solid fa-xmark text-xs"></i>
+                        <i className="fa-solid fa-play text-[9px]"></i>
+                        <span>Proses</span>
                       </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
-      </div>
+                    )}
 
-      {/* MODAL: ADD NEW PROJECT / ACCOUNT */}
-      {showAddProjectModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl p-5 border border-amber-500/40 bg-slate-900 max-w-sm w-full space-y-4 shadow-2xl">
-            <div className="flex justify-between items-center pb-2 border-b border-gray-800">
-              <h3 className="font-extrabold text-sm text-amber-200 flex items-center gap-2">
-                <i className="fa-solid fa-folder-plus text-amber-400"></i>
-                <span>Buat Folder / Project Baru</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowAddProjectModal(false)}
-                className="text-gray-400 hover:text-white"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs text-gray-300 font-bold block">Nama Folder / Project</label>
-              <input
-                type="text"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newProjectName.trim()) {
-                    onCreateProject(newProjectName.trim());
-                    setNewProjectName('');
-                    setShowAddProjectModal(false);
-                  }
-                }}
-                placeholder="Contoh: AdobeStock Cyber, Freepik Icons..."
-                className="w-full bg-slate-950 text-sm text-gray-100 border border-gray-700 rounded-xl px-3 py-2 focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowAddProjectModal(false)}
-                className="px-3 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (newProjectName.trim()) {
-                    onCreateProject(newProjectName.trim());
-                    setNewProjectName('');
-                    setShowAddProjectModal(false);
-                  }
-                }}
-                disabled={!newProjectName.trim()}
-                className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer disabled:opacity-50"
-              >
-                Simpan & Buat
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: COMPREHENSIVE PROJECT / FOLDER MANAGER (EDIT, SIMPAN, HAPUS, BUAT BARU) */}
-      {showProjectManagerModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-card rounded-2xl p-5 sm:p-6 border border-amber-500/40 bg-slate-950 max-w-2xl w-full space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="flex justify-between items-center pb-3 border-b border-gray-800 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-sm">
-                  <i className="fa-solid fa-folder-tree"></i>
-                </span>
-                <div>
-                  <h3 className="font-extrabold text-sm sm:text-base text-amber-200">
-                    Manajemen Folder & Project Microstock
-                  </h3>
-                  <p className="text-[11px] text-gray-400">
-                    Kelola nama project, buat folder baru, edit, simpan, atau hapus project beserta antriannya.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProjectManagerModal(false);
-                  setEditingProjectId(null);
-                }}
-                className="text-gray-400 hover:text-white p-1 text-base cursor-pointer"
-              >
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            {/* Quick Create Box */}
-            <div className="bg-slate-900/90 rounded-xl p-3 border border-amber-500/20 flex flex-col sm:flex-row items-center gap-2 shrink-0">
-              <div className="flex items-center gap-2 flex-1 w-full">
-                <i className="fa-solid fa-folder-plus text-amber-400 text-sm"></i>
-                <input
-                  type="text"
-                  value={managerNewProjectName}
-                  onChange={(e) => setManagerNewProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && managerNewProjectName.trim()) {
-                      onCreateProject(managerNewProjectName.trim());
-                      setManagerNewProjectName('');
-                    }
-                  }}
-                  placeholder="Ketik nama folder/project baru..."
-                  className="w-full bg-slate-950 text-xs text-gray-100 border border-gray-700 rounded-lg px-3 py-2 focus:ring-1 focus:ring-amber-400 focus:outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (managerNewProjectName.trim()) {
-                    onCreateProject(managerNewProjectName.trim());
-                    setManagerNewProjectName('');
-                  }
-                }}
-                disabled={!managerNewProjectName.trim()}
-                className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-extrabold text-xs rounded-lg transition shadow-md shadow-amber-500/20 disabled:opacity-40 cursor-pointer shrink-0"
-              >
-                + Buat Project
-              </button>
-            </div>
-
-            {/* Project List */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider pb-1 flex justify-between items-center">
-                <span>Daftar Project ({projects.length})</span>
-                <span>Status & Aksi</span>
-              </div>
-
-              {projects.map((proj) => {
-                const isCurrentActive = proj.id === activeProject.id;
-                const projItems = items.filter((it) => it.projectId === proj.id);
-                const projCompleted = projItems.filter((it) => it.status === 'completed').length;
-                const isEditing = editingProjectId === proj.id;
-
-                return (
-                  <div
-                    key={proj.id}
-                    className={`p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition ${
-                      isCurrentActive
-                        ? 'bg-amber-950/20 border-amber-500/40 shadow-sm'
-                        : 'bg-slate-900/50 border-gray-800 hover:border-gray-700'
-                    }`}
-                  >
-                    {/* Left: Project Info or Inline Edit Input */}
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${
-                        isCurrentActive
-                          ? 'bg-amber-500 text-slate-950 font-bold'
-                          : 'bg-slate-800 text-amber-300'
-                      }`}>
-                        <i className="fa-solid fa-folder"></i>
-                      </div>
-
-                      {isEditing ? (
-                        <div className="flex items-center gap-2 flex-1">
-                          <input
-                            type="text"
-                            value={editingProjectName}
-                            onChange={(e) => setEditingProjectName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && editingProjectName.trim()) {
-                                if (onUpdateProject) {
-                                  onUpdateProject(proj.id, editingProjectName.trim());
-                                }
-                                setEditingProjectId(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingProjectId(null);
-                              }
-                            }}
-                            className="w-full bg-slate-950 text-xs text-white border border-amber-400 rounded-lg px-2.5 py-1.5 focus:outline-none"
-                            autoFocus
-                          />
+                    {/* Preview / Comparison */}
+                    {isCompleted && item.animationResult && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onPreviewAnimation(item.animationResult!)}
+                          className="px-2 py-1 bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                          title="Preview Animasi di Layar Utama"
+                        >
+                          <i className="fa-solid fa-play text-[9px]"></i>
+                        </button>
+                        {item.shapeAnalysis && (
                           <button
                             type="button"
-                            onClick={() => {
-                              if (editingProjectName.trim() && onUpdateProject) {
-                                onUpdateProject(proj.id, editingProjectName.trim());
-                              }
-                              setEditingProjectId(null);
-                            }}
-                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition cursor-pointer shrink-0"
-                            title="Simpan Perubahan"
+                            onClick={() => setAnalysisModalItem(item)}
+                            className="px-2 py-1 bg-purple-500/20 hover:bg-purple-500/40 text-purple-300 border border-purple-500/40 font-semibold text-[11px] rounded-lg transition cursor-pointer flex items-center gap-1"
+                            title="Lihat 3 Analisis Logika AI"
                           >
-                            <i className="fa-solid fa-check"></i>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingProjectId(null)}
-                            className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-lg transition cursor-pointer shrink-0"
-                            title="Batal"
-                          >
-                            <i className="fa-solid fa-xmark"></i>
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4 className="text-xs sm:text-sm font-bold text-gray-100 truncate">
-                              {proj.name}
-                            </h4>
-                            {isCurrentActive && (
-                              <span className="text-[9px] bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded font-black uppercase tracking-wider">
-                                Sedang Aktif
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-gray-400 flex items-center gap-2 mt-0.5">
-                            <span>{projItems.length} Gambar total</span>
-                            <span>•</span>
-                            <span className="text-emerald-400">{projCompleted} selesai</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Right: Actions */}
-                    {!isEditing && (
-                      <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                        {/* Select / Activate button */}
-                        {!isCurrentActive && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onSelectProject(proj.id);
-                              setShowProjectManagerModal(false);
-                            }}
-                            className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-200 border border-amber-500/30 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1"
-                            title="Buka dan jadikan project aktif"
-                          >
-                            <i className="fa-solid fa-folder-open text-xs"></i>
-                            <span>Pilih</span>
+                            <i className="fa-solid fa-brain text-[9px]"></i>
+                            <span className="hidden sm:inline">Logika</span>
                           </button>
                         )}
-
-                        {/* Edit / Rename button */}
                         <button
                           type="button"
-                          onClick={() => {
-                            setEditingProjectId(proj.id);
-                            setEditingProjectName(proj.name);
-                          }}
-                          className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-gray-300 hover:text-white font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1 border border-gray-700"
-                          title="Ganti nama project"
+                          onClick={() => setComparisonItem(item)}
+                          className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                          title="Bandingkan Gambar Asli vs Animasi"
                         >
-                          <i className="fa-solid fa-pen-to-square text-xs text-sky-400"></i>
-                          <span>Edit</span>
+                          <i className="fa-solid fa-code-compare text-[9px]"></i>
                         </button>
-
-                        {/* Delete project button */}
                         <button
                           type="button"
-                          onClick={() => setProjectToDelete(proj)}
-                          className="px-2.5 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/40 font-bold text-xs rounded-lg transition cursor-pointer flex items-center gap-1 active:scale-95"
-                          title="Hapus project ini"
+                          onClick={() => handleDownloadSingleHtml(item)}
+                          className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-gray-300 font-semibold text-[11px] rounded-lg transition cursor-pointer"
+                          title="Unduh HTML"
                         >
-                          <i className="fa-solid fa-trash text-xs"></i>
-                          <span>Hapus</span>
+                          <i className="fa-solid fa-code text-[9px]"></i>
                         </button>
-                      </div>
+                        <button
+                          type="button"
+                          onClick={() => handleExportSingleMp4(item)}
+                          className="px-2 py-1 bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] rounded-lg transition cursor-pointer shadow-sm"
+                          title="Export MP4 (1080p 60 FPS)"
+                        >
+                          <i className="fa-solid fa-film text-[9px]"></i>
+                        </button>
+                      </>
                     )}
+
+                    {/* Delete Item */}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onDeleteItem(item.id);
+                      }}
+                      disabled={isProcessing}
+                      className="p-1.5 text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition cursor-pointer disabled:opacity-30 active:scale-90"
+                      title="Hapus gambar ini dari antrian"
+                    >
+                      <i className="fa-solid fa-xmark text-xs"></i>
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="pt-2 border-t border-gray-800 flex justify-end shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowProjectManagerModal(false);
-                  setEditingProjectId(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-bold transition cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
-
-      {/* MODAL: DELETE CONFIRMATION DIALOG */}
-      {projectToDelete && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
-          <div className="glass-card rounded-2xl p-5 border border-rose-500/50 bg-slate-950 max-w-md w-full space-y-4 shadow-2xl text-center">
-            <div className="w-12 h-12 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-400 flex items-center justify-center mx-auto text-xl animate-bounce">
-              <i className="fa-solid fa-triangle-exclamation"></i>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="font-extrabold text-base text-gray-100">
-                Hapus Folder / Project?
-              </h3>
-              <p className="text-xs text-gray-300 leading-relaxed">
-                Apakah Anda yakin ingin menghapus project{' '}
-                <strong className="text-rose-300">"{projectToDelete.name}"</strong>?
-              </p>
-              <p className="text-[11px] text-gray-500">
-                Semua gambar ({items.filter((it) => it.projectId === projectToDelete.id).length} item) dalam antrian project ini juga akan dihapus. Tindakan ini tidak dapat dibatalkan.
-              </p>
-            </div>
-
-            <div className="flex justify-center gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setProjectToDelete(null)}
-                className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  onDeleteProject(projectToDelete.id);
-                  setProjectToDelete(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition cursor-pointer shadow-lg shadow-rose-600/30 active:scale-95"
-              >
-                <i className="fa-solid fa-trash mr-1.5"></i>
-                Ya, Hapus Project
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* MODAL: SIDE-BY-SIDE COMPARISON (ORIGINAL IMAGE VS GENERATED MOTION) */}
       {comparisonItem && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="glass-card rounded-2xl p-5 border border-amber-500/40 bg-slate-950 max-w-4xl w-full space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center pb-3 border-b border-gray-800 shrink-0">
               <div className="flex items-center gap-2">
@@ -1910,7 +1186,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               </div>
               <button
                 onClick={() => setComparisonItem(null)}
-                className="text-gray-400 hover:text-white p-1"
+                className="text-gray-400 hover:text-white p-1 cursor-pointer"
               >
                 <i className="fa-solid fa-xmark text-base"></i>
               </button>
@@ -1942,7 +1218,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                   {comparisonItem.animationResult && (
                     <button
                       onClick={() => onOpenFullscreen(comparisonItem.animationResult!)}
-                      className="text-[10px] text-sky-300 hover:underline flex items-center gap-1"
+                      className="text-[10px] text-sky-300 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <i className="fa-solid fa-expand"></i> Fullscreen
                     </button>
@@ -2026,7 +1302,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             {/* Bottom Actions */}
             <div className="flex justify-between items-center pt-3 border-t border-gray-800 shrink-0">
               <span className="text-[11px] text-gray-400">
-                Mode: <strong className="text-amber-300 capitalize">{comparisonItem.motionDynamics}</strong> • Mode Warna: <strong className="text-amber-300 capitalize">{comparisonItem.colorMode}</strong>
+                Mode: <strong className="text-amber-300 capitalize">{comparisonItem.motionDynamics}</strong> • Warna: <strong className="text-amber-300 capitalize">{comparisonItem.colorMode}</strong>
               </span>
 
               <div className="flex items-center gap-2">
@@ -2064,7 +1340,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       {/* MODAL: DETAILED 3-STEP SHAPE & MOTION LOGICAL ANALYSIS */}
       {analysisModalItem && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fadeIn">
           <div className="glass-card rounded-2xl p-5 border border-purple-500/40 bg-slate-950 max-w-3xl w-full space-y-4 shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center pb-3 border-b border-gray-800 shrink-0">
               <div className="flex items-center gap-2">
@@ -2150,7 +1426,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 </div>
                 <p className="text-xs text-gray-300 leading-relaxed">
                   {analysisModalItem.shapeAnalysis?.professionalMotionPlan ||
-                    'Setiap elemen dianimasikan secara terpisah mengikuti prinsip fisika nyata & mikro-gerak microstock (rotasi jarum pada poros, denyut aerodinamis garis kecepatan, getaran titik inersia, dan klik pusher).'}
+                    'Setiap elemen dianimasikan secara terpisah mengikuti prinsip fisika nyata & mikro-gerak microstock.'}
                 </p>
               </div>
 
@@ -2184,16 +1460,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           </div>
         </div>
       )}
-
-      {/* MODAL: IMAGE TO MOTION AUTO PILOT (MULTI-ACCOUNT & REFERENCE IMAGES DRAG & DROP) */}
-      <ImageToMotionAutoPilotModal
-        isOpen={isAutoPilotModalOpen}
-        projects={projects}
-        onClose={handleCloseAutoPilotModal}
-        onStartAutoPilot={handleStartAutoPilotMultiAccount}
-        isAutoPilotRunning={isAutoPilotRunning}
-        showToast={showToast}
-      />
     </section>
   );
 };

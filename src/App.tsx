@@ -164,7 +164,6 @@ export default function App() {
   // Modals
   const [isApiModalOpen, setIsApiModalOpen] = useState<boolean>(false);
   const [isAutoPilotModalOpen, setIsAutoPilotModalOpen] = useState<boolean>(false);
-  const [isI2mAutoPilotModalOpen, setIsI2mAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isVideoConverterModalOpen, setIsVideoConverterModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
@@ -604,116 +603,74 @@ export default function App() {
   };
 
   // --- HANDLERS: IMAGE TO MOTION (AI VISION) ---
-  const saveI2mProjectsToStorage = (projects: ImageToMotionProject[]) => {
-    setI2mProjects(projects);
-    try {
-      localStorage.setItem(STORAGE_I2M_PROJECTS, JSON.stringify(projects));
-    } catch (e) {
-      console.error('Failed to save i2m projects', e);
-    }
-  };
-
   const saveI2mItemsToStorage = (items: ImageToMotionItem[]) => {
     setI2mItems(items);
     try {
-      localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(items.slice(0, 150)));
+      localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(items.slice(0, 200)));
     } catch (e) {
       console.error('Failed to save i2m items', e);
     }
   };
 
-  const handleCreateI2mProject = (name: string) => {
-    const newProject: ImageToMotionProject = {
-      id: 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(7),
-      name: name.trim(),
-      createdAt: Date.now(),
-    };
-    const updated = [newProject, ...i2mProjects];
-    saveI2mProjectsToStorage(updated);
-    setActiveI2mProjectId(newProject.id);
-    showToast(`Project "${name}" berhasil dibuat!`, 'success');
-  };
-
-  const handleUpdateI2mProject = (projectId: string, newName: string) => {
-    if (!newName.trim()) return;
-    const trimmed = newName.trim();
-    const updated = i2mProjects.map((p) => (p.id === projectId ? { ...p, name: trimmed } : p));
-    saveI2mProjectsToStorage(updated);
-    setI2mItems((prev) => {
-      const next = prev.map((item) =>
-        item.projectId === projectId ? { ...item, projectName: trimmed } : item
-      );
+  const handleAddAnimation = useCallback((newAnim: AnimationItem) => {
+    setAnimations((prev) => {
+      const exists = prev.some((a) => a.id === newAnim.id);
+      const updated = exists
+        ? prev.map((a) => (a.id === newAnim.id ? newAnim : a))
+        : [newAnim, ...prev];
+      const trimmed = updated.slice(0, 300);
       try {
-        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
-      } catch (e) {}
-      return next;
+        localStorage.setItem(STORAGE_ANIMATIONS, JSON.stringify(trimmed));
+      } catch (e) {
+        console.error('Failed to save animations', e);
+      }
+      return trimmed;
     });
-    showToast(`Nama project berhasil diubah menjadi "${trimmed}"`, 'success');
-  };
+  }, []);
 
-  const handleDeleteI2mProject = (projectId: string) => {
-    const projectToDelete = i2mProjects.find((p) => p.id === projectId);
-    const projName = projectToDelete ? projectToDelete.name : 'Project';
-    let updated = i2mProjects.filter((p) => p.id !== projectId);
-    if (updated.length === 0) {
-      const defaultProj: ImageToMotionProject = {
-        id: 'proj_' + Date.now(),
-        name: 'Akun Microstock Utama',
-        createdAt: Date.now(),
-      };
-      updated = [defaultProj];
-    }
-    saveI2mProjectsToStorage(updated);
-    if (activeI2mProjectId === projectId) {
-      setActiveI2mProjectId(updated[0].id);
-    }
-    setI2mItems((prev) => {
-      const next = prev.filter((item) => item.projectId !== projectId);
-      try {
-        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
-      } catch (e) {}
-      return next;
-    });
-    showToast(`Project "${projName}" berhasil dihapus`, 'info');
-  };
+  const handlePreviewAnimation = useCallback((anim: AnimationItem) => {
+    handleAddAnimation(anim);
+  }, [handleAddAnimation]);
 
   const handleAddI2mItems = (newItems: ImageToMotionItem[]) => {
-    const updated = [...newItems, ...i2mItems];
-    saveI2mItemsToStorage(updated);
+    setI2mItems((prev) => {
+      const updated = [...newItems, ...prev];
+      saveI2mItemsToStorage(updated);
+      return updated;
+    });
   };
 
   const handleUpdateI2mItem = (itemId: string, updates: Partial<ImageToMotionItem>) => {
     setI2mItems((prev) => {
-      const next = prev.map((item) => {
-        if (item.id === itemId) {
-          const updatedItem = { ...item, ...updates };
-          if (updates.animationResult) {
-            // Also save to global animations gallery
-            const alreadyExists = animations.some((a) => a.id === updates.animationResult!.id);
-            if (!alreadyExists) {
-              saveAnimationsToStorage([updates.animationResult, ...animations]);
-            }
-          }
-          return updatedItem;
-        }
-        return item;
-      });
+      const next = prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item));
       try {
-        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 150)));
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 200)));
       } catch (e) {}
       return next;
     });
   };
 
   const handleDeleteI2mItem = (itemId: string) => {
-    const updated = i2mItems.filter((i) => i.id !== itemId);
-    saveI2mItemsToStorage(updated);
+    setI2mItems((prev) => {
+      const updated = prev.filter((i) => i.id !== itemId);
+      saveI2mItemsToStorage(updated);
+      return updated;
+    });
     showToast('Gambar dihapus dari antrian', 'info');
   };
 
-  const handleClearCompletedI2mItems = (projectId: string) => {
-    const updated = i2mItems.filter((i) => !(i.projectId === projectId && i.status === 'completed'));
-    saveI2mItemsToStorage(updated);
+  const handleClearAllI2mItems = () => {
+    setI2mItems([]);
+    saveI2mItemsToStorage([]);
+    showToast('Semua antrian gambar berhasil dibersihkan', 'info');
+  };
+
+  const handleClearCompletedI2mItems = () => {
+    setI2mItems((prev) => {
+      const updated = prev.filter((i) => i.status !== 'completed');
+      saveI2mItemsToStorage(updated);
+      return updated;
+    });
     showToast('Antrian selesai berhasil dibersihkan', 'info');
   };
 
@@ -756,7 +713,9 @@ export default function App() {
         onOpenApiModal={() => setIsApiModalOpen(true)}
         onOpenAutoPilotModal={() => {
           if (activeTab === 'image_to_motion') {
-            setIsI2mAutoPilotModalOpen(true);
+            const el = document.getElementById('activity-log-console') || document.querySelector('section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+            showToast('Gunakan tombol "Jalankan Auto Pilot" di panel Antrian Gambar', 'info');
           } else {
             setIsAutoPilotModalOpen(true);
           }
@@ -832,25 +791,17 @@ export default function App() {
           <ImageToMotionSection
             apiKeys={apiKeys}
             selectedModel={selectedModel}
-            projects={i2mProjects}
-            activeProjectId={activeI2mProjectId}
-            onSelectProject={setActiveI2mProjectId}
-            onCreateProject={handleCreateI2mProject}
-            onUpdateProject={handleUpdateI2mProject}
-            onDeleteProject={handleDeleteI2mProject}
             items={i2mItems}
             onAddItems={handleAddI2mItems}
             onUpdateItem={handleUpdateI2mItem}
             onDeleteItem={handleDeleteI2mItem}
+            onClearAllItems={handleClearAllI2mItems}
             onClearCompletedItems={handleClearCompletedI2mItems}
-            onPreviewAnimation={(anim) => {
-              saveAnimationsToStorage([anim, ...animations.filter((a) => a.id !== anim.id)]);
-            }}
+            onAddAnimation={handleAddAnimation}
+            onPreviewAnimation={handlePreviewAnimation}
             onOpenFullscreen={(item) => setFullscreenItem(item)}
             showToast={showToast}
             addLog={addLog}
-            isExternalAutoPilotModalOpen={isI2mAutoPilotModalOpen}
-            onCloseExternalAutoPilotModal={() => setIsI2mAutoPilotModalOpen(false)}
           />
         )}
 
