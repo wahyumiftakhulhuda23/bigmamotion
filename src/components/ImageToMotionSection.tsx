@@ -369,7 +369,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     }
   };
 
-  // Auto Pilot sequential batch runner across ALL folders and items (folder teratas -> antrian teratas)
+  // Auto Pilot sequential batch runner across ALL folders and items (dari atas ke bawah satu persatu)
   const handleStartAutoPilotAll = async () => {
     const allPending = itemsRef.current.filter((it) => it.status === 'pending' || it.status === 'error');
     if (allPending.length === 0) {
@@ -377,11 +377,13 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       return;
     }
 
-    if (isAutoPilotRunning) {
+    if (autoPilotRef.current.isRunning || isAutoPilotRunning) {
       showToast('Auto Pilot sedang berjalan!', 'warn');
       return;
     }
 
+    // Set synchronous ref flag and React state
+    autoPilotRef.current = { isRunning: true, isPaused: false };
     setIsAutoPilotRunning(true);
     setAutoPilotPaused(false);
 
@@ -390,142 +392,114 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
     addLog(
-      `🚀 [AUTO PILOT DIMULAI] Menjalankan ${totalToProcess} antrian gambar di ${projectsRef.current.length} folder berurutan (dari folder teratas)...`,
+      `🚀 [AUTO PILOT DIMULAI] Menjalankan ${totalToProcess} antrian gambar satu persatu berurutan dari antrian teratas...`,
       'cyan'
     );
     showToast(
-      `🚀 Auto Pilot Dimulai! Menjalankan ${totalToProcess} antrian berurutan mulai dari folder teratas...`,
+      `🚀 Auto Pilot Dimulai! Memproses ${totalToProcess} antrian satu persatu dari urutan teratas...`,
       'info'
     );
 
-    // Loop through projects in order (starting from top folder)
-    for (let fIdx = 0; fIdx < projectsRef.current.length; fIdx++) {
-      if (!autoPilotRef.current.isRunning) break;
-
-      const currentProj = projectsRef.current[fIdx];
-      // Get latest pending items in this folder
-      const folderPending = itemsRef.current.filter(
-        (it) => it.projectId === currentProj.id && (it.status === 'pending' || it.status === 'error')
-      );
-
-      if (folderPending.length === 0) {
-        addLog(
-          `📁 [Folder ${fIdx + 1}/${projectsRef.current.length}: "${currentProj.name}"] Tidak ada antrian pending, lanjut ke folder berikutnya...`,
-          'info'
-        );
-        continue;
+    // Loop through all pending items sequentially from top (index 0) to bottom
+    for (let i = 0; i < allPending.length; i++) {
+      if (!autoPilotRef.current.isRunning) {
+        addLog('[Auto Pilot] Proses dihentikan oleh pengguna.', 'warn');
+        break;
       }
 
-      // Automatically switch active project view in UI so user sees this folder
-      onSelectProject(currentProj.id);
+      // Check if paused
+      while (autoPilotRef.current.isPaused) {
+        await new Promise((res) => setTimeout(res, 400));
+        if (!autoPilotRef.current.isRunning) break;
+      }
+      if (!autoPilotRef.current.isRunning) break;
+
+      const currentItem = allPending[i];
+      const targetProject = projectsRef.current.find((p) => p.id === currentItem.projectId);
+      const targetProjectName = targetProject?.name || currentItem.projectName || activeProject.name || 'Microstock';
+
+      // Update live status for the visual loading bar
+      const percent = Math.round((completedOverall / totalToProcess) * 100);
+      setAutoPilotStatus({
+        mode: 'all_folders',
+        totalFolders: projectsRef.current.length || 1,
+        currentFolderIndex: 1,
+        currentFolderId: currentItem.projectId,
+        currentFolderName: targetProjectName,
+        totalInCurrentFolder: allPending.length,
+        currentItemIndexInFolder: i + 1,
+        totalItemsOverall: totalToProcess,
+        completedItemsOverall: completedOverall,
+        currentFileName: currentItem.fileName,
+        currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${currentItem.fileName}"...`,
+        progressPercent: percent,
+      });
 
       addLog(
-        `📂 [FOLDER ${fIdx + 1}/${projectsRef.current.length}: "${currentProj.name}"] Memulai ${folderPending.length} antrian (dimulai dari antrian teratas)...`,
-        'cyan'
+        `⚡ [Antrian #${i + 1}/${totalToProcess}] (${targetProjectName}) Memproses "${currentItem.fileName}" (dari atas)...`,
+        'info'
       );
       showToast(
-        `📂 [Folder ${fIdx + 1}/${projectsRef.current.length}] Masuk ke "${currentProj.name}" (${folderPending.length} antrian)...`,
+        `⚡ [Antrian #${i + 1}/${totalToProcess}] Memproses "${currentItem.fileName}"...`,
         'info'
       );
 
-      // Loop through pending items in this folder in order (top item first)
-      for (let iIdx = 0; iIdx < folderPending.length; iIdx++) {
-        if (!autoPilotRef.current.isRunning) break;
+      const success = await processSingleItem(currentItem, targetProjectName);
+      completedOverall++;
 
-        // Check if paused
-        while (autoPilotRef.current.isPaused) {
-          await new Promise((res) => setTimeout(res, 500));
-          if (!autoPilotRef.current.isRunning) break;
-        }
-        if (!autoPilotRef.current.isRunning) break;
+      const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
+      setAutoPilotStatus((prev) =>
+        prev
+          ? {
+              ...prev,
+              completedItemsOverall: completedOverall,
+              progressPercent: updatedPercent,
+              currentStageText: success
+                ? `Berhasil merender "${currentItem.fileName}" (60 FPS HD)`
+                : `Gagal memproses "${currentItem.fileName}"`,
+            }
+          : null
+      );
 
-        const currentItem = folderPending[iIdx];
-
-        // Update live status for the visual loading bar
-        const percent = Math.round((completedOverall / totalToProcess) * 100);
-        setAutoPilotStatus({
-          mode: 'all_folders',
-          totalFolders: projectsRef.current.length,
-          currentFolderIndex: fIdx + 1,
-          currentFolderId: currentProj.id,
-          currentFolderName: currentProj.name,
-          totalInCurrentFolder: folderPending.length,
-          currentItemIndexInFolder: iIdx + 1,
-          totalItemsOverall: totalToProcess,
-          completedItemsOverall: completedOverall,
-          currentFileName: currentItem.fileName,
-          currentStageText: `Menganalisis logika bentuk & merancang motion 60 FPS untuk "${currentItem.fileName}"...`,
-          progressPercent: percent,
-        });
-
+      if (success) {
         addLog(
-          `⚡ [${currentProj.name}] -> Antrian #${iIdx + 1}/${folderPending.length}: Memproses "${currentItem.fileName}"...`,
-          'info'
+          `✅ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" selesai dibuat (Canvas 2D 60 FPS)!`,
+          'success'
         );
         showToast(
-          `⚡ [${currentProj.name}] Antrian #${iIdx + 1}: "${currentItem.fileName}" sedang diproses...`,
-          'info'
+          `✨ [Antrian #${i + 1}] "${currentItem.fileName}" berhasil dibuat 60 FPS!`,
+          'success'
         );
-
-        const success = await processSingleItem(currentItem, currentProj.name);
-        completedOverall++;
-
-        const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
-        setAutoPilotStatus((prev) =>
-          prev
-            ? {
-                ...prev,
-                completedItemsOverall: completedOverall,
-                progressPercent: updatedPercent,
-                currentStageText: success
-                  ? `Berhasil merender "${currentItem.fileName}" (60 FPS HD)`
-                  : `Gagal memproses "${currentItem.fileName}"`,
-              }
-            : null
+      } else {
+        addLog(
+          `⚠️ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
+          'warn'
         );
-
-        if (success) {
-          addLog(
-            `✅ [${currentProj.name}] -> Antrian #${iIdx + 1} "${currentItem.fileName}" selesai dibuat (Canvas 2D 60 FPS)!`,
-            'success'
-          );
-          showToast(
-            `✨ [${currentProj.name} #${iIdx + 1}] "${currentItem.fileName}" berhasil dibuat 60 FPS!`,
-            'success'
-          );
-        } else {
-          addLog(
-            `⚠️ [${currentProj.name}] -> Antrian #${iIdx + 1} "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
-            'warn'
-          );
-          showToast(
-            `⚠️ [${currentProj.name} #${iIdx + 1}] "${currentItem.fileName}" kendala, otomatis lanjut...`,
-            'warn'
-          );
-        }
-
-        // Brief breather
-        await new Promise((res) => setTimeout(res, 1000));
+        showToast(
+          `⚠️ [Antrian #${i + 1}] "${currentItem.fileName}" kendala, lanjut berikutnya...`,
+          'warn'
+        );
       }
 
-      if (autoPilotRef.current.isRunning) {
-        addLog(`🎉 [SELESAI FOLDER] Seluruh antrian di folder "${currentProj.name}" tuntas diproses!`, 'green');
-        showToast(`🎉 Folder "${currentProj.name}" selesai!`, 'success');
+      // Small breather between items
+      if (autoPilotRef.current.isRunning && i < allPending.length - 1) {
+        await new Promise((res) => setTimeout(res, 800));
       }
     }
 
     const wasRunning = autoPilotRef.current.isRunning;
+    autoPilotRef.current = { isRunning: false, isPaused: false };
     setIsAutoPilotRunning(false);
     setAutoPilotPaused(false);
     setAutoPilotStatus(null);
 
     if (wasRunning) {
       addLog(
-        `🏆 [AUTO PILOT SELESAI] Seluruh ${totalToProcess} antrian di semua folder telah selesai diproses berurutan!`,
+        `🏆 [AUTO PILOT SELESAI] Seluruh ${totalToProcess} antrian gambar telah selesai diproses berurutan dari atas ke bawah!`,
         'success'
       );
       addLog('═══════════════════════════════════════════════════════════════', 'cyan');
-      showToast('🎊 Auto Pilot Selesai! Semua antrian di seluruh folder berhasil digenerate!', 'success');
+      showToast('🎊 Auto Pilot Selesai! Semua antrian berhasil digenerate satu per satu!', 'success');
     }
   };
 
@@ -540,11 +514,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       return;
     }
 
-    if (isAutoPilotRunning) {
+    if (autoPilotRef.current.isRunning || isAutoPilotRunning) {
       showToast('Auto Pilot sedang berjalan!', 'warn');
       return;
     }
 
+    autoPilotRef.current = { isRunning: true, isPaused: false };
     setIsAutoPilotRunning(true);
     setAutoPilotPaused(false);
 
@@ -561,7 +536,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       if (!autoPilotRef.current.isRunning) break;
 
       while (autoPilotRef.current.isPaused) {
-        await new Promise((res) => setTimeout(res, 500));
+        await new Promise((res) => setTimeout(res, 400));
         if (!autoPilotRef.current.isRunning) break;
       }
       if (!autoPilotRef.current.isRunning) break;
@@ -611,10 +586,13 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         addLog(`⚠️ [${activeProject.name}] Antrian #${i + 1} "${current.fileName}" kendala, lanjut berikutnya...`, 'warn');
       }
 
-      await new Promise((res) => setTimeout(res, 1000));
+      if (autoPilotRef.current.isRunning && i < folderPending.length - 1) {
+        await new Promise((res) => setTimeout(res, 800));
+      }
     }
 
     const wasRunning = autoPilotRef.current.isRunning;
+    autoPilotRef.current = { isRunning: false, isPaused: false };
     setIsAutoPilotRunning(false);
     setAutoPilotPaused(false);
     setAutoPilotStatus(null);
@@ -689,6 +667,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const handlePauseAutoPilot = () => {
     const nextPaused = !autoPilotPaused;
     setAutoPilotPaused(nextPaused);
+    autoPilotRef.current.isPaused = nextPaused;
     if (nextPaused) {
       addLog('[Auto Pilot] ⏸ Dijeda oleh pengguna.', 'warn');
       showToast('⏸ Auto Pilot dijeda', 'info');
@@ -699,6 +678,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   };
 
   const handleStopAutoPilot = () => {
+    autoPilotRef.current = { isRunning: false, isPaused: false };
     setIsAutoPilotRunning(false);
     setAutoPilotPaused(false);
     setAutoPilotStatus(null);
@@ -1092,32 +1072,41 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             </div>
 
             {/* Scope Switcher Tabs */}
-            <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
-              <button
-                type="button"
-                onClick={() => setQueueViewMode('current_folder')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  queueViewMode === 'current_folder'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <i className="fa-solid fa-folder text-[10px]"></i>
-                <span>Folder Ini ({projectItems.length})</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setQueueViewMode('all_folders')}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                  queueViewMode === 'all_folders'
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <i className="fa-solid fa-globe text-[10px]"></i>
-                <span>Semua Folder ({items.length})</span>
-              </button>
-            </div>
+            {projectItems.length > 0 ? (
+              <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
+                <button
+                  type="button"
+                  onClick={() => setQueueViewMode('current_folder')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    queueViewMode === 'current_folder'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <i className="fa-solid fa-folder text-[10px]"></i>
+                  <span>Folder Ini ({projectItems.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQueueViewMode('all_folders')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                    queueViewMode === 'all_folders'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <i className="fa-solid fa-globe text-[10px]"></i>
+                  <span>Semua Folder ({items.length})</span>
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center bg-slate-900/90 p-1 rounded-xl border border-gray-800 ml-0 sm:ml-2">
+                <span className="px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-500 text-slate-950 shadow-sm flex items-center gap-1.5">
+                  <i className="fa-solid fa-globe text-[10px]"></i>
+                  <span>Semua Folder ({items.length})</span>
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Action Tools (ZIP MP4, ZIP HTML, Clear) */}
