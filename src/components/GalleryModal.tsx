@@ -365,7 +365,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 Belum ada animasi di galeri untuk kategori ini.
               </div>
             ) : (
-              filteredList.map((item) => {
+              filteredList.map((item, idx) => {
                 const isQueued = downloadQueue.includes(item.id);
                 const isRenderingMp4 = exportingMp4Id === item.id;
                 const borderClass = isQueued
@@ -374,7 +374,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
                 return (
                   <div
-                    key={item.id}
+                    key={`${item.id}_${idx}`}
                     className={`glass-card rounded-xl overflow-hidden border transition flex flex-col justify-between ${borderClass} shadow-lg hover:shadow-sky-950/30`}
                   >
                     <div className="aspect-16-9 w-full bg-slate-950 relative overflow-hidden shrink-0 group">

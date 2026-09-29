@@ -15,7 +15,7 @@ export interface FailedAutoPilotItem {
   error: string;
 }
 
-interface AutoPilotModalProps {
+interface PromptAutoPilotModalProps {
   isOpen: boolean;
   accounts: AutoPilotAccount[];
   onAddAccount: () => void;
@@ -28,7 +28,7 @@ interface AutoPilotModalProps {
   onRetryFailedItems?: () => void;
 }
 
-export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
+export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
   isOpen,
   accounts,
   onAddAccount,
@@ -46,7 +46,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
 
   return (
     <div
-      id="autopilot-modal"
+      id="prompt-autopilot-modal"
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
     >
       <div className="glass-card rounded-2xl max-w-3xl w-full border border-sky-500/30 p-6 space-y-5 max-h-[90vh] flex flex-col shadow-2xl bg-slate-950/95">

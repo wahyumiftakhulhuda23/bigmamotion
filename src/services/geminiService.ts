@@ -1031,25 +1031,27 @@ ${shapeAnalysisJson}
       scaleY = breathe;
     }
 
-    // 1. Ambient Background Energy Rings & Pulses
-    ctx.save();
-    ctx.translate(posX, posY);
-    for (let r = 1; r <= 3; r++) {
-      const ringRadius = (S * 0.55 * r * 0.6) + ((t * 25 * r) % (S * 0.7));
-      const ringAlpha = Math.max(0, 0.28 - (ringRadius / (S * 1.4)));
-      ctx.beginPath();
-      ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = "${glowColor}";
-      ctx.globalAlpha = ringAlpha * 0.7;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([8, 12]);
-      ctx.lineDashOffset = -t * 15 * r;
-      ctx.stroke();
+    // 1. Ambient Background Energy Rings & Pulses (Only for Neon / Glow styles)
+    if (${neonGlow}) {
+      ctx.save();
+      ctx.translate(posX, posY);
+      for (let r = 1; r <= 3; r++) {
+        const ringRadius = (S * 0.55 * r * 0.6) + ((t * 25 * r) % (S * 0.7));
+        const ringAlpha = Math.max(0, 0.28 - (ringRadius / (S * 1.4)));
+        ctx.beginPath();
+        ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+        ctx.strokeStyle = "${glowColor}";
+        ctx.globalAlpha = ringAlpha * 0.7;
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([8, 12]);
+        ctx.lineDashOffset = -t * 15 * r;
+        ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
-    // 2. Render Speed Streaks behind object
-    if (${hasSpeedTrails}) {
+    // 2. Render Speed Streaks behind object (Only when dynamic effects active)
+    if (${hasSpeedTrails && neonGlow}) {
       ctx.save();
       ctx.translate(posX, posY);
       for (let i = 0; i < streaks.length; i++) {
@@ -1077,29 +1079,31 @@ ${shapeAnalysisJson}
       ctx.restore();
     }
 
-    // 3. Render Trailing Kinetic Particles
-    ctx.save();
-    ctx.translate(posX, posY);
-    for (let i = 0; i < particles.length; i++) {
-      const p = particles[i];
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 1;
-      if (p.life <= 0 || p.x < -w * 0.5) {
-        p.x = -S * 0.15 + (Math.random() - 0.5) * 25;
-        p.y = (Math.random() - 0.5) * (S * 0.6);
-        p.vx = -(Math.random() * 4.5 + 2.0);
-        p.life = Math.random() * 50 + 20;
-      }
+    // 3. Render Trailing Kinetic Particles (Only for Neon / Glow styles)
+    if (${neonGlow}) {
+      ctx.save();
+      ctx.translate(posX, posY);
+      for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 1;
+        if (p.life <= 0 || p.x < -w * 0.5) {
+          p.x = -S * 0.15 + (Math.random() - 0.5) * 25;
+          p.y = (Math.random() - 0.5) * (S * 0.6);
+          p.vx = -(Math.random() * 4.5 + 2.0);
+          p.life = Math.random() * 50 + 20;
+        }
 
-      const pAlpha = (p.life / p.maxLife) * p.alpha;
-      ctx.fillStyle = i % 2 === 0 ? "${glowColor}" : "${secondaryColor}";
-      ctx.globalAlpha = Math.max(0, Math.min(1, pAlpha));
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fill();
+        const pAlpha = (p.life / p.maxLife) * p.alpha;
+        ctx.fillStyle = i % 2 === 0 ? "${glowColor}" : "${secondaryColor}";
+        ctx.globalAlpha = Math.max(0, Math.min(1, pAlpha));
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
     }
-    ctx.restore();
 
     // 4. Render Procedural Vector Art in Canvas 2D (Pure Code Re-creation)
     ctx.save();
@@ -1261,38 +1265,61 @@ async function generateImageToMotionDirect(
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
-  const masterMultimodalPrompt = `Anda adalah Master AI Vision Specialist & Lead HTML5 Canvas 2D Motion Graphics Engineer (Shutterstock/Envato Microstock Standard).
+  const masterMultimodalPrompt = `Anda adalah World-Class Computer Vision & Master SVG Vector Tracing Specialist, Senior Iconographer & Lead Canvas 2D Motion Graphics Engineer (Adobe Illustrator / After Effects / Lottie High-End Standard).
 
-TUGAS UTAMA:
-1. ANALISIS MENDALAM GAMBAR REFERENSI:
-   - Identifikasi objek/karakter/simbol apa ini secara spesifik.
-   - Analisis bentuk geometris, kontur, kurva bezier, proporsi, sudut, bevel, segmen-segmen komponen, dan detail-detail dalamnya.
-   - Analisis skema warna asli gambar (warna utama, warna sekunder, gradien, kilau highlight, dan bayangan).
-2. REKONSTRUKSI & GAMBAR ULANG MENJADI KODE ANIMASI CANVAS 2D MURNI (PROCEDURAL VECTOR RE-CREATION):
-   - Gambar ulang subjek tersebut SEMIRIP MUNGKIN dengan referensi menggunakan perintah gambar Canvas 2D murni: ctx.beginPath(), ctx.moveTo(), ctx.lineTo(), ctx.bezierCurveTo(), ctx.arc(), ctx.ellipse(), ctx.createLinearGradient(), ctx.createRadialGradient(), ctx.fill(), ctx.stroke().
-   - DILARANG KERAS MENGGUNAKAN <img>, new Image(), drawImage(), atau bitmap/sprite mentah! Seluruh visual subjek WAJIB digambar menggunakan matematika vektor Canvas 2D!
-   - Terapkan animasi kinetik 60 FPS yang hidup sesuai Motion Dynamics: ${motionDynamics.toUpperCase()}.
-   - Mode Warna: ${colorMode.toUpperCase()}. Neon Glow: ${neonGlow ? 'AKTIF' : 'NONAKTIF'}.
-   ${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
-   ${customInstructions ? `- Instruksi Tambahan Pengguna: "${customInstructions}"` : ''}
+TUGAS UTAMA (ULTRA-DETAIL SVG VECTOR TRACING 1:1 & ANIMASI KINETIK MULTI-LAYER):
+Lakukan analisis mikroskopis pada GAMBAR REFERENSI yang diunggah. JIKA GAMBAR BERGAYA FLAT VECTOR / FLAT ICON / 2D VECTOR, LAKUKAN TRACING VEKTOR SVG MIKROSKOPIS PENUH (100% IDENTIK PERSIS) DAN BANGUN ULANG MENJADI KODE CANVAS 2D DENGAN MEMETAKAN STRING SVG PATH2D DARI SETIAP KOMPONEN ANATOMI:
 
-ATURAN KUALITAS & ZERO GHOSTING (MANDATORY):
-1. Canvas responsive: let w, h, cx, cy, S = Math.min(w, h) * 0.44. Subjek terpusat di (cx, cy).
-2. Bersihkan canvas setiap frame di animate(): ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h); agar tidak meninggalkan bekas gerakan/jejak kotor.
-3. Isolasi state setiap layer dengan ctx.save() dan ctx.restore().
-4. Di bagian <head>, sertakan tag JSON analisis persis seperti:
-<script type="application/json" id="shape-analysis">
-{
-  "objectName": "Nama objek spesifik",
-  "shapeDescription": "Deskripsi bentuk & proporsi yang dianalisis",
-  "detectedElements": ["Elemen 1", "Elemen 2", "Elemen 3", "Elemen 4"],
-  "professionalMotionPlan": "Rencana animasi 60 FPS",
-  "similaritySynthesis": "Sintesis kemiripan vektor Canvas 2D dengan gambar asli",
-  "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
-}
-</script>
+=============================================================================
+METODE 1: ULTRA-DETAIL SVG VECTOR TRACING (REPLIKA 1:1 PERSIS BEBAS DISTORSI)
+=============================================================================
+1. TRACING KONTUR VEKTOR SVG EKSAK:
+   - Konversikan setiap siluet, kelopak, sayap, bodi, gear, panel, kurva, lubang tembus, dan garis tepi dari gambar referensi menjadi string data path SVG yang presisi:
+     \`const part1_body = new Path2D("M 0 -120 C 50 -120 90 -80 90 -30 L 90 80 C 90 130 50 170 0 170 C -50 170 -90 130 -90 80 L -90 -30 C -90 -80 -50 -120 0 -120 Z");\`
+   - Gunakan perintah SVG Path standar (\`M\`, \`C\`, \`S\`, \`Q\`, \`L\`, \`A\`, \`Z\`) ternormalisasi pada sistem koordinat berpusat di (0,0) atau sistem viewBox [0,0,500,500].
+   - Setiap lapisan warna (fill) dan garis tepi (stroke) ditrace secara terpisah sehingga tidak ada detail referensi yang terlewat.
 
-WAJIB GUNAKAN STRUKTUR BOILERPLATE INI:
+2. EKSTRAKSI PALET WARNA FLAT HEX 1:1:
+   - Deteksi dan ekstrak kode warna HEX nyata dari setiap lapisan objek asli (misal: warna dasar \`#2563EB\`, bayangan flat \`#1D4ED8\`, aksen terang \`#60A5FA\`, outline \`#0F172A\`).
+   - DILARANG menggunakan warna tebakan jika gambar referensi memiliki palet warna tertentu.
+
+=============================================================================
+METODE 2: ARTICULATED MULTI-PART RIGGING & ANIMASI KINETIK CERDAS
+=============================================================================
+1. RIGGING SUB-KOMPONEN TERPISAH:
+   - Pisahkan hasil tracing SVG menjadi 4–8 sub-komponen independen (Bodi Utama, Kepala/Dial/Lensa, Roda/Sayap/Daun/Jarum, Aksen/Detail Mikro).
+   - Setiap komponen di-render pada titik putarnya masing-masing menggunakan hierarki Canvas 2D:
+     \`\`\`js
+     ctx.save();
+     ctx.translate(cx + partX * S, cy + partY * S);
+     ctx.rotate(partAngle);
+     ctx.scale(partScaleX * (S / 250), partScaleY * (S / 250));
+     ctx.fillStyle = "#hexColor";
+     ctx.fill(partPath);
+     if (hasStroke) {
+       ctx.strokeStyle = "#strokeColor";
+       ctx.lineWidth = strokeWidth;
+       ctx.stroke(partPath);
+     }
+     ctx.restore();
+     \`\`\`
+
+2. GERAKAN KINETIK KONTEKSTUAL 60 FPS:
+   - Animasikan bagian yang bergerak sesuai fungsi aslinya:
+     * Dial / Roda Gigi / Kipas: Berputar pada poros tengahnya (\`rot = t * speed\`).
+     * Lonceng / Pendulum / Ekor: Berayun harmonik (\`rot = Math.sin(t * 3.5) * 0.15\`).
+     * Sayap / Daun / Anggota Tubuh: Mengepak/bergoyang dengan *phase offset* sekunder.
+     * Bodi / Karakter: Denyut pernapasan atau pantulan *squash-and-stretch* elastis yang lembut.
+     * Ikon Badge / Gembok: Pantulan kilau spekular menyapu (*specular sheen wave*) melintasi permukaan.
+
+=============================================================================
+METODE 3: JIKA REFERENSI ADALAH GAYA 3D / NEON / CYBER GLOW:
+=============================================================================
+- Pertahankan kekayaan efek pendaran cahaya luminescent (\`ctx.shadowBlur = 15..30\`), multi-stop gradients, dan partikel kinetik yang memukau.
+
+=============================================================================
+STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
+=============================================================================
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1304,12 +1331,12 @@ WAJIB GUNAKAN STRUKTUR BOILERPLATE INI:
 </style>
 <script type="application/json" id="shape-analysis">
 {
-  "objectName": "...",
-  "shapeDescription": "...",
-  "detectedElements": [...],
-  "professionalMotionPlan": "...",
-  "similaritySynthesis": "...",
-  "glowColor": "${colorMode === 'neon' ? '#00f0ff' : '#38bdf8'}"
+  "objectName": "Nama spesifik objek referensi",
+  "shapeDescription": "Hasil Ultra-Detail SVG Tracing anatomi, layer Path2D, dan palet warna asli referensi",
+  "detectedElements": ["Traced Layer 1 (Root)", "Traced Layer 2 (Pivot Sekunder)", "Traced Layer 3", "Traced Layer 4"],
+  "professionalMotionPlan": "Analisis articulated rigging SVG Path2D kinetik 60 FPS",
+  "similaritySynthesis": "Rekonstruksi SVG Path2D 1:1 identik ultra-detail dengan animasi mandiri per layer",
+  "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
 }
 </script>
 <script>
@@ -1340,13 +1367,20 @@ WAJIB GUNAKAN STRUKTUR BOILERPLATE INI:
   window.addEventListener('resize', resize);
   resize();
 
+  // DEFINISI LENGKAP OBJEK PATH2D HASIL SVG TRACING ULTRA-DETAIL
+  // Contoh:
+  // const path_chassis = new Path2D("M ... C ... Z");
+  // const path_details = new Path2D("M ... L ... Z");
+
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // KODE MENGGAMBAR SUBJEK DENGAN CANVAS 2D VECTOR SECARA PRESISI (TANPA DRAWIMAGE)
+    // 1. RENDER LATAR BELAKANG / BAYANGAN DASAR (JIKA ADA DI REFERENSI)
+    // 2. RENDER HIERARKI SUB-KOMPONEN HASIL SVG TRACING PADA PIVOT MASING-MASING DENGAN ctx.save() / ctx.restore()
+    // 3. TERAPKAN WARNA FLAT HEX PERSIS GAMBAR ASLI
 
     requestAnimationFrame(animate);
   }
@@ -1387,7 +1421,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
             },
           ],
           generationConfig: {
-            temperature: 0.3,
+            temperature: 0.25,
+            maxOutputTokens: 8192,
           },
         }),
       });

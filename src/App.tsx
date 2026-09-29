@@ -3,6 +3,7 @@ import {
   AnimationItem,
   AnimationType,
   AutoPilotAccount,
+  ImageToMotionAutoPilotAccount,
   GeminiModel,
   LogItem,
   NicheCategory,
@@ -26,7 +27,8 @@ import { WorkflowSection } from './components/WorkflowSection';
 import { ImageToMotionSection } from './components/ImageToMotionSection';
 import { RightPanel } from './components/RightPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { AutoPilotModal } from './components/AutoPilotModal';
+import { AutoPilotModal, FailedAutoPilotItem } from './components/AutoPilotModal';
+import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
 import { FullscreenModal } from './components/FullscreenModal';
 import { VideoConverterModal } from './components/VideoConverterModal';
@@ -38,6 +40,7 @@ const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
 const STORAGE_I2M_ITEMS = 'bigma_i2m_items';
 const STORAGE_ACTIVE_TAB = 'bigma_active_tab';
+const STORAGE_I2M_AUTOPILOT_ACCOUNTS = 'bigma_i2m_autopilot_accounts_flow';
 
 export default function App() {
   // --- LICENSE & TRIAL STATE ---
@@ -83,23 +86,20 @@ export default function App() {
     } catch {}
   };
 
-  // Image to Motion Projects & Items
+  // Image to Motion Projects & Items (Starts empty, no dummy projects)
   const [i2mProjects, setI2mProjects] = useState<ImageToMotionProject[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_I2M_PROJECTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
     } catch {}
-    return [
-      { id: 'proj_default', name: 'Akun Microstock Utama', createdAt: Date.now() },
-      { id: 'proj_cyber', name: 'Project Cyber Neon', createdAt: Date.now() },
-    ];
+    return [];
   });
 
   const [activeI2mProjectId, setActiveI2mProjectId] = useState<string>(() => {
-    return i2mProjects[0]?.id || 'proj_default';
+    return i2mProjects[0]?.id || '';
   });
 
   const [i2mItems, setI2mItems] = useState<ImageToMotionItem[]>(() => {
@@ -107,7 +107,14 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_I2M_ITEMS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          const seen = new Set<string>();
+          return parsed.filter((item: ImageToMotionItem) => {
+            if (!item || !item.id || seen.has(item.id)) return false;
+            seen.add(item.id);
+            return true;
+          });
+        }
       }
     } catch {}
     return [];
@@ -147,6 +154,8 @@ export default function App() {
   const [keywordsText, setKeywordsText] = useState<string>('');
 
   const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([]);
+  const [failedPrompts, setFailedPrompts] = useState<string[]>([]);
+  const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>([]);
   const [animations, setAnimations] = useState<AnimationItem[]>([]);
   const [downloadQueue, setDownloadQueue] = useState<string[]>([]);
 
@@ -163,12 +172,28 @@ export default function App() {
 
   // Modals
   const [isApiModalOpen, setIsApiModalOpen] = useState<boolean>(false);
-  const [isAutoPilotModalOpen, setIsAutoPilotModalOpen] = useState<boolean>(false);
+  const [isPromptAutoPilotModalOpen, setIsPromptAutoPilotModalOpen] = useState<boolean>(false);
+  const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isVideoConverterModalOpen, setIsVideoConverterModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
 
-  // Auto Pilot Accounts
+  // Auto Pilot Trigger Token for ImageToMotionSection
+  const [autoPilotTriggerToken, setAutoPilotTriggerToken] = useState<number | undefined>(undefined);
+
+  // Image to Motion Auto Pilot Accounts (Starts empty as requested: user adds custom names & images)
+  const [i2mAutoPilotAccounts, setI2mAutoPilotAccounts] = useState<ImageToMotionAutoPilotAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+    return [];
+  });
+
+  // Prompt AI Auto Pilot Accounts (Restored original defaults for Prompt AI)
   const [autoPilotAccounts, setAutoPilotAccounts] = useState<AutoPilotAccount[]>([
     {
       id: 'acc_1',
@@ -176,7 +201,7 @@ export default function App() {
       type: 'icon',
       subCategory: 'teknologi',
       style: 'minimalist',
-      promptCount: 3,
+      promptCount: 2,
     },
   ]);
 
@@ -336,10 +361,12 @@ export default function App() {
     }
 
     setIsGeneratingAnimations(true);
+    setFailedPrompts([]);
     const total = generatedPrompts.length;
     addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM) ==========`, 'info');
 
     let currentAnimList = [...animations];
+    let caughtFailures: string[] = [];
 
     for (let i = 0; i < total; i++) {
       const currentPrompt = generatedPrompts[i];
@@ -383,20 +410,242 @@ export default function App() {
           addLog(`Berhasil merender animasi #${i + 1}.`, 'success');
         }
       } catch (e: any) {
-        addLog(`Error pada animasi #${i + 1}: ${e.message}. Otomatis lanjut ke prompt berikutnya...`, 'error');
-        showToast(`Melewati antrean #${i + 1} karena kendala API: ${e.message}`, 'error');
-        await new Promise((res) => setTimeout(res, 2500));
+        addLog(`Error pada animasi #${i + 1}: ${e.message}. Menyimpan untuk fitur coba ulang...`, 'error');
+        showToast(`Kendala pada prompt #${i + 1}: ${e.message}`, 'error');
+        caughtFailures.push(currentPrompt);
+        setFailedPrompts((prev) => [...prev, currentPrompt]);
+        await new Promise((res) => setTimeout(res, 2000));
         continue;
       }
     }
 
     setIsGeneratingAnimations(false);
     setProgressShow(false);
-    addLog(`========== SELESAI MERENDER ${total} ANIMASI ==========`, 'success');
-    showToast('Seluruh animasi selesai di-generate!', 'success');
+
+    if (caughtFailures.length > 0) {
+      addLog(`========== SELESAI DENGAN ${caughtFailures.length} GAGAL (BISA DIULANG) ==========`, 'warn');
+      showToast(`Selesai! ${caughtFailures.length} animasi gagal dibuat. Klik tombol "Ulangi yang Gagal" untuk mencoba kembali.`, 'warn');
+    } else {
+      addLog(`========== SELESAI MERENDER ${total} ANIMASI ==========`, 'success');
+      showToast('Seluruh animasi selesai di-generate!', 'success');
+    }
   };
 
-  // --- HANDLERS: AUTO PILOT ---
+  // Re-try all failed prompts in standard workflow
+  const handleRetryFailedPrompts = async () => {
+    if (failedPrompts.length === 0) {
+      showToast('Tidak ada animasi yang gagal dibuat.', 'info');
+      return;
+    }
+
+    setIsGeneratingAnimations(true);
+    const promptsToRetry = [...failedPrompts];
+    const total = promptsToRetry.length;
+    addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL ==========`, 'warn');
+    showToast(`Mencoba ulang ${total} animasi yang sebelumnya mengalami kendala...`, 'info');
+
+    let currentAnimList = [...animations];
+    let remainingFailed: string[] = [];
+
+    for (let i = 0; i < total; i++) {
+      const currentPrompt = promptsToRetry[i];
+      setProgressShow(true);
+      setProgressText(`Mencoba Ulang #${i + 1} dari ${total}...`);
+      setProgressPercent(Math.round(((i + 1) / total) * 100));
+
+      try {
+        const anim = await generateSingleAnimationCode(
+          apiKeys,
+          selectedModel,
+          currentPrompt,
+          currentType,
+          nicheCategory,
+          visualStyle,
+          i + 1,
+          total,
+          undefined,
+          3,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
+        );
+
+        if (anim) {
+          const newAnimItem: AnimationItem = {
+            ...anim,
+            isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
+            account: 'Manual Retry',
+            createdAt: Date.now(),
+          };
+          currentAnimList = [newAnimItem, ...currentAnimList];
+          saveAnimationsToStorage(currentAnimList);
+          addLog(`[Sukses Diperbaiki] Prompt: "${currentPrompt.substring(0, 35)}..." berhasil dirender!`, 'success');
+          showToast(`Berhasil memperbaiki animasi untuk prompt #${i + 1}!`, 'success');
+        }
+      } catch (e: any) {
+        addLog(`[Masih Kendala] Prompt #${i + 1}: ${e.message}`, 'error');
+        remainingFailed.push(currentPrompt);
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    }
+
+    setFailedPrompts(remainingFailed);
+    setIsGeneratingAnimations(false);
+    setProgressShow(false);
+
+    if (remainingFailed.length === 0) {
+      showToast('Seluruh animasi gagal berhasil diperbaiki!', 'success');
+      addLog('========== SEMUA ANIMASI GAGAL TELAH BERHASIL DIPERBAIKI ==========', 'success');
+    } else {
+      showToast(`Tersisa ${remainingFailed.length} animasi yang masih kendala API.`, 'warn');
+    }
+  };
+
+  // Re-try a single failed prompt
+  const handleRetrySinglePrompt = async (promptText: string, index: number) => {
+    addLog(`[Coba Ulang Tunggal] Memproses prompt #${index + 1}: "${promptText.substring(0, 35)}..."`, 'info');
+    showToast(`Mencoba ulang render animasi #${index + 1}...`, 'info');
+
+    try {
+      const anim = await generateSingleAnimationCode(
+        apiKeys,
+        selectedModel,
+        promptText,
+        currentType,
+        nicheCategory,
+        visualStyle,
+        1,
+        1,
+        undefined,
+        3,
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow
+      );
+
+      if (anim) {
+        const newAnimItem: AnimationItem = {
+          ...anim,
+          isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
+          account: 'Manual Retry',
+          createdAt: Date.now(),
+        };
+        const updated = [newAnimItem, ...animations];
+        saveAnimationsToStorage(updated);
+        setFailedPrompts((prev) => prev.filter((p) => p !== promptText));
+        showToast(`Prompt #${index + 1} berhasil diperbaiki & ditambahkan ke Galeri!`, 'success');
+        addLog(`Prompt #${index + 1} sukses diperbaiki!`, 'success');
+      }
+    } catch (e: any) {
+      showToast(`Masih gagal mencoba ulang: ${e.message}`, 'error');
+      addLog(`Gagal mencoba ulang prompt #${index + 1}: ${e.message}`, 'error');
+    }
+  };
+
+  // --- HANDLERS: IMAGE TO MOTION AUTO PILOT ---
+  const handleSaveI2mAccounts = (accounts: ImageToMotionAutoPilotAccount[]) => {
+    setI2mAutoPilotAccounts(accounts);
+    try {
+      localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(accounts));
+    } catch (e) {
+      console.error('Failed to save autopilot accounts', e);
+    }
+  };
+
+  const handleResetI2mAccounts = () => {
+    setI2mAutoPilotAccounts([]);
+    try {
+      localStorage.removeItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS);
+    } catch (e) {}
+  };
+
+  const handleDeleteI2mAccount = (id: string, name: string) => {
+    // 1. Remove from saved autopilot accounts
+    setI2mAutoPilotAccounts((prev) => {
+      const updated = prev.filter((a) => (id ? a.id !== id : true) && a.name.toLowerCase() !== name.toLowerCase());
+      try {
+        localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 2. Remove all items belonging to this account from queue
+    setI2mItems((prev) => {
+      const updated = prev.filter(
+        (it) => it.projectName.toLowerCase() !== name.toLowerCase() && (id ? it.projectId !== id : true)
+      );
+      try {
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    showToast(`Akun "${name}" dan seluruh antriannya berhasil dihapus.`, 'info');
+    addLog(`[Auto Pilot] Akun "${name}" dihapus beserta antrian gambarnya.`, 'info');
+  };
+
+  const handleStartI2mAutoPilot = (accounts: ImageToMotionAutoPilotAccount[]) => {
+    handleSaveI2mAccounts(accounts);
+
+    const totalImages = accounts.reduce((sum, a) => sum + (a.referenceImages?.length || 0), 0);
+    if (totalImages === 0) {
+      showToast('Masukkan minimal 1 gambar referensi ke dalam akun!', 'warn');
+      return;
+    }
+
+    // Convert each reference image into an ImageToMotionItem
+    const newItems: ImageToMotionItem[] = [];
+    accounts.forEach((acc) => {
+      (acc.referenceImages || []).forEach((img, idx) => {
+        newItems.push({
+          id: 'i2m_item_' + Date.now() + '_' + acc.id + '_' + idx + '_' + Math.random().toString(36).substring(2, 7),
+          projectId: acc.id || ('proj_' + acc.name.toLowerCase().replace(/[^a-z0-9]/g, '_')),
+          projectName: acc.name,
+          fileName: img.fileName,
+          fileSize: img.fileSize,
+          imagePreviewUrl: img.previewUrl,
+          imageBase64: img.imageBase64,
+          mimeType: img.mimeType || 'image/png',
+          status: 'pending',
+          progress: 0,
+          motionDynamics: acc.motionDynamics || 'flow',
+          colorMode: acc.colorMode || 'gradient',
+          neonGlow: acc.neonGlow ?? true,
+          isGreenScreen: acc.isGreenScreen ?? false,
+          customInstructions: acc.customInstructions || '',
+          createdAt: Date.now(),
+        });
+      });
+    });
+
+    // Merge into i2mItems queue
+    setI2mItems((prev) => {
+      const existingKeys = new Set(prev.map((it) => `${it.projectName}::${it.fileName}`));
+      const itemsToAdd = newItems.filter((it) => !existingKeys.has(`${it.projectName}::${it.fileName}`));
+      const combined = [...prev, ...itemsToAdd];
+      try {
+        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(combined.slice(0, 200)));
+      } catch {}
+      return combined;
+    });
+
+    // Close modal & navigate to Image to Motion tab
+    setIsImageAutoPilotModalOpen(false);
+    setActiveTab('image_to_motion');
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_TAB, 'image_to_motion');
+    } catch {}
+
+    // Trigger reactive auto-run in ImageToMotionSection
+    setAutoPilotTriggerToken(Date.now());
+
+    showToast(`🚀 Memulai Auto Pilot untuk ${accounts.length} Akun (${newItems.length} Animasi)!`, 'info');
+    addLog(`[Auto Pilot] Menjalankan batch antrian untuk ${accounts.length} akun (${newItems.length} animasi)`, 'cyan');
+  };
+
+  // --- HANDLERS: AUTO PILOT (PROMPT AI) ---
   const handleAddAccount = () => {
     setAutoPilotAccounts((prev) => [
       ...prev,
@@ -412,9 +661,7 @@ export default function App() {
   };
 
   const handleRemoveAccount = (index: number) => {
-    if (autoPilotAccounts.length > 1) {
-      setAutoPilotAccounts((prev) => prev.filter((_, i) => i !== index));
-    }
+    setAutoPilotAccounts((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleUpdateAccount = (index: number, updated: Partial<AutoPilotAccount>) => {
@@ -425,8 +672,13 @@ export default function App() {
     });
   };
 
-  const handleStartAutoPilot = async () => {
-    if (autoPilotAccounts.length === 0) {
+  // Run Auto Pilot batch sequentially account by account, or for a specific account
+  const handleStartAutoPilot = async (targetAccountName: string = 'ALL') => {
+    const accountsToRun = targetAccountName === 'ALL'
+      ? autoPilotAccounts
+      : autoPilotAccounts.filter((a) => a.name === targetAccountName);
+
+    if (accountsToRun.length === 0) {
       showToast('Daftar akun Auto Pilot masih kosong!', 'warn');
       return;
     }
@@ -436,15 +688,19 @@ export default function App() {
     }
 
     setIsAutoPilotRunning(true);
-    setIsAutoPilotModalOpen(false);
-    addLog('========== AUTO PILOT BATCH STARTED ==========', 'info');
+    setIsPromptAutoPilotModalOpen(false);
+    const accLabel = targetAccountName === 'ALL' ? 'Semua Akun' : `Akun: "${targetAccountName}"`;
+    addLog('═══════════════════════════════════════════════════════════════', 'cyan');
+    addLog(`🚀 [AUTO PILOT DIMULAI - ${accLabel}] Menjalankan batch satu per satu sesuai antrian akun...`, 'cyan');
+    showToast(`🚀 Auto Pilot [${accLabel}] Dimulai!`, 'info');
     setIsGalleryModalOpen(true);
 
     let currentAnimList = [...animations];
+    let newFailedItems: FailedAutoPilotItem[] = [];
 
-    for (let i = 0; i < autoPilotAccounts.length; i++) {
-      const acc = autoPilotAccounts[i];
-      addLog(`Processing Auto Pilot [${acc.name}] - Meminta AI generate ${acc.promptCount} prompt...`, 'warn');
+    for (let i = 0; i < accountsToRun.length; i++) {
+      const acc = accountsToRun[i];
+      addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${acc.promptCount} prompt...`, 'info');
 
       let prompts: string[] = [];
       try {
@@ -461,15 +717,28 @@ export default function App() {
           acc.motionDynamics ?? 'flow',
           acc.neonGlow ?? true
         );
-        addLog(`Berhasil mendapatkan ${prompts.length} prompt untuk [${acc.name}]`, 'success');
+        addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt. Memulai render satu per satu...`, 'success');
       } catch (e: any) {
-        addLog(`Gagal generate prompt background untuk [${acc.name}]: ${e.message}`, 'error');
+        addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
+        newFailedItems.push({
+          id: 'fail_p_' + Date.now() + '_' + i,
+          accountName: acc.name,
+          prompt: `(Generate Prompts: ${acc.type} - ${acc.subCategory})`,
+          type: acc.type,
+          subCategory: acc.subCategory,
+          style: acc.style,
+          isGreenScreen: acc.isGreenScreen ?? false,
+          colorMode: acc.colorMode ?? 'gradient',
+          motionDynamics: acc.motionDynamics ?? 'flow',
+          neonGlow: acc.neonGlow ?? true,
+          error: e.message || 'Gagal menghasilkan prompt',
+        });
         continue;
       }
 
       for (let j = 0; j < prompts.length; j++) {
         const currentPrompt = prompts[j];
-        addLog(`[${acc.name}] Render Animasi ${j + 1}/${prompts.length}: "${currentPrompt.substring(0, 35)}..."`, 'info');
+        addLog(`🎬 [${acc.name}] Render Animasi #${j + 1}/${prompts.length}: "${currentPrompt.substring(0, 35)}..."`, 'info');
 
         try {
           const anim = await generateSingleAnimationCode(
@@ -497,19 +766,108 @@ export default function App() {
             };
             currentAnimList = [newAnimItem, ...currentAnimList];
             saveAnimationsToStorage(currentAnimList);
-            addLog(`[${acc.name}] Animasi #${j + 1} berhasil ditambahkan ke Galeri.`, 'success');
+            addLog(`✅ [${acc.name}] Animasi #${j + 1} berhasil dibuat & disimpan ke Galeri!`, 'success');
           }
         } catch (e: any) {
-          addLog(`Auto Pilot err #${j + 1}: ${e.message}. Mencoba lanjut...`, 'error');
-          await new Promise((res) => setTimeout(res, 3000));
+          addLog(`⚠️ [${acc.name}] Error animasi #${j + 1}: ${e.message}. Menyimpan untuk fitur coba ulang kesalahan...`, 'error');
+          newFailedItems.push({
+            id: 'fail_' + Date.now() + '_' + j + '_' + Math.random().toString(36).substring(7),
+            accountName: acc.name,
+            prompt: currentPrompt,
+            type: acc.type,
+            subCategory: acc.subCategory,
+            style: acc.style,
+            isGreenScreen: acc.isGreenScreen ?? false,
+            colorMode: acc.colorMode ?? 'gradient',
+            motionDynamics: acc.motionDynamics ?? 'flow',
+            neonGlow: acc.neonGlow ?? true,
+            error: e.message || 'Gagal merender animasi',
+          });
+          await new Promise((res) => setTimeout(res, 2000));
           continue;
         }
       }
     }
 
+    if (newFailedItems.length > 0) {
+      setFailedAutoPilotItems((prev) => [...newFailedItems, ...prev]);
+      showToast(`Auto Pilot selesai dengan ${newFailedItems.length} kesalahan. Anda dapat menggunakan fitur "Ulangi Animasi Gagal".`, 'warn');
+      addLog(`⚠️ [AUTO PILOT SELESAI] Terdapat ${newFailedItems.length} animasi yang mengalami kesalahan.`, 'warn');
+    } else {
+      showToast(`🏆 Auto Pilot [${accLabel}] Selesai dengan sempurna!`, 'success');
+      addLog(`🏆 [AUTO PILOT SELESAI] Seluruh animasi [${accLabel}] berhasil diproses!`, 'success');
+    }
+
     setIsAutoPilotRunning(false);
-    addLog('========== AUTO PILOT SELESAI ==========', 'success');
-    showToast('Proses Auto Pilot Batch Selesai! Silakan cek Galeri.', 'success');
+    addLog('═══════════════════════════════════════════════════════════════', 'cyan');
+  };
+
+  // Re-try failed animations from Auto Pilot sequentially
+  const handleRetryFailedAutoPilot = async () => {
+    if (failedAutoPilotItems.length === 0) {
+      showToast('Tidak ada animasi gagal dari Auto Pilot.', 'info');
+      return;
+    }
+
+    setIsAutoPilotRunning(true);
+    const itemsToRetry = [...failedAutoPilotItems];
+    const total = itemsToRetry.length;
+    addLog('═══════════════════════════════════════════════════════════════', 'warn');
+    addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Mencoba ulang ${total} animasi yang sebelumnya mengalami kesalahan...`, 'warn');
+    showToast(`🔄 Mencoba ulang ${total} animasi Auto Pilot yang gagal...`, 'info');
+
+    let currentAnimList = [...animations];
+    let remainingFailed: FailedAutoPilotItem[] = [];
+
+    for (let i = 0; i < total; i++) {
+      const item = itemsToRetry[i];
+      addLog(`⚡ [Coba Ulang Auto Pilot #${i + 1}/${total} - ${item.accountName}] Memproses "${item.prompt.substring(0, 30)}..."`, 'info');
+
+      try {
+        const anim = await generateSingleAnimationCode(
+          apiKeys,
+          selectedModel,
+          item.prompt,
+          item.type,
+          item.subCategory,
+          item.style,
+          i + 1,
+          total,
+          undefined,
+          3,
+          item.isGreenScreen ?? false,
+          item.colorMode ?? 'gradient',
+          item.motionDynamics ?? 'flow',
+          item.neonGlow ?? true
+        );
+
+        if (anim) {
+          const newAnimItem: AnimationItem = {
+            ...anim,
+            account: item.accountName,
+            createdAt: Date.now(),
+          };
+          currentAnimList = [newAnimItem, ...currentAnimList];
+          saveAnimationsToStorage(currentAnimList);
+          addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi selesai & disimpan ke Galeri!`, 'success');
+          showToast(`✅ [${item.accountName}] Animasi berhasil diperbaiki!`, 'success');
+        }
+      } catch (e: any) {
+        addLog(`❌ [Masih Kendala] [${item.accountName}]: ${e.message}`, 'error');
+        remainingFailed.push({ ...item, error: e.message || 'Masih kendala saat dicoba ulang' });
+        await new Promise((res) => setTimeout(res, 2000));
+      }
+    }
+
+    setFailedAutoPilotItems(remainingFailed);
+    setIsAutoPilotRunning(false);
+
+    if (remainingFailed.length === 0) {
+      showToast('🎉 Semua animasi gagal Auto Pilot berhasil diperbaiki!', 'success');
+      addLog('🏁 [SELESAI COBA ULANG] Seluruh animasi gagal Auto Pilot telah berhasil diperbaiki!', 'success');
+    } else {
+      showToast(`Tersisa ${remainingFailed.length} animasi Auto Pilot yang masih kendala.`, 'warn');
+    }
   };
 
   // --- HANDLERS: DOWNLOAD & QUEUE ---
@@ -603,10 +961,15 @@ export default function App() {
   };
 
   // --- HANDLERS: IMAGE TO MOTION (AI VISION) ---
-  const saveI2mItemsToStorage = (items: ImageToMotionItem[]) => {
-    setI2mItems(items);
+  const persistI2mItems = (items: ImageToMotionItem[]) => {
     try {
-      localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(items.slice(0, 200)));
+      const seen = new Set<string>();
+      const uniqueItems = items.filter((item) => {
+        if (!item || !item.id || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+      });
+      localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(uniqueItems.slice(0, 200)));
     } catch (e) {
       console.error('Failed to save i2m items', e);
     }
@@ -634,8 +997,10 @@ export default function App() {
 
   const handleAddI2mItems = (newItems: ImageToMotionItem[]) => {
     setI2mItems((prev) => {
-      const updated = [...newItems, ...prev];
-      saveI2mItemsToStorage(updated);
+      const existingIds = new Set(prev.map((i) => i.id));
+      const uniqueNew = newItems.filter((i) => i && i.id && !existingIds.has(i.id));
+      const updated = [...uniqueNew, ...prev];
+      persistI2mItems(updated);
       return updated;
     });
   };
@@ -643,9 +1008,7 @@ export default function App() {
   const handleUpdateI2mItem = (itemId: string, updates: Partial<ImageToMotionItem>) => {
     setI2mItems((prev) => {
       const next = prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item));
-      try {
-        localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(next.slice(0, 200)));
-      } catch (e) {}
+      persistI2mItems(next);
       return next;
     });
   };
@@ -653,7 +1016,7 @@ export default function App() {
   const handleDeleteI2mItem = (itemId: string) => {
     setI2mItems((prev) => {
       const updated = prev.filter((i) => i.id !== itemId);
-      saveI2mItemsToStorage(updated);
+      persistI2mItems(updated);
       return updated;
     });
     showToast('Gambar dihapus dari antrian', 'info');
@@ -661,14 +1024,14 @@ export default function App() {
 
   const handleClearAllI2mItems = () => {
     setI2mItems([]);
-    saveI2mItemsToStorage([]);
+    persistI2mItems([]);
     showToast('Semua antrian gambar berhasil dibersihkan', 'info');
   };
 
   const handleClearCompletedI2mItems = () => {
     setI2mItems((prev) => {
       const updated = prev.filter((i) => i.status !== 'completed');
-      saveI2mItemsToStorage(updated);
+      persistI2mItems(updated);
       return updated;
     });
     showToast('Antrian selesai berhasil dibersihkan', 'info');
@@ -713,11 +1076,9 @@ export default function App() {
         onOpenApiModal={() => setIsApiModalOpen(true)}
         onOpenAutoPilotModal={() => {
           if (activeTab === 'image_to_motion') {
-            const el = document.getElementById('activity-log-console') || document.querySelector('section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-            showToast('Gunakan tombol "Jalankan Auto Pilot" di panel Antrian Gambar', 'info');
+            setIsImageAutoPilotModalOpen(true);
           } else {
-            setIsAutoPilotModalOpen(true);
+            setIsPromptAutoPilotModalOpen(true);
           }
         }}
         onOpenVideoConverterModal={() => setIsVideoConverterModalOpen(true)}
@@ -785,6 +1146,9 @@ export default function App() {
             onGenerateAnimations={handleGenerateAnimations}
             isGeneratingAnimations={isGeneratingAnimations}
             onProcessManualPrompts={handleProcessManualPrompts}
+            failedPrompts={failedPrompts}
+            onRetryFailedPrompts={handleRetryFailedPrompts}
+            onRetrySinglePrompt={handleRetrySinglePrompt}
             showToast={showToast}
           />
         ) : (
@@ -792,9 +1156,13 @@ export default function App() {
             apiKeys={apiKeys}
             selectedModel={selectedModel}
             items={i2mItems}
+            autoPilotAccounts={i2mAutoPilotAccounts}
+            autoPilotTriggerToken={autoPilotTriggerToken}
+            onOpenAutoPilotModal={() => setIsImageAutoPilotModalOpen(true)}
             onAddItems={handleAddI2mItems}
             onUpdateItem={handleUpdateI2mItem}
             onDeleteItem={handleDeleteI2mItem}
+            onDeleteAccount={handleDeleteI2mAccount}
             onClearAllItems={handleClearAllI2mItems}
             onClearCompletedItems={handleClearCompletedI2mItems}
             onAddAnimation={handleAddAnimation}
@@ -870,15 +1238,31 @@ export default function App() {
         addLog={addLog}
       />
 
+      {/* Prompt AI Auto Pilot Modal (Original) */}
       <AutoPilotModal
-        isOpen={isAutoPilotModalOpen}
+        isOpen={isPromptAutoPilotModalOpen}
         accounts={autoPilotAccounts}
         onAddAccount={handleAddAccount}
         onRemoveAccount={handleRemoveAccount}
         onUpdateAccount={handleUpdateAccount}
         onStartAutoPilot={handleStartAutoPilot}
         isAutoPilotRunning={isAutoPilotRunning}
-        onClose={() => setIsAutoPilotModalOpen(false)}
+        onClose={() => setIsPromptAutoPilotModalOpen(false)}
+        failedItems={failedAutoPilotItems}
+        onRetryFailedItems={handleRetryFailedAutoPilot}
+      />
+
+      {/* Image to Prompt / Motion Auto Pilot Modal (Drag & Drop + Import dari Komputer) */}
+      <ImageAutoPilotModal
+        isOpen={isImageAutoPilotModalOpen}
+        onClose={() => setIsImageAutoPilotModalOpen(false)}
+        accounts={i2mAutoPilotAccounts}
+        onSaveAccounts={handleSaveI2mAccounts}
+        onResetAccounts={handleResetI2mAccounts}
+        onDeleteAccount={handleDeleteI2mAccount}
+        onStartAutoPilot={handleStartI2mAutoPilot}
+        isAutoPilotRunning={isAutoPilotRunning}
+        showToast={showToast}
       />
 
       <GalleryModal

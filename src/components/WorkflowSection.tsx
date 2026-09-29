@@ -28,6 +28,9 @@ interface WorkflowSectionProps {
   onGenerateAnimations: () => void;
   isGeneratingAnimations: boolean;
   onProcessManualPrompts: (prompts: string[]) => void;
+  failedPrompts?: string[];
+  onRetryFailedPrompts?: () => void;
+  onRetrySinglePrompt?: (promptText: string, index: number) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
 }
 
@@ -58,6 +61,9 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onGenerateAnimations,
   isGeneratingAnimations,
   onProcessManualPrompts,
+  failedPrompts = [],
+  onRetryFailedPrompts,
+  onRetrySinglePrompt,
   showToast,
 }) => {
   const [manualText, setManualText] = useState('');
@@ -419,53 +425,107 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             </span>
           </div>
 
+          {/* Error notice banner if any prompt failed */}
+          {failedPrompts.length > 0 && (
+            <div className="bg-rose-950/70 border border-rose-500/50 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-inner">
+              <div className="flex items-center gap-2 text-rose-300 text-xs font-bold">
+                <i className="fa-solid fa-triangle-exclamation text-rose-400"></i>
+                <span>Terdapat {failedPrompts.length} animasi yang gagal dibuat sebelumnya</span>
+              </div>
+              {onRetryFailedPrompts && !isGeneratingAnimations && (
+                <button
+                  type="button"
+                  onClick={onRetryFailedPrompts}
+                  className="px-2.5 py-1 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 text-white font-bold text-[11px] rounded-lg transition flex items-center gap-1 cursor-pointer shadow"
+                >
+                  <i className="fa-solid fa-rotate-right text-[10px]"></i>
+                  <span>Ulangi Semua</span>
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Scrollable list of prompts */}
           <div className="bg-gray-950/80 rounded-xl border border-gray-800/80 p-2 shadow-inner">
             <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              {generatedPrompts.map((promptText, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-2 bg-gray-900/90 hover:bg-gray-900 p-2 rounded-xl border border-gray-800/80 transition"
-                >
-                  <span className="w-5 h-5 rounded-lg bg-sky-500/20 text-sky-400 text-[11px] font-bold flex items-center justify-center shrink-0">
-                    {idx + 1}
-                  </span>
-                  <input
-                    type="text"
-                    value={promptText}
-                    onChange={(e) => onUpdatePrompt(idx, e.target.value)}
-                    className="w-full bg-transparent text-xs text-gray-200 focus:outline-none font-medium px-1"
-                  />
-                  <button
-                    onClick={() => onDeletePrompt(idx)}
-                    className="text-gray-500 hover:text-red-400 p-1 text-xs shrink-0 transition cursor-pointer"
-                    title="Hapus Prompt"
+              {generatedPrompts.map((promptText, idx) => {
+                const isFailed = failedPrompts.includes(promptText);
+                return (
+                  <div
+                    key={idx}
+                    className={`flex items-center gap-2 p-2 rounded-xl border transition ${
+                      isFailed
+                        ? 'bg-rose-950/30 border-rose-500/50 shadow-sm'
+                        : 'bg-gray-900/90 hover:bg-gray-900 border-gray-800/80'
+                    }`}
                   >
-                    <i className="fa-solid fa-trash"></i>
-                  </button>
-                </div>
-              ))}
+                    <span className={`w-5 h-5 rounded-lg text-[11px] font-bold flex items-center justify-center shrink-0 ${
+                      isFailed ? 'bg-rose-500/20 text-rose-400' : 'bg-sky-500/20 text-sky-400'
+                    }`}>
+                      {idx + 1}
+                    </span>
+                    <input
+                      type="text"
+                      value={promptText}
+                      onChange={(e) => onUpdatePrompt(idx, e.target.value)}
+                      className="w-full bg-transparent text-xs text-gray-200 focus:outline-none font-medium px-1"
+                    />
+                    {isFailed && onRetrySinglePrompt && !isGeneratingAnimations && (
+                      <button
+                        type="button"
+                        onClick={() => onRetrySinglePrompt(promptText, idx)}
+                        className="px-2 py-0.5 rounded bg-rose-600/30 hover:bg-rose-600/50 border border-rose-500/50 text-rose-300 text-[10px] font-bold shrink-0 transition flex items-center gap-1 cursor-pointer"
+                        title="Ulangi render animasi untuk prompt ini"
+                      >
+                        <i className="fa-solid fa-rotate-right text-[9px]"></i>
+                        <span>Ulangi</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onDeletePrompt(idx)}
+                      className="text-gray-500 hover:text-red-400 p-1 text-xs shrink-0 transition cursor-pointer"
+                      title="Hapus Prompt"
+                    >
+                      <i className="fa-solid fa-trash"></i>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Action Button: Generate Animations */}
-          <button
-            onClick={onGenerateAnimations}
-            disabled={isGeneratingAnimations}
-            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-          >
-            {isGeneratingAnimations ? (
-              <>
-                <i className="fa-solid fa-spinner fa-spin"></i>
-                <span>Sedang Merender Animasi...</span>
-              </>
-            ) : (
-              <>
-                <i className="fa-solid fa-play"></i>
-                <span>Generate Animasi ({generatedPrompts.length} Item)</span>
-              </>
+          {/* Action Buttons: Generate Animations & Retry Failed */}
+          <div className="flex flex-col gap-2">
+            {failedPrompts.length > 0 && onRetryFailedPrompts && !isGeneratingAnimations && (
+              <button
+                type="button"
+                onClick={onRetryFailedPrompts}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs uppercase tracking-wider shadow-md flex items-center justify-center gap-2 transition active:scale-[0.99] cursor-pointer"
+                title="Coba ulang render untuk prompt yang sebelumnya mengalami kesalahan"
+              >
+                <i className="fa-solid fa-rotate-right text-xs"></i>
+                <span>Ulangi yang Gagal ({failedPrompts.length} Prompt)</span>
+              </button>
             )}
-          </button>
+
+            <button
+              onClick={onGenerateAnimations}
+              disabled={isGeneratingAnimations}
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-extrabold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/25 flex items-center justify-center gap-2 transition active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isGeneratingAnimations ? (
+                <>
+                  <i className="fa-solid fa-spinner fa-spin"></i>
+                  <span>Sedang Merender Animasi...</span>
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-play"></i>
+                  <span>Generate Animasi ({generatedPrompts.length} Item)</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
 
