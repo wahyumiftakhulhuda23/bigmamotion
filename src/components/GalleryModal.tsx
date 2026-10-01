@@ -169,9 +169,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
       itemsToZip.forEach((item, index) => {
         const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 25);
-        const acc = item.account ? item.account.toLowerCase() : 'manual';
-        const fileName = `${String(index + 1).padStart(2, '0')}_microstock_${acc}_${item.type}_${safeTitle}.html`;
-        zip.file(fileName, item.html);
+        const acc = item.account ? item.account.replace(/[^a-z0-9_-]/gi, '_') : 'manual';
+        const folder = zip.folder(acc) || zip;
+        const fileName = `${String(index + 1).padStart(2, '0')}_microstock_${acc.toLowerCase()}_${item.type}_${safeTitle}.html`;
+        folder.file(fileName, item.html);
       });
 
       const zipBlob = await zip.generateAsync({ type: 'blob' });

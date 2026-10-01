@@ -132,12 +132,21 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
 
   // Remove account
   const handleRemoveAccount = (id: string, name: string) => {
-    const updated = localAccounts.filter((a) => a.id !== id && a.name.toLowerCase() !== name.toLowerCase());
+    const targetId = (id || '').trim();
+    const targetName = (name || '').trim().toLowerCase();
+    const updated = localAccounts.filter((a) => {
+      if (targetId && a.id === targetId) return false;
+      if (targetName && (a.name || '').trim().toLowerCase() === targetName) return false;
+      return true;
+    });
     setLocalAccounts(updated);
     onSaveAccounts(updated);
     if (onDeleteAccount) {
       onDeleteAccount(id, name);
     }
+    try {
+      localStorage.setItem('bigma_i2m_autopilot_accounts_flow', JSON.stringify(updated));
+    } catch (e) {}
     setHasUnsavedChanges(false);
     showToast(`Akun "${name}" berhasil dihapus.`, 'info');
   };

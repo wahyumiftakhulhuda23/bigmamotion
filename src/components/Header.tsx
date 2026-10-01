@@ -15,6 +15,7 @@ interface HeaderProps {
   onOpenAutoPilotModal: () => void;
   onOpenVideoConverterModal: () => void;
   onOpenGalleryModal: () => void;
+  onOpenTutorialModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +32,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAutoPilotModal,
   onOpenVideoConverterModal,
   onOpenGalleryModal,
+  onOpenTutorialModal,
 }) => {
   const getModelBadge = (model: GeminiModel | string = 'gemini-2.5-flash') => {
     switch (model) {
@@ -113,7 +115,20 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Action Controls - Compressed and optimized */}
-        <div className="flex items-center space-x-1.5 sm:space-x-2.5">
+        <div className="flex items-center space-x-1.5 sm:space-x-2">
+          {/* Tutorial / Panduan Button - Highly Visible */}
+          {onOpenTutorialModal && (
+            <button
+              onClick={onOpenTutorialModal}
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-sky-500/20 hover:from-emerald-500/30 hover:to-sky-500/30 text-emerald-300 border border-emerald-500/50 hover:border-emerald-400 transition text-xs font-black shadow-md shadow-emerald-500/15 cursor-pointer active:scale-95"
+              title="Buka Buku Panduan & Tutorial Lengkap Seluruh Fitur"
+            >
+              <i className="fa-solid fa-book-open-reader text-emerald-400 text-xs"></i>
+              <span className="hidden sm:inline tracking-wide">TUTORIAL</span>
+              <span className="sm:hidden">Panduan</span>
+            </button>
+          )}
+
           {/* API & Model Status Trigger */}
           <button
             onClick={onOpenApiModal}

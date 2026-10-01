@@ -12,6 +12,7 @@ import {
   MotionDynamics,
   ImageToMotionItem,
   ImageToMotionProject,
+  NotepadBatch,
 } from './types';
 import {
   getStoredApiKeys,
@@ -24,6 +25,7 @@ import {
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
 import { WorkflowSection } from './components/WorkflowSection';
+import { ImageToPromptSection } from './components/ImageToPromptSection';
 import { ImageToMotionSection } from './components/ImageToMotionSection';
 import { RightPanel } from './components/RightPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
@@ -32,6 +34,7 @@ import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
 import { FullscreenModal } from './components/FullscreenModal';
 import { VideoConverterModal } from './components/VideoConverterModal';
+import { TutorialModal } from './components/TutorialModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
@@ -40,7 +43,9 @@ const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
 const STORAGE_I2M_ITEMS = 'bigma_i2m_items';
 const STORAGE_ACTIVE_TAB = 'bigma_active_tab';
+const STORAGE_PROMPT_SUB_TAB = 'bigma_prompt_sub_tab';
 const STORAGE_I2M_AUTOPILOT_ACCOUNTS = 'bigma_i2m_autopilot_accounts_flow';
+const STORAGE_AUTOPILOT_ACCOUNTS = 'bigma_prompt_autopilot_accounts';
 
 export default function App() {
   // --- LICENSE & TRIAL STATE ---
@@ -83,6 +88,22 @@ export default function App() {
     setActiveTab(tab);
     try {
       localStorage.setItem(STORAGE_ACTIVE_TAB, tab);
+    } catch {}
+  };
+
+  // Sub-tab inside Prompt AI: 'prompt_to_motion' vs 'image_to_prompt'
+  const [promptSubTab, setPromptSubTab] = useState<'prompt_to_motion' | 'image_to_prompt'>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_PROMPT_SUB_TAB);
+      if (saved === 'image_to_prompt' || saved === 'prompt_to_motion') return saved;
+    } catch {}
+    return 'prompt_to_motion';
+  });
+
+  const handleSelectPromptSubTab = (subTab: 'prompt_to_motion' | 'image_to_prompt') => {
+    setPromptSubTab(subTab);
+    try {
+      localStorage.setItem(STORAGE_PROMPT_SUB_TAB, subTab);
     } catch {}
   };
 
@@ -176,6 +197,7 @@ export default function App() {
   const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isVideoConverterModalOpen, setIsVideoConverterModalOpen] = useState<boolean>(false);
+  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
 
   // Auto Pilot Trigger Token for ImageToMotionSection
@@ -193,17 +215,70 @@ export default function App() {
     return [];
   });
 
-  // Prompt AI Auto Pilot Accounts (Restored original defaults for Prompt AI)
-  const [autoPilotAccounts, setAutoPilotAccounts] = useState<AutoPilotAccount[]>([
-    {
-      id: 'acc_1',
-      name: 'Account_1',
-      type: 'icon',
-      subCategory: 'teknologi',
-      style: 'minimalist',
-      promptCount: 2,
-    },
-  ]);
+  // Prompt AI Auto Pilot Accounts
+  const [autoPilotAccounts, setAutoPilotAccounts] = useState<AutoPilotAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_AUTOPILOT_ACCOUNTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return [
+      {
+        id: 'acc_1',
+        name: 'Account_1',
+        type: 'icon',
+        subCategory: 'teknologi',
+        style: 'minimalist',
+        promptCount: 2,
+      },
+    ];
+  });
+
+  // Startup cleanup for dummy names in localStorage (cleans out legacy dummy accounts)
+  useEffect(() => {
+    const dummySet = new Set([
+      'akun microstock 1',
+      'akun microstock 2',
+      'akun microstock',
+      'project cyber',
+      'project flat icon',
+      'akun microstock utama',
+      'microstock 1',
+      'microstock 2',
+    ]);
+
+    setI2mAutoPilotAccounts((prev) => {
+      const cleaned = prev.filter((a) => !dummySet.has((a.name || '').trim().toLowerCase()));
+      if (cleaned.length !== prev.length) {
+        try {
+          localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(cleaned));
+        } catch (e) {}
+      }
+      return cleaned;
+    });
+
+    setI2mItems((prev) => {
+      const cleaned = prev.filter((it) => !dummySet.has((it.projectName || '').trim().toLowerCase()));
+      if (cleaned.length !== prev.length) {
+        try {
+          localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(cleaned));
+        } catch (e) {}
+      }
+      return cleaned;
+    });
+
+    setI2mProjects((prev) => {
+      const cleaned = prev.filter((p) => !dummySet.has((p.name || '').trim().toLowerCase()));
+      if (cleaned.length !== prev.length) {
+        try {
+          localStorage.setItem(STORAGE_I2M_PROJECTS, JSON.stringify(cleaned));
+        } catch (e) {}
+      }
+      return cleaned;
+    });
+  }, []);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -562,9 +637,16 @@ export default function App() {
   };
 
   const handleDeleteI2mAccount = (id: string, name: string) => {
+    const targetName = (name || '').trim().toLowerCase();
+    const targetId = (id || '').trim();
+
     // 1. Remove from saved autopilot accounts
     setI2mAutoPilotAccounts((prev) => {
-      const updated = prev.filter((a) => (id ? a.id !== id : true) && a.name.toLowerCase() !== name.toLowerCase());
+      const updated = prev.filter((a) => {
+        if (targetId && a.id === targetId) return false;
+        if (targetName && (a.name || '').trim().toLowerCase() === targetName) return false;
+        return true;
+      });
       try {
         localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(updated));
       } catch (e) {}
@@ -573,11 +655,26 @@ export default function App() {
 
     // 2. Remove all items belonging to this account from queue
     setI2mItems((prev) => {
-      const updated = prev.filter(
-        (it) => it.projectName.toLowerCase() !== name.toLowerCase() && (id ? it.projectId !== id : true)
-      );
+      const updated = prev.filter((it) => {
+        if (targetName && (it.projectName || '').trim().toLowerCase() === targetName) return false;
+        if (targetId && it.projectId === targetId) return false;
+        return true;
+      });
       try {
         localStorage.setItem(STORAGE_I2M_ITEMS, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    // 3. Remove project if exists
+    setI2mProjects((prev) => {
+      const updated = prev.filter((p) => {
+        if (targetName && (p.name || '').trim().toLowerCase() === targetName) return false;
+        if (targetId && p.id === targetId) return false;
+        return true;
+      });
+      try {
+        localStorage.setItem(STORAGE_I2M_PROJECTS, JSON.stringify(updated));
       } catch (e) {}
       return updated;
     });
@@ -647,29 +744,125 @@ export default function App() {
 
   // --- HANDLERS: AUTO PILOT (PROMPT AI) ---
   const handleAddAccount = () => {
-    setAutoPilotAccounts((prev) => [
-      ...prev,
-      {
-        id: 'acc_' + Date.now(),
-        name: `Account_${prev.length + 1}`,
-        type: 'icon',
-        subCategory: 'teknologi',
-        style: 'minimalist',
-        promptCount: 2,
-      },
-    ]);
+    setAutoPilotAccounts((prev) => {
+      const next: AutoPilotAccount[] = [
+        ...prev,
+        {
+          id: 'acc_' + Date.now(),
+          name: `Account_${prev.length + 1}`,
+          type: 'icon' as AnimationType,
+          subCategory: 'teknologi' as NicheCategory,
+          style: 'minimalist' as VisualStyle,
+          promptCount: 2,
+        },
+      ];
+      try {
+        localStorage.setItem(STORAGE_AUTOPILOT_ACCOUNTS, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const handleRemoveAccount = (index: number) => {
-    setAutoPilotAccounts((prev) => prev.filter((_, i) => i !== index));
+    setAutoPilotAccounts((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      try {
+        localStorage.setItem(STORAGE_AUTOPILOT_ACCOUNTS, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    showToast('Akun berhasil dihapus.', 'info');
   };
 
   const handleUpdateAccount = (index: number, updated: Partial<AutoPilotAccount>) => {
     setAutoPilotAccounts((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...updated };
+      try {
+        localStorage.setItem(STORAGE_AUTOPILOT_ACCOUNTS, JSON.stringify(next));
+      } catch (e) {}
       return next;
     });
+  };
+
+  // --- HANDLERS: NOTEPAD BATCH GENERATION ---
+  const handleProcessNotepadBatches = async (batches: NotepadBatch[]) => {
+    if (batches.length === 0) return;
+    setIsGeneratingAnimations(true);
+
+    const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
+    let completedOverall = 0;
+    let currentAnimList = [...animations];
+
+    addLog('═══════════════════════════════════════════════════════════════', 'cyan');
+    addLog(
+      `🚀 [BATCH NOTEPAD] Memulai generate animasi dari ${batches.length} file Notepad (${totalPromptsOverall} total prompt)...`,
+      'cyan'
+    );
+    showToast(`🚀 Memulai generate animasi dari ${batches.length} file Notepad...`, 'info');
+
+    for (let bIdx = 0; bIdx < batches.length; bIdx++) {
+      const batch = batches[bIdx];
+      addLog(`📁 [Notepad ${bIdx + 1}/${batches.length}] Memproses file: "${batch.fileName}" (${batch.prompts.length} prompt)...`, 'info');
+
+      for (let pIdx = 0; pIdx < batch.prompts.length; pIdx++) {
+        const promptText = batch.prompts[pIdx];
+        completedOverall++;
+        const percent = Math.round((completedOverall / totalPromptsOverall) * 100);
+
+        setProgressShow(true);
+        setProgressText(`[${batch.name}] Prompt ${pIdx + 1}/${batch.prompts.length} (${completedOverall}/${totalPromptsOverall})...`);
+        setProgressPercent(percent);
+
+        try {
+          const anim = await generateSingleAnimationCode(
+            apiKeys,
+            selectedModel,
+            promptText,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            pIdx + 1,
+            batch.prompts.length,
+            undefined,
+            3,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+
+          if (anim) {
+            const newAnimItem: AnimationItem = {
+              ...anim,
+              isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
+              account: batch.name, // Categorized with the notepad name!
+              createdAt: Date.now(),
+            };
+            currentAnimList = [newAnimItem, ...currentAnimList];
+            saveAnimationsToStorage(currentAnimList);
+            addLog(`✅ [${batch.name}] Sukses render: "${promptText.substring(0, 30)}..."`, 'success');
+          }
+        } catch (e: any) {
+          addLog(`❌ [${batch.name}] Gagal prompt #${pIdx + 1}: ${e.message}`, 'error');
+        }
+
+        if (completedOverall < totalPromptsOverall) {
+          await new Promise((res) => setTimeout(res, 500));
+        }
+      }
+    }
+
+    setIsGeneratingAnimations(false);
+    setProgressShow(false);
+    addLog('🏁 [SELESAI BATCH NOTEPAD] Semua animasi dari file notepad berhasil digenerate dan tersimpan di Galeri!', 'cyan');
+    showToast(`🏁 Selesai! Animasi dari ${batches.length} file Notepad telah tersimpan di Galeri!`, 'success');
+  };
+
+  const handleSendPromptsToWorkflow = (prompts: string[]) => {
+    setGeneratedPrompts((prev) => [...prompts, ...prev]);
+    setPromptSubTab('prompt_to_motion');
+    showToast(`${prompts.length} prompt berhasil dimuat ke daftar siap render!`, 'success');
   };
 
   // Run Auto Pilot batch sequentially account by account, or for a specific account
@@ -1083,6 +1276,7 @@ export default function App() {
         }}
         onOpenVideoConverterModal={() => setIsVideoConverterModalOpen(true)}
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
+        onOpenTutorialModal={() => setIsTutorialModalOpen(true)}
       />
 
       {/* Prominent Mobile & Tablet Navigation Switcher */}
@@ -1119,38 +1313,147 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-3 sm:px-6 py-3 sm:py-5 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6">
         {/* Left Panel: Workflow OR Image to Motion */}
         {activeTab === 'prompt' ? (
-          <WorkflowSection
-            currentType={currentType}
-            onSelectType={setCurrentType}
-            nicheCategory={nicheCategory}
-            onSelectNiche={setNicheCategory}
-            visualStyle={visualStyle}
-            onSelectStyle={setVisualStyle}
-            colorMode={colorMode}
-            onSelectColorMode={setColorMode}
-            motionDynamics={motionDynamics}
-            onSelectMotionDynamics={setMotionDynamics}
-            neonGlow={neonGlow}
-            onToggleNeonGlow={setNeonGlow}
-            promptCount={promptCount}
-            onChangePromptCount={setPromptCount}
-            isGreenScreen={isGreenScreen}
-            onToggleGreenScreen={setIsGreenScreen}
-            keywordsText={keywordsText}
-            onChangeKeywordsText={setKeywordsText}
-            onGeneratePrompts={handleGeneratePrompts}
-            isGeneratingPrompts={isGeneratingPrompts}
-            generatedPrompts={generatedPrompts}
-            onUpdatePrompt={handleUpdatePrompt}
-            onDeletePrompt={handleDeletePrompt}
-            onGenerateAnimations={handleGenerateAnimations}
-            isGeneratingAnimations={isGeneratingAnimations}
-            onProcessManualPrompts={handleProcessManualPrompts}
-            failedPrompts={failedPrompts}
-            onRetryFailedPrompts={handleRetryFailedPrompts}
-            onRetrySinglePrompt={handleRetrySinglePrompt}
-            showToast={showToast}
-          />
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            {/* Sidebar Tambahan: 2 Menu Besar Prompt AI */}
+            <div className="glass-card rounded-2xl p-2.5 sm:p-3 border border-gray-800 bg-slate-950/75 shadow-xl space-y-2">
+              <div className="flex items-center justify-between px-1">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <i className="fa-solid fa-layer-group text-sky-400 text-xs"></i>
+                  <span>Menu Utama Prompt AI</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsTutorialModalOpen(true)}
+                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1 cursor-pointer"
+                    title="Buka panduan lengkap fitur Prompt AI"
+                  >
+                    <i className="fa-solid fa-circle-question"></i>
+                    <span>Panduan</span>
+                  </button>
+                  <span className="text-[9px] font-bold text-sky-300 bg-sky-950/80 border border-sky-800/60 px-2 py-0.5 rounded-full">
+                    2 Mode
+                  </span>
+                </div>
+              </div>
+
+              {/* 2 Big Menus */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Menu 1: Prompt to Motion */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectPromptSubTab('prompt_to_motion')}
+                  className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer relative overflow-hidden group ${
+                    promptSubTab === 'prompt_to_motion'
+                      ? 'bg-gradient-to-br from-sky-500/20 via-indigo-500/15 to-slate-900 border-sky-400 text-white shadow-lg shadow-sky-500/15 ring-1 ring-sky-400/40'
+                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-transform group-hover:scale-105 ${
+                    promptSubTab === 'prompt_to_motion'
+                      ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/30'
+                      : 'bg-slate-800 text-gray-400'
+                  }`}>
+                    <i className="fa-solid fa-wand-magic-sparkles"></i>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`text-xs font-black tracking-tight ${promptSubTab === 'prompt_to_motion' ? 'text-sky-200' : 'text-gray-200'}`}>
+                        1. Prompt to Motion
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-sky-950 text-sky-300 border border-sky-800/60">
+                        Generator
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">
+                      Parameter visual & input/drag-drop notepad batch (.txt)
+                    </p>
+                  </div>
+                </button>
+
+                {/* Menu 2: Image To Prompt Motion */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectPromptSubTab('image_to_prompt')}
+                  className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer relative overflow-hidden group ${
+                    promptSubTab === 'image_to_prompt'
+                      ? 'bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-slate-900 border-indigo-400 text-white shadow-lg shadow-indigo-500/15 ring-1 ring-indigo-400/40'
+                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-transform group-hover:scale-105 ${
+                    promptSubTab === 'image_to_prompt'
+                      ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/30'
+                      : 'bg-slate-800 text-gray-400'
+                  }`}>
+                    <i className="fa-solid fa-file-waveform"></i>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className={`text-xs font-black tracking-tight ${promptSubTab === 'image_to_prompt' ? 'text-indigo-200' : 'text-gray-200'}`}>
+                        2. Image To Prompt
+                      </span>
+                      <span className="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-purple-950 text-purple-300 border border-purple-800/60">
+                        Vision AI
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">
+                      Analisa gambar per project & unduh notepad prompt murni
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Active Sub-Menu View */}
+            {promptSubTab === 'prompt_to_motion' ? (
+              <WorkflowSection
+                currentType={currentType}
+                onSelectType={setCurrentType}
+                nicheCategory={nicheCategory}
+                onSelectNiche={setNicheCategory}
+                visualStyle={visualStyle}
+                onSelectStyle={setVisualStyle}
+                colorMode={colorMode}
+                onSelectColorMode={setColorMode}
+                motionDynamics={motionDynamics}
+                onSelectMotionDynamics={setMotionDynamics}
+                neonGlow={neonGlow}
+                onToggleNeonGlow={setNeonGlow}
+                promptCount={promptCount}
+                onChangePromptCount={setPromptCount}
+                isGreenScreen={isGreenScreen}
+                onToggleGreenScreen={setIsGreenScreen}
+                keywordsText={keywordsText}
+                onChangeKeywordsText={setKeywordsText}
+                onGeneratePrompts={handleGeneratePrompts}
+                isGeneratingPrompts={isGeneratingPrompts}
+                generatedPrompts={generatedPrompts}
+                onUpdatePrompt={handleUpdatePrompt}
+                onDeletePrompt={handleDeletePrompt}
+                onGenerateAnimations={handleGenerateAnimations}
+                isGeneratingAnimations={isGeneratingAnimations}
+                onProcessManualPrompts={handleProcessManualPrompts}
+                onProcessNotepadBatches={handleProcessNotepadBatches}
+                onClearPrompts={() => {
+                  setGeneratedPrompts([]);
+                  showToast('Daftar prompt siap render berhasil di-reset.', 'info');
+                }}
+                failedPrompts={failedPrompts}
+                onRetryFailedPrompts={handleRetryFailedPrompts}
+                onRetrySinglePrompt={handleRetrySinglePrompt}
+                showToast={showToast}
+              />
+            ) : (
+              <ImageToPromptSection
+                apiKeys={apiKeys}
+                selectedModel={selectedModel}
+                onSendToPromptToMotion={handleSendPromptsToWorkflow}
+                showToast={showToast}
+                addLog={addLog}
+              />
+            )}
+          </div>
         ) : (
           <ImageToMotionSection
             apiKeys={apiKeys}
@@ -1283,6 +1586,20 @@ export default function App() {
         isOpen={isVideoConverterModalOpen}
         onClose={() => setIsVideoConverterModalOpen(false)}
         showToast={showToast}
+      />
+
+      <TutorialModal
+        isOpen={isTutorialModalOpen}
+        onClose={() => setIsTutorialModalOpen(false)}
+        onNavigateToTab={(tab, subTab) => {
+          handleSelectTab(tab);
+          if (subTab) handleSelectPromptSubTab(subTab);
+          setIsTutorialModalOpen(false);
+        }}
+        onOpenApiModal={() => {
+          setIsTutorialModalOpen(false);
+          setIsApiModalOpen(true);
+        }}
       />
 
       {/* Toast Notifications */}

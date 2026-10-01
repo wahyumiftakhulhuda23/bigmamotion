@@ -74,25 +74,39 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [batchGreenScreen, setBatchGreenScreen] = useState<boolean>(false);
   const [batchCustomInstructions, setBatchCustomInstructions] = useState<string>('');
   
-  // Real accounts from user's autoPilotAccounts + items in queue (NO dummy accounts)
+  // Real accounts from user's autoPilotAccounts + items in queue (Strictly NO dummy accounts)
+  const DUMMY_ACCOUNT_NAMES = React.useMemo(() => new Set([
+    'akun microstock 1',
+    'akun microstock 2',
+    'akun microstock',
+    'project cyber',
+    'project flat icon',
+    'akun microstock utama',
+    'microstock 1',
+    'microstock 2',
+  ]), []);
+
   const availableAccounts = React.useMemo(() => {
     const accs = new Set<string>();
     (autoPilotAccounts || []).forEach((acc) => {
-      if (acc.name && acc.name.trim().length > 0) {
-        accs.add(acc.name.trim());
+      const name = (acc.name || '').trim();
+      if (name.length > 0 && !DUMMY_ACCOUNT_NAMES.has(name.toLowerCase())) {
+        accs.add(name);
       }
     });
     items.forEach((it) => {
-      if (it.projectName && it.projectName.trim().length > 0) {
-        accs.add(it.projectName.trim());
+      const name = (it.projectName || '').trim();
+      if (name.length > 0 && !DUMMY_ACCOUNT_NAMES.has(name.toLowerCase())) {
+        accs.add(name);
       }
     });
     return Array.from(accs);
-  }, [items, autoPilotAccounts]);
+  }, [items, autoPilotAccounts, DUMMY_ACCOUNT_NAMES]);
 
   const [currentAccountName, setCurrentAccountName] = useState<string>(() => {
     if (autoPilotAccounts && autoPilotAccounts.length > 0 && autoPilotAccounts[0].name) {
-      return autoPilotAccounts[0].name;
+      const first = autoPilotAccounts[0].name.trim();
+      if (!DUMMY_ACCOUNT_NAMES.has(first.toLowerCase())) return first;
     }
     return '';
   });
@@ -164,14 +178,25 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   // Delete account directly from queue
   const handleDeleteAccountFromQueue = (accName: string) => {
     if (!accName || accName === 'ALL') return;
+    const targetName = accName.trim();
     if (onDeleteAccount) {
-      onDeleteAccount('', accName);
-    } else {
-      const targetIds = items.filter((it) => it.projectName === accName).map((it) => it.id);
-      targetIds.forEach((id) => onDeleteItem(id));
-      showToast(`Antrian akun "${accName}" berhasil dihapus.`, 'info');
+      onDeleteAccount('', targetName);
     }
+    // Also remove any queue items matching this account
+    const targetItems = items.filter(
+      (it) => (it.projectName || '').trim().toLowerCase() === targetName.toLowerCase()
+    );
+    targetItems.forEach((it) => onDeleteItem(it.id));
+
+    if (currentAccountName.trim().toLowerCase() === targetName.toLowerCase()) {
+      const remaining = availableAccounts.filter(
+        (a) => a.trim().toLowerCase() !== targetName.toLowerCase()
+      );
+      setCurrentAccountName(remaining[0] || '');
+    }
+
     setSelectedAccountFilter('ALL');
+    showToast(`Akun "${targetName}" dan seluruh antriannya berhasil dihapus.`, 'info');
   };
 
   const pendingItems = filteredItems.filter((item) => item.status === 'pending' || item.status === 'error');
@@ -1020,22 +1045,22 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         </div>
 
         {/* Clean Unified Control Bar (Filter Akun, Kelola & Run Auto Pilot) */}
-        <div className="bg-slate-950/85 rounded-xl p-3 border border-amber-500/25 flex flex-col lg:flex-row lg:items-center justify-between gap-3 shadow-md">
-          {/* Account Filter Dropdown & Hapus Akun Action */}
-          <div className="flex items-center gap-2 flex-wrap min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
-            <div className="flex items-center gap-1.5 text-xs font-bold text-gray-300">
-              <i className="fa-solid fa-filter text-amber-400 text-xs"></i>
-              <span className="hidden sm:inline">Filter Akun:</span>
+        <div className="bg-slate-950/85 rounded-xl p-2.5 sm:p-3 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md overflow-x-auto scrollbar-thin">
+          {/* Left: Account Filter Dropdown & Compact Delete Account */}
+          <div className="flex items-center gap-2 flex-nowrap shrink-0">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-pulse"></span>
+            <div className="flex items-center gap-1 text-xs font-bold text-gray-300 shrink-0">
+              <i className="fa-solid fa-filter text-amber-400 text-[11px]"></i>
+              <span className="text-[11px]">Akun:</span>
             </div>
 
             <select
               value={selectedAccountFilter}
               onChange={(e) => setSelectedAccountFilter(e.target.value)}
-              className="bg-slate-900 border border-gray-700 hover:border-amber-400/60 rounded-xl px-2.5 py-1.5 text-xs text-amber-300 font-bold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer max-w-[200px] truncate"
+              className="bg-slate-900 border border-gray-700 hover:border-amber-400/60 rounded-lg px-2.5 py-1 text-xs text-amber-300 font-bold focus:outline-none focus:ring-1 focus:ring-amber-400 cursor-pointer min-w-[110px] max-w-[170px] truncate"
               title="Pilih akun untuk memfilter antrian gambar"
             >
-              <option value="ALL">Semua Akun ({uniqueItems.length})</option>
+              <option value="ALL">Semua ({uniqueItems.length})</option>
               {availableAccounts.map((accName) => (
                 <option key={accName} value={accName}>
                   {accName} ({uniqueItems.filter((it) => it.projectName === accName).length})
@@ -1043,36 +1068,36 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               ))}
             </select>
 
-            <span className="text-[11px] text-amber-300 font-mono font-bold bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-lg shrink-0">
+            <span className="text-[10px] text-amber-300 font-mono font-bold bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-lg shrink-0 whitespace-nowrap">
               {pendingItems.length} antrian
             </span>
 
-            {/* Tombol Hapus Akun Terpilih */}
+            {/* Tombol Hapus Akun Terpilih - Compact Red Trash Icon */}
             {selectedAccountFilter !== 'ALL' && (
               <button
                 type="button"
                 onClick={() => handleDeleteAccountFromQueue(selectedAccountFilter)}
-                className="px-2.5 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/40 text-rose-300 hover:text-white transition text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 shrink-0"
-                title={`Hapus akun "${selectedAccountFilter}" dan semua antrian gambarnya`}
+                className="h-7 px-2 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 hover:text-white transition text-xs font-bold flex items-center gap-1 cursor-pointer shadow-sm active:scale-95 shrink-0 whitespace-nowrap"
+                title={`Hapus akun "${selectedAccountFilter}" dan semua antriannya`}
               >
                 <i className="fa-solid fa-trash-can text-xs text-rose-400"></i>
-                <span>Hapus Akun Ini</span>
+                <span className="text-[10px] hidden md:inline">Hapus Akun</span>
               </button>
             )}
           </div>
 
-          {/* Trigger Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Right: Action Buttons - Unified Heights, Neat & Clear */}
+          <div className="flex items-center gap-1.5 shrink-0 flex-nowrap self-start sm:self-center">
             {/* Open Auto Pilot Multi-Account Modal */}
             {onOpenAutoPilotModal && !isAutoPilotRunning && (
               <button
                 type="button"
                 onClick={onOpenAutoPilotModal}
-                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95 whitespace-nowrap"
-                title="Buka Pengaturan Auto Pilot (Input Nama Akun, Import Gambar & Drag-Drop)"
+                className="h-8 px-2.5 bg-slate-900 hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg flex items-center gap-1.5 transition shadow-sm cursor-pointer active:scale-95 whitespace-nowrap"
+                title="Kelola Akun Auto Pilot"
               >
                 <i className="fa-solid fa-folder-tree text-amber-400 text-xs"></i>
-                <span>Kelola Akun</span>
+                <span className="text-[11px]">Kelola</span>
               </button>
             )}
 
@@ -1081,11 +1106,11 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               <button
                 type="button"
                 onClick={handleRetryFailedItems}
-                className="px-3 py-2 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-black text-xs rounded-xl flex items-center gap-1.5 transition shadow-md shadow-rose-500/25 cursor-pointer active:scale-95 whitespace-nowrap"
-                title="Coba ulang semua animasi yang mengalami kesalahan/error"
+                className="h-8 px-2.5 bg-gradient-to-r from-rose-600 to-amber-600 hover:from-rose-500 hover:to-amber-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition shadow-md cursor-pointer active:scale-95 whitespace-nowrap"
+                title="Ulangi animasi gagal"
               >
                 <i className="fa-solid fa-rotate-right text-xs"></i>
-                <span>Ulangi Gagal ({failedItems.length})</span>
+                <span className="text-[11px]">Ulangi ({failedItems.length})</span>
               </button>
             )}
 
@@ -1094,35 +1119,33 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                 type="button"
                 onClick={handleStartAutoPilot}
                 disabled={pendingItems.length === 0}
-                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition shadow-md shadow-amber-500/25 disabled:opacity-40 cursor-pointer active:scale-95 whitespace-nowrap"
-                title="Jalankan antrian gambar terpilih satu per satu berurutan"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs rounded-lg flex items-center gap-1.5 transition shadow-md shadow-amber-500/25 disabled:opacity-40 cursor-pointer active:scale-95 whitespace-nowrap"
+                title="Jalankan antrian gambar terpilih"
               >
                 <i className="fa-solid fa-rocket text-xs"></i>
-                <span>
-                  Jalankan Auto Pilot ({pendingItems.length})
-                </span>
+                <span>Jalankan ({pendingItems.length})</span>
               </button>
             ) : (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={handlePauseAutoPilot}
-                  className={`px-3 py-1.5 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap ${
-                    autoPilotPaused
-                      ? 'bg-emerald-600 hover:bg-emerald-500'
-                      : 'bg-amber-600 hover:bg-amber-500'
+                  className={`px-2.5 py-1 text-white font-bold text-xs rounded-lg flex items-center gap-1 transition cursor-pointer shadow whitespace-nowrap ${
+                    autoPilotPaused ? 'bg-emerald-600' : 'bg-amber-600'
                   }`}
+                  title={autoPilotPaused ? 'Lanjutkan' : 'Jeda'}
                 >
-                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'} text-xs`}></i>
-                  <span>{autoPilotPaused ? 'Lanjutkan' : 'Jeda'}</span>
+                  <i className={`fa-solid fa-${autoPilotPaused ? 'play' : 'pause'} text-[11px]`}></i>
+                  <span className="text-[11px]">{autoPilotPaused ? 'Lanjut' : 'Jeda'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleStopAutoPilot}
-                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow whitespace-nowrap"
+                  className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-lg flex items-center gap-1 transition cursor-pointer shadow whitespace-nowrap"
+                  title="Hentikan Auto Pilot"
                 >
-                  <i className="fa-solid fa-stop text-xs"></i>
-                  <span>Hentikan</span>
+                  <i className="fa-solid fa-stop text-[11px]"></i>
+                  <span className="text-[11px]">Stop</span>
                 </button>
               </div>
             )}
@@ -1289,22 +1312,22 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               return (
                 <div
                   key={`${item.id}_${idx}`}
-                  className={`p-2.5 sm:p-3 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition ${
+                  className={`p-2 sm:p-2.5 rounded-xl border flex items-center justify-between gap-2.5 transition ${
                     isProcessing
-                      ? 'bg-amber-950/25 border-amber-500/70 shadow-lg shadow-amber-500/15 ring-1 ring-amber-400/40'
+                      ? 'bg-amber-950/25 border-amber-500/70 shadow-md shadow-amber-500/15 ring-1 ring-amber-400/40'
                       : isCompleted
                       ? 'bg-slate-900/60 border-emerald-500/30'
                       : isError
-                      ? 'bg-rose-950/25 border-rose-500/50 shadow-md shadow-rose-950/40'
+                      ? 'bg-rose-950/25 border-rose-500/50 shadow-sm'
                       : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700'
                   }`}
                 >
                   {/* Left: Thumbnail & Metadata */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     {/* Thumbnail */}
                     <div
                       onClick={() => setComparisonItem(item)}
-                      className="w-11 h-11 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
+                      className="w-10 h-10 rounded-lg overflow-hidden border border-gray-700 bg-slate-950 shrink-0 cursor-pointer group relative"
                       title="Klik untuk bandingkan gambar asli & animasi"
                     >
                       <img
@@ -1312,22 +1335,22 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                         alt={item.fileName}
                         className="w-full h-full object-contain group-hover:scale-110 transition-transform"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[10px]">
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px]">
                         <i className="fa-solid fa-magnifying-glass"></i>
                       </div>
                     </div>
 
                     {/* Metadata & Badges */}
-                    <div className="min-w-0 flex-1 space-y-1">
+                    <div className="min-w-0 flex-1 space-y-0.5">
                       {/* Row 1: Index, Account Badge, File Name */}
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="text-[10px] font-mono font-bold text-gray-500 shrink-0">#{idx + 1}</span>
                         {item.projectName && (
                           <span
-                            className="text-[9px] bg-sky-950/80 text-sky-300 border border-sky-800/60 px-1.5 py-0.5 rounded font-bold shrink-0 truncate max-w-[120px] flex items-center gap-1"
+                            className="text-[9px] bg-sky-950/80 text-sky-300 border border-sky-800/60 px-1.5 py-0.2 rounded font-bold shrink-0 truncate max-w-[100px] flex items-center gap-1"
                             title={`Akun: ${item.projectName}`}
                           >
-                            <i className="fa-solid fa-folder text-[8px]"></i>
+                            <i className="fa-solid fa-folder text-[7px]"></i>
                             <span className="truncate">{item.projectName}</span>
                           </span>
                         )}
@@ -1338,12 +1361,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
                       {/* Row 2: Compact Meta Tags & Status */}
                       <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
-                        <span className="text-gray-400 font-mono text-[10px]">{item.fileSize}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-slate-800 text-amber-300 font-semibold capitalize text-[10px]">
+                        <span className="text-gray-400 font-mono text-[9px]">{item.fileSize}</span>
+                        <span className="px-1 py-0.2 rounded bg-slate-800 text-amber-300 font-semibold capitalize text-[9px]">
                           {item.motionDynamics}
                         </span>
                         {item.isGreenScreen && (
-                          <span className="px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40 text-[9px] font-bold" title="Green Screen">
+                          <span className="px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40 text-[8px] font-bold" title="Green Screen">
                             GS
                           </span>
                         )}
@@ -1351,7 +1374,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                           <button
                             type="button"
                             onClick={() => setAnalysisModalItem(item)}
-                            className="p-1 rounded bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/50 text-[10px] cursor-pointer"
+                            className="p-0.5 rounded bg-purple-950/80 hover:bg-purple-900 text-purple-300 border border-purple-800/50 text-[9px] cursor-pointer"
                             title={`Analisis Logika: ${item.shapeAnalysis?.objectName || item.detectedSubject}`}
                           >
                             <i className="fa-solid fa-brain"></i>
@@ -1360,38 +1383,38 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
                         {/* Status Badges */}
                         {item.status === 'pending' && (
-                          <span className="text-[9px] bg-slate-800/80 text-gray-400 px-1.5 py-0.2 rounded font-medium">
+                          <span className="text-[9px] bg-slate-800/80 text-gray-400 px-1 py-0.2 rounded font-medium">
                             Menunggu
                           </span>
                         )}
                         {item.status === 'analyzing' && (
-                          <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                            <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Analisa
+                          <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                            <i className="fa-solid fa-spinner fa-spin text-[7px]"></i> Analisa
                           </span>
                         )}
                         {item.status === 'generating' && (
-                          <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
-                            <i className="fa-solid fa-spinner fa-spin text-[8px]"></i> Render 60fps
+                          <span className="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/40 px-1 py-0.2 rounded font-bold flex items-center gap-1 animate-pulse">
+                            <i className="fa-solid fa-spinner fa-spin text-[7px]"></i> Render
                           </span>
                         )}
                         {item.status === 'completed' && (
-                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
-                            <i className="fa-solid fa-check text-[8px]"></i> Selesai
+                          <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-1 py-0.2 rounded font-bold flex items-center gap-0.5">
+                            <i className="fa-solid fa-check text-[7px]"></i> Selesai
                           </span>
                         )}
                         {item.status === 'error' && (
                           <span
-                            className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 rounded font-bold flex items-center gap-1 truncate max-w-[130px]"
+                            className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1 py-0.2 rounded font-bold flex items-center gap-0.5 truncate max-w-[110px]"
                             title={item.error}
                           >
-                            <i className="fa-solid fa-triangle-exclamation text-[8px]"></i> Gagal
+                            <i className="fa-solid fa-triangle-exclamation text-[7px]"></i> Gagal
                           </span>
                         )}
                       </div>
 
                       {/* Inline Progress Bar when Processing */}
                       {isProcessing && (
-                        <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden border border-amber-500/30">
+                        <div className="w-full bg-slate-950 rounded-full h-1 overflow-hidden border border-amber-500/30">
                           <div
                             className="h-full bg-gradient-to-r from-amber-400 to-yellow-300 animate-pulse"
                             style={{ width: `${item.progress || 50}%` }}
@@ -1401,17 +1424,17 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Action Buttons (Compact Icons Only) */}
-                  <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                  {/* Right: Action Buttons - Unified Compact Pill Container */}
+                  <div className="flex items-center gap-1 shrink-0 bg-slate-950/60 p-1 rounded-xl border border-gray-800/80">
                     {/* Retry Button on Error Item */}
                     {isError && !isProcessing && (
                       <button
                         type="button"
                         onClick={() => processSingleItem(item)}
-                        className="w-8 h-8 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
+                        className="w-7 h-7 rounded-lg bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
                         title="Ulangi proses pembuatan animasi gambar ini"
                       >
-                        <i className="fa-solid fa-rotate-right text-xs"></i>
+                        <i className="fa-solid fa-rotate-right text-[11px]"></i>
                       </button>
                     )}
 
@@ -1420,47 +1443,47 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                       <button
                         type="button"
                         onClick={() => processSingleItem(item)}
-                        className="w-8 h-8 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
+                        className="w-7 h-7 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
                         title="Proses gambar ini sekarang"
                       >
-                        <i className="fa-solid fa-play text-xs"></i>
+                        <i className="fa-solid fa-play text-[11px]"></i>
                       </button>
                     )}
 
-                    {/* Actions when completed - All Icon Buttons */}
+                    {/* Actions when completed - Clean 28x28 Icon Buttons */}
                     {isCompleted && item.animationResult && (
                       <>
                         <button
                           type="button"
                           onClick={() => onPreviewAnimation(item.animationResult!)}
-                          className="w-8 h-8 rounded-lg bg-sky-600/25 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 flex items-center justify-center transition cursor-pointer active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-sky-600/25 hover:bg-sky-600/50 text-sky-300 flex items-center justify-center transition cursor-pointer active:scale-95"
                           title="Preview Animasi di Layar Utama"
                         >
-                          <i className="fa-solid fa-play text-xs"></i>
+                          <i className="fa-solid fa-play text-[11px]"></i>
                         </button>
                         <button
                           type="button"
                           onClick={() => setComparisonItem(item)}
-                          className="w-8 h-8 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 border border-amber-500/30 flex items-center justify-center transition cursor-pointer active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 flex items-center justify-center transition cursor-pointer active:scale-95"
                           title="Bandingkan Gambar Asli vs Animasi"
                         >
-                          <i className="fa-solid fa-code-compare text-xs"></i>
+                          <i className="fa-solid fa-code-compare text-[11px]"></i>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDownloadSingleHtml(item)}
-                          className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 border border-gray-700 flex items-center justify-center transition cursor-pointer active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-gray-300 flex items-center justify-center transition cursor-pointer active:scale-95"
                           title="Unduh File HTML"
                         >
-                          <i className="fa-solid fa-code text-xs"></i>
+                          <i className="fa-solid fa-code text-[11px]"></i>
                         </button>
                         <button
                           type="button"
                           onClick={() => handleExportSingleMp4(item)}
-                          className="w-8 h-8 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
+                          className="w-7 h-7 rounded-lg bg-purple-600 hover:bg-purple-500 text-white flex items-center justify-center transition cursor-pointer shadow-sm active:scale-95"
                           title="Export Video MP4 60 FPS"
                         >
-                          <i className="fa-solid fa-film text-xs"></i>
+                          <i className="fa-solid fa-film text-[11px]"></i>
                         </button>
                       </>
                     )}
@@ -1474,10 +1497,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                         onDeleteItem(item.id);
                       }}
                       disabled={isProcessing}
-                      className="w-8 h-8 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition cursor-pointer disabled:opacity-30 active:scale-90"
+                      className="w-7 h-7 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-rose-500/20 flex items-center justify-center transition cursor-pointer disabled:opacity-30 active:scale-90"
                       title="Hapus gambar ini dari antrian"
                     >
-                      <i className="fa-solid fa-xmark text-sm"></i>
+                      <i className="fa-solid fa-xmark text-xs"></i>
                     </button>
                   </div>
                 </div>

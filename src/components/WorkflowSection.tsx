@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
+import React, { useState, useRef } from 'react';
+import { AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics, NotepadBatch } from '../types';
 
 interface WorkflowSectionProps {
   currentType: AnimationType;
@@ -28,6 +28,8 @@ interface WorkflowSectionProps {
   onGenerateAnimations: () => void;
   isGeneratingAnimations: boolean;
   onProcessManualPrompts: (prompts: string[]) => void;
+  onProcessNotepadBatches?: (batches: NotepadBatch[]) => void;
+  onClearPrompts?: () => void;
   failedPrompts?: string[];
   onRetryFailedPrompts?: () => void;
   onRetrySinglePrompt?: (promptText: string, index: number) => void;
@@ -61,6 +63,8 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onGenerateAnimations,
   isGeneratingAnimations,
   onProcessManualPrompts,
+  onProcessNotepadBatches,
+  onClearPrompts,
   failedPrompts = [],
   onRetryFailedPrompts,
   onRetrySinglePrompt,
@@ -69,6 +73,11 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   const [manualText, setManualText] = useState('');
   const [showManualSection, setShowManualSection] = useState(false);
   const [showKeywordSection, setShowKeywordSection] = useState(false);
+  const [notepadBatches, setNotepadBatches] = useState<NotepadBatch[]>([]);
+  const [isNotepadDragging, setIsNotepadDragging] = useState(false);
+  const [expandedNotepadId, setExpandedNotepadId] = useState<string | null>(null);
+
+  const notepadFileInputRef = useRef<HTMLInputElement>(null);
 
   const manualLines = manualText
     .split('\n')
@@ -88,8 +97,70 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
     onProcessManualPrompts(manualLines);
   };
 
+  // Process text files dropped or selected
+  const processNotepadFiles = (files: FileList | File[]) => {
+    const txtFiles = Array.from(files).filter(
+      (f) => f.name.toLowerCase().endsWith('.txt') || f.type === 'text/plain'
+    );
+
+    if (txtFiles.length === 0) {
+      showToast('Pilih file Notepad (.txt) yang valid', 'warn');
+      return;
+    }
+
+    const loadedBatches: NotepadBatch[] = [];
+    let completed = 0;
+
+    txtFiles.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = (e.target?.result as string) || '';
+        const lines = text
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0);
+
+        if (lines.length > 0) {
+          const cleanName = file.name.replace(/\.[^/.]+$/, '').trim() || 'Notepad';
+          loadedBatches.push({
+            id: 'batch_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            fileName: file.name,
+            name: cleanName,
+            prompts: lines,
+          });
+        }
+
+        completed++;
+        if (completed === txtFiles.length) {
+          if (loadedBatches.length > 0) {
+            setNotepadBatches((prev) => [...prev, ...loadedBatches]);
+            const totalPrompts = loadedBatches.reduce((sum, b) => sum + b.prompts.length, 0);
+            showToast(`Berhasil memuat ${loadedBatches.length} file Notepad (${totalPrompts} total prompt)!`, 'success');
+          } else {
+            showToast('File Notepad yang dipilih tidak berisi prompt (kosong).', 'warn');
+          }
+        }
+      };
+      reader.readAsText(file);
+    });
+  };
+
+  const handleRemoveNotepadBatch = (batchId: string) => {
+    setNotepadBatches((prev) => prev.filter((b) => b.id !== batchId));
+  };
+
+  const handleRunNotepadBatches = () => {
+    if (notepadBatches.length === 0) {
+      showToast('Belum ada file Notepad yang dimuat!', 'warn');
+      return;
+    }
+    if (onProcessNotepadBatches) {
+      onProcessNotepadBatches(notepadBatches);
+    }
+  };
+
   return (
-    <section className="lg:col-span-5 flex flex-col gap-4">
+    <section className="flex flex-col gap-4 w-full">
       {/* STEP 1: PARAMETER SELECTION COMMAND CENTER */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-gray-800/90 space-y-4 shadow-xl">
         {/* Header Bar */}
@@ -367,42 +438,190 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           )}
         </button>
 
-        {/* Collapsible Manual Prompt Section */}
-        <div className="border-t border-gray-800/80 pt-2">
+        {/* Collapsible Manual Prompt & Notepad (.txt) Section */}
+        <div className="border-t border-gray-800/80 pt-2 space-y-2">
           <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={() => setShowManualSection(!showManualSection)}
-              className="text-xs font-bold text-gray-400 hover:text-gray-200 flex items-center gap-1.5 transition cursor-pointer"
+              className="text-xs font-bold text-gray-300 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
             >
               <i className={`fa-solid fa-chevron-${showManualSection ? 'down' : 'right'} text-[10px] text-gray-500`}></i>
-              <i className="fa-solid fa-keyboard text-gray-400 text-xs"></i>
-              <span>Input Prompt Manual</span>
+              <i className="fa-solid fa-file-lines text-amber-400 text-xs"></i>
+              <span>Input Notepad (.txt) & Manual</span>
             </button>
-            {manualLines.length > 0 && (
-              <span className="text-[10px] bg-gray-800 text-gray-300 border border-gray-700 px-2 py-0.2 rounded-full font-bold">
-                {manualLines.length} baris
-              </span>
-            )}
+            <div className="flex items-center gap-1.5">
+              {notepadBatches.length > 0 && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">
+                  {notepadBatches.length} Notepad ({notepadBatches.reduce((s, b) => s + b.prompts.length, 0)} Prompt)
+                </span>
+              )}
+              {manualLines.length > 0 && (
+                <span className="text-[10px] bg-gray-800 text-gray-300 border border-gray-700 px-2 py-0.2 rounded-full font-bold">
+                  {manualLines.length} baris
+                </span>
+              )}
+            </div>
           </div>
 
           {showManualSection && (
-            <div className="mt-2.5 space-y-2 animate-fadeIn">
-              <textarea
-                rows={3}
-                value={manualText}
-                onChange={(e) => setManualText(e.target.value)}
-                className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono"
-                placeholder="Ketik prompt Anda di sini... (Satu prompt per baris)"
-              ></textarea>
-              <button
-                onClick={handleManualSubmit}
-                disabled={isGeneratingAnimations}
-                className="w-full py-2.5 px-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold text-xs uppercase tracking-wider transition active:scale-[0.99] flex justify-center items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+            <div className="mt-2.5 space-y-3 animate-fadeIn">
+              {/* Notepad Drag & Drop / Input Zone */}
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsNotepadDragging(true);
+                }}
+                onDragLeave={() => setIsNotepadDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsNotepadDragging(false);
+                  if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    processNotepadFiles(e.dataTransfer.files);
+                  }
+                }}
+                onClick={() => notepadFileInputRef.current?.click()}
+                className={`p-3.5 rounded-xl border-2 border-dashed transition cursor-pointer text-center relative ${
+                  isNotepadDragging
+                    ? 'border-amber-400 bg-amber-500/10'
+                    : 'border-gray-700/80 hover:border-amber-400/50 bg-slate-950/60'
+                }`}
               >
-                <i className="fa-solid fa-arrow-right text-sky-400 text-xs"></i>
-                <span>Gunakan Prompt Manual</span>
-              </button>
+                <input
+                  ref={notepadFileInputRef}
+                  type="file"
+                  multiple
+                  accept=".txt,text/plain"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files.length > 0) {
+                      processNotepadFiles(e.target.files);
+                      e.target.value = '';
+                    }
+                  }}
+                />
+
+                <div className="flex items-center justify-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-sm shrink-0">
+                    <i className="fa-solid fa-file-lines"></i>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-bold text-gray-200">
+                      Input / Drag & Drop Notepad (.txt)
+                    </p>
+                    <p className="text-[10px] text-gray-400">
+                      Bisa input beberapa notepad sekaligus (1 prompt per baris). Animasi dikelompokkan sesuai nama notepad!
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loaded Notepad Files List */}
+              {notepadBatches.length > 0 && (
+                <div className="space-y-2 bg-slate-950/70 p-2.5 rounded-xl border border-amber-500/30">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-amber-300">
+                    <span className="flex items-center gap-1.5">
+                      <i className="fa-solid fa-list-ol"></i>
+                      <span>Daftar File Notepad ({notepadBatches.length})</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setNotepadBatches([])}
+                      className="text-[10px] text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                    >
+                      Hapus Semua
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {notepadBatches.map((batch) => {
+                      const isExpanded = expandedNotepadId === batch.id;
+                      return (
+                        <div
+                          key={batch.id}
+                          className="bg-slate-900 border border-gray-800 rounded-lg p-2 space-y-1 text-xs"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div
+                              onClick={() => setExpandedNotepadId(isExpanded ? null : batch.id)}
+                              className="flex items-center gap-1.5 font-bold text-gray-200 min-w-0 flex-1 cursor-pointer"
+                            >
+                              <i className="fa-solid fa-file-lines text-amber-400 text-xs"></i>
+                              <span className="truncate">{batch.fileName}</span>
+                              <span className="text-[10px] bg-slate-950 text-amber-300 px-1.5 py-0.2 rounded font-mono font-bold">
+                                {batch.prompts.length} prompt
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedNotepadId(isExpanded ? null : batch.id)}
+                                className="p-1 text-gray-400 hover:text-white transition cursor-pointer"
+                                title="Lihat isi prompt"
+                              >
+                                <i className={`fa-solid fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px]`}></i>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveNotepadBatch(batch.id)}
+                                className="p-1 text-gray-400 hover:text-rose-400 transition cursor-pointer"
+                                title="Hapus notepad ini"
+                              >
+                                <i className="fa-solid fa-xmark text-xs"></i>
+                              </button>
+                            </div>
+                          </div>
+
+                          {isExpanded && (
+                            <div className="bg-slate-950 rounded p-1.5 text-[10px] font-mono text-gray-400 space-y-0.5 max-h-24 overflow-y-auto">
+                              {batch.prompts.map((p, pIdx) => (
+                                <div key={pIdx} className="truncate">
+                                  <span className="text-gray-600 mr-1">{pIdx + 1}.</span> {p}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Button to run sequential generation directly from Notepad Batches */}
+                  <button
+                    type="button"
+                    onClick={handleRunNotepadBatches}
+                    disabled={isGeneratingAnimations}
+                    className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider transition active:scale-[0.99] flex justify-center items-center gap-2 cursor-pointer shadow-md shadow-amber-500/20 disabled:opacity-50"
+                  >
+                    <i className="fa-solid fa-bolt text-xs"></i>
+                    <span>Generate Animasi dari Notepad ({notepadBatches.reduce((s, b) => s + b.prompts.length, 0)} Total Prompt)</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Textarea for typing manual prompt */}
+              <div className="space-y-1.5 pt-1 border-t border-gray-800/60">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+                  Atau Ketik Prompt Manual:
+                </label>
+                <textarea
+                  rows={3}
+                  value={manualText}
+                  onChange={(e) => setManualText(e.target.value)}
+                  className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono"
+                  placeholder="Ketik prompt Anda di sini... (Satu prompt per baris)"
+                ></textarea>
+                <button
+                  type="button"
+                  onClick={handleManualSubmit}
+                  disabled={isGeneratingAnimations}
+                  className="w-full py-2 px-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 font-bold text-xs uppercase tracking-wider transition active:scale-[0.99] flex justify-center items-center gap-2 cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  <i className="fa-solid fa-arrow-right text-sky-400 text-xs"></i>
+                  <span>Gunakan Prompt Manual</span>
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -420,9 +639,23 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                 <i className="fa-solid fa-list-check text-amber-400"></i> Daftar Prompt Siap Render
               </h3>
             </div>
-            <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full font-bold">
-              {generatedPrompts.length} Prompt
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                {generatedPrompts.length} Prompt
+              </span>
+              {onClearPrompts && (
+                <button
+                  type="button"
+                  onClick={onClearPrompts}
+                  disabled={isGeneratingAnimations}
+                  className="px-2.5 py-1 bg-rose-950/70 hover:bg-rose-900/90 border border-rose-600/50 hover:border-rose-500 text-rose-300 hover:text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95 disabled:opacity-40"
+                  title="Reset / Bersihkan seluruh prompt siap render"
+                >
+                  <i className="fa-solid fa-arrow-rotate-left text-[11px]"></i>
+                  <span>Reset</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Error notice banner if any prompt failed */}

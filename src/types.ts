@@ -154,3 +154,30 @@ export interface ImageToMotionAutoPilotAccount {
   customInstructions: string;
   referenceImages: ReferenceImageUpload[];
 }
+
+export interface NotepadBatch {
+  id: string;
+  fileName: string;
+  name: string; // Account/Category name without extension
+  prompts: string[];
+}
+
+export interface ImageToPromptItem {
+  id: string;
+  projectId: string;
+  fileName: string;
+  fileSize: string;
+  imagePreviewUrl: string;
+  imageBase64: string;
+  mimeType: string;
+  status: 'idle' | 'analyzing' | 'done' | 'error';
+  generatedPrompt?: string;
+  error?: string;
+  createdAt: number;
+}
+
+export interface ImageToPromptProject {
+  id: string;
+  name: string;
+  createdAt: number;
+}

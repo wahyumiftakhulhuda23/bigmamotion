@@ -572,7 +572,10 @@ ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
 2. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
 3. KOORDINAT TERPUSAT & RESPONSIF: Definisikan const S = Math.min(w, h) * ${type === 'icon' ? '0.44' : type === 'text' ? '0.48' : '0.65'}; Gambar selalu berpusat di cx, cy menggunakan skala S. DILARANG koordinat absolut pixel statis yang membuat gambar melenceng.
 4. ZERO GLITCH / NO SMEARS: Jangan biarkan canvas berkedip atau memiliki artefak sisa frame sebelumnya.
-5. RINGKAS & TUNTAS: Buat kode 180 - 250 baris yang langsung berfungsi penuh dan looping tanpa henti.
+5. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX & TATA LETAK ELEMEN):
+   - Jika di dalam prompt terdapat spesifikasi warna hex code (#XXXXXX), palet warna spesifik, atau posisi elemen geometris (tengah, atas, bawah, sudut kemiringan):
+     AI WAJIB 100% MENGIKUTI kode warna hex dan tata letak geometris tersebut pada Canvas 2D agar visual yang dirender semirip mungkin dengan deskripsi referensi gambar!
+6. RINGKAS & TUNTAS: Buat kode 180 - 260 baris yang langsung berfungsi penuh dan looping 60 FPS tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -668,7 +671,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
   };
 }
 
-// High-Precision Procedural Vector Canvas HTML Generator (100% Pure Procedural Canvas 2D - No Raw Image Pasting)
+//// Master High-Precision Procedural Vector Canvas HTML Generator (Smart Semantic Vector, No Generic Gear)
 export function buildProceduralVectorMotionHtml(params: {
   motionDynamics: string;
   colorMode: string;
@@ -732,15 +735,14 @@ export function buildProceduralVectorMotionHtml(params: {
       ? '#64748b'
       : '#ec4899';
 
-  const spinSpeed = aiAnalysis.spinSpeed ?? (motionDynamics === 'mechanical' ? 2.5 : 1.8);
-  const hasSpeedTrails = aiAnalysis.hasSpeedTrails ?? true;
+  const subjectTitle = (aiAnalysis.objectName || 'Vector Motion Subject').toLowerCase();
 
   const shapeAnalysisJson = JSON.stringify({
-    objectName: aiAnalysis.objectName || 'Procedural Motion Graphic',
-    shapeDescription: aiAnalysis.shapeDescription || 'Rekonstruksi vektor Canvas 2D murni berdasarkan analisis mendalam referensi visual.',
-    detectedElements: aiAnalysis.detectedElements || ['Vektor Utama Geometris', 'Gradien Multi-Stop', 'Partikel Aerodinamis', 'Aura Neon Luminescence'],
-    professionalMotionPlan: aiAnalysis.professionalMotionPlan || `Animasi kinetik 60 FPS multi-layer dengan dinamika ${motionDynamics.toUpperCase()} dan pencahayaan ${colorMode.toUpperCase()}.`,
-    similaritySynthesis: aiAnalysis.similaritySynthesis || 'Sintesis bentuk geometris, kontur, dan warna referensi yang direkonstruksi utuh menggunakan algoritma Canvas 2D.',
+    objectName: aiAnalysis.objectName || 'Vector Motion Graphic',
+    shapeDescription: aiAnalysis.shapeDescription || 'Rekonstruksi vektor Canvas 2D 60 FPS tingkat tinggi dengan multi-layer kinetic transforms.',
+    detectedElements: aiAnalysis.detectedElements || ['Vektor Utama Geometris', 'Gradien Multi-Stop', 'Partikel Kinetik', 'Luminescence Aura'],
+    professionalMotionPlan: aiAnalysis.professionalMotionPlan || `Animasi kinetik 60 FPS dengan dinamika ${motionDynamics.toUpperCase()} dan pencahayaan ${colorMode.toUpperCase()}.`,
+    similaritySynthesis: aiAnalysis.similaritySynthesis || 'Sintesis bentuk geometris proporsional, kontur elegan, dan warna referensi yang direkonstruksi utuh.',
   });
 
   return `<!DOCTYPE html>
@@ -787,30 +789,17 @@ ${shapeAnalysisJson}
 
   // Multi-Layer Kinetic Particle System
   const particles = [];
-  const particleCount = 42;
+  const particleCount = 45;
   for (let i = 0; i < particleCount; i++) {
     particles.push({
-      x: (Math.random() - 0.5) * 450,
-      y: (Math.random() - 0.5) * 200,
-      vx: -(Math.random() * 4.5 + 2.0),
+      x: (Math.random() - 0.5) * 500,
+      y: (Math.random() - 0.5) * 350,
+      vx: -(Math.random() * 4.0 + 1.5),
       vy: (Math.random() - 0.5) * 1.5,
       size: Math.random() * 3.5 + 1.2,
       alpha: Math.random() * 0.8 + 0.2,
       life: Math.random() * 60 + 10,
       maxLife: 70
-    });
-  }
-
-  // Speed Streaks
-  const streaks = [];
-  for (let i = 0; i < 16; i++) {
-    streaks.push({
-      yOffset: (Math.random() - 0.5) * 200,
-      length: Math.random() * 220 + 70,
-      thickness: Math.random() * 2.8 + 1,
-      speed: Math.random() * 4.5 + 2.5,
-      phase: Math.random() * Math.PI * 2,
-      alpha: Math.random() * 0.6 + 0.3
     });
   }
 
@@ -820,7 +809,7 @@ ${shapeAnalysisJson}
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // Dynamic Kinetic Transforms according to chosen motion dynamics
+    // Active, energetic transforms (60 FPS clear kinetic movement)
     let posX = cx;
     let posY = cy;
     let scaleX = 1;
@@ -829,96 +818,69 @@ ${shapeAnalysisJson}
 
     const dyn = "${motionDynamics}";
     if (dyn === 'bounce') {
-      const bounce = Math.abs(Math.sin(t * 3.5));
-      posY = cy - (bounce * S * 0.35) + (S * 0.08);
-      const squash = 1 + 0.22 * (1 - bounce);
+      const bounce = Math.abs(Math.sin(t * 3.8));
+      posY = cy - (bounce * S * 0.35) + (S * 0.06);
+      const squash = 1 + 0.25 * (1 - bounce);
       scaleX = 1 / Math.sqrt(squash);
       scaleY = squash;
       rot = Math.sin(t * 2.5) * 0.1;
     } else if (dyn === 'orbital') {
-      posX = cx + Math.cos(t * 1.8) * (S * 0.32);
-      posY = cy + Math.sin(t * 1.8) * (S * 0.12);
-      const depthScale = 0.88 + 0.24 * (Math.sin(t * 1.8) + 1) * 0.5;
+      posX = cx + Math.cos(t * 2.0) * (S * 0.32);
+      posY = cy + Math.sin(t * 2.0) * (S * 0.14);
+      const depthScale = 0.85 + 0.3 * (Math.sin(t * 2.0) + 1) * 0.5;
       scaleX = depthScale;
       scaleY = depthScale;
-      rot = Math.sin(t * 1.5) * 0.2;
+      rot = Math.sin(t * 1.8) * 0.2;
     } else if (dyn === 'morph') {
-      const pulse = 1 + Math.sin(t * 3.8) * 0.12;
+      const pulse = 1 + Math.sin(t * 4.0) * 0.12;
       scaleX = pulse;
       scaleY = 1 / pulse;
-      posX = cx + Math.sin(t * 1.4) * 10;
-      posY = cy + Math.cos(t * 1.8) * 8;
-      rot = Math.sin(t * 1.8) * 0.12;
+      posX = cx + Math.sin(t * 1.5) * 14;
+      posY = cy + Math.cos(t * 2.0) * 10;
+      rot = Math.sin(t * 2.0) * 0.14;
     } else if (dyn === 'cyber') {
-      const step = Math.floor(t * 6) / 6;
-      posX = cx + Math.sin(step * Math.PI * 2) * 10;
-      posY = cy + Math.cos(step * Math.PI * 2) * 6;
-      rot = Math.sin(step * Math.PI) * 0.12;
-      scaleX = 1 + Math.sin(step * 10) * 0.05;
-      scaleY = 1 + Math.cos(step * 10) * 0.05;
+      const step = Math.floor(t * 8) / 8;
+      posX = cx + Math.sin(step * Math.PI * 2) * 12;
+      posY = cy + Math.cos(step * Math.PI * 2) * 8;
+      rot = Math.sin(step * Math.PI) * 0.15;
+      scaleX = 1 + Math.sin(step * 10) * 0.06;
+      scaleY = 1 + Math.cos(step * 10) * 0.06;
     } else if (dyn === 'mechanical') {
-      rot = t * ${spinSpeed};
-      posX = cx + Math.sin(t * 1.2) * 6;
-      posY = cy + Math.cos(t * 1.2) * 5;
+      posX = cx + Math.sin(t * 1.8) * 8;
+      posY = cy + Math.cos(t * 2.2) * 6;
+      rot = Math.sin(t * 2.0) * 0.12;
+      scaleX = 1 + Math.sin(t * 3.0) * 0.04;
+      scaleY = scaleX;
     } else {
-      // Flow & harmonic organic floating
-      posX = cx + Math.sin(t * 1.6) * (S * 0.08);
-      posY = cy + Math.cos(t * 2.2) * (S * 0.06);
-      rot = Math.sin(t * 1.4) * 0.1;
-      const breathe = 1 + Math.sin(t * 2.0) * 0.04;
+      // Flow & harmonic organic floating with prominent lively amplitude
+      posX = cx + Math.sin(t * 2.4) * (S * 0.14);
+      posY = cy + Math.cos(t * 3.0) * (S * 0.16);
+      rot = Math.sin(t * 2.0) * 0.12;
+      const breathe = 1 + Math.sin(t * 3.2) * 0.06;
       scaleX = breathe;
       scaleY = breathe;
     }
 
-    // 1. Ambient Background Energy Rings & Pulses (Only for Neon / Glow styles)
+    // 1. Ambient Background Energy Rings & Wavefronts
     if (${neonGlow}) {
       ctx.save();
       ctx.translate(posX, posY);
       for (let r = 1; r <= 3; r++) {
-        const ringRadius = (S * 0.55 * r * 0.6) + ((t * 25 * r) % (S * 0.7));
-        const ringAlpha = Math.max(0, 0.28 - (ringRadius / (S * 1.4)));
+        const ringRadius = (S * 0.5 * r * 0.6) + ((t * 35 * r) % (S * 0.8));
+        const ringAlpha = Math.max(0, 0.35 - (ringRadius / (S * 1.5)));
         ctx.beginPath();
         ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
         ctx.strokeStyle = "${glowColor}";
-        ctx.globalAlpha = ringAlpha * 0.7;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([8, 12]);
-        ctx.lineDashOffset = -t * 15 * r;
+        ctx.globalAlpha = ringAlpha;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([10, 14]);
+        ctx.lineDashOffset = -t * 25 * r;
         ctx.stroke();
       }
       ctx.restore();
     }
 
-    // 2. Render Speed Streaks behind object (Only when dynamic effects active)
-    if (${hasSpeedTrails && neonGlow}) {
-      ctx.save();
-      ctx.translate(posX, posY);
-      for (let i = 0; i < streaks.length; i++) {
-        const st = streaks[i];
-        const wave = Math.sin(t * st.speed + st.phase) * 5;
-        const streakLen = st.length * (0.8 + 0.3 * Math.sin(t * 3.5 + st.phase));
-        
-        ctx.beginPath();
-        const startX = -S * 0.35;
-        const endX = startX - streakLen;
-        const currY = st.yOffset * (S / 220) + wave;
-
-        const grad = ctx.createLinearGradient(startX, currY, endX, currY);
-        grad.addColorStop(0, "${glowColor}");
-        grad.addColorStop(0.4, "${secondaryColor}" + "88");
-        grad.addColorStop(1, "transparent");
-
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = st.thickness;
-        ctx.lineCap = 'round';
-        ctx.moveTo(startX, currY);
-        ctx.lineTo(endX, currY);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // 3. Render Trailing Kinetic Particles (Only for Neon / Glow styles)
+    // 2. Trailing Kinetic Particles
     if (${neonGlow}) {
       ctx.save();
       ctx.translate(posX, posY);
@@ -928,10 +890,10 @@ ${shapeAnalysisJson}
         p.y += p.vy;
         p.life -= 1;
         if (p.life <= 0 || p.x < -w * 0.5) {
-          p.x = -S * 0.15 + (Math.random() - 0.5) * 25;
-          p.y = (Math.random() - 0.5) * (S * 0.6);
+          p.x = -S * 0.15 + (Math.random() - 0.5) * 30;
+          p.y = (Math.random() - 0.5) * (S * 0.7);
           p.vx = -(Math.random() * 4.5 + 2.0);
-          p.life = Math.random() * 50 + 20;
+          p.life = Math.random() * 55 + 20;
         }
 
         const pAlpha = (p.life / p.maxLife) * p.alpha;
@@ -944,7 +906,7 @@ ${shapeAnalysisJson}
       ctx.restore();
     }
 
-    // 4. Render Procedural Vector Art in Canvas 2D (Pure Code Re-creation)
+    // 3. Central Semantic Vector Object (High Fidelity Reconstructed Icon)
     ctx.save();
     ctx.translate(posX, posY);
     ctx.scale(scaleX, scaleY);
@@ -952,95 +914,124 @@ ${shapeAnalysisJson}
 
     if (${neonGlow}) {
       ctx.shadowColor = "${glowColor}";
-      ctx.shadowBlur = 20 + Math.sin(t * 3.5) * 8;
+      ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12;
     }
 
-    const R = S * 0.72;
+    const R = S * 0.75;
+    const title = "${subjectTitle}";
 
-    // Multi-Layer Outer Futuristic Bevel / Halo
-    const outerGrad = ctx.createLinearGradient(-R, -R, R, R);
-    outerGrad.addColorStop(0, "${glowColor}");
-    outerGrad.addColorStop(0.5, "${secondaryColor}");
-    outerGrad.addColorStop(1, "${accentColor}");
-
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = outerGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, R * 0.68, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Inner Radiant Shield / Dial Structure
-    const innerGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.6);
-    innerGrad.addColorStop(0, "${glowColor}" + "33");
-    innerGrad.addColorStop(0.7, "${secondaryColor}" + "18");
-    innerGrad.addColorStop(1, "transparent");
-    ctx.fillStyle = innerGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, R * 0.68, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Calibrated Dial Ticks & Rotating Spokes
-    ctx.save();
-    ctx.rotate(t * 0.6);
-    for (let a = 0; a < 12; a++) {
-      const angle = (a / 12) * Math.PI * 2;
-      const x1 = Math.cos(angle) * (R * 0.52);
-      const y1 = Math.sin(angle) * (R * 0.52);
-      const x2 = Math.cos(angle) * (R * 0.64);
-      const y2 = Math.sin(angle) * (R * 0.64);
+    // Draw multi-layered modern vector graphics (Smart Subject Rendering)
+    if (title.includes('shield') || title.includes('protect') || title.includes('security') || title.includes('lock')) {
+      // Modern Security Shield
       ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.strokeStyle = a % 3 === 0 ? "${glowColor}" : "${secondaryColor}" + "99";
-      ctx.lineWidth = a % 3 === 0 ? 3 : 1.5;
+      ctx.moveTo(0, -R * 0.75);
+      ctx.lineTo(R * 0.65, -R * 0.5);
+      ctx.lineTo(R * 0.65, R * 0.15);
+      ctx.quadraticCurveTo(R * 0.65, R * 0.65, 0, R * 0.85);
+      ctx.quadraticCurveTo(-R * 0.65, R * 0.65, -R * 0.65, R * 0.15);
+      ctx.lineTo(-R * 0.65, -R * 0.5);
+      ctx.closePath();
+      const grad = ctx.createLinearGradient(-R * 0.65, -R * 0.75, R * 0.65, R * 0.85);
+      grad.addColorStop(0, "${glowColor}");
+      grad.addColorStop(0.5, "${secondaryColor}");
+      grad.addColorStop(1, "${accentColor}");
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Inner Emblem
+      ctx.beginPath();
+      ctx.arc(0, -R * 0.05, R * 0.25, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+    } else if (title.includes('rocket') || title.includes('launch') || title.includes('space') || title.includes('fly')) {
+      // Sleek Space Rocket
+      ctx.beginPath();
+      ctx.moveTo(0, -R * 0.85);
+      ctx.bezierCurveTo(R * 0.45, -R * 0.4, R * 0.45, R * 0.4, 0, R * 0.6);
+      ctx.bezierCurveTo(-R * 0.45, R * 0.4, -R * 0.45, -R * 0.4, 0, -R * 0.85);
+      ctx.closePath();
+      const rGrad = ctx.createLinearGradient(0, -R * 0.85, 0, R * 0.6);
+      rGrad.addColorStop(0, '#ffffff');
+      rGrad.addColorStop(0.4, "${glowColor}");
+      rGrad.addColorStop(1, "${secondaryColor}");
+      ctx.fillStyle = rGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Rocket Porthole Window
+      ctx.beginPath();
+      ctx.arc(0, -R * 0.2, R * 0.18, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Exhaust Thruster Flame (Pulsating)
+      const flameLen = R * (0.35 + Math.sin(t * 18) * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(-R * 0.18, R * 0.6);
+      ctx.lineTo(0, R * 0.6 + flameLen);
+      ctx.lineTo(R * 0.18, R * 0.6);
+      ctx.closePath();
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+    } else {
+      // Futuristic Hexagonal Core / Emblem (Elegant High-Tech Vector)
+      ctx.beginPath();
+      for (let s = 0; s < 6; s++) {
+        const ang = (s / 6) * Math.PI * 2 - Math.PI / 2;
+        const hx = Math.cos(ang) * (R * 0.72);
+        const hy = Math.sin(ang) * (R * 0.72);
+        if (s === 0) ctx.moveTo(hx, hy);
+        else ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+      const hexGrad = ctx.createLinearGradient(-R * 0.7, -R * 0.7, R * 0.7, R * 0.7);
+      hexGrad.addColorStop(0, "${glowColor}");
+      hexGrad.addColorStop(0.5, "${secondaryColor}");
+      hexGrad.addColorStop(1, "${accentColor}");
+      ctx.fillStyle = hexGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Inner Glowing Diamond
+      ctx.save();
+      ctx.rotate(Math.sin(t * 2.5) * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(0, -R * 0.38);
+      ctx.lineTo(R * 0.38, 0);
+      ctx.lineTo(0, R * 0.38);
+      ctx.lineTo(-R * 0.38, 0);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fill();
+      ctx.restore();
+
+      // Concentric Orbital Ring
+      ctx.beginPath();
+      ctx.ellipse(0, 0, R * 0.92, R * 0.35, Math.sin(t * 1.5) * 0.4, 0, Math.PI * 2);
+      ctx.strokeStyle = "${accentColor}";
+      ctx.lineWidth = 2.5;
       ctx.stroke();
     }
-    ctx.restore();
 
-    // Central Kinetic Emblem / Vector Core
+    // Specular Gleam Sweep (Dynamic light sheen across surface)
     ctx.save();
-    ctx.rotate(-t * 0.9);
-    ctx.beginPath();
-    const spikes = 6;
-    for (let s = 0; s < spikes * 2; s++) {
-      const sa = (s / (spikes * 2)) * Math.PI * 2;
-      const sr = s % 2 === 0 ? R * 0.38 : R * 0.22;
-      const sx = Math.cos(sa) * sr;
-      const sy = Math.sin(sa) * sr;
-      if (s === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    }
-    ctx.closePath();
-    const coreGrad = ctx.createLinearGradient(-R * 0.35, -R * 0.35, R * 0.35, R * 0.35);
-    coreGrad.addColorStop(0, "${glowColor}");
-    coreGrad.addColorStop(0.5, "${secondaryColor}");
-    coreGrad.addColorStop(1, "${accentColor}");
-    ctx.fillStyle = coreGrad;
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-
-    // Luminescent Center Core Orb
-    const orbGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 0.14);
-    orbGrad.addColorStop(0, "#ffffff");
-    orbGrad.addColorStop(0.5, "${glowColor}");
-    orbGrad.addColorStop(1, "transparent");
-    ctx.fillStyle = orbGrad;
-    ctx.beginPath();
-    ctx.arc(0, 0, R * 0.14, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Specular Gleam Sweep
-    ctx.save();
-    const gleamX = ((t * 1.5) % 3 - 1.5) * R * 2;
-    const gleamGrad = ctx.createLinearGradient(gleamX - 30, -R, gleamX + 30, R);
+    const gleamX = ((t * 1.4) % 3 - 1.5) * R * 2.2;
+    const gleamGrad = ctx.createLinearGradient(gleamX - 35, -R, gleamX + 35, R);
     gleamGrad.addColorStop(0, 'rgba(255,255,255,0)');
-    gleamGrad.addColorStop(0.5, 'rgba(255,255,255,0.4)');
+    gleamGrad.addColorStop(0.5, 'rgba(255,255,255,0.55)');
     gleamGrad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = gleamGrad;
-    ctx.fillRect(-R * 0.7, -R * 0.7, R * 1.4, R * 1.4);
+    ctx.fillRect(-R * 0.85, -R * 0.85, R * 1.7, R * 1.7);
     ctx.restore();
 
     ctx.restore();
@@ -1095,57 +1086,37 @@ export async function handleImageToMotionLogic(body: any) {
     const ai = getClient(apiKey);
     const targetModel = sanitizeModel(model);
 
-    const masterMultimodalPrompt = `Anda adalah World-Class Computer Vision & Master SVG Vector Tracing Specialist, Senior Iconographer & Lead Canvas 2D Motion Graphics Engineer (Adobe Illustrator / After Effects / Lottie High-End Standard).
+    const masterMultimodalPrompt = `Anda adalah Master Canvas 2D Motion Graphics & Senior Computer Vision Engineer (Adobe After Effects / Lottie 60 FPS Microstock Specialist).
 
-TUGAS UTAMA (ULTRA-DETAIL SVG VECTOR TRACING 1:1 & ANIMASI KINETIK MULTI-LAYER):
-Lakukan analisis mikroskopis pada GAMBAR REFERENSI yang diunggah. JIKA GAMBAR BERGAYA FLAT VECTOR / FLAT ICON / 2D VECTOR, LAKUKAN TRACING VEKTOR SVG MIKROSKOPIS PENUH (100% IDENTIK PERSIS) DAN BANGUN ULANG MENJADI KODE CANVAS 2D DENGAN MEMETAKAN STRING SVG PATH2D DARI SETIAP KOMPONEN ANATOMI:
-
-=============================================================================
-METODE 1: ULTRA-DETAIL SVG VECTOR TRACING (REPLIKA 1:1 PERSIS BEBAS DISTORSI)
-=============================================================================
-1. TRACING KONTUR VEKTOR SVG EKSAK:
-   - Konversikan setiap siluet, kelopak, sayap, bodi, gear, panel, kurva, lubang tembus, dan garis tepi dari gambar referensi menjadi string data path SVG yang presisi:
-     \`const part1_body = new Path2D("M 0 -120 C 50 -120 90 -80 90 -30 L 90 80 C 90 130 50 170 0 170 C -50 170 -90 130 -90 80 L -90 -30 C -90 -80 -50 -120 0 -120 Z");\`
-   - Gunakan perintah SVG Path standar (\`M\`, \`C\`, \`S\`, \`Q\`, \`L\`, \`A\`, \`Z\`) ternormalisasi pada sistem koordinat berpusat di (0,0) atau sistem viewBox [0,0,500,500].
-   - Setiap lapisan warna (fill) dan garis tepi (stroke) ditrace secara terpisah sehingga tidak ada detail referensi yang terlewat.
-
-2. EKSTRAKSI PALET WARNA FLAT HEX 1:1:
-   - Deteksi dan ekstrak kode warna HEX nyata dari setiap lapisan objek asli (misal: warna dasar \`#2563EB\`, bayangan flat \`#1D4ED8\`, aksen terang \`#60A5FA\`, outline \`#0F172A\`).
-   - DILARANG menggunakan warna tebakan jika gambar referensi memiliki palet warna tertentu.
+TUGAS UTAMA:
+Analisis GAMBAR REFERENSI yang diunggah secara visual pixel-by-pixel, lalu REKONSTRUKSI MENJADI KODE HTML5 CANVAS 2D yang SANGAT MIRIP dengan gambar aslinya (bentuk anatomi objek, letak elemen, kode warna HEX asli) dan BERIKAN GERAKAN KINETIK 60 FPS YANG JELAS, AKTIF, DAN BERTENAGA!
 
 =============================================================================
-METODE 2: ARTICULATED MULTI-PART RIGGING & ANIMASI KINETIK CERDAS
+ATURAN KETAT (ANTI-FALLBACK & KESESUAIAN TINGGI):
 =============================================================================
-1. RIGGING SUB-KOMPONEN TERPISAH:
-   - Pisahkan hasil tracing SVG menjadi 4–8 sub-komponen independen (Bodi Utama, Kepala/Dial/Lensa, Roda/Sayap/Daun/Jarum, Aksen/Detail Mikro).
-   - Setiap komponen di-render pada titik putarnya masing-masing menggunakan hierarki Canvas 2D:
-     \`\`\`js
-     ctx.save();
-     ctx.translate(cx + partX * S, cy + partY * S);
-     ctx.rotate(partAngle);
-     ctx.scale(partScaleX * (S / 250), partScaleY * (S / 250));
-     ctx.fillStyle = "#hexColor";
-     ctx.fill(partPath);
-     if (hasStroke) {
-       ctx.strokeStyle = "#strokeColor";
-       ctx.lineWidth = strokeWidth;
-       ctx.stroke(partPath);
-     }
-     ctx.restore();
-     \`\`\`
-
-2. GERAKAN KINETIK KONTEKSTUAL 60 FPS:
-   - Animasikan bagian yang bergerak sesuai fungsi aslinya:
-     * Dial / Roda Gigi / Kipas: Berputar pada poros tengahnya (\`rot = t * speed\`).
-     * Lonceng / Pendulum / Ekor: Berayun harmonik (\`rot = Math.sin(t * 3.5) * 0.15\`).
-     * Sayap / Daun / Anggota Tubuh: Mengepak/bergoyang dengan *phase offset* sekunder.
-     * Bodi / Karakter: Denyut pernapasan atau pantulan *squash-and-stretch* elastis yang lembut.
-     * Ikon Badge / Gembok: Pantulan kilau spekular menyapu (*specular sheen wave*) melintasi permukaan.
+1. DILARANG KERAS menghasilkan bentuk kotak roda gerigi berputar jika gambar aslinya bukan roda gigi! Gambarlah bentuk visual subjek aslinya (misal: Mikrofon, Kamera, Roket, Tas Belanja, Robot, Gedung, Mobil, Karakter, dll.).
+2. DILARANG bentuk acak/tidak beraturan atau garis melayang tanpa arti. Setiap elemen Canvas harus terhubung rapi membentuk objek referensi yang proporsional dan solid.
+3. DILARANG gerakan minim / samar / hanya glow tipis statis. Animasi WAJIB memiliki gerakan 60 FPS yang nyata dan bertenaga (osilasi floating Y, breathing scale pulse, specular gleam sweep, partikel kinetik, artikulasi sub-bagian).
 
 =============================================================================
-METODE 3: JIKA REFERENSI ADALAH GAYA 3D / NEON / CYBER GLOW:
+1. REPRODUKSI BENTUK & KODE WARNA HEX 1:1 DARI GAMBAR:
 =============================================================================
-- Pertahankan kekayaan efek pendaran cahaya luminescent (\`ctx.shadowBlur = 15..30\`), multi-stop gradients, dan partikel kinetik yang memukau.
+- Identifikasi subjek utama secara akurat.
+- Ekstrak PALET WARNA HEX ASLI (#RRGGBB) dari gambar untuk setiap bagian objek (warna badan utama, bayangan kontur, highlight, aksen pendaran glow, dan garis stroke).
+- Gambar setiap komponen secara proporsional dan presisi menggunakan fungsi Canvas 2D: \`ctx.roundRect\`, \`ctx.arc\`, \`ctx.ellipse\`, \`ctx.bezierCurveTo\`, \`ctx.lineTo\`, dan \`ctx.fill()\` / \`ctx.stroke()\`.
+- Skala objek S = Math.min(w, h) * 0.44. Objek harus terpusat di (cx, cy) dengan ukuran proporsional (mengisi 75-85% kanvas).
+
+=============================================================================
+2. GERAKAN KINETIK 60 FPS YANG DINAMIS & TEGAS (ACTIVE MOTION):
+=============================================================================
+- Gerak Utama Objek:
+  * Floating/Osilasi: \`posY = cy + Math.sin(t * 2.8) * (S * 0.14); rot = Math.sin(t * 2.0) * 0.12;\`
+  * Dynamic Breathing Pulse: \`scaleX = 1 + Math.sin(t * 3.2) * 0.05; scaleY = 1 - Math.sin(t * 3.2) * 0.04;\`
+  * Artikulasi Sub-Komponen: Gerakkan bagian yang logis dari subjek (misal: lensa memancarkan sinar pulsa, baling-baling/rotor berputar, indikator lampu berkedip, sayap bergetar, dial radar berputar).
+  * Efek Kilau Spekular: Sapuan garis kilau cahaya miring terang yang melintasi permukaan objek (\`const shineX = ((t * 1.5) % 3 - 1.5) * S * 2;\`).
+- Efek Pendaran & Partikel (Neon Glow):
+  * Gunakan \`ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12;\` dengan warna glow menyala terang (\`ctx.shadowColor = primaryGlowHex;\`).
+  * Tambahkan 15–30 partikel energi atau cincin gelombang kinetik yang memancar dari objek.
 
 =============================================================================
 STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
@@ -1161,11 +1132,11 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
 </style>
 <script type="application/json" id="shape-analysis">
 {
-  "objectName": "Nama spesifik objek referensi",
-  "shapeDescription": "Hasil Ultra-Detail SVG Tracing anatomi, layer Path2D, dan palet warna asli referensi",
-  "detectedElements": ["Traced Layer 1 (Root)", "Traced Layer 2 (Pivot Sekunder)", "Traced Layer 3", "Traced Layer 4"],
-  "professionalMotionPlan": "Analisis articulated rigging SVG Path2D kinetik 60 FPS",
-  "similaritySynthesis": "Rekonstruksi SVG Path2D 1:1 identik ultra-detail dengan animasi mandiri per layer",
+  "objectName": "Nama objek spesifik dari gambar referensi",
+  "shapeDescription": "Rekonstruksi bentuk dan warna asli referensi dengan Canvas 2D 60 FPS",
+  "detectedElements": ["Elemen Utama", "Aksen Warna Asli", "Efek Kinetik"],
+  "professionalMotionPlan": "Animasi kinetik 60 FPS dinamis dengan artikulasi layer",
+  "similaritySynthesis": "Rekonstruksi presisi kode warna dan proporsi gambar",
   "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
 }
 </script>
@@ -1197,20 +1168,13 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
   window.addEventListener('resize', resize);
   resize();
 
-  // DEFINISI LENGKAP OBJEK PATH2D HASIL SVG TRACING ULTRA-DETAIL
-  // Contoh:
-  // const path_chassis = new Path2D("M ... C ... Z");
-  // const path_details = new Path2D("M ... L ... Z");
-
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // 1. RENDER LATAR BELAKANG / BAYANGAN DASAR (JIKA ADA DI REFERENSI)
-    // 2. RENDER HIERARKI SUB-KOMPONEN HASIL SVG TRACING PADA PIVOT MASING-MASING DENGAN ctx.save() / ctx.restore()
-    // 3. TERAPKAN WARNA FLAT HEX PERSIS GAMBAR ASLI
+    // RENDER ANIMASI OBJEK SESUAI BENTUK GAMBAR ASLI DENGAN WARNA HEX ASLI & GERAKAN KINETIK NYATA 60 FPS
 
     requestAnimationFrame(animate);
   }
@@ -1219,7 +1183,7 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
 </body>
 </html>
 
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apapun:`;
+Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
 
     const { response } = await generateContentWithFallback(
       ai,
@@ -1317,6 +1281,83 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     fileName,
     detectedSubject,
     shapeAnalysis,
+  };
+}
+
+// Master Image To Motion Prompt Generator (Single clean line prompt per image)
+export async function handleImageToPromptLogic(body: any) {
+  const apiKey = body.apiKey;
+  const targetModel = sanitizeModel(body.model);
+  const imageBase64 = body.imageBase64 || "";
+  const mimeType = body.mimeType || "image/png";
+  const fileName = body.fileName || "image.png";
+  const projectName = body.projectName || "Default";
+
+  const pureBase64 = imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+
+  const ai = getClient(apiKey);
+
+  const promptDirective = `You are a World-Class Computer Vision & Motion Graphic Reverse-Engineering Specialist.
+Analyze this reference image with maximum fidelity and output EXACTLY ONE SINGLE LINE of an ultra-detailed, production-ready motion graphics animation prompt that enables an AI code generator to recreate an animated twin identical to this image.
+
+CRITICAL REVERSE-ENGINEERING REQUIREMENTS:
+1. IDENTIFY EXACT SUBJECT & ART STYLE: Accurately name the central object/character/symbol and its exact artistic style (e.g. flat vector art, isometric 3D, neon cyber HUD, glassmorphism, claymation, line icon).
+2. EXACT COLOR PALETTE WITH HEX CODES: Detect and explicitly include the EXACT HEX CODES (#RRGGBB) from the image: primary body color (e.g. #FF5E3A), secondary structure color (e.g. #1E232A), accent trims, luminous glow/neon tint, and background contrast.
+3. PRECISE SPATIAL PLACEMENT & ELEMENT ANATOMY: Detail the exact coordinate placement of each sub-component (e.g. centralized base at 50% X 70% Y, cylindrical neck extending upwards to 50% X 40% Y, angled head rotated 30 degrees at upper left, symmetrical side brackets, proportional stroke width).
+4. LOGICAL ANIMATION DYNAMICS & MICROSTOCK EFFECTS: Define how this specific subject moves realistically and aesthetically in 60 FPS:
+   - Primary component motion (e.g. smooth floating bob along Y-axis ±8px with ease-in-out, gentle gimbal tilt ±10 degrees, rhythmic breathing scale 0.98 to 1.02).
+   - Secondary articulated movement (e.g. rotating inner elements, pulsating radial energy rings, light sweeps along bevels).
+   - Complementary particle/emission effects matching the theme (e.g. floating dust sparks, subtle laser scan line, cyber glow luminescence).
+5. STRICT OUTPUT FORMAT:
+- Output MUST be EXACTLY ONE SINGLE CONTINUOUS LINE of prompt text (NO newlines, NO line breaks).
+- NO numbering (no '1.'), NO quotation marks, NO markdown formatting (no bold/bullets), NO conversational introductory phrases (never say "Prompt:", "Here is...").
+- Output pure, clean, highly-descriptive motion prompt in English ready for 60 FPS code generation.`;
+
+  const { response } = await generateContentWithFallback(
+    ai,
+    targetModel,
+    (currentModel) => {
+      const config: any = {
+        temperature: 0.35,
+        maxOutputTokens: 2048,
+      };
+      const fastThinking = getFastThinkingConfig(currentModel);
+      if (fastThinking) config.thinkingConfig = fastThinking;
+      return {
+        contents: [
+          {
+            inlineData: {
+              data: pureBase64,
+              mimeType: mimeType || "image/png",
+            },
+          },
+          {
+            text: promptDirective,
+          },
+        ],
+        config,
+      };
+    },
+    2
+  );
+
+  let raw = response.text || "";
+  let cleanPrompt = raw
+    .replace(/^["'`\s]+|["'`\s]+$/g, "")
+    .replace(/^(?:Prompt|Motion Prompt|Result|Output|Here is the prompt)[\s:=*-]+/i, "")
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!cleanPrompt) {
+    cleanPrompt = `Ultra-detailed 60 FPS motion graphics animation of ${fileName.replace(/\.[^/.]+$/, "")} featuring fluid kinetic movements, glowing particle emitter trails, dynamic elastic easing, and luminous visual effects on a clean background.`;
+  }
+
+  return {
+    success: true,
+    fileName,
+    projectName,
+    prompt: cleanPrompt,
   };
 }
 
@@ -1474,6 +1515,20 @@ export function createApiRouter(): Router {
   };
   router.post("/gemini/image-to-motion", imageToMotionHandler);
   router.post("/api/gemini/image-to-motion", imageToMotionHandler);
+
+  // Generate Motion Prompt from Image (1 Clean Line Prompt per image)
+  const imageToPromptHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const result = await handleImageToPromptLogic(body);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[ImageToPrompt] Error:", err);
+      res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menganalisa gambar ke motion prompt" });
+    }
+  };
+  router.post("/gemini/image-to-prompt", imageToPromptHandler);
+  router.post("/api/gemini/image-to-prompt", imageToPromptHandler);
 
   // Check Trial Status
   const checkTrialHandler = (req: Request, res: Response) => {
