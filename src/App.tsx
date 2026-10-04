@@ -1410,8 +1410,6 @@ export default function App() {
               <WorkflowSection
                 currentType={currentType}
                 onSelectType={setCurrentType}
-                nicheCategory={nicheCategory}
-                onSelectNiche={setNicheCategory}
                 visualStyle={visualStyle}
                 onSelectStyle={setVisualStyle}
                 colorMode={colorMode}

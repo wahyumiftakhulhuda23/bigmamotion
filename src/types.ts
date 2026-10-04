@@ -62,7 +62,7 @@ export interface AutoPilotAccount {
   id: string;
   name: string;
   type: AnimationType;
-  subCategory: NicheCategory;
+  subCategory?: NicheCategory | string;
   style: VisualStyle;
   promptCount: number;
   isGreenScreen?: boolean;

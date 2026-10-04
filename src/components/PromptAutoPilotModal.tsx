@@ -110,8 +110,8 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                     <i className="fa-solid fa-trash"></i>
                   </button>
 
-                {/* Row 1: Nama Akun, Tipe Animasi & Jml Prompt */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-8">
+                {/* Row 1: Nama Akun, Tipe Animasi, Gaya Visual & Jml Prompt */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pr-8">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Nama Akun / Folder</label>
                     <input
@@ -133,6 +133,24 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                     </select>
                   </div>
                   <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Gaya Visual</label>
+                    <select
+                      value={acc.style}
+                      onChange={(e) => onUpdateAccount(index, { style: e.target.value as VisualStyle })}
+                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="minimalist">Clean Minimalist</option>
+                      <option value="flat_vector">Flat Vector Art</option>
+                      <option value="cyberpunk">Cyberpunk Neon</option>
+                      <option value="corporate">Modern Corporate Flat</option>
+                      <option value="glassmorphism">Glassmorphism & 3D</option>
+                      <option value="kinetic">Kinetic Typography</option>
+                      <option value="fluid">Abstract Fluid Mesh</option>
+                      <option value="isometric">Isometric 3D Projection</option>
+                      <option value="retro_synth">Retro Synthwave 80s</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Jml Prompt</label>
                     <input
                       type="number"
@@ -144,44 +162,6 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                       }
                       className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none font-bold"
                     />
-                  </div>
-                </div>
-
-                {/* Row 2: Kategori Niche & Gaya Visual */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Kategori Niche</label>
-                    <select
-                      value={acc.subCategory}
-                      onChange={(e) => onUpdateAccount(index, { subCategory: e.target.value as NicheCategory })}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
-                    >
-                      <option value="marketing">Marketing & Bisnis</option>
-                      <option value="teknologi">Teknologi & AI</option>
-                      <option value="arsitektur">Arsitektur & Properti</option>
-                      <option value="pendidikan">Pendidikan & E-Learning</option>
-                      <option value="transportasi">Transportasi & Logistik</option>
-                      <option value="kesehatan">Kesehatan & Medis</option>
-                      <option value="finansial">Finansial & Crypto</option>
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Gaya Visual</label>
-                    <select
-                      value={acc.style}
-                      onChange={(e) => onUpdateAccount(index, { style: e.target.value as VisualStyle })}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
-                    >
-                      <option value="minimalist">Clean Minimalist</option>
-                      <option value="flat_vector">Flat Vector Art (Modern Flat)</option>
-                      <option value="cyberpunk">Cyberpunk Neon</option>
-                      <option value="corporate">Modern Corporate Flat</option>
-                      <option value="glassmorphism">Glassmorphism & 3D</option>
-                      <option value="kinetic">Kinetic Typography</option>
-                      <option value="fluid">Abstract Fluid Mesh</option>
-                      <option value="isometric">Isometric 3D Projection</option>
-                      <option value="retro_synth">Retro Synthwave 80s</option>
-                    </select>
                   </div>
                 </div>
 

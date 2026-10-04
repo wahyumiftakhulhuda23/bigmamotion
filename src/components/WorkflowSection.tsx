@@ -1,11 +1,9 @@
 import React, { useState, useRef } from 'react';
-import { AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics, NotepadBatch } from '../types';
+import { AnimationType, VisualStyle, ColorMode, MotionDynamics, NotepadBatch } from '../types';
 
 interface WorkflowSectionProps {
   currentType: AnimationType;
   onSelectType: (type: AnimationType) => void;
-  nicheCategory: NicheCategory;
-  onSelectNiche: (cat: NicheCategory) => void;
   visualStyle: VisualStyle;
   onSelectStyle: (style: VisualStyle) => void;
   colorMode?: ColorMode;
@@ -39,8 +37,6 @@ interface WorkflowSectionProps {
 export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   currentType,
   onSelectType,
-  nicheCategory,
-  onSelectNiche,
   visualStyle,
   onSelectStyle,
   colorMode = 'gradient',
@@ -209,32 +205,13 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 2. Niche & Style Grid (Compact 2 Columns on medium screens) */}
+        {/* 2. Gaya Visual & Mode Warna Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-          {/* Niche Selection */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
-              2. Kategori Niche
-            </label>
-            <select
-              value={nicheCategory}
-              onChange={(e) => onSelectNiche(e.target.value as NicheCategory)}
-              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
-            >
-              <option value="marketing">Marketing & Bisnis</option>
-              <option value="teknologi">Teknologi & AI</option>
-              <option value="arsitektur">Arsitektur & Properti</option>
-              <option value="pendidikan">Pendidikan & E-Learning</option>
-              <option value="transportasi">Transportasi & Logistik</option>
-              <option value="kesehatan">Kesehatan & Medis</option>
-              <option value="finansial">Finansial & Crypto</option>
-            </select>
-          </div>
-
           {/* Style Preset */}
           <div className="space-y-1">
-            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
-              Gaya Visual Preset
+            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
+              <i className="fa-solid fa-wand-magic-sparkles text-sky-400 text-[10px]"></i>
+              <span>2. Gaya Visual Preset</span>
             </label>
             <select
               value={visualStyle}
@@ -252,15 +229,12 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               <option value="retro_synth">Retro Synthwave 80s</option>
             </select>
           </div>
-        </div>
 
-        {/* 3. Color Mode & Motion Dynamics (Variasi & Anti-Monoton) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {/* Mode Warna / Color Mode */}
           <div className="space-y-1">
             <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
               <i className="fa-solid fa-palette text-pink-400 text-[10px]"></i>
-              <span>3. Mode Warna</span>
+              <span>Mode Warna (Palette)</span>
             </label>
             <select
               value={colorMode}
@@ -275,26 +249,26 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               <option value="luxury">Luxury Gold & Obsidian</option>
             </select>
           </div>
+        </div>
 
-          {/* Fisika Gerakan / Motion Dynamics */}
-          <div className="space-y-1">
-            <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
-              <i className="fa-solid fa-person-running text-sky-400 text-[10px]"></i>
-              <span>Fisika Gerakan (Dynamics)</span>
-            </label>
-            <select
-              value={motionDynamics}
-              onChange={(e) => onSelectMotionDynamics && onSelectMotionDynamics(e.target.value as MotionDynamics)}
-              className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
-            >
-              <option value="flow">Flow & Harmonic Wave (Mengalir Lembut)</option>
-              <option value="bounce">Elastic Bounce (Membal & Squash/Stretch)</option>
-              <option value="orbital">3D Orbital Gyroscope (Putaran 3D Orbit)</option>
-              <option value="morph">Kinetic Morphing (Perubahan Bentuk Dinamis)</option>
-              <option value="cyber">Cyber Step HUD (Telemetri & Laser Scanner)</option>
-              <option value="mechanical">Mechanical Clockwork (Gigi Roda Saling Mengunci)</option>
-            </select>
-          </div>
+        {/* 3. Fisika Gerakan / Motion Dynamics */}
+        <div className="space-y-1">
+          <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
+            <i className="fa-solid fa-person-running text-amber-400 text-[10px]"></i>
+            <span>3. Fisika Gerakan (Motion Dynamics)</span>
+          </label>
+          <select
+            value={motionDynamics}
+            onChange={(e) => onSelectMotionDynamics && onSelectMotionDynamics(e.target.value as MotionDynamics)}
+            className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
+          >
+            <option value="flow">Flow & Harmonic Wave (Mengalir Lembut)</option>
+            <option value="bounce">Elastic Bounce (Membal & Squash/Stretch)</option>
+            <option value="orbital">3D Orbital Gyroscope (Putaran 3D Orbit)</option>
+            <option value="morph">Kinetic Morphing (Perubahan Bentuk Dinamis)</option>
+            <option value="cyber">Cyber Step HUD (Telemetri & Laser Scanner)</option>
+            <option value="mechanical">Mechanical Articulated (Artikulasi Presisi)</option>
+          </select>
         </div>
 
         {/* 4. Compact Settings Row: Neon Glow, Green Screen, Prompt Count */}

@@ -357,9 +357,9 @@ async function generatePromptsDirect(
       : 'Smooth organic sinusoidal waves, flowing ribbons and continuous fluid drift'
   })`;
 
+  const categoryLine = subCategory && subCategory !== 'all' && subCategory !== 'general' && subCategory !== 'teknologi' ? `Category / Domain: ${subCategory}\n` : '';
   const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
-Category: ${subCategory}
-Animation Type: ${String(type).toUpperCase()}
+${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}${motionDirective}
 Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 Requirement: Focus strictly on the central geometric object, color palette, and specific motion dynamics.
