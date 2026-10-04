@@ -129,7 +129,6 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                       className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
                     >
                       <option value="icon">Icon Motion</option>
-                      <option value="text">Text Effect</option>
                       <option value="bg">Background Motion</option>
                     </select>
                   </div>

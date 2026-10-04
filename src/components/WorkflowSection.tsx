@@ -176,12 +176,12 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </span>
         </div>
 
-        {/* 1. Animation Type Selection - Sleek Compact Tabs */}
+        {/* 1. Animation Type Selection - Sleek 2-Column Tabs */}
         <div className="space-y-1.5">
           <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
             1. Tipe Animasi Microstock
           </label>
-          <div className="grid grid-cols-3 gap-1.5">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => onSelectType('icon')}
@@ -193,18 +193,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             >
               <i className="fa-solid fa-shapes text-sm text-sky-400"></i>
               <span className="text-center leading-none text-[11px]">Icon Motion</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectType('text')}
-              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
-                currentType === 'text'
-                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
-                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
-              }`}
-            >
-              <i className="fa-solid fa-font text-sm text-purple-400"></i>
-              <span className="text-center leading-none text-[11px]">Text Effect</span>
             </button>
             <button
               type="button"

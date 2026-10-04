@@ -310,9 +310,6 @@ async function generatePromptsDirect(
   if (type === 'icon') {
     typeInstruction =
       'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision.';
-  } else if (type === 'text') {
-    typeInstruction =
-      'Every prompt must include a bold catchy main text slogan with energetic typography and motion.';
   } else if (type === 'bg') {
     typeInstruction =
       'Every prompt must describe an elegant looping motion background concept (no text), seamless geometry or atmospheric waves.';
@@ -507,12 +504,7 @@ async function generateAnimationDirect(
     typeInstructions = `
 ATURAN UTAMA ICON MOTION:
 - Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat di tengah canvas.
-- DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur (misal: perisai, roket, gear, chip, atom, chart, gedung, diamond).`;
-  } else if (type === 'text') {
-    typeInstructions = `
-ATURAN UTAMA TEXT EFFECT:
-- Tampilkan Teks Utama yang tebal & terdistribusi rapi di tengah canvas.
-- Tambahkan efek visual pendukung sesuai Motion Dynamics dan Style (misal: aura, border highlight, particle sweep, atau kinetic tracking).`;
+- DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur solid (misal: perisai, roket, kamera, mikrofon, robot, drone, atom, chart, gedung, diamond).`;
   } else if (type === 'bg') {
     typeInstructions = `
 ATURAN UTAMA BACKGROUND MOTION:
@@ -552,8 +544,8 @@ PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
 - Elemen HUD: busur derajat berputar, dial bidik, laser scanner bolak-balik melintasi canvas, kurung sudut siku [ ], dan garis garis target.`;
   } else if (motionDynamics === 'mechanical') {
     motionGuide = `
-PANDUAN GERAKAN MECHANICAL & CLOCKWORK:
-- Gigi roda (gears) yang saling mengunci (intermeshing) berputar berlawanan arah dengan rasio putaran terkalibrasi: rotasi Gear A = t * speed; rotasi Gear B = -t * speed * (teethA / teethB);`;
+PANDUAN GERAKAN MECHANICAL & ARTICULATED:
+- Komponen mekanik berputar dan berosilasi presisi seiring waktu t dengan artikulasi multi-part yang mulus dan bertenaga.`;
   } else {
     motionGuide = `
 PANDUAN GERAKAN ORGANIC FLOW & WAVES:
@@ -571,7 +563,7 @@ ${colorMode === 'flat' ? '- DILARANG menggunakan createLinearGradient atau creat
   } else {
     styleAndColorGuide = `
 PANDUAN WARNA & NEON GLOW (AKTIF):
-- Terapkan efek luminescence bertingkat: ctx.shadowBlur = 18; ctx.shadowColor = primaryColor;
+- Terapkan efek luminescence bertingkat: ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12; ctx.shadowColor = primaryColor;
 ${colorMode === 'neon' ? '- Palet Neon Cyber: Cyan (#00f3ff), Neon Magenta (#ff007f), Electric Lime (#39ff14), Neon Gold (#ffd700).' : ''}
 ${colorMode === 'monochrome' ? '- Palet Monochrome: Putih murni (#ffffff), Slate Silver (#cbd5e1), Graphite (#475569), dengan aksen glow putih kristal.' : ''}
 ${colorMode === 'pastel' ? '- Palet Pastel: Soft Lavender (#c4b5fd), Mint (#a7f3d0), Peach (#fdba74), Baby Blue (#93c5fd).' : ''}
@@ -610,14 +602,14 @@ ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
 1. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';) agar pendaran tidak bocor atau meninggalkan jejak/bekas gerakan (ghosting artifacts) di frame berikutnya.
 2. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
 3. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL (TIDAK BOLEH ZOOM-OUT / TERLALU KECIL):
-   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : type === 'text' ? '0.48' : '0.65'};
+   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
    - Objek Icon / Grafis harus proporsional & memenuhi frame sekitar 80-88% tinggi canvas dengan margin aman (tidak terpotong dan tidak tampak kecil di tengah).
-   - Text Effect harus tebal dan lebar mengisi area tengah visual.
    - Background Motion harus menyebar ke seluruh kanvas (w, h) hingga ke sudut-sudut tanpa ruang hitam kosong.
 4. ZERO GLITCH / NO SMEARS: Canvas tidak boleh meninggalkan noda jejak yang tak diinginkan.
-6. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX & TATA LETAK ELEMEN):
-   - Jika di dalam prompt terdapat spesifikasi warna hex code (#XXXXXX), palet warna spesifik, atau posisi elemen geometris (tengah, atas, bawah, sudut kemiringan):
-     AI WAJIB 100% MENGIKUTI kode warna hex dan tata letak geometris tersebut pada Canvas 2D agar visual yang dirender semirip mungkin dengan gambar referensi aslinya!
+5. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX, ANATOMI GEOMETRIS & GERAKAN 60 FPS):
+   - Jika di dalam prompt terdapat deskripsi anatomi subjek, sub-komponen, spesifikasi kode warna hex (#XXXXXX), atau detail gerakan kinetik:
+     AI WAJIB 100% MENGIKUTI deskripsi geometri, kode warna hex, dan pola gerakan kinetik tersebut pada Canvas 2D agar visual yang dirender semirip dan sedinamis mungkin dengan gambar referensi aslinya!
+6. GERAKAN KINETIK NYATA 60 FPS: Objek HARUS memiliki gerakan aktif (floating osilasi Y ±(S*0.14), breathing scale pulse 0.96x-1.04x, specular beam sweep diagonal, partikel memancar).
 7. RINGKAS & TUNTAS: Buat kode efisien 180 - 260 baris yang langsung looping 60 FPS tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
@@ -649,7 +641,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
-    S = Math.min(w, h) * ${type === 'icon' ? '0.44' : type === 'text' ? '0.48' : '0.65'};
+    S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
   }
   window.addEventListener('resize', resize);
   resize();
@@ -1592,21 +1584,19 @@ export async function generateMotionPromptFromImage(
       // 1. Direct browser API call if user has configured key
       if (apiKey) {
         try {
-          const promptDirective = `You are a World-Class Computer Vision & Motion Graphic Reverse-Engineering Specialist.
-Analyze this reference image with maximum fidelity and output EXACTLY ONE SINGLE LINE of an ultra-detailed, production-ready motion graphics animation prompt that enables an AI code generator to recreate an animated twin identical to this image.
+          const promptDirective = `You are a World-Class Computer Vision Engineer & Lead Motion Designer for Microstock Video Assets (Adobe After Effects / Lottie / 60 FPS HTML5 Canvas Specialist).
 
-CRITICAL REVERSE-ENGINEERING REQUIREMENTS:
-1. IDENTIFY EXACT SUBJECT & ART STYLE: Accurately name the central object/character/symbol and its exact artistic style (e.g. flat vector art, isometric 3D, neon cyber HUD, glassmorphism, claymation, line icon).
-2. EXACT COLOR PALETTE WITH HEX CODES: Detect and explicitly include the EXACT HEX CODES (#RRGGBB) from the image: primary body color (e.g. #FF5E3A), secondary structure color (e.g. #1E232A), accent trims, luminous glow/neon tint, and background contrast.
-3. PRECISE SPATIAL PLACEMENT & ELEMENT ANATOMY: Detail the exact coordinate placement of each sub-component (e.g. centralized base at 50% X 70% Y, cylindrical neck extending upwards to 50% X 40% Y, angled head rotated 30 degrees at upper left, symmetrical side brackets, proportional stroke width).
-4. LOGICAL ANIMATION DYNAMICS & MICROSTOCK EFFECTS: Define how this specific subject moves realistically and aesthetically in 60 FPS:
-   - Primary component motion (e.g. smooth floating bob along Y-axis ±8px with ease-in-out, gentle gimbal tilt ±10 degrees, rhythmic breathing scale 0.98 to 1.02).
-   - Secondary articulated movement (e.g. rotating inner elements, pulsating radial energy rings, light sweeps along bevels).
-   - Complementary particle/emission effects matching the theme (e.g. floating dust sparks, subtle laser scan line, cyber glow luminescence).
-5. STRICT OUTPUT FORMAT:
-- Output MUST be EXACTLY ONE SINGLE CONTINUOUS LINE of prompt text (NO newlines, NO line breaks).
-- NO numbering (no '1.'), NO quotation marks, NO markdown formatting (no bold/bullets), NO conversational introductory phrases (never say "Prompt:", "Here is...").
-- Output pure, clean, highly-descriptive motion prompt in English ready for 60 FPS code generation.`;
+Analyze this reference image with extreme anatomical fidelity and output EXACTLY ONE SINGLE CONTINUOUS LINE of an ultra-detailed, production-ready motion graphics animation prompt that enables an AI code generator to recreate an animated twin identical to this image.
+
+Your output prompt MUST strictly follow this comprehensive blueprint format (all in ONE single continuous line):
+Central Subject: [Accurately name the central object/character/symbol, e.g. "Futuristic Studio Spotlight Camera", "Cyberpunk Delivery Drone", "Golden Bitcoin Shield", "Medical DNA Capsule", "Shopping Bag Icon"] with [Exact Art Style, e.g. "Modern Flat Vector Art with bold crisp outlines", "Isometric 3D Vector with clean lighting", "Glossy Glassmorphism with luminous cyber glow accents"];
+Geometric Anatomy & Structure: [Describe all visual components from top to bottom and center outward with exact proportions, shapes, rounded caps, lenses, dials, chassis, wings, or brackets];
+Exact Color Palette: Primary Body #[HEX], Secondary Structure #[HEX], Accent Trim #[HEX], Core Glow #[HEX], Outline #[HEX], Highlight #[HEX];
+60 FPS Microstock Kinetic Dynamics: Smooth continuous vertical floating oscillation along Y-axis (amplitude ±14px, period 2.4s) paired with gentle harmonic gimbal tilt (±8 degrees, period 3.0s), rhythmic breathing pulse scale (0.96x to 1.04x on smooth ease-in-out curve), articulated kinetic movement of internal sub-components, brilliant 45-degree diagonal specular gleam light-sheen sweep across bevels every 2.0s, and radiating luminescent energy particles with soft neon glow blur.
+
+CRITICAL RULES:
+- Output MUST be EXACTLY ONE SINGLE CONTINUOUS LINE (NO line breaks, NO newlines).
+- Output pure prompt text only (NO "Prompt:", NO quotes, NO bullet points, NO markdown bold).`;
 
           const targetModel = sanitizeModel(model);
           const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(apiKey)}`;

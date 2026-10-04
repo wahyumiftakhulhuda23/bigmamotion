@@ -217,7 +217,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                     <span>Pengaturan Parameter Visual:</span>
                   </h4>
                   <ul className="list-disc pl-5 space-y-1 text-xs text-gray-300">
-                    <li><strong>Tipe Animasi:</strong> Pilih <em>Icon Motion</em> (simbol sentral), <em>Text Effect</em> (efek tipografi dinamis), atau <em>Background Motion</em> (latar bergerak penuh).</li>
+                    <li><strong>Tipe Animasi:</strong> Pilih <em>Icon Motion</em> (simbol vektor sentral berpresisi tinggi) atau <em>Background Motion</em> (latar bergerak penuh 60 FPS).</li>
                     <li><strong>Motion Dynamics:</strong> Mengatur karakteristik gerak (Bounce/Spring, Orbital 3D, Kinetic Morphing, Cyber HUD, atau Organic Flow).</li>
                     <li><strong>Mode Warna & Neon Glow:</strong> Tersedia pilihan Gradient, Flat Art, Neon Cyber, Monochrome, Pastel, dan Luxury Gold.</li>
                     <li><strong>Green Screen (#00FF00):</strong> Aktifkan tombol Green Screen jika Anda ingin hasil animasi siap diedit dengan teknik Chroma Key di Adobe Premiere, After Effects, CapCut, atau DaVinci Resolve.</li>

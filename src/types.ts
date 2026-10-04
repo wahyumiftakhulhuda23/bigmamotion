@@ -1,4 +1,4 @@
-export type AnimationType = 'icon' | 'text' | 'bg';
+export type AnimationType = 'icon' | 'bg';
 
 export type NicheCategory = 
   | 'marketing' 
