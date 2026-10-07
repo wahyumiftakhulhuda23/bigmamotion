@@ -11,6 +11,7 @@ interface VideoConverterModalProps {
 
 export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen, onClose, showToast }) => {
   const [files, setFiles] = useState<VideoConverterFile[]>([]);
+
   const [resolution, setResolution] = useState<{ width: number; height: number; label: string }>({
     width: 1920,
     height: 1080,
@@ -121,7 +122,7 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
         return next;
       });
 
-      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted})${result.engineUsed === 'webcodecs' ? ' [H.264 FastStart]' : ' [Universal Recorder]'}`, 'success');
+      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted}) [${result.engineUsed}]`, 'success');
     } catch (err: any) {
       console.error(err);
       addLog(`[Gagal] ${fileObj.name}: ${err.message}`, 'error');

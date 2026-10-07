@@ -6,10 +6,11 @@ export interface VideoRenderOptions {
   fps?: number;
   duration?: number; // in seconds
   bitrate?: number; // in Mbps
-  mode?: 'icon' | 'text' | 'bg';
+  mode?: 'icon' | 'text' | 'bg' | 'auto';
   format?: 'mp4';
   isGreenScreen?: boolean;
   onProgress?: (percent: number, message: string) => void;
+  renderPreset?: 'ultra_60' | 'standard_30' | 'lowspec_720' | 'auto';
 }
 
 export interface VideoRenderResult {
@@ -19,23 +20,66 @@ export interface VideoRenderResult {
   sizeFormatted: string;
   width: number;
   height: number;
+  fps: number;
   duration: number;
-  engineUsed: 'webcodecs' | 'mediarecorder';
+  engineUsed: 'webcodecs-hardware' | 'webcodecs-software' | 'mediarecorder';
+}
+
+/**
+ * Detects device hardware profile to optimize encoding parameters for low-spec PCs and phones.
+ */
+export function getDevicePerformanceProfile(): {
+  isLowSpec: boolean;
+  isMobile: boolean;
+  cpuCores: number;
+  deviceMemoryGb: number;
+  suggestedFps: number;
+  suggestedBitrate: number;
+  description: string;
+} {
+  const isMobile =
+    typeof navigator !== 'undefined' &&
+    (/android|iphone|ipad|ipod|mobile|windows phone/i.test(navigator.userAgent) ||
+      (typeof window !== 'undefined' && window.innerWidth < 768));
+
+  const cpuCores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 4 : 4;
+  const deviceMemoryGb =
+    typeof navigator !== 'undefined' && (navigator as any).deviceMemory
+      ? (navigator as any).deviceMemory
+      : 4;
+
+  const isLowSpec = isMobile || cpuCores <= 4 || deviceMemoryGb <= 4;
+
+  return {
+    isLowSpec,
+    isMobile,
+    cpuCores,
+    deviceMemoryGb,
+    suggestedFps: isLowSpec ? 30 : 60,
+    suggestedBitrate: isLowSpec ? 12 : 18,
+    description: isMobile
+      ? 'Mobile Device (Optimized for Battery & Smoothness)'
+      : isLowSpec
+      ? `Entry-Level / Low-Spec PC (${cpuCores} Cores, ~${deviceMemoryGb}GB RAM)`
+      : `High-Performance PC (${cpuCores} Cores, ~${deviceMemoryGb}GB+ RAM)`,
+  };
 }
 
 const CANDIDATE_CODECS = [
-  'avc1.420028', // Baseline Profile Level 4.0 (1080p universal)
+  'avc1.64002a', // High Profile Level 4.2 (1080p60 optimal)
   'avc1.4d002a', // Main Profile Level 4.2
-  'avc1.64002a', // High Profile Level 4.2
+  'avc1.42002a', // Baseline Level 4.2
   'avc1.640028', // High Profile Level 4.0
-  'avc1.42001f', // Baseline Profile Level 3.1
+  'avc1.4d0028', // Main Profile Level 4.0
+  'avc1.420028', // Baseline Profile Level 4.0 (Universal 1080p)
+  'avc1.42001f', // Baseline Level 3.1
+  'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
   'avc1.42E01E', // Constrained Baseline
-  'avc1.42001e',
 ];
 
-const ACCELERATION_PREFERENCES: ('no-preference' | 'prefer-hardware' | 'prefer-software')[] = [
+const ACCELERATION_PREFERENCES: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
   'no-preference', // Most compatible: lets the browser pick hardware GPU or built-in OpenH264/FFmpeg
-  'prefer-software', // Solid fallback for PCs without discrete GPU
+  'prefer-software', // Solid fallback for PCs without discrete GPU (like AMD Ryzen 3 / Radeon Vega)
   'prefer-hardware',
 ];
 
@@ -79,7 +123,7 @@ export async function findWorkingWebCodecsConfig(
 
 /**
  * Injects styling and frame synchronization into animation HTML.
- * Eliminates artificial mode-based shrinking so all animations fill the canvas edge-to-edge.
+ * Ensures the canvas scales responsively and background renders cleanly.
  */
 export function prepareHtmlForVideo(
   htmlContent: string,
@@ -96,7 +140,7 @@ export function prepareHtmlForVideo(
 
   let finalHtml = htmlContent;
 
-  // Auto-upgrade legacy or small scale constants (e.g. 0.35, 0.30) to proportional 0.44 microstock sizing
+  // Auto-upgrade small scale constants to proportional microstock sizing
   finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.35/g, 'Math.min(w, h) * 0.44');
   finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.30/g, 'Math.min(w, h) * 0.44');
   finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.3\b/g, 'Math.min(w, h) * 0.44');
@@ -123,6 +167,7 @@ export function prepareHtmlForVideo(
         display: block !important;
         width: 100% !important;
         height: 100% !important;
+        image-rendering: auto !important;
       }
     </style>
   `;
@@ -134,20 +179,22 @@ export function prepareHtmlForVideo(
 }
 
 /**
- * Universal video renderer supporting:
- * Tier 1: Hardware/Software WebCodecs H.264 FastStart MP4 with exact resolution, FPS, and Bitrate adherence.
- * Tier 2: Resilient MediaRecorder stream pipeline fallback.
+ * Universal, Crash-Proof Video Renderer.
+ * Optimized for low-spec PCs (e.g. AMD Ryzen 3, Radeon Vega, Intel Celeron/i3, 4GB-8GB RAM),
+ * mobile phones, and all major operating systems (Windows, macOS, Linux, Android, iOS).
  */
 export async function renderHtmlToVideo(
   htmlContent: string,
   options: VideoRenderOptions = {}
 ): Promise<VideoRenderResult> {
+  const devProfile = getDevicePerformanceProfile();
+
   const {
     width = 1920,
     height = 1080,
-    fps = 60,
+    fps = options.renderPreset === 'standard_30' ? 30 : 60,
     duration = 10,
-    bitrate = 18,
+    bitrate = options.renderPreset === 'lowspec_720' ? 10 : 18,
     mode = 'auto',
     isGreenScreen = false,
     onProgress,
@@ -163,33 +210,35 @@ export async function renderHtmlToVideo(
   const frameIntervalMs = 1000 / fps;
   const targetBitrateBps = Math.round(bitrate * 1_000_000);
 
+  let isCancelled = false;
+
   // Active rendering overlay container to prevent background tab throttling
   const overlay = document.createElement('div');
   overlay.id = 'bigma-render-overlay';
   overlay.style.position = 'fixed';
   overlay.style.inset = '0';
   overlay.style.zIndex = '99999';
-  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.92)';
-  overlay.style.backdropFilter = 'blur(12px)';
+  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.94)';
+  overlay.style.backdropFilter = 'blur(16px)';
   overlay.style.display = 'flex';
   overlay.style.flexDirection = 'column';
   overlay.style.alignItems = 'center';
   overlay.style.justifyContent = 'center';
-  overlay.style.gap = '16px';
-  overlay.style.padding = '20px';
+  overlay.style.gap = '14px';
+  overlay.style.padding = '16px';
   overlay.style.pointerEvents = 'auto';
 
   const card = document.createElement('div');
   card.style.width = '100%';
-  card.style.maxWidth = '580px';
-  card.style.backgroundColor = '#0f172a';
-  card.style.border = '1px solid rgba(56, 189, 248, 0.4)';
+  card.style.maxWidth = '520px';
+  card.style.backgroundColor = '#0b1120';
+  card.style.border = '1px solid rgba(56, 189, 248, 0.35)';
   card.style.borderRadius = '20px';
-  card.style.padding = '20px';
-  card.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(56, 189, 248, 0.2)';
+  card.style.padding = '18px';
+  card.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(56, 189, 248, 0.15)';
   card.style.display = 'flex';
   card.style.flexDirection = 'column';
-  card.style.gap = '14px';
+  card.style.gap = '12px';
 
   const headerDiv = document.createElement('div');
   headerDiv.style.display = 'flex';
@@ -197,31 +246,30 @@ export async function renderHtmlToVideo(
   headerDiv.style.justifyContent = 'space-between';
   headerDiv.innerHTML = `
     <div style="display: flex; align-items: center; gap: 10px;">
-      <div style="width: 32px; height: 32px; border-radius: 10px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 14px;">
+      <div style="width: 32px; height: 32px; border-radius: 10px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 13px;">
         <i class="fa-solid fa-film"></i>
       </div>
       <div>
-        <div style="font-weight: 800; font-size: 13px; color: #f8fafc; font-family: sans-serif;">Rendering Video MP4 H.264</div>
-        <div style="font-size: 11px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${bitrate} Mbps</div>
+        <div style="font-weight: 800; font-size: 13px; color: #f8fafc; font-family: sans-serif; letter-spacing: -0.2px;">Rendering Video MP4 (H.264)</div>
+        <div style="font-size: 10px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${duration}s</div>
       </div>
     </div>
-    <span style="font-size: 10px; font-weight: 700; color: #4ade80; background: rgba(74, 222, 128, 0.15); border: 1px solid rgba(74, 222, 128, 0.3); padding: 2px 8px; border-radius: 9999px; font-family: sans-serif;">
-      ${fps} FPS Active
-    </span>
+    <button id="bigma-cancel-render-btn" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 4px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-family: sans-serif;">
+      Batal
+    </button>
   `;
 
-  // Natural 16:9 preview box strictly matching target resolution aspect ratio
+  // Natural 16:9 preview box
   const previewBox = document.createElement('div');
   previewBox.style.width = '100%';
   previewBox.style.aspectRatio = `${width}/${height}`;
+  previewBox.style.maxHeight = '240px';
   previewBox.style.backgroundColor = canvasBgColor;
   previewBox.style.borderRadius = '12px';
   previewBox.style.overflow = 'hidden';
   previewBox.style.position = 'relative';
-  previewBox.style.border = '1px solid #1e293b';
+  previewBox.style.border = '1px solid rgba(30, 41, 59, 0.8)';
 
-  // Master iframe wrapper holding iframe at native resolution (e.g. 1920x1080)
-  // Scaled via CSS transform so preview on screen matches 1:1 with download (no zoom mismatch)
   const iframeWrapper = document.createElement('div');
   iframeWrapper.style.width = `${width}px`;
   iframeWrapper.style.height = `${height}px`;
@@ -241,24 +289,25 @@ export async function renderHtmlToVideo(
   previewBox.appendChild(iframeWrapper);
 
   const updatePreviewScale = () => {
-    const boxW = previewBox.clientWidth || 540;
+    const boxW = previewBox.clientWidth || 480;
     const scale = boxW / width;
     iframeWrapper.style.transform = `scale(${scale})`;
   };
+
   window.addEventListener('resize', updatePreviewScale);
 
   const statusText = document.createElement('div');
   statusText.style.display = 'flex';
   statusText.style.justifyContent = 'space-between';
-  statusText.style.fontSize = '12px';
+  statusText.style.fontSize = '11px';
   statusText.style.fontWeight = '600';
   statusText.style.color = '#38bdf8';
   statusText.style.fontFamily = 'sans-serif';
-  statusText.innerHTML = `<span>Inisialisasi engine video...</span><span>0%</span>`;
+  statusText.innerHTML = `<span>Inisialisasi engine MP4...</span><span>0%</span>`;
 
   const progressBarContainer = document.createElement('div');
   progressBarContainer.style.width = '100%';
-  progressBarContainer.style.height = '8px';
+  progressBarContainer.style.height = '7px';
   progressBarContainer.style.backgroundColor = '#1e293b';
   progressBarContainer.style.borderRadius = '9999px';
   progressBarContainer.style.overflow = 'hidden';
@@ -267,7 +316,7 @@ export async function renderHtmlToVideo(
   progressBar.style.width = '0%';
   progressBar.style.height = '100%';
   progressBar.style.background = 'linear-gradient(90deg, #38bdf8, #818cf8, #34d399)';
-  progressBar.style.transition = 'width 0.15s ease-out';
+  progressBar.style.transition = 'width 0.1s ease-out';
   progressBarContainer.appendChild(progressBar);
 
   card.appendChild(headerDiv);
@@ -277,22 +326,31 @@ export async function renderHtmlToVideo(
   overlay.appendChild(card);
   document.body.appendChild(overlay);
 
+  const cancelBtn = headerDiv.querySelector('#bigma-cancel-render-btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      isCancelled = true;
+      statusText.innerHTML = `<span style="color: #ef4444;">Membatalkan proses...</span><span>Batal</span>`;
+    });
+  }
+
   const updateUIProgress = (pct: number, msg: string) => {
+    if (isCancelled) return;
     progressBar.style.width = `${pct}%`;
     statusText.innerHTML = `<span>${msg}</span><span>${pct}%</span>`;
     onProgress?.(pct, msg);
   };
 
   try {
-    updateUIProgress(5, 'Menyiapkan canvas rendering engine...');
-
+    updateUIProgress(4, 'Menyiapkan canvas & aset rendering...');
     updatePreviewScale();
+
     const preparedHtml = prepareHtmlForVideo(htmlContent, mode, width, height, fps, isGreenScreen);
     const blobHtml = new Blob([preparedHtml], { type: 'text/html;charset=utf-8' });
     const iframeUrl = URL.createObjectURL(blobHtml);
 
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout memuat animasi HTML')), 10000);
+      const timeout = setTimeout(() => reject(new Error('Timeout memuat animasi HTML')), 12000);
       iframe.onload = () => {
         clearTimeout(timeout);
         resolve();
@@ -302,13 +360,17 @@ export async function renderHtmlToVideo(
 
     URL.revokeObjectURL(iframeUrl);
 
+    if (isCancelled) throw new Error('Render dibatalkan oleh pengguna.');
+
     const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
     if (iframeDoc && (iframeDoc as any).fonts) {
       try {
         await (iframeDoc as any).fonts.ready;
       } catch {}
     }
-    await new Promise((r) => setTimeout(r, 600));
+
+    // Micro-delay to ensure WebGL/Canvas 2D loop starts
+    await new Promise((r) => setTimeout(r, 400));
 
     const iframeCanvas = iframeDoc?.querySelector('canvas') as HTMLCanvasElement | null;
 
@@ -316,12 +378,17 @@ export async function renderHtmlToVideo(
     const targetCanvas = document.createElement('canvas');
     targetCanvas.width = width;
     targetCanvas.height = height;
-    const ctx = targetCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
+
+    const ctx = targetCanvas.getContext('2d', {
+      alpha: false,
+      willReadFrequently: false,
+      desynchronized: true,
+    });
+
     if (!ctx) throw new Error('Tidak dapat membuat Canvas 2D context');
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = 'high';
 
-    // Helper to draw current iframe canvas frame into targetCanvas scaled cleanly
     const drawCurrentFrameToTarget = () => {
       ctx.fillStyle = canvasBgColor;
       ctx.fillRect(0, 0, width, height);
@@ -330,272 +397,177 @@ export async function renderHtmlToVideo(
       }
     };
 
-    // ==========================================
-    // TIER 1: Try WebCodecs H.264 FastStart MP4
-    // ==========================================
+    // =========================================================================
+    // TIER 1: High-Performance WebCodecs FastStart MP4 with Strict Backpressure
+    // =========================================================================
     let webCodecsSuccess = false;
     let mp4Result: VideoRenderResult | null = null;
-    const targetTotalBytes = Math.round((targetBitrateBps / 8) * duration);
+    let engineUsed: 'webcodecs-hardware' | 'webcodecs-software' = 'webcodecs-hardware';
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      // Comprehensive list of H.264 codecs with hardware & software fallbacks
-      let codecCandidates: string[];
-      if (width >= 3840) {
-        codecCandidates = [
-          'avc1.640033', // High Level 5.1
-          'avc1.640034', // High Level 5.2
-          'avc1.4d0033', // Main Level 5.1
-          'avc1.64002a',
-          'avc1.4d002a',
-          'avc1.42002a',
-        ];
-      } else if (width >= 1920) {
-        codecCandidates = [
-          'avc1.64002a', // High Profile Level 4.2 (ideal for 1080p60)
-          'avc1.4d002a', // Main Profile Level 4.2
-          'avc1.42002a', // Baseline Level 4.2
-          'avc1.640028', // High Profile Level 4.0
-          'avc1.4d0028', // Main Profile Level 4.0
-          'avc1.420028', // Baseline Level 4.0 (Universal 1080p)
-          'avc1.42001f', // Baseline Level 3.1
-          'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
-          'avc1.42E01E', // Constrained Baseline
-        ];
-      } else {
-        codecCandidates = [
-          'avc1.420028',
-          'avc1.4d0028',
-          'avc1.640028',
-          'avc1.42001f',
-          'avc1.42001e',
-          'avc1.42E01E',
-        ];
-      }
-
-      const accelCandidates: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
-        'no-preference',
-        'prefer-software',
-        'prefer-hardware',
+      // Form candidate configurations ordered from optimal hardware down to guaranteed software baseline
+      const encoderConfigsToTry: { codec: string; accel: 'no-preference' | 'prefer-software' | 'prefer-hardware' }[] = [
+        { codec: 'avc1.64002a', accel: 'no-preference' },
+        { codec: 'avc1.4d002a', accel: 'no-preference' },
+        { codec: 'avc1.420028', accel: 'no-preference' },
+        { codec: 'avc1.42001e', accel: 'prefer-software' }, // OpenH264 software encoder on all Ryzen/Intel/Linux PCs
+        { codec: 'avc1.42001f', accel: 'prefer-software' },
+        { codec: 'avc1.42E01E', accel: 'no-preference' },
       ];
 
-      for (const accel of accelCandidates) {
-        if (webCodecsSuccess) break;
+      for (const candidate of encoderConfigsToTry) {
+        if (webCodecsSuccess || isCancelled) break;
 
-        for (const codec of codecCandidates) {
-          if (webCodecsSuccess) break;
+        const { codec, accel } = candidate;
 
-          try {
-            const encoderConfig: any = {
-              codec,
-              width,
-              height,
-              bitrate: targetBitrateBps,
-              framerate: fps,
-              hardwareAcceleration: accel,
-              avc: { format: 'avc' },
-            };
+        try {
+          const encoderConfig: any = {
+            codec,
+            width,
+            height,
+            bitrate: targetBitrateBps,
+            framerate: fps,
+            hardwareAcceleration: accel,
+            avc: { format: 'avc' },
+          };
 
-            // Pre-check codec support if browser supports isConfigSupported
-            if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
-              try {
-                const check = await (window as any).VideoEncoder.isConfigSupported(encoderConfig);
-                if (!check || !check.supported) {
-                  continue;
-                }
-              } catch {}
-            }
-
-            updateUIProgress(10, `Inisialisasi encoder H.264 (${codec})...`);
-
-            const muxer = new Muxer({
-              target: new ArrayBufferTarget(),
-              video: {
-                codec: 'avc',
-                width,
-                height,
-                frameRate: fps,
-              },
-              fastStart: 'in-memory',
-              firstTimestampBehavior: 'offset',
-            });
-
-            let encodeError: any = null;
-            let totalEmittedBytes = 0;
-            let outputChunkIndex = 0;
-
-            const videoEncoder = new (window as any).VideoEncoder({
-              output: (chunk: any, meta: any) => {
-                try {
-                  outputChunkIndex++;
-                  const targetSoFar = Math.round((outputChunkIndex / totalFrames) * targetTotalBytes);
-                  const currentLen = chunk.byteLength;
-                  const deficit = Math.round(targetSoFar - (totalEmittedBytes + currentLen));
-                  const actualDuration = (chunk.duration && chunk.duration > 0) ? chunk.duration : frameDurationUs;
-
-                  // Append H.264 NALU type 12 (Filler Data) so stream strictly adheres to chosen CBR bitrate (e.g. 18 Mbps)
-                  if (deficit >= 6) {
-                    const naluPayloadLen = deficit - 4;
-                    const paddedData = new Uint8Array(currentLen + deficit);
-                    const rawData = new Uint8Array(currentLen);
-                    chunk.copyTo(rawData);
-                    paddedData.set(rawData, 0);
-
-                    const offset = currentLen;
-                    // 4-byte big-endian NALU length prefix
-                    paddedData[offset + 0] = (naluPayloadLen >>> 24) & 0xFF;
-                    paddedData[offset + 1] = (naluPayloadLen >>> 16) & 0xFF;
-                    paddedData[offset + 2] = (naluPayloadLen >>> 8) & 0xFF;
-                    paddedData[offset + 3] = naluPayloadLen & 0xFF;
-
-                    // H.264 NAL Unit Header: 0x0C (nal_ref_idc = 0, nal_unit_type = 12 = filler_data)
-                    paddedData[offset + 4] = 0x0C;
-
-                    // H.264 filler payload: 0xFF repeated (ff_byte per ISO/IEC 14496-10)
-                    paddedData.fill(0xFF, offset + 5, offset + 4 + naluPayloadLen - 1);
-
-                    // H.264 RBSP trailing bits: 0x80
-                    paddedData[offset + 4 + naluPayloadLen - 1] = 0x80;
-
-                    muxer.addVideoChunkRaw(
-                      paddedData,
-                      chunk.type,
-                      chunk.timestamp,
-                      actualDuration,
-                      meta
-                    );
-                    totalEmittedBytes += paddedData.byteLength;
-                  } else {
-                    const rawData = new Uint8Array(currentLen);
-                    chunk.copyTo(rawData);
-                    muxer.addVideoChunkRaw(
-                      rawData,
-                      chunk.type,
-                      chunk.timestamp,
-                      actualDuration,
-                      meta
-                    );
-                    totalEmittedBytes += currentLen;
-                  }
-                } catch (outputErr) {
-                  try {
-                    muxer.addVideoChunk(chunk, meta);
-                  } catch {}
-                }
-              },
-              error: (e: any) => {
-                console.warn('[WebCodecs Warning]', e);
-                encodeError = e;
-              },
-            });
-
-            // Attempt Constant Bitrate (CBR)
-            if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
-              try {
-                const cbrSupport = await (window as any).VideoEncoder.isConfigSupported({
-                  ...encoderConfig,
-                  bitrateMode: 'constant',
-                });
-                if (cbrSupport && cbrSupport.supported) {
-                  encoderConfig.bitrateMode = 'constant';
-                }
-              } catch {}
-            }
-
-            await videoEncoder.configure(encoderConfig);
-
-            // Test first frame encoding with explicit timestamp and duration
-            drawCurrentFrameToTarget();
-            const testFrame = new (window as any).VideoFrame(targetCanvas, {
-              timestamp: 0,
-              duration: frameDurationUs,
-            });
-            videoEncoder.encode(testFrame, { keyFrame: true });
-            testFrame.close();
-
-            if (encodeError) {
-              try { videoEncoder.close(); } catch {}
+          // Pre-check support if API available
+          if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
+            try {
+              const check = await (window as any).VideoEncoder.isConfigSupported(encoderConfig);
+              if (!check || !check.supported) continue;
+            } catch {
               continue;
             }
+          }
 
-            // Encoder verified & ready! Proceed with complete frame rendering
-            updateUIProgress(12, `Encoding MP4 H.264 (${width}x${height} @ ${fps}fps, ${bitrate}Mbps)...`);
+          updateUIProgress(8, `Inisialisasi encoder H.264 (${codec})...`);
 
-            for (let frame = 1; frame < totalFrames; frame++) {
-              if (encodeError) throw encodeError;
-
-              drawCurrentFrameToTarget();
-
-              const timestampUs = Math.round(frame * frameDurationUs);
-              const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
-
-              const videoFrame = new (window as any).VideoFrame(targetCanvas, {
-                timestamp: timestampUs,
-                duration: frameDurationUs,
-              });
-
-              videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
-              videoFrame.close();
-
-              const pct = Math.round(12 + (frame / totalFrames) * 80);
-              if (frame % Math.max(1, Math.round(fps / 6)) === 0) {
-                updateUIProgress(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
-              }
-
-              await new Promise((resolve) => {
-                if (iframe.contentWindow && iframe.contentWindow.requestAnimationFrame) {
-                  iframe.contentWindow.requestAnimationFrame(() => resolve(null));
-                } else {
-                  setTimeout(resolve, frameIntervalMs * 0.7);
-                }
-              });
-            }
-
-            updateUIProgress(95, 'Finalisasi MP4 FastStart header...');
-            await videoEncoder.flush();
-            muxer.finalize();
-
-            let mp4Buffer: ArrayBuffer = muxer.target.buffer;
-
-            // Enforce exact CBR bitrate by padding ISO free box if needed
-            if (mp4Buffer.byteLength < targetTotalBytes) {
-              const padDeficit = targetTotalBytes - mp4Buffer.byteLength;
-              if (padDeficit >= 8) {
-                const freeBox = new Uint8Array(padDeficit);
-                const view = new DataView(freeBox.buffer);
-                view.setUint32(0, padDeficit, false); // 4-byte big-endian size
-                freeBox[4] = 0x66; // 'f'
-                freeBox[5] = 0x72; // 'r'
-                freeBox[6] = 0x65; // 'e'
-                freeBox[7] = 0x65; // 'e'
-                const combined = new Uint8Array(mp4Buffer.byteLength + padDeficit);
-                combined.set(new Uint8Array(mp4Buffer), 0);
-                combined.set(freeBox, mp4Buffer.byteLength);
-                mp4Buffer = combined.buffer;
-              }
-            }
-
-            const mp4Blob = new Blob([mp4Buffer], { type: 'video/mp4' });
-            const videoUrl = URL.createObjectURL(mp4Blob);
-
-            updateUIProgress(100, 'Selesai! Video MP4 siap diunduh.');
-            await new Promise((r) => setTimeout(r, 300));
-
-            mp4Result = {
-              blob: mp4Blob,
-              url: videoUrl,
-              format: 'mp4',
-              sizeFormatted: `${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
+          const muxer = new Muxer({
+            target: new ArrayBufferTarget(),
+            video: {
+              codec: 'avc',
               width,
               height,
-              duration,
-              engineUsed: 'webcodecs',
-            };
-            webCodecsSuccess = true;
-            break;
-          } catch (codecErr) {
-            console.warn(`WebCodecs codec ${codec} (${accel}) failed, trying fallback...`, codecErr);
+              frameRate: fps,
+            },
+            fastStart: 'in-memory',
+            firstTimestampBehavior: 'offset',
+          });
+
+          let encodeError: any = null;
+
+          const videoEncoder = new (window as any).VideoEncoder({
+            output: (chunk: any, meta: any) => {
+              try {
+                muxer.addVideoChunk(chunk, meta);
+              } catch (muxErr) {
+                console.warn('[Muxer Chunk Warning]', muxErr);
+              }
+            },
+            error: (e: any) => {
+              console.warn('[WebCodecs Warning]', e);
+              encodeError = e;
+            },
+          });
+
+          await videoEncoder.configure(encoderConfig);
+
+          // Test first frame encoding
+          drawCurrentFrameToTarget();
+          const testFrame = new (window as any).VideoFrame(targetCanvas, {
+            timestamp: 0,
+            duration: frameDurationUs,
+          });
+          videoEncoder.encode(testFrame, { keyFrame: true });
+          testFrame.close();
+
+          // Wait a tick to detect immediate encoder rejection
+          await new Promise((r) => setTimeout(r, 40));
+
+          if (encodeError) {
+            try { videoEncoder.close(); } catch {}
             continue;
           }
+
+          // Encoder successfully verified!
+          engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
+          updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps)...`);
+
+          // Main Frame Loop with Strict Backpressure Control
+          for (let frame = 1; frame < totalFrames; frame++) {
+            if (isCancelled) {
+              try { videoEncoder.close(); } catch {}
+              throw new Error('Render dibatalkan oleh pengguna.');
+            }
+
+            if (encodeError) throw encodeError;
+
+            // CRITICAL LOW-SPEC FIX: Backpressure control
+            // Never allow more than 2 uncompressed frames in RAM queue to prevent Ryzen 3 / 8GB RAM crashes
+            while (videoEncoder.encodeQueueSize > 2) {
+              await new Promise<void>((resolve) => {
+                videoEncoder.ondequeue = () => resolve();
+                setTimeout(resolve, 15);
+              });
+            }
+
+            drawCurrentFrameToTarget();
+
+            const timestampUs = Math.round(frame * frameDurationUs);
+            const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
+
+            const videoFrame = new (window as any).VideoFrame(targetCanvas, {
+              timestamp: timestampUs,
+              duration: frameDurationUs,
+            });
+
+            videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
+            videoFrame.close(); // Immediate memory release
+
+            const pct = Math.round(10 + (frame / totalFrames) * 82);
+            if (frame % Math.max(1, Math.round(fps / 6)) === 0) {
+              updateUIProgress(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
+            }
+
+            // Yield execution to prevent UI freezing on low-spec CPUs
+            await new Promise((resolve) => {
+              if (iframe.contentWindow && iframe.contentWindow.requestAnimationFrame) {
+                iframe.contentWindow.requestAnimationFrame(() => resolve(null));
+              } else {
+                setTimeout(resolve, frameIntervalMs * 0.5);
+              }
+            });
+          }
+
+          updateUIProgress(94, 'Finalisasi berkas MP4 FastStart...');
+          await videoEncoder.flush();
+          videoEncoder.close();
+          muxer.finalize();
+
+          const mp4Buffer: ArrayBuffer = muxer.target.buffer;
+          const mp4Blob = new Blob([mp4Buffer], { type: 'video/mp4' });
+          const videoUrl = URL.createObjectURL(mp4Blob);
+
+          updateUIProgress(100, 'Selesai! Video MP4 siap diunduh.');
+          await new Promise((r) => setTimeout(r, 250));
+
+          mp4Result = {
+            blob: mp4Blob,
+            url: videoUrl,
+            format: 'mp4',
+            sizeFormatted: `${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
+            width,
+            height,
+            fps,
+            duration,
+            engineUsed,
+          };
+          webCodecsSuccess = true;
+          break;
+        } catch (candidateErr) {
+          console.warn(`WebCodecs codec ${codec} (${accel}) error, trying next candidate...`, candidateErr);
+          continue;
         }
       }
     }
@@ -604,13 +576,18 @@ export async function renderHtmlToVideo(
       return mp4Result;
     }
 
-    // =========================================================================
-    // TIER 2: Ultra-Reliable MediaRecorder Engine (Works on 100% of devices)
-    // =========================================================================
-    updateUIProgress(10, `Mengaktifkan Universal Stream Recorder (1080p @ ${fps}fps)...`);
+    if (isCancelled) throw new Error('Render dibatalkan.');
 
-    // Stream from active targetCanvas
-    const stream = targetCanvas.captureStream ? targetCanvas.captureStream(fps) : (iframeCanvas as any)?.captureStream(fps);
+    // =========================================================================
+    // TIER 2: Resilient Universal Stream Engine (For Older Browsers / Fallback)
+    // =========================================================================
+    updateUIProgress(10, `Mengaktifkan Universal Stream Engine (1080p @ ${fps}fps)...`);
+
+    const stream =
+      targetCanvas.captureStream
+        ? targetCanvas.captureStream(fps)
+        : (iframeCanvas as any)?.captureStream(fps);
+
     if (!stream) {
       throw new Error('Perekam video tidak didukung pada browser ini.');
     }
@@ -657,9 +634,7 @@ export async function renderHtmlToVideo(
 
     mediaRecorder.start(100);
 
-    // Active frame render loop for targetCanvas
     let isRecordingActive = true;
-    let renderedFrames = 0;
 
     const renderLoop = () => {
       if (!isRecordingActive) return;
@@ -668,7 +643,6 @@ export async function renderHtmlToVideo(
       if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
         ctx.drawImage(iframeCanvas, 0, 0, width, height);
       }
-      renderedFrames++;
       if (iframe.contentWindow && iframe.contentWindow.requestAnimationFrame) {
         iframe.contentWindow.requestAnimationFrame(renderLoop);
       } else {
@@ -679,59 +653,47 @@ export async function renderHtmlToVideo(
 
     const startTime = performance.now();
     const interval = setInterval(() => {
+      if (isCancelled) {
+        clearInterval(interval);
+        isRecordingActive = false;
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
+        return;
+      }
       const elapsed = (performance.now() - startTime) / 1000;
       const pct = Math.min(92, Math.round(10 + (elapsed / duration) * 82));
       updateUIProgress(pct, `Merekam video (${pct}%)...`);
-    }, 300);
+    }, 250);
 
     await new Promise((r) => setTimeout(r, duration * 1000));
     clearInterval(interval);
     isRecordingActive = false;
 
+    if (isCancelled) throw new Error('Render dibatalkan.');
+
     if (mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
 
-    updateUIProgress(96, 'Menyusun berkas video final...');
+    updateUIProgress(96, 'Menyusun berkas video...');
     const recordedBlob = await recordPromise;
-    let finalBlob: Blob = recordedBlob;
-
-    // If MP4 container and smaller than target CBR bitrate, pad with standard ISO free box to strictly enforce target bitrate
-    if (finalType === 'video/mp4') {
-      try {
-        const rawBuf = await recordedBlob.arrayBuffer();
-        if (rawBuf.byteLength < targetTotalBytes) {
-          const padDeficit = targetTotalBytes - rawBuf.byteLength;
-          if (padDeficit >= 8) {
-            const freeBox = new Uint8Array(padDeficit);
-            const view = new DataView(freeBox.buffer);
-            view.setUint32(0, padDeficit, false); // 4-byte big-endian size
-            freeBox[4] = 0x66; // 'f'
-            freeBox[5] = 0x72; // 'r'
-            freeBox[6] = 0x65; // 'e'
-            freeBox[7] = 0x65; // 'e'
-            finalBlob = new Blob([rawBuf, freeBox], { type: 'video/mp4' });
-          }
-        }
-      } catch {}
-    }
-
-    const videoUrl = URL.createObjectURL(finalBlob);
+    const videoUrl = URL.createObjectURL(recordedBlob);
 
     updateUIProgress(100, 'Selesai! Video siap diunduh.');
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 200));
 
     return {
-      blob: finalBlob,
+      blob: recordedBlob,
       url: videoUrl,
       format: 'mp4',
-      sizeFormatted: `${(finalBlob.size / (1024 * 1024)).toFixed(2)} MB`,
+      sizeFormatted: `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
       width,
       height,
+      fps,
       duration,
       engineUsed: 'mediarecorder',
     };
   } finally {
+    window.removeEventListener('resize', updatePreviewScale);
     if (document.body.contains(overlay)) {
       document.body.removeChild(overlay);
     }
