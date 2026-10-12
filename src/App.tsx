@@ -38,6 +38,7 @@ import { TutorialModal } from './components/TutorialModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
+import { getDefaultCategoryForType } from './constants/categories';
 
 const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
@@ -165,7 +166,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
 
   const [currentType, setCurrentType] = useState<AnimationType>('icon');
-  const [nicheCategory, setNicheCategory] = useState<NicheCategory>('marketing');
+  const [nicheCategory, setNicheCategory] = useState<NicheCategory>('business_finance');
   const [visualStyle, setVisualStyle] = useState<VisualStyle>('minimalist');
   const [colorMode, setColorMode] = useState<ColorMode>('gradient');
   const [motionDynamics, setMotionDynamics] = useState<MotionDynamics>('flow');
@@ -229,7 +230,7 @@ export default function App() {
         id: 'acc_1',
         name: 'Account_1',
         type: 'icon',
-        subCategory: 'teknologi',
+        subCategory: 'business_finance',
         style: 'minimalist',
         promptCount: 2,
       },
@@ -1409,7 +1410,12 @@ export default function App() {
             {promptSubTab === 'prompt_to_motion' ? (
               <WorkflowSection
                 currentType={currentType}
-                onSelectType={setCurrentType}
+                onSelectType={(newType) => {
+                  setCurrentType(newType);
+                  setNicheCategory(getDefaultCategoryForType(newType) as NicheCategory);
+                }}
+                subCategory={nicheCategory}
+                onSelectSubCategory={(cat) => setNicheCategory(cat as NicheCategory)}
                 visualStyle={visualStyle}
                 onSelectStyle={setVisualStyle}
                 colorMode={colorMode}

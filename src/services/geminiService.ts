@@ -1,4 +1,5 @@
 import { AnimationType, GeminiModel, ApiKeyTestResult, ColorMode, MotionDynamics, ShapeAnalysis } from '../types';
+import { findCategoryById } from '../constants/categories';
 
 const STORAGE_API_KEYS = 'bigma_gemini_api_keys';
 const STORAGE_SELECTED_MODEL = 'bigma_gemini_model';
@@ -309,10 +310,10 @@ async function generatePromptsDirect(
   let typeInstruction = '';
   if (type === 'icon') {
     typeInstruction =
-      'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision.';
+      'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision. STRICT REQUIREMENT FOR ICON: Do NOT describe flying particles, debris, stars, or background clutter around the icon. Focus purely on the isolated icon itself and its internal geometric parts.';
   } else if (type === 'bg') {
     typeInstruction =
-      'Every prompt must describe an elegant looping motion background concept (no text), seamless geometry or atmospheric waves.';
+      'Every prompt must describe an elegant looping motion background concept (no text), seamless geometry, atmospheric waves, or thematic backdrop.';
   }
 
   let keywordsDirective = '';
@@ -343,26 +344,17 @@ async function generatePromptsDirect(
 
   const glowDirective = `\nNeon Glow: ${neonGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
 
-  const motionDirective = `\nMotion Dynamics: ${motionDynamics.toUpperCase()} (${
-    motionDynamics === 'bounce'
-      ? 'Energetic elastic bounce with squash and stretch spring physics'
-      : motionDynamics === 'orbital'
-      ? '3D orbital gyroscopic rotation and planetary revolution'
-      : motionDynamics === 'morph'
-      ? 'Kinetic geometric morphing and vertex shape transitions'
-      : motionDynamics === 'cyber'
-      ? 'High-tech stepped HUD telemetry, scanning laser beams, and digital dial ratchets'
-      : motionDynamics === 'mechanical'
-      ? 'Precision mechanical clockwork, interlocking gear mesh rotation and pistons'
-      : 'Smooth organic sinusoidal waves, flowing ribbons and continuous fluid drift'
-  })`;
+  const catMeta = findCategoryById(subCategory, type);
+  const categoryLine = catMeta
+    ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
+    : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
-  const categoryLine = subCategory && subCategory !== 'all' && subCategory !== 'general' && subCategory !== 'teknologi' ? `Category / Domain: ${subCategory}\n` : '';
-  const promptContent = `Generate exactly ${count} concise, creative microstock animation prompts in English (5 to 8 words per prompt).
+  const promptContent = `Generate exactly ${count} highly descriptive, creative, and professional microstock animation prompts in English with NO word count limitations (do NOT limit or truncate words; create detailed, vivid, and comprehensive prompts).
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
-Visual Style: ${style}${colorModeDirective}${glowDirective}${motionDirective}
+Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-Requirement: Focus strictly on the central geometric object, color palette, and specific motion dynamics.
+LINEAR MOTION INTEGRATION (MANDATORY):
+Every prompt MUST seamlessly synthesize both the subject's iconic form AND its linear kinetic motion in the prompt itself (e.g. describing how the icon parts rotate, pulse, expand, articulate, or cycle with smooth linear continuity, or how the background waves and grid flow linearly). The motion must be linear, coherent, and inseparable from the visual subject.
 Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
 
   let lastDirectError: any = null;
@@ -499,17 +491,28 @@ async function generateAnimationDirect(
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const targetModel = sanitizeModel(model);
 
+  const catMeta = findCategoryById(subCategory, type);
+  const catInfo = catMeta ? `${catMeta.enName} (${catMeta.name}) - ${catMeta.description}` : subCategory;
+
   let typeInstructions = '';
   if (type === 'icon') {
     typeInstructions = `
-ATURAN UTAMA ICON MOTION:
-- Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat di tengah canvas.
-- DILARANG TEKS/HURUF. Gunakan bentuk geometris terstruktur solid (misal: perisai, roket, kamera, mikrofon, robot, drone, atom, chart, gedung, diamond).`;
+ATURAN UTAMA ICON MOTION (SANGAT KRUSIAL - ANTI-BUG BENTUK & ZERO PARTICLE):
+1. ISOLASI TOTAL ICON (TIDAK BOLEH ADA OBJEK/PARTIKEL ASING):
+   - Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat di tengah canvas.
+   - DILARANG KERAS memunculkan partikel melayang, debu berterbangan, bintik-bintik random, percikan/sparks liar, cincin orbit aneh, serpihan, pecahan, atau objek lain di luar bentuk icon utama!
+   - Background kanvas di sekeliling icon HARUS 100% bersih, kosong, dan polos tanpa visual clutter atau noise apapun.
+2. BENTUK GEOMETRIS IDEAL & PRESISI:
+   - Bentuk geometris icon harus proporsional, solid, simetris/terstruktur rapi, tidak cacat, dan merepresentasikan subjek dengan presisi tinggi (rasio ketebalan garis rapi, penempatan fitur akurat, proporsi seimbang di cx, cy).
+   - DILARANG TEKS/HURUF. Gunakan path vektor canvas yang bersih (ctx.beginPath(), ctx.roundRect(), ctx.arc(), ctx.lineTo()).
+3. GERAKAN LINEAR SELARAS PROMPT:
+   - Seluruh pergerakan animasi HARUS linear dan mengikuti deskripsi gerakan yang tertera di dalam prompt.
+   - Gerakan kinetik HARUS diterapkan langsung pada badan icon dan anatomi internalnya (misal: rotasi halus elemen internal, breathing pulse 0.96x-1.04x, artikulasi roda gigi/lensa/tuas, osilasi floating lembut tanpa partikel luar).`;
   } else if (type === 'bg') {
     typeInstructions = `
 ATURAN UTAMA BACKGROUND MOTION:
 - Animasi latar belakang bergerak penuh di seluruh canvas (waves, flowing grid, orbital field, matrix HUD, atau synthwave horizon).
-- DILARANG TEKS/HURUF. Bergerak dengan ritme harmonis tanpa jeda.`;
+- DILARANG TEKS/HURUF. Bergerak dengan ritme harmonis linear tanpa jeda sejalan dengan kategori dan deskripsi prompt.`;
   }
 
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
@@ -586,11 +589,11 @@ Tugas: Buat 1 file HTML animasi Canvas 2D yang bervariasi, dinamis, dan MINIM BU
 PARAMETER TERPILIH:
 - Subjek/Prompt: "${promptTopic}"
 - Tipe Animasi: ${String(type).toUpperCase()}
-- Kategori Niche: ${subCategory}
+- Kategori Microstock: ${catInfo}
 - Gaya Visual: ${style}
 - Mode Warna: ${colorMode.toUpperCase()}
 - Status Neon Glow: ${neonGlow ? 'AKTIF' : 'NONAKTIF (Flat / Tanpa Blur)'}
-- Motion Dynamics: ${motionDynamics.toUpperCase()}
+- Gerakan: LINEAR MOTION (Selaras & terintegrasi dengan deskripsi Prompt)
 ${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
 
 ${typeInstructions}
@@ -609,7 +612,7 @@ ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
 5. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX, ANATOMI GEOMETRIS & GERAKAN 60 FPS):
    - Jika di dalam prompt terdapat deskripsi anatomi subjek, sub-komponen, spesifikasi kode warna hex (#XXXXXX), atau detail gerakan kinetik:
      AI WAJIB 100% MENGIKUTI deskripsi geometri, kode warna hex, dan pola gerakan kinetik tersebut pada Canvas 2D agar visual yang dirender semirip dan sedinamis mungkin dengan gambar referensi aslinya!
-6. GERAKAN KINETIK NYATA 60 FPS: Objek HARUS memiliki gerakan aktif (floating osilasi Y ±(S*0.14), breathing scale pulse 0.96x-1.04x, specular beam sweep diagonal, partikel memancar).
+6. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.12), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal). Untuk Icon: DILARANG KERAS ADA PARTIKEL MEMANCAR, DEBU, ATAU OBJEK ASING DI LUAR ICON!
 7. RINGKAS & TUNTAS: Buat kode efisien 180 - 260 baris yang langsung looping 60 FPS tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:

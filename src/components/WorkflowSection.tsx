@@ -1,9 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { AnimationType, VisualStyle, ColorMode, MotionDynamics, NotepadBatch } from '../types';
+import { getCategoriesForType, findCategoryById } from '../constants/categories';
 
 interface WorkflowSectionProps {
   currentType: AnimationType;
   onSelectType: (type: AnimationType) => void;
+  subCategory?: string;
+  onSelectSubCategory?: (cat: string) => void;
   visualStyle: VisualStyle;
   onSelectStyle: (style: VisualStyle) => void;
   colorMode?: ColorMode;
@@ -37,6 +40,8 @@ interface WorkflowSectionProps {
 export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   currentType,
   onSelectType,
+  subCategory,
+  onSelectSubCategory,
   visualStyle,
   onSelectStyle,
   colorMode = 'gradient',
@@ -205,13 +210,50 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 2. Gaya Visual & Mode Warna Grid */}
+        {/* 2. Kategori Populer Adobe Stock & Shutterstock (10 Kategori Dinamis per Tipe) */}
+        {(() => {
+          const categories = getCategoriesForType(currentType);
+          const activeCat = findCategoryById(subCategory || '', currentType) || categories[0];
+          return (
+            <div className="space-y-1.5 p-3 rounded-xl bg-gray-900/60 border border-gray-800">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider block flex items-center gap-1.5">
+                  <i className="fa-solid fa-layer-group text-amber-400 text-[10px]"></i>
+                  <span>2. Kategori Adobe Stock & Shutterstock ({currentType === 'icon' ? 'Icon' : 'Background'})</span>
+                </label>
+                <span className="text-[10px] font-semibold text-gray-400">10 Pilihan Populer Microstock</span>
+              </div>
+              <select
+                value={activeCat.id}
+                onChange={(e) => onSelectSubCategory && onSelectSubCategory(e.target.value)}
+                className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
+              >
+                {categories.map((cat, idx) => (
+                  <option key={cat.id} value={cat.id}>
+                    {idx + 1}. {cat.name} — {cat.enName}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-start gap-1.5 text-[10px] text-gray-400 bg-gray-950/60 p-2 rounded-lg border border-gray-800/80">
+                <i className={`fa-solid ${activeCat.icon} text-sky-400 text-xs mt-0.5`}></i>
+                <div className="leading-tight">
+                  <span className="text-gray-300 font-semibold">{activeCat.description}</span>
+                  <div className="text-[9px] text-gray-400 mt-0.5">
+                    Microstock keywords: {activeCat.stockKeywords.slice(0, 5).join(', ')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 3. Gaya Visual & Mode Warna Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
           {/* Style Preset */}
           <div className="space-y-1">
             <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
               <i className="fa-solid fa-wand-magic-sparkles text-sky-400 text-[10px]"></i>
-              <span>2. Gaya Visual Preset</span>
+              <span>3. Gaya Visual Preset</span>
             </label>
             <select
               value={visualStyle}
@@ -251,24 +293,12 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 3. Fisika Gerakan / Motion Dynamics */}
-        <div className="space-y-1">
-          <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
-            <i className="fa-solid fa-person-running text-amber-400 text-[10px]"></i>
-            <span>3. Fisika Gerakan (Motion Dynamics)</span>
-          </label>
-          <select
-            value={motionDynamics}
-            onChange={(e) => onSelectMotionDynamics && onSelectMotionDynamics(e.target.value as MotionDynamics)}
-            className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
-          >
-            <option value="flow">Flow & Harmonic Wave (Mengalir Lembut)</option>
-            <option value="bounce">Elastic Bounce (Membal & Squash/Stretch)</option>
-            <option value="orbital">3D Orbital Gyroscope (Putaran 3D Orbit)</option>
-            <option value="morph">Kinetic Morphing (Perubahan Bentuk Dinamis)</option>
-            <option value="cyber">Cyber Step HUD (Telemetri & Laser Scanner)</option>
-            <option value="mechanical">Mechanical Articulated (Artikulasi Presisi)</option>
-          </select>
+        {/* Linear Motion Indicator (Gerakan otomatis linear terintegrasi langsung di dalam Prompt & Animasi) */}
+        <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-800/40 flex items-center gap-2 text-xs text-sky-200">
+          <i className="fa-solid fa-chart-line text-sky-400 text-sm"></i>
+          <div className="text-[11px] leading-tight">
+            <span className="font-bold text-sky-300">Gerakan Linear Otomatis:</span> Dinamika gerakan disintesis langsung di dalam prompt secara linear tanpa batas kata, menjaga keselarasan ideal antara bentuk visual dan animasi 60 FPS.
+          </div>
         </div>
 
         {/* 4. Compact Settings Row: Neon Glow, Green Screen, Prompt Count */}

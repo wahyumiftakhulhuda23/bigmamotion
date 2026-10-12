@@ -1,13 +1,37 @@
 export type AnimationType = 'icon' | 'bg';
 
 export type NicheCategory = 
+  // Icon Categories
+  | 'business_finance'
+  | 'technology_ai'
+  | 'medical_health'
+  | 'ecommerce_shopping'
+  | 'social_communication'
+  | 'education_learning'
+  | 'ecology_green_energy'
+  | 'cyber_security'
+  | 'logistics_delivery'
+  | 'creative_multimedia'
+  // Background Categories
+  | 'abstract_geometric'
+  | 'cyber_scifi_hud'
+  | 'liquid_fluid_waves'
+  | 'corporate_fintech'
+  | 'particle_constellation'
+  | 'aura_gradient_blur'
+  | 'botanical_nature'
+  | 'retro_synthwave'
+  | 'luxury_gold_silk'
+  | 'dynamic_speed_energy'
+  // Legacy backward-compatibility
   | 'marketing' 
   | 'teknologi' 
   | 'arsitektur' 
   | 'pendidikan' 
   | 'transportasi' 
   | 'kesehatan' 
-  | 'finansial';
+  | 'finansial'
+  | string;
 
 export type VisualStyle = 
   | 'minimalist' 
