@@ -69,16 +69,14 @@ export function getDevicePerformanceProfile(): {
 }
 
 const CANDIDATE_CODECS = [
-  'avc1.640033', // High Profile Level 5.1 (Up to 240 Mbps @ 4K60)
-  'avc1.64002a', // High Profile Level 4.2 (Up to 50 Mbps @ 1080p60 optimal)
-  'avc1.4d0033', // Main Profile Level 5.1
-  'avc1.4d002a', // Main Profile Level 4.2 (Up to 50 Mbps)
-  'avc1.42002a', // Baseline Level 4.2 (Up to 50 Mbps)
-  'avc1.640028', // High Profile Level 4.0 (Up to 25 Mbps)
+  'avc1.420028', // Baseline Profile Level 4.0 (Fastest CPU encoding on Celeron)
   'avc1.4d0028', // Main Profile Level 4.0
-  'avc1.420028', // Baseline Profile Level 4.0 (Universal 1080p)
-  'avc1.42001f', // Baseline Level 3.1
-  'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
+  'avc1.42001e', // Baseline Level 3.0
+  'avc1.42002a', // Baseline Level 4.2
+  'avc1.4d002a', // Main Profile Level 4.2
+  'avc1.640028', // High Profile Level 4.0
+  'avc1.64002a', // High Profile Level 4.2
+  'avc1.640033', // High Profile Level 5.1
   'avc1.42E01E', // Constrained Baseline
 ];
 
@@ -587,16 +585,14 @@ export async function renderHtmlToVideo(
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
       // Form candidate configurations ordered by profile/level and rate-control capability
       const candidateCodecs = [
-        'avc1.640033', // High Profile Level 5.1 (Up to 240 Mbps @ 4K60)
-        'avc1.64002a', // High Profile Level 4.2 (Up to 50 Mbps @ 1080p60)
-        'avc1.4d0033', // Main Profile Level 5.1
-        'avc1.4d002a', // Main Profile Level 4.2 (Up to 50 Mbps)
-        'avc1.42002a', // Baseline Level 4.2 (Up to 50 Mbps)
-        'avc1.640028', // High Profile Level 4.0 (Up to 25 Mbps)
+        'avc1.420028', // Baseline Profile Level 4.0 (Fastest CPU encoding on Celeron)
         'avc1.4d0028', // Main Profile Level 4.0
-        'avc1.420028', // Baseline Profile Level 4.0
-        'avc1.42001f', // Baseline Level 3.1
-        'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
+        'avc1.42001e', // Baseline Level 3.0
+        'avc1.42002a', // Baseline Level 4.2
+        'avc1.4d002a', // Main Profile Level 4.2
+        'avc1.640028', // High Profile Level 4.0
+        'avc1.64002a', // High Profile Level 4.2
+        'avc1.640033', // High Profile Level 5.1
         'avc1.42E01E', // Constrained Baseline
       ];
 
