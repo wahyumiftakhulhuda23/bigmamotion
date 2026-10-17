@@ -602,18 +602,33 @@ ${styleAndColorGuide}
 ${greenScreenDirective}
 
 ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
-1. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';) agar pendaran tidak bocor atau meninggalkan jejak/bekas gerakan (ghosting artifacts) di frame berikutnya.
-2. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
-3. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL (TIDAK BOLEH ZOOM-OUT / TERLALU KECIL):
+1. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - WAJIB ANTI-DETACH):
+   - Seluruh bagian suatu objek (misal: badan tas + gagang; bodi mobil + roda; bodi smartphone + layar + kamera; cangkir + pegangan; kamera + lensa + shutter) WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
+     ctx.save();
+     ctx.translate(posX, posY); // posX = cx, posY = cy + floating/bounce
+     ctx.rotate(rot);
+     ctx.scale(scaleX, scaleY);
+     // SEMUA SUB-KOMPONEN DIGAMBAR RELATIF TERHADAP (0, 0)!
+     // DILARANG MEMBERI TRANSLASI POSISI X/Y TERPISAH PADA GAGANG ATAU RODA YANG MEMBUATNYA LEPAS DARI BADAN!
+     ctx.restore();
+2. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH:
+   - TAS & KOPER: Badan tas simetris (roundRect). Gagang/tali tas WAJIB menempel menyatu kokoh di bibir atas badan tas pada (-strapOffset, topBagY) dan (+strapOffset, topBagY). DILARANG gagang melayang terpisah dari tas!
+   - KENDARAAN & MOBIL: Bodi mobil aerodinamis dengan spakbor (wheel arches). Roda mobil WAJIB tertanam presisi di dalam lubang spakbor sasis bawah di (-wheelDist, axleY) dan (+wheelDist, axleY). Roda bergerak 100% mengikuti bodi sasis; hanya velg di dalam ban yang berputar di pusat roda masing-masing (ctx.rotate(t * speed)). DILARANG roda terpental, melayang liar, atau berada di luar bodi!
+   - SMARTPHONE & GADGET: Bodi ponsel WAJIB berbentuk persegi panjang dengan sudut membulat sempurna (rasio standar 9:19.5, ctx.roundRect(-w/2, -h/2, w, h, 20)), bezel tipis simetris, dynamic island terpusat di atas, home bar di bawah, dan layar kaca menyala di dalam bezel. DILARANG bentuk tidak beraturan atau poligon asimetris cacat!
+   - KAMERA, CANGKIR, JAM, LAPTOP, DLL: Setiap bagian harus memiliki hubungan geometris yang logis dan melekat kokoh (lensa di tengah bodi kamera, pegangan cangkir di samping bodi, jarum jam tertancap di poros tengah 0,0).
+3. ISOLASI TOTAL ICON (ZERO PARTIKEL & ZERO NOISE LUAR):
+   - Untuk tipe ICON: Kanvas di sekeliling icon HARUS 100% bersih, kosong, dan polos. DILARANG KERAS memunculkan partikel melayang, debu berterbangan, bintik-bintik random, percikan/sparks liar, cincin orbit aneh, serpihan, pecahan, atau objek lain di luar bentuk icon utama!
+4. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';) agar pendaran tidak bocor atau meninggalkan jejak/bekas gerakan (ghosting artifacts) di frame berikutnya.
+5. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
+6. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL (TIDAK BOLEH ZOOM-OUT / TERLALU KECIL):
    - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
    - Objek Icon / Grafis harus proporsional & memenuhi frame sekitar 80-88% tinggi canvas dengan margin aman (tidak terpotong dan tidak tampak kecil di tengah).
    - Background Motion harus menyebar ke seluruh kanvas (w, h) hingga ke sudut-sudut tanpa ruang hitam kosong.
-4. ZERO GLITCH / NO SMEARS: Canvas tidak boleh meninggalkan noda jejak yang tak diinginkan.
-5. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX, ANATOMI GEOMETRIS & GERAKAN 60 FPS):
+7. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX, ANATOMI GEOMETRIS & GERAKAN 60 FPS):
    - Jika di dalam prompt terdapat deskripsi anatomi subjek, sub-komponen, spesifikasi kode warna hex (#XXXXXX), atau detail gerakan kinetik:
      AI WAJIB 100% MENGIKUTI deskripsi geometri, kode warna hex, dan pola gerakan kinetik tersebut pada Canvas 2D agar visual yang dirender semirip dan sedinamis mungkin dengan gambar referensi aslinya!
-6. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.12), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal). Untuk Icon: DILARANG KERAS ADA PARTIKEL MEMANCAR, DEBU, ATAU OBJEK ASING DI LUAR ICON!
-7. RINGKAS & TUNTAS: Buat kode efisien 180 - 260 baris yang langsung looping 60 FPS tanpa henti.
+8. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.12), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal).
+9. RINGKAS & TUNTAS: Buat kode efisien 180 - 280 baris yang langsung looping 60 FPS tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -943,22 +958,6 @@ ${shapeAnalysisJson}
   window.addEventListener('resize', resize);
   resize();
 
-  // Multi-Layer Kinetic Particle System
-  const particles = [];
-  const particleCount = 45;
-  for (let i = 0; i < particleCount; i++) {
-    particles.push({
-      x: (Math.random() - 0.5) * 500,
-      y: (Math.random() - 0.5) * 350,
-      vx: -(Math.random() * 4.0 + 1.5),
-      vy: (Math.random() - 0.5) * 1.5,
-      size: Math.random() * 3.5 + 1.2,
-      alpha: Math.random() * 0.8 + 0.2,
-      life: Math.random() * 60 + 10,
-      maxLife: 70
-    });
-  }
-
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
@@ -979,90 +978,45 @@ ${shapeAnalysisJson}
       const squash = 1 + 0.25 * (1 - bounce);
       scaleX = 1 / Math.sqrt(squash);
       scaleY = squash;
-      rot = Math.sin(t * 2.5) * 0.1;
+      rot = Math.sin(t * 2.5) * 0.08;
     } else if (dyn === 'orbital') {
-      posX = cx + Math.cos(t * 2.0) * (S * 0.32);
-      posY = cy + Math.sin(t * 2.0) * (S * 0.14);
-      const depthScale = 0.85 + 0.3 * (Math.sin(t * 2.0) + 1) * 0.5;
+      posX = cx + Math.cos(t * 2.0) * (S * 0.25);
+      posY = cy + Math.sin(t * 2.0) * (S * 0.12);
+      const depthScale = 0.88 + 0.24 * (Math.sin(t * 2.0) + 1) * 0.5;
       scaleX = depthScale;
       scaleY = depthScale;
-      rot = Math.sin(t * 1.8) * 0.2;
+      rot = Math.sin(t * 1.8) * 0.15;
     } else if (dyn === 'morph') {
-      const pulse = 1 + Math.sin(t * 4.0) * 0.12;
+      const pulse = 1 + Math.sin(t * 4.0) * 0.08;
       scaleX = pulse;
       scaleY = 1 / pulse;
-      posX = cx + Math.sin(t * 1.5) * 14;
-      posY = cy + Math.cos(t * 2.0) * 10;
-      rot = Math.sin(t * 2.0) * 0.14;
+      posX = cx + Math.sin(t * 1.5) * 12;
+      posY = cy + Math.cos(t * 2.0) * 8;
+      rot = Math.sin(t * 2.0) * 0.10;
     } else if (dyn === 'cyber') {
       const step = Math.floor(t * 8) / 8;
-      posX = cx + Math.sin(step * Math.PI * 2) * 12;
-      posY = cy + Math.cos(step * Math.PI * 2) * 8;
-      rot = Math.sin(step * Math.PI) * 0.15;
-      scaleX = 1 + Math.sin(step * 10) * 0.06;
-      scaleY = 1 + Math.cos(step * 10) * 0.06;
+      posX = cx + Math.sin(step * Math.PI * 2) * 10;
+      posY = cy + Math.cos(step * Math.PI * 2) * 6;
+      rot = Math.sin(step * Math.PI) * 0.10;
+      scaleX = 1 + Math.sin(step * 10) * 0.04;
+      scaleY = 1 + Math.cos(step * 10) * 0.04;
     } else if (dyn === 'mechanical') {
-      posX = cx + Math.sin(t * 1.8) * 8;
-      posY = cy + Math.cos(t * 2.2) * 6;
-      rot = Math.sin(t * 2.0) * 0.12;
-      scaleX = 1 + Math.sin(t * 3.0) * 0.04;
+      posX = cx + Math.sin(t * 1.8) * 6;
+      posY = cy + Math.cos(t * 2.2) * 5;
+      rot = Math.sin(t * 2.0) * 0.08;
+      scaleX = 1 + Math.sin(t * 3.0) * 0.03;
       scaleY = scaleX;
     } else {
       // Flow & harmonic organic floating with prominent lively amplitude
-      posX = cx + Math.sin(t * 2.4) * (S * 0.14);
-      posY = cy + Math.cos(t * 3.0) * (S * 0.16);
-      rot = Math.sin(t * 2.0) * 0.12;
-      const breathe = 1 + Math.sin(t * 3.2) * 0.06;
+      posX = cx + Math.sin(t * 2.4) * (S * 0.12);
+      posY = cy + Math.cos(t * 3.0) * (S * 0.14);
+      rot = Math.sin(t * 2.0) * 0.08;
+      const breathe = 1 + Math.sin(t * 3.2) * 0.05;
       scaleX = breathe;
       scaleY = breathe;
     }
 
-    // 1. Ambient Background Energy Rings & Wavefronts
-    if (${neonGlow}) {
-      ctx.save();
-      ctx.translate(posX, posY);
-      for (let r = 1; r <= 3; r++) {
-        const ringRadius = (S * 0.5 * r * 0.6) + ((t * 35 * r) % (S * 0.8));
-        const ringAlpha = Math.max(0, 0.35 - (ringRadius / (S * 1.5)));
-        ctx.beginPath();
-        ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = "${glowColor}";
-        ctx.globalAlpha = ringAlpha;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([10, 14]);
-        ctx.lineDashOffset = -t * 25 * r;
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // 2. Trailing Kinetic Particles
-    if (${neonGlow}) {
-      ctx.save();
-      ctx.translate(posX, posY);
-      for (let i = 0; i < particles.length; i++) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= 1;
-        if (p.life <= 0 || p.x < -w * 0.5) {
-          p.x = -S * 0.15 + (Math.random() - 0.5) * 30;
-          p.y = (Math.random() - 0.5) * (S * 0.7);
-          p.vx = -(Math.random() * 4.5 + 2.0);
-          p.life = Math.random() * 55 + 20;
-        }
-
-        const pAlpha = (p.life / p.maxLife) * p.alpha;
-        ctx.fillStyle = i % 2 === 0 ? "${glowColor}" : "${secondaryColor}";
-        ctx.globalAlpha = Math.max(0, Math.min(1, pAlpha));
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    // 3. Central Semantic Vector Object (High Fidelity Reconstructed Icon)
+    // 1. Central Semantic Vector Object (100% Unified Parent Matrix, Anti-Detach, Zero Particles)
     ctx.save();
     ctx.translate(posX, posY);
     ctx.scale(scaleX, scaleY);
@@ -1076,9 +1030,471 @@ ${shapeAnalysisJson}
     const R = S * 0.75;
     const title = "${subjectTitle}";
 
-    // Draw multi-layered modern vector graphics (Smart Subject Rendering)
-    if (title.includes('shield') || title.includes('protect') || title.includes('security') || title.includes('lock')) {
-      // Modern Security Shield
+    // =========================================================================
+    // SMART SEMANTIC RECONSTRUCTION (100% Sensible Anatomy & Rigged Parts)
+    // =========================================================================
+    if (title.includes('phone') || title.includes('mobile') || title.includes('hp') || title.includes('handphone') || title.includes('smartphone') || title.includes('gadget') || title.includes('iphone') || title.includes('android')) {
+      // 1. SMARTPHONE / MOBILE DEVICE (Pristine Symmetrical Chassis, Screen, Camera, Dynamic Island)
+      const pw = R * 0.88;
+      const ph = R * 1.62;
+
+      // Outer Phone Titanium Chassis
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-pw / 2, -ph / 2, pw, ph, 24);
+      } else {
+        ctx.rect(-pw / 2, -ph / 2, pw, ph);
+      }
+      const phoneChassisGrad = ctx.createLinearGradient(-pw / 2, -ph / 2, pw / 2, ph / 2);
+      phoneChassisGrad.addColorStop(0, '#334155');
+      phoneChassisGrad.addColorStop(0.5, '#0f172a');
+      phoneChassisGrad.addColorStop(1, '#1e293b');
+      ctx.fillStyle = phoneChassisGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+
+      // Inner Screen Bezel & OLED Display
+      ctx.save();
+      ctx.beginPath();
+      const sw = pw - 14;
+      const sh = ph - 14;
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-sw / 2, -sh / 2, sw, sh, 18);
+      } else {
+        ctx.rect(-sw / 2, -sh / 2, sw, sh);
+      }
+      const screenGrad = ctx.createLinearGradient(0, -sh / 2, 0, sh / 2);
+      screenGrad.addColorStop(0, '#020617');
+      screenGrad.addColorStop(0.5, '#0b1329');
+      screenGrad.addColorStop(1, '#020617');
+      ctx.fillStyle = screenGrad;
+      ctx.fill();
+      ctx.clip(); // Keep all screen graphics strictly inside the glass
+
+      // Screen Wallpaper Glow Wave
+      const waveGrad = ctx.createRadialGradient(0, Math.sin(t * 2) * 20, 10, 0, 0, sw * 0.7);
+      waveGrad.addColorStop(0, "${glowColor}");
+      waveGrad.addColorStop(0.6, "${secondaryColor}");
+      waveGrad.addColorStop(1, 'rgba(2, 6, 23, 0)');
+      ctx.fillStyle = waveGrad;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.arc(0, Math.sin(t * 2) * 20, sw * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Glowing UI Cards / Analytics Chart inside display
+      ctx.strokeStyle = "${accentColor}";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      for (let x = -sw * 0.38; x <= sw * 0.38; x += 12) {
+        const y = Math.sin(t * 4 + x * 0.08) * 16 + 10;
+        if (x === -sw * 0.38) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // UI Metric Pill Cards
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-sw * 0.38, -sh * 0.28, sw * 0.76, 32, 8);
+        ctx.roundRect(-sw * 0.38, sh * 0.18, sw * 0.76, 24, 6);
+      }
+      ctx.fill();
+
+      ctx.restore();
+
+      // Top Dynamic Island Pill (Centered, firmly attached)
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-22, -ph / 2 + 12, 44, 12, 6);
+      } else {
+        ctx.rect(-22, -ph / 2 + 12, 44, 12);
+      }
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+      // Mini camera lens
+      ctx.beginPath();
+      ctx.arc(-8, -ph / 2 + 18, 3, 0, Math.PI * 2);
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+
+      // Bottom Home Indicator Bar (Centered, firmly attached)
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-26, ph / 2 - 16, 52, 4, 2);
+      } else {
+        ctx.rect(-26, ph / 2 - 16, 52, 4);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fill();
+
+    } else if (title.includes('bag') || title.includes('tas') || title.includes('backpack') || title.includes('tote') || title.includes('luggage') || title.includes('koper') || title.includes('ransel') || title.includes('wallet') || title.includes('dompet')) {
+      // 2. BAG / TOTE / LUGGAGE (Unified Anchored Handles & Main Pouch)
+      const bw = R * 1.18;
+      const bh = R * 1.05;
+      const topY = -bh * 0.42;
+
+      // Handle Straps (WAJIB Kokoh menempel di bibir atas tas)
+      const strapX = bw * 0.24;
+      ctx.beginPath();
+      ctx.moveTo(-strapX, topY);
+      ctx.bezierCurveTo(-strapX, topY - R * 0.55, strapX, topY - R * 0.55, strapX, topY);
+      ctx.lineWidth = 11;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-strapX + 2, topY);
+      ctx.bezierCurveTo(-strapX + 2, topY - R * 0.50, strapX - 2, topY - R * 0.50, strapX - 2, topY);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Metal Grommets at Anchors
+      ctx.fillStyle = "${accentColor}";
+      ctx.beginPath();
+      ctx.arc(-strapX, topY, 7, 0, Math.PI * 2);
+      ctx.arc(strapX, topY, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Main Bag Body (Curved Luxury Pouch)
+      ctx.beginPath();
+      ctx.moveTo(-bw * 0.42, topY);
+      ctx.lineTo(bw * 0.42, topY);
+      ctx.quadraticCurveTo(bw * 0.52, topY + bh * 0.5, bw * 0.46, topY + bh);
+      ctx.quadraticCurveTo(0, topY + bh + 14, -bw * 0.46, topY + bh);
+      ctx.quadraticCurveTo(-bw * 0.52, topY + bh * 0.5, -bw * 0.42, topY);
+      ctx.closePath();
+      const bagGrad = ctx.createLinearGradient(-bw * 0.5, topY, bw * 0.5, topY + bh);
+      bagGrad.addColorStop(0, "${glowColor}");
+      bagGrad.addColorStop(0.5, "${secondaryColor}");
+      bagGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = bagGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Front Flap / Leather Pocket
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-bw * 0.34, topY + 22, bw * 0.68, bh * 0.42, 10);
+      } else {
+        ctx.rect(-bw * 0.34, topY + 22, bw * 0.68, bh * 0.42);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Center Metallic Emblem Clasp
+      ctx.beginPath();
+      ctx.arc(0, topY + bh * 0.42 + 22, 9, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+    } else if (title.includes('car') || title.includes('mobil') || title.includes('vehicle') || title.includes('truck') || title.includes('automotive') || title.includes('wheel') || title.includes('roda')) {
+      // 3. AUTOMOTIVE / CAR (Streamlined Chassis with Integrated Spinning Wheels)
+      const cw = R * 1.55;
+      const ch = R * 0.65;
+      const baseY = R * 0.18;
+      const rearWheelX = -cw * 0.26;
+      const frontWheelX = cw * 0.24;
+
+      // Streamlined Car Chassis with Wheel Arches
+      ctx.beginPath();
+      ctx.moveTo(-cw * 0.50, baseY); // Rear bumper
+      ctx.lineTo(-cw * 0.48, baseY - ch * 0.35); // Rear boot
+      ctx.quadraticCurveTo(-cw * 0.35, baseY - ch * 0.42, -cw * 0.22, baseY - ch * 0.88); // Rear windshield
+      ctx.lineTo(cw * 0.08, baseY - ch * 0.88); // Roof
+      ctx.quadraticCurveTo(cw * 0.28, baseY - ch * 0.45, cw * 0.46, baseY - ch * 0.22); // Front windshield & bonnet
+      ctx.lineTo(cw * 0.52, baseY); // Front bumper
+      ctx.lineTo(frontWheelX + R * 0.22, baseY);
+      ctx.arc(frontWheelX, baseY, R * 0.22, 0, Math.PI, true); // Front wheel arch
+      ctx.lineTo(rearWheelX + R * 0.22, baseY);
+      ctx.arc(rearWheelX, baseY, R * 0.22, 0, Math.PI, true); // Rear wheel arch
+      ctx.lineTo(-cw * 0.50, baseY);
+      ctx.closePath();
+
+      const carGrad = ctx.createLinearGradient(-cw * 0.5, baseY - ch, cw * 0.5, baseY);
+      carGrad.addColorStop(0, "${glowColor}");
+      carGrad.addColorStop(0.5, "${secondaryColor}");
+      carGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = carGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Tinted Windows
+      ctx.beginPath();
+      ctx.moveTo(-cw * 0.20, baseY - ch * 0.82);
+      ctx.lineTo(cw * 0.06, baseY - ch * 0.82);
+      ctx.lineTo(cw * 0.22, baseY - ch * 0.42);
+      ctx.lineTo(-cw * 0.28, baseY - ch * 0.42);
+      ctx.closePath();
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Glowing Headlights
+      ctx.beginPath();
+      ctx.arc(cw * 0.48, baseY - ch * 0.15, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Wheels Helper (Firmly locked inside wheel arches, rotating spokes)
+      function drawRiggedWheel(wx, wy) {
+        ctx.save();
+        ctx.translate(wx, wy);
+
+        // Black Rubber Tire
+        ctx.beginPath();
+        ctx.arc(0, 0, R * 0.20, 0, Math.PI * 2);
+        ctx.fillStyle = '#090d16';
+        ctx.fill();
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = "${accentColor}";
+        ctx.stroke();
+
+        // Metallic Rim
+        ctx.beginPath();
+        ctx.arc(0, 0, R * 0.12, 0, Math.PI * 2);
+        ctx.fillStyle = '#1e293b';
+        ctx.fill();
+
+        // Rotating Spokes (Velg berputar presisi di poros pusat roda)
+        ctx.rotate(t * 12);
+        for (let sp = 0; sp < 5; sp++) {
+          const a = (sp / 5) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(Math.cos(a) * (R * 0.12), Math.sin(a) * (R * 0.12));
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
+        }
+
+        // Center Cap
+        ctx.beginPath();
+        ctx.arc(0, 0, 4, 0, Math.PI * 2);
+        ctx.fillStyle = "${glowColor}";
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      drawRiggedWheel(rearWheelX, baseY);
+      drawRiggedWheel(frontWheelX, baseY);
+
+    } else if (title.includes('camera') || title.includes('foto') || title.includes('lens') || title.includes('kamera')) {
+      // 4. CAMERA (Sleek Camera Chassis, Pulsing Aperture Rings, Shutter Button)
+      const camW = R * 1.45;
+      const camH = R * 1.05;
+
+      // Camera Body
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-camW / 2, -camH / 2, camW, camH, 20);
+      } else {
+        ctx.rect(-camW / 2, -camH / 2, camW, camH);
+      }
+      const camGrad = ctx.createLinearGradient(-camW / 2, -camH / 2, camW / 2, camH / 2);
+      camGrad.addColorStop(0, "${glowColor}");
+      camGrad.addColorStop(0.5, "${secondaryColor}");
+      camGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = camGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Top Shutter Button & Flash Module (Firmly mounted)
+      ctx.fillStyle = "${accentColor}";
+      ctx.fillRect(-camW * 0.35, -camH / 2 - 10, 24, 10);
+      ctx.beginPath();
+      ctx.arc(camW * 0.28, -camH * 0.28, 9, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Concentric Master Lens Rings
+      for (let lr = 3; lr >= 1; lr--) {
+        const radius = R * 0.38 * (lr / 3);
+        ctx.beginPath();
+        ctx.arc(0, 6, radius, 0, Math.PI * 2);
+        ctx.fillStyle = lr === 1 ? '#020617' : (lr === 2 ? "${secondaryColor}" : '#0f172a');
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = lr === 1 ? "${glowColor}" : '#ffffff';
+        ctx.stroke();
+      }
+
+      // Glowing Aperture Iris
+      ctx.beginPath();
+      ctx.arc(0, 6, R * 0.08 + Math.sin(t * 3) * 4, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+
+    } else if (title.includes('cart') || title.includes('shopping') || title.includes('belanja') || title.includes('toko') || title.includes('keranjang')) {
+      // 5. SHOPPING CART (Sturdy Wireframe Basket, Firm Handle, Integrated Wheels)
+      const basketW = R * 1.25;
+      const basketH = R * 0.75;
+
+      // Basket Wireframe
+      ctx.beginPath();
+      ctx.moveTo(-basketW * 0.45, -basketH * 0.45);
+      ctx.lineTo(basketW * 0.45, -basketH * 0.45);
+      ctx.lineTo(basketW * 0.32, basketH * 0.40);
+      ctx.lineTo(-basketW * 0.35, basketH * 0.40);
+      ctx.closePath();
+      const cartGrad = ctx.createLinearGradient(-basketW * 0.5, -basketH * 0.5, basketW * 0.5, basketH * 0.5);
+      cartGrad.addColorStop(0, "${glowColor}");
+      cartGrad.addColorStop(1, "${secondaryColor}");
+      ctx.fillStyle = cartGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Handle (Welded firmly to top left)
+      ctx.beginPath();
+      ctx.moveTo(-basketW * 0.45, -basketH * 0.45);
+      ctx.lineTo(-basketW * 0.62, -basketH * 0.72);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Lower Wheels (Firmly seated on base)
+      ctx.beginPath();
+      ctx.arc(-basketW * 0.22, basketH * 0.58, 12, 0, Math.PI * 2);
+      ctx.arc(basketW * 0.22, basketH * 0.58, 12, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+
+    } else if (title.includes('cup') || title.includes('coffee') || title.includes('tea') || title.includes('kopi') || title.includes('cangkir') || title.includes('mug')) {
+      // 6. COFFEE CUP / MUG (Solid Ceramic Body, Side Handle, Animated Steam)
+      const cupW = R * 1.1;
+      const cupH = R * 0.95;
+
+      // Side Handle (Firmly attached to right wall)
+      ctx.beginPath();
+      ctx.arc(cupW * 0.38, 0, cupH * 0.32, -Math.PI * 0.45, Math.PI * 0.45);
+      ctx.lineWidth = 9;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.stroke();
+
+      // Cup Body (Tapered Cylinder)
+      ctx.beginPath();
+      ctx.moveTo(-cupW * 0.45, -cupH * 0.42);
+      ctx.lineTo(cupW * 0.45, -cupH * 0.42);
+      ctx.quadraticCurveTo(cupW * 0.42, cupH * 0.48, 0, cupH * 0.48);
+      ctx.quadraticCurveTo(-cupW * 0.42, cupH * 0.48, -cupW * 0.45, -cupH * 0.42);
+      ctx.closePath();
+      const cupGrad = ctx.createLinearGradient(-cupW * 0.5, -cupH * 0.5, cupW * 0.5, cupH * 0.5);
+      cupGrad.addColorStop(0, "${glowColor}");
+      cupGrad.addColorStop(0.5, "${secondaryColor}");
+      cupGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = cupGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Rising Harmonic Steam
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "${accentColor}";
+      for (let s = -1; s <= 1; s++) {
+        ctx.beginPath();
+        const steamX = s * 22;
+        ctx.moveTo(steamX, -cupH * 0.48);
+        ctx.quadraticCurveTo(steamX + Math.sin(t * 3 + s) * 12, -cupH * 0.72, steamX, -cupH * 0.96);
+        ctx.stroke();
+      }
+
+    } else if (title.includes('laptop') || title.includes('computer') || title.includes('pc') || title.includes('monitor') || title.includes('komputer')) {
+      // 7. LAPTOP / COMPUTER (Angled Display, Base Keyboard Deck, Trackpad)
+      const lapW = R * 1.45;
+      const lapH = R * 0.92;
+
+      // Upper Screen
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-lapW * 0.42, -lapH * 0.85, lapW * 0.84, lapH * 0.75, 10);
+      } else {
+        ctx.rect(-lapW * 0.42, -lapH * 0.85, lapW * 0.84, lapH * 0.75);
+      }
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+
+      // Glowing Screen Content
+      ctx.fillStyle = "${secondaryColor}";
+      ctx.fillRect(-lapW * 0.35, -lapH * 0.75, lapW * 0.70, lapH * 0.55);
+
+      // Bottom Keyboard Deck
+      ctx.beginPath();
+      ctx.moveTo(-lapW * 0.48, -lapH * 0.05);
+      ctx.lineTo(lapW * 0.48, -lapH * 0.05);
+      ctx.lineTo(lapW * 0.52, lapH * 0.25);
+      ctx.lineTo(-lapW * 0.52, lapH * 0.25);
+      ctx.closePath();
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Trackpad
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+      ctx.fillRect(-20, lapH * 0.08, 40, 14);
+
+    } else if (title.includes('heart') || title.includes('love') || title.includes('health') || title.includes('medis')) {
+      // 8. HEART / MEDICAL (Symmetrical Bezier Heart with Pulse Cardiogram)
+      const hw = R * 1.1;
+      const hh = R * 1.1;
+      ctx.beginPath();
+      ctx.moveTo(0, hh * 0.45);
+      ctx.bezierCurveTo(hw * 0.65, 0, hw * 0.65, -hh * 0.45, 0, -hh * 0.20);
+      ctx.bezierCurveTo(-hw * 0.65, -hh * 0.45, -hw * 0.65, 0, 0, hh * 0.45);
+      ctx.closePath();
+      const heartGrad = ctx.createLinearGradient(0, -hh * 0.5, 0, hh * 0.5);
+      heartGrad.addColorStop(0, '#ff007f');
+      heartGrad.addColorStop(0.5, "${glowColor}");
+      heartGrad.addColorStop(1, '#7f00ff');
+      ctx.fillStyle = heartGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Pulsing ECG Cardiogram Line
+      ctx.beginPath();
+      ctx.moveTo(-hw * 0.38, 0);
+      ctx.lineTo(-12, 0);
+      ctx.lineTo(-4, -18);
+      ctx.lineTo(6, 18);
+      ctx.lineTo(14, 0);
+      ctx.lineTo(hw * 0.38, 0);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+    } else if (title.includes('shield') || title.includes('protect') || title.includes('security') || title.includes('lock') || title.includes('gembok')) {
+      // 9. SECURITY SHIELD & EMBLEM
       ctx.beginPath();
       ctx.moveTo(0, -R * 0.75);
       ctx.lineTo(R * 0.65, -R * 0.5);
@@ -1097,13 +1513,22 @@ ${shapeAnalysisJson}
       ctx.strokeStyle = '#ffffff';
       ctx.stroke();
 
-      // Inner Emblem
+      // Center Keyhole / Lock Core
       ctx.beginPath();
-      ctx.arc(0, -R * 0.05, R * 0.25, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
+      ctx.arc(0, -R * 0.08, R * 0.16, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
       ctx.fill();
-    } else if (title.includes('rocket') || title.includes('launch') || title.includes('space') || title.includes('fly')) {
-      // Sleek Space Rocket
+      ctx.beginPath();
+      ctx.moveTo(-6, -R * 0.04);
+      ctx.lineTo(6, -R * 0.04);
+      ctx.lineTo(10, R * 0.22);
+      ctx.lineTo(-10, R * 0.22);
+      ctx.closePath();
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+
+    } else if (title.includes('rocket') || title.includes('launch') || title.includes('space') || title.includes('fly') || title.includes('roket')) {
+      // 10. SPACE ROCKET
       ctx.beginPath();
       ctx.moveTo(0, -R * 0.85);
       ctx.bezierCurveTo(R * 0.45, -R * 0.4, R * 0.45, R * 0.4, 0, R * 0.6);
@@ -1119,7 +1544,7 @@ ${shapeAnalysisJson}
       ctx.strokeStyle = '#ffffff';
       ctx.stroke();
 
-      // Rocket Porthole Window
+      // Porthole Window
       ctx.beginPath();
       ctx.arc(0, -R * 0.2, R * 0.18, 0, Math.PI * 2);
       ctx.fillStyle = '#0f172a';
@@ -1137,8 +1562,9 @@ ${shapeAnalysisJson}
       ctx.closePath();
       ctx.fillStyle = "${accentColor}";
       ctx.fill();
+
     } else {
-      // Futuristic Hexagonal Core / Emblem (Elegant High-Tech Vector)
+      // 11. MASTER HIGH-TECH GEOMETRIC CORE (Pristine Hexagonal Vector Emblem)
       ctx.beginPath();
       for (let s = 0; s < 6; s++) {
         const ang = (s / 6) * Math.PI * 2 - Math.PI / 2;
@@ -1257,11 +1683,25 @@ TUGAS UTAMA:
 Analisis GAMBAR REFERENSI yang diunggah secara visual pixel-by-pixel, lalu REKONSTRUKSI MENJADI KODE HTML5 CANVAS 2D yang SANGAT MIRIP dengan gambar aslinya (bentuk anatomi objek, letak elemen, kode warna HEX asli) dan BERIKAN GERAKAN KINETIK 60 FPS YANG JELAS, AKTIF, DAN BERTENAGA!
 
 =============================================================================
-ATURAN KETAT (ANTI-FALLBACK & KESESUAIAN TINGGI):
+ATURAN KETAT (ANTI-FALLBACK, ANTI-LEPAS & KESESUAIAN TINGGI):
 =============================================================================
-1. DILARANG KERAS menghasilkan bentuk kotak roda gerigi berputar jika gambar aslinya bukan roda gigi! Gambarlah bentuk visual subjek aslinya (misal: Mikrofon, Kamera, Roket, Tas Belanja, Robot, Gedung, Mobil, Karakter, dll.).
-2. DILARANG bentuk acak/tidak beraturan atau garis melayang tanpa arti. Setiap elemen Canvas harus terhubung rapi membentuk objek referensi yang proporsional dan solid.
-3. DILARANG gerakan minim / samar / hanya glow tipis statis. Animasi WAJIB memiliki gerakan 60 FPS yang nyata dan bertenaga (osilasi floating Y, breathing scale pulse, specular gleam sweep, partikel kinetik, artikulasi sub-bagian).
+1. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - WAJIB ANTI-DETACH):
+   - Seluruh bagian suatu objek (misal: badan tas + gagang tali; bodi mobil + roda; bodi smartphone + layar + kamera; cangkir + pegangan; kamera + lensa + shutter) WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
+     ctx.save();
+     ctx.translate(posX, posY); // posX = cx, posY = cy + floating/bounce
+     ctx.rotate(rot);
+     ctx.scale(scaleX, scaleY);
+     // SEMUA SUB-KOMPONEN DIGAMBAR DENGAN KOORDINAT RELATIF TERHADAP (0, 0)!
+     // DILARANG MEMBERIKAN TRANSLASI POSISI X/Y TERPISAH PADA GAGANG ATAU RODA YANG MEMBUATNYA LEPAS DARI BADAN!
+     ctx.restore();
+2. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH (PHYSICAL ATTACHMENT):
+   - TAS & KOPER: Gagang/tali tas WAJIB menempel menyatu kokoh di bibir atas badan tas pada (-strapOffset, topBagY) dan (+strapOffset, topBagY). DILARANG gagang melayang terpisah dari tas!
+   - KENDARAAN & MOBIL: Bodi mobil aerodinamis dengan spakbor (wheel arches). Roda mobil WAJIB tertanam presisi di dalam lubang spakbor sasis bawah di (-wheelDist, axleY) dan (+wheelDist, axleY). Roda bergerak 100% mengikuti bodi sasis; hanya velg di dalam ban yang berputar di poros masing-masing. DILARANG roda terpental, melayang liar, atau berada di luar bodi!
+   - SMARTPHONE & GADGET: Bodi ponsel WAJIB berbentuk persegi panjang dengan sudut membulat sempurna (rasio standar 9:19.5, ctx.roundRect(-w/2, -h/2, w, h, 20)), bezel tipis simetris, dynamic island terpusat di atas, home bar di bawah, dan layar kaca menyala di dalam bezel. DILARANG bentuk tidak beraturan atau poligon asimetris cacat!
+   - DILARANG partikel berhamburan/debu liar di luar icon. Background kanvas harus 100% bersih.
+3. DILARANG KERAS menghasilkan bentuk kotak roda gerigi berputar jika gambar aslinya bukan roda gigi! Gambarlah bentuk visual subjek aslinya (misal: Mikrofon, Kamera, Roket, Tas Belanja, Robot, Gedung, Mobil, Karakter, dll.).
+4. DILARANG bentuk acak/tidak beraturan atau garis melayang tanpa arti. Setiap elemen Canvas harus terhubung rapi membentuk objek referensi yang proporsional dan solid.
+5. DILARANG gerakan minim / samar / hanya glow tipis statis. Animasi WAJIB memiliki gerakan 60 FPS yang nyata dan bertenaga (osilasi floating Y, breathing scale pulse, specular gleam sweep, artikulasi sub-bagian).
 
 =============================================================================
 1. REPRODUKSI BENTUK & KODE WARNA HEX 1:1 DARI GAMBAR:
@@ -1275,13 +1715,13 @@ ATURAN KETAT (ANTI-FALLBACK & KESESUAIAN TINGGI):
 2. GERAKAN KINETIK 60 FPS YANG DINAMIS & TEGAS (ACTIVE MOTION):
 =============================================================================
 - Gerak Utama Objek:
-  * Floating/Osilasi: \`posY = cy + Math.sin(t * 2.8) * (S * 0.14); rot = Math.sin(t * 2.0) * 0.12;\`
+  * Floating/Osilasi: \`posY = cy + Math.sin(t * 2.8) * (S * 0.14); rot = Math.sin(t * 2.0) * 0.10;\`
   * Dynamic Breathing Pulse: \`scaleX = 1 + Math.sin(t * 3.2) * 0.05; scaleY = 1 - Math.sin(t * 3.2) * 0.04;\`
   * Artikulasi Sub-Komponen: Gerakkan bagian yang logis dari subjek (misal: lensa memancarkan sinar pulsa, baling-baling/rotor berputar, indikator lampu berkedip, sayap bergetar, dial radar berputar).
   * Efek Kilau Spekular: Sapuan garis kilau cahaya miring terang yang melintasi permukaan objek (\`const shineX = ((t * 1.5) % 3 - 1.5) * S * 2;\`).
-- Efek Pendaran & Partikel (Neon Glow):
+- Efek Pendaran Luminescence (Neon Glow):
   * Gunakan \`ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12;\` dengan warna glow menyala terang (\`ctx.shadowColor = primaryGlowHex;\`).
-  * Tambahkan 15–30 partikel energi atau cincin gelombang kinetik yang memancar dari objek.
+  * Isolasi glow dengan \`ctx.save()\` & \`ctx.restore()\` dan reset \`ctx.shadowBlur = 0\` setelah menggambar objek.
 
 =============================================================================
 STRUKTUR WAJIB KODE HTML5 CANVAS 2D:

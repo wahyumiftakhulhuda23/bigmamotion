@@ -122,8 +122,59 @@ export async function findWorkingWebCodecsConfig(
 }
 
 /**
- * Injects styling and frame synchronization into animation HTML.
- * Ensures the canvas scales responsively and background renders cleanly.
+ * Silent AudioContext Keep-Alive service.
+ * In modern web browsers (Chrome, Edge, Safari, Firefox), when an audio session is active,
+ * the browser classifies the tab as a priority media process and NEVER puts its JavaScript execution
+ * or timers to sleep, even when the user minimizes the browser, covers it with other software, or switches tabs.
+ */
+class BackgroundRenderKeepAlive {
+  private ctx: any = null;
+  private osc: any = null;
+  private gain: any = null;
+
+  start() {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        this.ctx = new AudioCtx();
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        this.osc = this.ctx.createOscillator();
+        this.gain = this.ctx.createGain();
+        this.gain.gain.value = 0.00001; // completely silent / inaudible
+        this.osc.connect(this.gain);
+        this.gain.connect(this.ctx.destination);
+        this.osc.start();
+      }
+    } catch {
+      // AudioContext not permitted or unsupported, proceed gracefully
+    }
+  }
+
+  stop() {
+    try {
+      if (this.osc) {
+        this.osc.stop();
+        this.osc.disconnect();
+      }
+      if (this.gain) {
+        this.gain.disconnect();
+      }
+      if (this.ctx) {
+        this.ctx.close();
+      }
+    } catch {}
+    this.ctx = null;
+    this.osc = null;
+    this.gain = null;
+  }
+}
+
+/**
+ * Injects styling and deterministic virtual frame stepping into animation HTML.
+ * Ensures the canvas scales responsively and animations can be stepped frame-by-frame
+ * offline without requiring the browser window to be visible or focused.
  */
 export function prepareHtmlForVideo(
   htmlContent: string,
@@ -170,6 +221,36 @@ export function prepareHtmlForVideo(
         image-rendering: auto !important;
       }
     </style>
+    <script>
+      (function() {
+        let _stepCallback = null;
+        window.__bigmaVirtualTimeMs = 0;
+        window.__bigmaHasManualStepper = true;
+
+        window.__bigmaStepFrame = function(targetMs) {
+          window.__bigmaVirtualTimeMs = targetMs;
+          if (typeof _stepCallback === 'function') {
+            const cb = _stepCallback;
+            _stepCallback = null;
+            try {
+              cb(targetMs);
+            } catch (e) {
+              console.warn('[Bigma Virtual Step Error]', e);
+            }
+          } else if (typeof window.animate === 'function') {
+            try {
+              window.animate(targetMs);
+            } catch (e) {}
+          }
+        };
+
+        const originalRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+        window.requestAnimationFrame = function(cb) {
+          _stepCallback = cb;
+          return 1;
+        };
+      })();
+    </script>
   `;
 
   if (finalHtml.includes('<head>')) {
@@ -341,6 +422,9 @@ export async function renderHtmlToVideo(
     onProgress?.(pct, msg);
   };
 
+  const keepAlive = new BackgroundRenderKeepAlive();
+  keepAlive.start();
+
   try {
     updateUIProgress(4, 'Menyiapkan canvas & aset rendering...');
     updatePreviewScale();
@@ -473,7 +557,14 @@ export async function renderHtmlToVideo(
 
           await videoEncoder.configure(encoderConfig);
 
-          // Test first frame encoding
+          // Test first frame encoding with deterministic stepper
+          const iframeWin = iframe.contentWindow as any;
+          if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
+            iframeWin.__bigmaStepFrame(0);
+          } else if (iframeWin && typeof iframeWin.animate === 'function') {
+            try { iframeWin.animate(0); } catch {}
+          }
+
           drawCurrentFrameToTarget();
           const testFrame = new (window as any).VideoFrame(targetCanvas, {
             timestamp: 0,
@@ -494,7 +585,7 @@ export async function renderHtmlToVideo(
           engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
           updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps)...`);
 
-          // Main Frame Loop with Strict Backpressure Control
+          // Main Frame Loop with Deterministic Offline Virtual Stepping
           for (let frame = 1; frame < totalFrames; frame++) {
             if (isCancelled) {
               try { videoEncoder.close(); } catch {}
@@ -503,18 +594,29 @@ export async function renderHtmlToVideo(
 
             if (encodeError) throw encodeError;
 
-            // CRITICAL LOW-SPEC FIX: Backpressure control
-            // Never allow more than 2 uncompressed frames in RAM queue to prevent Ryzen 3 / 8GB RAM crashes
+            // CRITICAL LOW-SPEC FIX: Backpressure control with non-throttled queue wait
             while (videoEncoder.encodeQueueSize > 2) {
               await new Promise<void>((resolve) => {
                 videoEncoder.ondequeue = () => resolve();
-                setTimeout(resolve, 15);
+                const mc = new MessageChannel();
+                mc.port1.onmessage = () => resolve();
+                mc.port2.postMessage(null);
+                setTimeout(resolve, 20);
               });
+            }
+
+            const timestampUs = Math.round(frame * frameDurationUs);
+            const targetTimeMs = (frame / fps) * 1000;
+
+            // Deterministic frame update (Immune to window minimizing, tab switching, and occlusion)
+            if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
+              iframeWin.__bigmaStepFrame(targetTimeMs);
+            } else if (iframeWin && typeof iframeWin.animate === 'function') {
+              try { iframeWin.animate(targetTimeMs); } catch {}
             }
 
             drawCurrentFrameToTarget();
 
-            const timestampUs = Math.round(frame * frameDurationUs);
             const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
 
             const videoFrame = new (window as any).VideoFrame(targetCanvas, {
@@ -530,13 +632,11 @@ export async function renderHtmlToVideo(
               updateUIProgress(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
             }
 
-            // Yield execution to prevent UI freezing on low-spec CPUs
-            await new Promise((resolve) => {
-              if (iframe.contentWindow && iframe.contentWindow.requestAnimationFrame) {
-                iframe.contentWindow.requestAnimationFrame(() => resolve(null));
-              } else {
-                setTimeout(resolve, frameIntervalMs * 0.5);
-              }
+            // Yield execution via MessageChannel (immune to background tab timer throttling)
+            await new Promise<void>((resolve) => {
+              const ch = new MessageChannel();
+              ch.port1.onmessage = () => resolve();
+              ch.port2.postMessage(null);
             });
           }
 
@@ -635,26 +735,32 @@ export async function renderHtmlToVideo(
     mediaRecorder.start(100);
 
     let isRecordingActive = true;
+    const iframeWin = iframe.contentWindow as any;
+    let streamFrame = 0;
 
     const renderLoop = () => {
       if (!isRecordingActive) return;
+      const targetTimeMs = (streamFrame / fps) * 1000;
+      if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
+        iframeWin.__bigmaStepFrame(targetTimeMs);
+      } else if (iframeWin && typeof iframeWin.animate === 'function') {
+        try { iframeWin.animate(targetTimeMs); } catch {}
+      }
       ctx.fillStyle = canvasBgColor;
       ctx.fillRect(0, 0, width, height);
       if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
         ctx.drawImage(iframeCanvas, 0, 0, width, height);
       }
-      if (iframe.contentWindow && iframe.contentWindow.requestAnimationFrame) {
-        iframe.contentWindow.requestAnimationFrame(renderLoop);
-      } else {
-        setTimeout(renderLoop, frameIntervalMs);
-      }
+      streamFrame++;
     };
-    renderLoop();
+
+    const streamInterval = setInterval(renderLoop, frameIntervalMs);
 
     const startTime = performance.now();
-    const interval = setInterval(() => {
+    const progressInterval = setInterval(() => {
       if (isCancelled) {
-        clearInterval(interval);
+        clearInterval(progressInterval);
+        clearInterval(streamInterval);
         isRecordingActive = false;
         if (mediaRecorder.state === 'recording') mediaRecorder.stop();
         return;
@@ -665,7 +771,8 @@ export async function renderHtmlToVideo(
     }, 250);
 
     await new Promise((r) => setTimeout(r, duration * 1000));
-    clearInterval(interval);
+    clearInterval(progressInterval);
+    clearInterval(streamInterval);
     isRecordingActive = false;
 
     if (isCancelled) throw new Error('Render dibatalkan.');
@@ -693,6 +800,7 @@ export async function renderHtmlToVideo(
       engineUsed: 'mediarecorder',
     };
   } finally {
+    keepAlive.stop();
     window.removeEventListener('resize', updatePreviewScale);
     if (document.body.contains(overlay)) {
       document.body.removeChild(overlay);

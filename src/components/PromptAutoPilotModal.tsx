@@ -148,8 +148,7 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                     return (
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-amber-400 uppercase flex items-center justify-between">
-                          <span>Kategori Microstock</span>
-                          <span className="text-[9px] text-gray-500 font-normal">10 Populer</span>
+                          <span>Kategori</span>
                         </label>
                         <select
                           value={activeCat.id}

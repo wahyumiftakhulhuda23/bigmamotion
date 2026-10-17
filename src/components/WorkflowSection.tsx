@@ -210,19 +210,16 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 2. Kategori Populer Adobe Stock & Shutterstock (10 Kategori Dinamis per Tipe) */}
+        {/* Kategori Populer (10 Kategori Dinamis per Tipe) */}
         {(() => {
           const categories = getCategoriesForType(currentType);
           const activeCat = findCategoryById(subCategory || '', currentType) || categories[0];
           return (
             <div className="space-y-1.5 p-3 rounded-xl bg-gray-900/60 border border-gray-800">
-              <div className="flex items-center justify-between">
-                <label className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider block flex items-center gap-1.5">
-                  <i className="fa-solid fa-layer-group text-amber-400 text-[10px]"></i>
-                  <span>2. Kategori Adobe Stock & Shutterstock ({currentType === 'icon' ? 'Icon' : 'Background'})</span>
-                </label>
-                <span className="text-[10px] font-semibold text-gray-400">10 Pilihan Populer Microstock</span>
-              </div>
+              <label className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider block flex items-center gap-1.5">
+                <i className="fa-solid fa-layer-group text-amber-400 text-[10px]"></i>
+                <span>Kategori</span>
+              </label>
               <select
                 value={activeCat.id}
                 onChange={(e) => onSelectSubCategory && onSelectSubCategory(e.target.value)}
@@ -234,15 +231,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                   </option>
                 ))}
               </select>
-              <div className="flex items-start gap-1.5 text-[10px] text-gray-400 bg-gray-950/60 p-2 rounded-lg border border-gray-800/80">
-                <i className={`fa-solid ${activeCat.icon} text-sky-400 text-xs mt-0.5`}></i>
-                <div className="leading-tight">
-                  <span className="text-gray-300 font-semibold">{activeCat.description}</span>
-                  <div className="text-[9px] text-gray-400 mt-0.5">
-                    Microstock keywords: {activeCat.stockKeywords.slice(0, 5).join(', ')}
-                  </div>
-                </div>
-              </div>
             </div>
           );
         })()}
@@ -290,14 +278,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               <option value="pastel">Pastel Aesthetic (Soft Colors)</option>
               <option value="luxury">Luxury Gold & Obsidian</option>
             </select>
-          </div>
-        </div>
-
-        {/* Linear Motion Indicator (Gerakan otomatis linear terintegrasi langsung di dalam Prompt & Animasi) */}
-        <div className="p-2.5 rounded-xl bg-sky-950/40 border border-sky-800/40 flex items-center gap-2 text-xs text-sky-200">
-          <i className="fa-solid fa-chart-line text-sky-400 text-sm"></i>
-          <div className="text-[11px] leading-tight">
-            <span className="font-bold text-sky-300">Gerakan Linear Otomatis:</span> Dinamika gerakan disintesis langsung di dalam prompt secara linear tanpa batas kata, menjaga keselarasan ideal antara bentuk visual dan animasi 60 FPS.
           </div>
         </div>
 
