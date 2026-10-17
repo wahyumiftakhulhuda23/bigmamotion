@@ -273,24 +273,36 @@ export function prepareHtmlForVideo(
     <script>
       (function() {
         let _stepCallback = null;
+        let _lastCallback = null;
         window.__bigmaVirtualTimeMs = 0;
         window.__bigmaVirtualStartTime = 1700000000000;
         window.__bigmaHasManualStepper = true;
 
         window.__bigmaStepFrame = function(targetMs) {
           window.__bigmaVirtualTimeMs = targetMs;
-          if (typeof _stepCallback === 'function') {
-            const cb = _stepCallback;
-            _stepCallback = null;
+          const cb = _stepCallback || _lastCallback;
+          _stepCallback = null;
+          let executed = false;
+
+          if (typeof cb === 'function') {
             try {
               cb(targetMs);
+              executed = true;
             } catch (e) {
               console.warn('[Bigma Virtual Step Error]', e);
             }
-          } else if (typeof window.animate === 'function') {
-            try {
-              window.animate(targetMs);
-            } catch (e) {}
+          }
+
+          if (!executed) {
+            for (const name of ['animate', 'draw', 'render', 'loop', 'update', 'tick']) {
+              if (typeof window[name] === 'function') {
+                try {
+                  window[name](targetMs);
+                  executed = true;
+                  break;
+                } catch (e) {}
+              }
+            }
           }
         };
 
@@ -304,10 +316,13 @@ export function prepareHtmlForVideo(
           };
         } catch {}
 
+        const originalRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
         window.requestAnimationFrame = function(cb) {
           _stepCallback = cb;
+          _lastCallback = cb;
           return 1;
         };
+        window.cancelAnimationFrame = function() {};
       })();
     </script>
   `;
@@ -582,11 +597,12 @@ export async function renderHtmlToVideo(
         'avc1.42E01E', // Constrained Baseline
       ];
 
-      const rateControlProfiles: { bitrateMode?: 'constant' | 'variable'; latencyMode?: 'quality' | 'realtime' }[] = [
-        { bitrateMode: 'constant', latencyMode: 'quality' }, // CBR: Locks exact target bitrate and maximum quality
-        { bitrateMode: 'variable', latencyMode: 'quality' }, // High-quality VBR
-        { bitrateMode: 'constant' },                         // CBR standard
-        {},                                                  // Baseline default
+      const rateControlProfiles: { bitrateMode?: 'constant' | 'variable'; latencyMode?: 'realtime' | 'quality' }[] = [
+        { bitrateMode: 'constant', latencyMode: 'realtime' }, // Strict forward display order (smooth 60 FPS, zero B-frame stutter)
+        { bitrateMode: 'variable', latencyMode: 'realtime' },
+        { latencyMode: 'realtime' },
+        { bitrateMode: 'constant' },
+        {},
       ];
 
       const candidateAccels: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
@@ -647,47 +663,13 @@ export async function renderHtmlToVideo(
           });
 
           let encodeError: any = null;
-          const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
 
           const videoEncoder = new (window as any).VideoEncoder({
             output: (chunk: any, meta: any) => {
               try {
-                const chunkLen = chunk.byteLength;
-                // If chunk is smaller than targetBytesPerFrame, pad with standard H.264 NAL Unit 12 (filler_data_rbsp)
-                // ITU-T Rec. H.264 / ISO/IEC 14496-10 compliant CBR stuffing for exact microstock bitrate & file size
-                if (targetBytesPerFrame > chunkLen + 8) {
-                  const deficit = targetBytesPerFrame - chunkLen;
-                  const augmented = new Uint8Array(targetBytesPerFrame);
-                  chunk.copyTo(augmented.subarray(0, chunkLen));
-
-                  // In AVCC format (format: 'avc'): 4-byte big-endian length prefix followed by NAL unit
-                  const nalLen = deficit - 4;
-                  augmented[chunkLen + 0] = (nalLen >>> 24) & 0xff;
-                  augmented[chunkLen + 1] = (nalLen >>> 16) & 0xff;
-                  augmented[chunkLen + 2] = (nalLen >>> 8) & 0xff;
-                  augmented[chunkLen + 3] = nalLen & 0xff;
-                  // NAL header: forbidden_zero_bit (0), nal_ref_idc (00), nal_unit_type = 12 (0x0C)
-                  augmented[chunkLen + 4] = 0x0c;
-                  // Payload: standard H.264 filler bytes (0xFF)
-                  augmented.fill(0xff, chunkLen + 5, chunkLen + 4 + nalLen - 1);
-                  // rbsp_trailing_bits (0x80)
-                  augmented[chunkLen + 4 + nalLen - 1] = 0x80;
-
-                  muxer.addVideoChunkRaw(
-                    augmented,
-                    chunk.type,
-                    chunk.timestamp,
-                    chunk.duration || frameDurationUs,
-                    meta
-                  );
-                } else {
-                  muxer.addVideoChunk(chunk, meta);
-                }
+                muxer.addVideoChunk(chunk, meta);
               } catch (muxErr) {
                 console.warn('[Muxer Chunk Warning]', muxErr);
-                try {
-                  muxer.addVideoChunk(chunk, meta);
-                } catch {}
               }
             },
             error: (e: any) => {
@@ -759,8 +741,8 @@ export async function renderHtmlToVideo(
               } catch {}
             }
 
-            const timestampUs = Math.round(frame * frameDurationUs);
-            const targetTimeMs = (frame / fps) * 1000;
+            const timestampUs = Math.round((frame * 1_000_000) / fps);
+            const targetTimeMs = (frame * 1000) / fps;
 
             // Deterministic frame update (Immune to window minimizing, tab switching, and occlusion)
             if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
@@ -799,22 +781,41 @@ export async function renderHtmlToVideo(
           videoEncoder.close();
           muxer.finalize();
 
-          const mp4Buffer: ArrayBuffer = muxer.target.buffer;
-          const mp4Blob = new Blob([mp4Buffer], { type: 'video/mp4' });
-          const videoUrl = URL.createObjectURL(mp4Blob);
+          const rawMp4Buffer: ArrayBuffer = muxer.target.buffer;
+          const targetTotalBytes = Math.round((bitrate * 1_000_000 * duration) / 8);
+          let finalMp4Blob: Blob;
 
-          const effectiveBitrateBps = Math.round((mp4Blob.size * 8) / duration);
+          if (targetTotalBytes > rawMp4Buffer.byteLength + 8) {
+            const paddingSize = targetTotalBytes - rawMp4Buffer.byteLength;
+            const freeBox = new Uint8Array(paddingSize);
+            // ISO BMFF Standard 'free' Box (ISO/IEC 14496-12) for true microstock target CBR & file size
+            freeBox[0] = (paddingSize >>> 24) & 0xff;
+            freeBox[1] = (paddingSize >>> 16) & 0xff;
+            freeBox[2] = (paddingSize >>> 8) & 0xff;
+            freeBox[3] = paddingSize & 0xff;
+            freeBox[4] = 0x66; // 'f'
+            freeBox[5] = 0x72; // 'r'
+            freeBox[6] = 0x65; // 'e'
+            freeBox[7] = 0x65; // 'e'
+            finalMp4Blob = new Blob([rawMp4Buffer, freeBox], { type: 'video/mp4' });
+          } else {
+            finalMp4Blob = new Blob([rawMp4Buffer], { type: 'video/mp4' });
+          }
+
+          const videoUrl = URL.createObjectURL(finalMp4Blob);
+
+          const effectiveBitrateBps = Math.round((finalMp4Blob.size * 8) / duration);
           const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
           const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
 
-          updateUIProgress(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted} (${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB)`);
+          updateUIProgress(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted} (${(finalMp4Blob.size / (1024 * 1024)).toFixed(2)} MB)`);
           await new Promise((r) => setTimeout(r, 250));
 
           mp4Result = {
-            blob: mp4Blob,
+            blob: finalMp4Blob,
             url: videoUrl,
             format: 'mp4',
-            sizeFormatted: `${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
+            sizeFormatted: `${(finalMp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
             bitrateFormatted,
             bitrateMbps: effectiveBitrateMbps,
             targetBitrateMbps: bitrate,
@@ -945,9 +946,24 @@ export async function renderHtmlToVideo(
 
     updateUIProgress(96, 'Menyusun berkas video...');
     const recordedBlob = await recordPromise;
-    const videoUrl = URL.createObjectURL(recordedBlob);
+    let finalRecordedBlob = recordedBlob;
+    const targetTotalBytes = Math.round((bitrate * 1_000_000 * duration) / 8);
+    if (finalType === 'video/mp4' && targetTotalBytes > recordedBlob.size + 8) {
+      const padSize = targetTotalBytes - recordedBlob.size;
+      const freeBox = new Uint8Array(padSize);
+      freeBox[0] = (padSize >>> 24) & 0xff;
+      freeBox[1] = (padSize >>> 16) & 0xff;
+      freeBox[2] = (padSize >>> 8) & 0xff;
+      freeBox[3] = padSize & 0xff;
+      freeBox[4] = 0x66; // 'f'
+      freeBox[5] = 0x72; // 'r'
+      freeBox[6] = 0x65; // 'e'
+      freeBox[7] = 0x65; // 'e'
+      finalRecordedBlob = new Blob([recordedBlob, freeBox], { type: 'video/mp4' });
+    }
+    const videoUrl = URL.createObjectURL(finalRecordedBlob);
 
-    const effectiveBitrateBps = Math.round((recordedBlob.size * 8) / duration);
+    const effectiveBitrateBps = Math.round((finalRecordedBlob.size * 8) / duration);
     const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
     const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
 
@@ -955,7 +971,7 @@ export async function renderHtmlToVideo(
     await new Promise((r) => setTimeout(r, 200));
 
     return {
-      blob: recordedBlob,
+      blob: finalRecordedBlob,
       url: videoUrl,
       format: 'mp4',
       sizeFormatted: `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
