@@ -19,7 +19,7 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
   });
   const [duration, setDuration] = useState<number>(10);
   const [fps, setFps] = useState<number>(60);
-  const [bitrate, setBitrate] = useState<number>(18);
+  const [bitrate, setBitrate] = useState<number>(25); // 25 Mbps: Adobe Stock & Shutterstock standard
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [logs, setLogs] = useState<{ text: string; type: string; timestamp: string }[]>([]);
 
@@ -117,12 +117,12 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
           status: 'done',
           videoUrl: result.url,
           blob: result.blob,
-          size: result.sizeFormatted,
+          size: `${result.sizeFormatted} (${result.bitrateFormatted})`,
         };
         return next;
       });
 
-      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted}) [${result.engineUsed}]`, 'success');
+      addLog(`[Sukses] Berhasil merender MP4: ${fileObj.name} (${result.sizeFormatted} • ${result.bitrateFormatted}) [${result.engineUsed}]`, 'success');
     } catch (err: any) {
       console.error(err);
       addLog(`[Gagal] ${fileObj.name}: ${err.message}`, 'error');
@@ -257,6 +257,9 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
                 const [w, h] = e.target.value.split('x').map(Number);
                 const label = w === 1920 ? '1080p Full HD (1920x1080)' : w === 3840 ? '4K Ultra HD (3840x2160)' : '720p HD (1280x720)';
                 setResolution({ width: w, height: h, label });
+                if (w === 3840 && bitrate < 45) setBitrate(50);
+                else if (w === 1920 && (bitrate > 35 || bitrate < 15)) setBitrate(25);
+                else if (w === 1280 && bitrate > 20) setBitrate(12);
               }}
               className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-gray-200 focus:outline-none cursor-pointer"
             >
@@ -293,16 +296,19 @@ export const VideoConverterModal: React.FC<VideoConverterModalProps> = ({ isOpen
           </div>
 
           <div className="space-y-1">
-            <label className="font-bold text-gray-400 uppercase text-[10px]">Bitrate Video</label>
+            <label className="font-bold text-gray-400 uppercase text-[10px]">Bitrate Video (Target CBR)</label>
             <select
               value={bitrate}
               onChange={(e) => setBitrate(parseInt(e.target.value))}
               className="w-full bg-gray-950 border border-purple-500/40 rounded-lg p-2 text-purple-300 font-bold focus:outline-none cursor-pointer"
             >
-              <option value={18}>18 Mbps (Microstock Pro)</option>
-              <option value={25}>25 Mbps (Lossless Look)</option>
-              <option value={12}>12 Mbps (High Quality)</option>
-              <option value={8}>8 Mbps (Compact File)</option>
+              <option value={25}>25 Mbps (Adobe Stock & Shutterstock Pro - Standar)</option>
+              <option value={30}>30 Mbps (Ultra HD 60 FPS)</option>
+              <option value={20}>20 Mbps (Shutterstock Standard HD)</option>
+              <option value={18}>18 Mbps (Microstock Default)</option>
+              <option value={15}>15 Mbps (Standar HD Ringan)</option>
+              <option value={10}>10 Mbps (Hemat File / Low-Spec)</option>
+              <option value={50}>50 Mbps (Master 4K / Broadcast)</option>
             </select>
           </div>
         </div>

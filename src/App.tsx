@@ -180,6 +180,23 @@ export default function App() {
   const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>([]);
   const [animations, setAnimations] = useState<AnimationItem[]>([]);
   const [downloadQueue, setDownloadQueue] = useState<string[]>([]);
+  const [exportBitrate, setExportBitrate] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bigma_export_bitrate');
+      if (saved) {
+        const val = Number(saved);
+        if (val > 0) return val;
+      }
+    } catch {}
+    return 25; // 25 Mbps: Standard Microstock Pro for Adobe Stock & Shutterstock
+  });
+
+  const handleExportBitrateChange = (val: number) => {
+    setExportBitrate(val);
+    try {
+      localStorage.setItem('bigma_export_bitrate', String(val));
+    } catch {}
+  };
 
   // Logs & Progress
   const [logs, setLogs] = useState<LogItem[]>([]);
@@ -1112,10 +1129,11 @@ export default function App() {
     showToast('File HTML animasi berhasil diunduh!', 'success');
   };
 
-  const handleExportMp4Single = async (item: AnimationItem) => {
+  const handleExportMp4Single = async (item: AnimationItem, customBitrate?: number) => {
+    const chosenBitrate = customBitrate ?? exportBitrate ?? 25;
     setExportingMp4Id(item.id);
-    showToast(`Memulai render MP4 H.264 60 FPS untuk "${item.title.substring(0, 20)}..."`, 'info');
-    addLog(`[Export MP4] Merender "${item.title}" ke format MP4 H.264 Universal (1080p 60 FPS)...`, 'info');
+    showToast(`Memulai render MP4 H.264 60 FPS (${chosenBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
+    addLog(`[Export MP4] Merender "${item.title}" ke format MP4 H.264 Universal (1080p 60 FPS • ${chosenBitrate} Mbps CBR)...`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.html, {
@@ -1123,7 +1141,7 @@ export default function App() {
         height: 1080,
         fps: 60,
         duration: 10,
-        bitrate: 18,
+        bitrate: chosenBitrate,
         format: 'mp4',
         mode: item.type,
         isGreenScreen: item.isGreenScreen ?? isGreenScreen,
@@ -1138,14 +1156,14 @@ export default function App() {
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(result.url), 5000);
 
-      showToast(`Video MP4 (${result.sizeFormatted}) berhasil diunduh & siap diputar!`, 'success');
-      addLog(`[Export MP4 Sukses] "${item.title}" (${result.sizeFormatted}) siap diputar di semua komputer.`, 'success');
+      showToast(`Video MP4 (${result.sizeFormatted} • ${result.bitrateFormatted}) berhasil diunduh!`, 'success');
+      addLog(`[Export MP4 Sukses] "${item.title}" (${result.sizeFormatted} • ${result.bitrateFormatted}) siap diunggah ke microstock.`, 'success');
     } catch (err: any) {
       showToast(`Gagal export MP4: ${err.message}`, 'error');
       addLog(`[Export MP4 Error] ${err.message}`, 'error');
@@ -1496,6 +1514,8 @@ export default function App() {
           onDownloadSingle={handleDownloadSingle}
           onExportMp4Single={handleExportMp4Single}
           isExportingMp4Id={exportingMp4Id}
+          exportBitrate={exportBitrate}
+          onExportBitrateChange={handleExportBitrateChange}
         />
       </main>
 
@@ -1584,6 +1604,8 @@ export default function App() {
         onClose={() => setIsGalleryModalOpen(false)}
         onOpenFullscreen={(item) => setFullscreenItem(item)}
         showToast={showToast}
+        exportBitrate={exportBitrate}
+        onExportBitrateChange={handleExportBitrateChange}
       />
 
       <VideoConverterModal

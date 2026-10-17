@@ -15,6 +15,8 @@ interface GalleryModalProps {
   onClose: () => void;
   onOpenFullscreen: (item: AnimationItem) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
+  exportBitrate?: number;
+  onExportBitrateChange?: (bitrate: number) => void;
 }
 
 export const GalleryModal: React.FC<GalleryModalProps> = ({
@@ -29,6 +31,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   onClose,
   onOpenFullscreen,
   showToast,
+  exportBitrate = 25,
+  onExportBitrateChange,
 }) => {
   const [currentFilter, setCurrentFilter] = useState<string>('All');
   const [downloadLogs, setDownloadLogs] = useState<{ text: string; type: 'info' | 'success' | 'error' }[]>([]);
@@ -67,8 +71,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
   const handleExportSingleMp4 = async (item: AnimationItem) => {
     setExportingMp4Id(item.id);
-    addDownloadLog(`[MP4 Export] Memulai render 1080p 60FPS: "${item.title.substring(0, 25)}..."`, 'info');
-    showToast(`Merender MP4 H.264 untuk "${item.title.substring(0, 20)}..."`, 'info');
+    addDownloadLog(`[MP4 Export] Memulai render 1080p 60FPS (${exportBitrate} Mbps): "${item.title.substring(0, 25)}..."`, 'info');
+    showToast(`Merender MP4 H.264 (${exportBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.html, {
@@ -76,7 +80,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
         height: 1080,
         fps: 60,
         duration: 10,
-        bitrate: 18,
+        bitrate: exportBitrate,
         mode: item.type,
       });
 
@@ -84,14 +88,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(result.url), 5000);
 
-      addDownloadLog(`[MP4 Sukses] "${item.title}" (${result.sizeFormatted}) siap diputar!`, 'success');
-      showToast(`Video MP4 (${result.sizeFormatted}) berhasil diunduh!`, 'success');
+      addDownloadLog(`[MP4 Sukses] "${item.title}" (${result.sizeFormatted} • ${result.bitrateFormatted}) siap diunggah!`, 'success');
+      showToast(`Video MP4 (${result.sizeFormatted} • ${result.bitrateFormatted}) berhasil diunduh!`, 'success');
     } catch (e: any) {
       addDownloadLog(`[MP4 Error] Gagal: ${e.message}`, 'error');
       showToast(`Gagal export MP4: ${e.message}`, 'error');
@@ -250,6 +254,28 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
               </button>
             )}
 
+            {/* Target Bitrate Selector in Gallery */}
+            <div className="flex items-center gap-1.5 bg-gray-900/90 border border-purple-500/30 rounded-xl px-2.5 py-1.5 shadow-sm">
+              <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+                <i className="fa-solid fa-sliders text-purple-400 text-[10px]"></i>
+                <span className="hidden md:inline">Bitrate:</span>
+              </span>
+              <select
+                value={exportBitrate}
+                onChange={(e) => onExportBitrateChange?.(Number(e.target.value))}
+                className="bg-transparent text-[11px] font-extrabold text-purple-300 focus:outline-none cursor-pointer"
+                title="Pilih Target Bitrate MP4 untuk Adobe Stock & Shutterstock"
+              >
+                <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (Pro - Rekomendasi)</option>
+                <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (Ultra 60 FPS)</option>
+                <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (Shutterstock HD)</option>
+                <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (Microstock)</option>
+                <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (Standar HD)</option>
+                <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (Hemat File)</option>
+                <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (Master 4K)</option>
+              </select>
+            </div>
+
             <button
               onClick={downloadAllAsZip}
               disabled={isDownloading || animations.length === 0}
@@ -397,9 +423,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                           onClick={() => handleExportSingleMp4(item)}
                           disabled={isRenderingMp4}
                           className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-lg flex items-center gap-1 disabled:opacity-50"
-                          title="Render ke MP4 H.264"
+                          title={`Render ke MP4 H.264 @ ${exportBitrate} Mbps`}
                         >
-                          <i className="fa-solid fa-film"></i> MP4
+                          <i className="fa-solid fa-film"></i> MP4 ({exportBitrate}M)
                         </button>
                       </div>
                     </div>
@@ -471,14 +497,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                           onClick={() => handleExportSingleMp4(item)}
                           disabled={isRenderingMp4}
                           className="px-2 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border border-purple-500/40 disabled:opacity-50"
-                          title="Export ke MP4 (H.264 Playable)"
+                          title={`Export ke MP4 (H.264 @ ${exportBitrate} Mbps)`}
                         >
                           {isRenderingMp4 ? (
                             <i className="fa-solid fa-circle-notch fa-spin text-purple-300"></i>
                           ) : (
                             <i className="fa-solid fa-film text-purple-400"></i>
                           )}
-                          <span>MP4</span>
+                          <span>MP4 ({exportBitrate}M)</span>
                         </button>
 
                         <button

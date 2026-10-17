@@ -11,8 +11,10 @@ interface RightPanelProps {
   onOpenGalleryModal: () => void;
   onOpenFullscreen: (item: AnimationItem) => void;
   onDownloadSingle: (item: AnimationItem) => void;
-  onExportMp4Single?: (item: AnimationItem) => void;
+  onExportMp4Single?: (item: AnimationItem, bitrate?: number) => void;
   isExportingMp4Id?: string | null;
+  exportBitrate?: number;
+  onExportBitrateChange?: (bitrate: number) => void;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -27,6 +29,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   onDownloadSingle,
   onExportMp4Single,
   isExportingMp4Id,
+  exportBitrate = 25,
+  onExportBitrateChange,
 }) => {
   const logConsoleRef = useRef<HTMLDivElement>(null);
   const [isLogExpanded, setIsLogExpanded] = useState(true);
@@ -129,13 +133,35 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         </div>
       )}
 
-      {/* Gallery Header */}
-      <div className="flex items-center justify-between">
+      {/* Gallery Header & Bitrate Controller */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-extrabold text-sm text-gray-200 flex items-center gap-2">
           <i className="fa-solid fa-desktop text-sky-400"></i>
           <span>Live Preview Animasi</span>
         </h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Target Bitrate Selector */}
+          <div className="flex items-center gap-1.5 bg-gray-900/90 border border-purple-500/30 rounded-xl px-2.5 py-1 shadow-sm">
+            <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
+              <i className="fa-solid fa-sliders text-purple-400 text-[10px]"></i>
+              <span className="hidden sm:inline">Bitrate:</span>
+            </span>
+            <select
+              value={exportBitrate}
+              onChange={(e) => onExportBitrateChange?.(Number(e.target.value))}
+              className="bg-transparent text-[11px] font-extrabold text-purple-300 focus:outline-none cursor-pointer"
+              title="Pilih Target Bitrate MP4 untuk Adobe Stock & Shutterstock"
+            >
+              <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (Adobe Stock & Shutterstock Pro - Rekomendasi)</option>
+              <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (Ultra HD 60 FPS)</option>
+              <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (Shutterstock Standard HD)</option>
+              <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (Microstock Default)</option>
+              <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (Standar HD Ringan)</option>
+              <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (Hemat File / Low-Spec)</option>
+              <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (Master 4K / Broadcast)</option>
+            </select>
+          </div>
+
           <button
             onClick={onOpenGalleryModal}
             className="text-xs text-sky-100 hover:text-white flex items-center gap-1.5 transition px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-md shadow-sky-500/20 font-bold border border-sky-400/30 cursor-pointer active:scale-95"
@@ -186,10 +212,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               </button>
               {onExportMp4Single && (
                 <button
-                  onClick={() => onExportMp4Single(latestAnimation)}
+                  onClick={() => onExportMp4Single(latestAnimation, exportBitrate)}
                   disabled={!!isRenderingMp4}
                   className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-purple-500/30 cursor-pointer disabled:opacity-50"
-                  title="Export MP4 Video (H.264)"
+                  title={`Export MP4 Video (H.264 @ ${exportBitrate} Mbps)`}
                 >
                   {isRenderingMp4 ? (
                     <>
@@ -197,7 +223,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-film text-purple-300"></i> Unduh MP4
+                      <i className="fa-solid fa-film text-purple-300"></i> Unduh MP4 ({exportBitrate} Mbps)
                     </>
                   )}
                 </button>
@@ -244,16 +270,17 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               </button>
               {onExportMp4Single && (
                 <button
-                  onClick={() => onExportMp4Single(latestAnimation)}
+                  onClick={() => onExportMp4Single(latestAnimation, exportBitrate)}
                   disabled={!!isRenderingMp4}
                   className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm shadow-purple-600/30 disabled:opacity-50"
+                  title={`Export MP4 (H.264 @ ${exportBitrate} Mbps)`}
                 >
                   {isRenderingMp4 ? (
                     <i className="fa-solid fa-spinner fa-spin text-[10px]"></i>
                   ) : (
                     <i className="fa-solid fa-film text-[10px]"></i>
                   )}
-                  <span>MP4</span>
+                  <span>MP4 ({exportBitrate}M)</span>
                 </button>
               )}
             </div>

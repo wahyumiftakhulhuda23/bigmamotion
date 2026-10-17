@@ -18,6 +18,9 @@ export interface VideoRenderResult {
   url: string;
   format: 'mp4';
   sizeFormatted: string;
+  bitrateFormatted: string;
+  bitrateMbps: number;
+  targetBitrateMbps: number;
   width: number;
   height: number;
   fps: number;
@@ -56,7 +59,7 @@ export function getDevicePerformanceProfile(): {
     cpuCores,
     deviceMemoryGb,
     suggestedFps: isLowSpec ? 30 : 60,
-    suggestedBitrate: isLowSpec ? 12 : 18,
+    suggestedBitrate: isLowSpec ? 15 : 25,
     description: isMobile
       ? 'Mobile Device (Optimized for Battery & Smoothness)'
       : isLowSpec
@@ -66,10 +69,12 @@ export function getDevicePerformanceProfile(): {
 }
 
 const CANDIDATE_CODECS = [
-  'avc1.64002a', // High Profile Level 4.2 (1080p60 optimal)
-  'avc1.4d002a', // Main Profile Level 4.2
-  'avc1.42002a', // Baseline Level 4.2
-  'avc1.640028', // High Profile Level 4.0
+  'avc1.640033', // High Profile Level 5.1 (Up to 240 Mbps @ 4K60)
+  'avc1.64002a', // High Profile Level 4.2 (Up to 50 Mbps @ 1080p60 optimal)
+  'avc1.4d0033', // Main Profile Level 5.1
+  'avc1.4d002a', // Main Profile Level 4.2 (Up to 50 Mbps)
+  'avc1.42002a', // Baseline Level 4.2 (Up to 50 Mbps)
+  'avc1.640028', // High Profile Level 4.0 (Up to 25 Mbps)
   'avc1.4d0028', // Main Profile Level 4.0
   'avc1.420028', // Baseline Profile Level 4.0 (Universal 1080p)
   'avc1.42001f', // Baseline Level 3.1
@@ -90,7 +95,7 @@ export async function findWorkingWebCodecsConfig(
   width = 1920,
   height = 1080,
   fps = 60,
-  bitrateMbps = 18
+  bitrateMbps = 25
 ): Promise<{ supported: boolean; codec: string; hardwareAcceleration: 'no-preference' | 'prefer-hardware' | 'prefer-software' }> {
   if (typeof window === 'undefined' || !('VideoEncoder' in window) || !('VideoFrame' in window)) {
     return { supported: false, codec: '', hardwareAcceleration: 'no-preference' };
@@ -104,6 +109,8 @@ export async function findWorkingWebCodecsConfig(
           width,
           height,
           bitrate: bitrateMbps * 1_000_000,
+          bitrateMode: 'constant',
+          latencyMode: 'quality',
           framerate: fps,
           hardwareAcceleration: accel,
           avc: { format: 'avc' },
@@ -275,11 +282,24 @@ export async function renderHtmlToVideo(
     height = 1080,
     fps = options.renderPreset === 'standard_30' ? 30 : 60,
     duration = 10,
-    bitrate = options.renderPreset === 'lowspec_720' ? 10 : 18,
     mode = 'auto',
     isGreenScreen = false,
     onProgress,
   } = options;
+
+  // Intelligent adaptive bitrate based on microstock agency standards (Adobe Stock & Shutterstock)
+  let bitrate = options.bitrate;
+  if (!bitrate || bitrate <= 0) {
+    if (options.renderPreset === 'lowspec_720') {
+      bitrate = 12;
+    } else if (width >= 3840) {
+      bitrate = fps >= 50 ? 50 : 40;
+    } else if (width >= 1920) {
+      bitrate = fps >= 50 ? 25 : 20; // 25 Mbps is the gold standard for Adobe Stock & Shutterstock Full HD 60fps
+    } else {
+      bitrate = fps >= 50 ? 15 : 10;
+    }
+  }
 
   const isGreen =
     isGreenScreen ||
@@ -332,7 +352,7 @@ export async function renderHtmlToVideo(
       </div>
       <div>
         <div style="font-weight: 800; font-size: 13px; color: #f8fafc; font-family: sans-serif; letter-spacing: -0.2px;">Rendering Video MP4 (H.264)</div>
-        <div style="font-size: 10px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${duration}s</div>
+        <div style="font-size: 10px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${duration}s • Target ${bitrate} Mbps</div>
       </div>
     </div>
     <button id="bigma-cancel-render-btn" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 4px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-family: sans-serif;">
@@ -489,20 +509,48 @@ export async function renderHtmlToVideo(
     let engineUsed: 'webcodecs-hardware' | 'webcodecs-software' = 'webcodecs-hardware';
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      // Form candidate configurations ordered from optimal hardware down to guaranteed software baseline
-      const encoderConfigsToTry: { codec: string; accel: 'no-preference' | 'prefer-software' | 'prefer-hardware' }[] = [
-        { codec: 'avc1.64002a', accel: 'no-preference' },
-        { codec: 'avc1.4d002a', accel: 'no-preference' },
-        { codec: 'avc1.420028', accel: 'no-preference' },
-        { codec: 'avc1.42001e', accel: 'prefer-software' }, // OpenH264 software encoder on all Ryzen/Intel/Linux PCs
-        { codec: 'avc1.42001f', accel: 'prefer-software' },
-        { codec: 'avc1.42E01E', accel: 'no-preference' },
+      // Form candidate configurations ordered by profile/level and rate-control capability
+      const candidateCodecs = [
+        'avc1.640033', // High Profile Level 5.1 (Up to 240 Mbps @ 4K60)
+        'avc1.64002a', // High Profile Level 4.2 (Up to 50 Mbps @ 1080p60)
+        'avc1.4d0033', // Main Profile Level 5.1
+        'avc1.4d002a', // Main Profile Level 4.2 (Up to 50 Mbps)
+        'avc1.42002a', // Baseline Level 4.2 (Up to 50 Mbps)
+        'avc1.640028', // High Profile Level 4.0 (Up to 25 Mbps)
+        'avc1.4d0028', // Main Profile Level 4.0
+        'avc1.420028', // Baseline Profile Level 4.0
+        'avc1.42001f', // Baseline Level 3.1
+        'avc1.42001e', // Baseline Level 3.0 (Universal Software OpenH264)
+        'avc1.42E01E', // Constrained Baseline
       ];
+
+      const rateControlProfiles: { bitrateMode?: 'constant' | 'variable'; latencyMode?: 'quality' | 'realtime' }[] = [
+        { bitrateMode: 'constant', latencyMode: 'quality' }, // CBR: Locks exact target bitrate and maximum quality
+        { bitrateMode: 'variable', latencyMode: 'quality' }, // High-quality VBR
+        { bitrateMode: 'constant' },                         // CBR standard
+        {},                                                  // Baseline default
+      ];
+
+      const candidateAccels: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
+        'no-preference',
+        'prefer-software',
+        'prefer-hardware',
+      ];
+
+      // Build prioritized candidates
+      const encoderConfigsToTry: { codec: string; accel: 'no-preference' | 'prefer-software' | 'prefer-hardware'; rc: any }[] = [];
+      for (const accel of candidateAccels) {
+        for (const codec of candidateCodecs) {
+          for (const rc of rateControlProfiles) {
+            encoderConfigsToTry.push({ codec, accel, rc });
+          }
+        }
+      }
 
       for (const candidate of encoderConfigsToTry) {
         if (webCodecsSuccess || isCancelled) break;
 
-        const { codec, accel } = candidate;
+        const { codec, accel, rc } = candidate;
 
         try {
           const encoderConfig: any = {
@@ -513,6 +561,7 @@ export async function renderHtmlToVideo(
             framerate: fps,
             hardwareAcceleration: accel,
             avc: { format: 'avc' },
+            ...rc,
           };
 
           // Pre-check support if API available
@@ -525,7 +574,7 @@ export async function renderHtmlToVideo(
             }
           }
 
-          updateUIProgress(8, `Inisialisasi encoder H.264 (${codec})...`);
+          updateUIProgress(8, `Inisialisasi encoder H.264 (${codec} @ ${bitrate} Mbps)...`);
 
           const muxer = new Muxer({
             target: new ArrayBufferTarget(),
@@ -583,7 +632,7 @@ export async function renderHtmlToVideo(
 
           // Encoder successfully verified!
           engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
-          updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps)...`);
+          updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
 
           // Main Frame Loop with Deterministic Offline Virtual Stepping
           for (let frame = 1; frame < totalFrames; frame++) {
@@ -649,7 +698,11 @@ export async function renderHtmlToVideo(
           const mp4Blob = new Blob([mp4Buffer], { type: 'video/mp4' });
           const videoUrl = URL.createObjectURL(mp4Blob);
 
-          updateUIProgress(100, 'Selesai! Video MP4 siap diunduh.');
+          const effectiveBitrateBps = Math.round((mp4Blob.size * 8) / duration);
+          const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
+          const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
+
+          updateUIProgress(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted} (${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB)`);
           await new Promise((r) => setTimeout(r, 250));
 
           mp4Result = {
@@ -657,6 +710,9 @@ export async function renderHtmlToVideo(
             url: videoUrl,
             format: 'mp4',
             sizeFormatted: `${(mp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
+            bitrateFormatted,
+            bitrateMbps: effectiveBitrateMbps,
+            targetBitrateMbps: bitrate,
             width,
             height,
             fps,
@@ -715,8 +771,8 @@ export async function renderHtmlToVideo(
     const mediaRecorder = new MediaRecorder(
       stream,
       chosenMime
-        ? { mimeType: chosenMime, videoBitsPerSecond: bitrate * 1_000_000 }
-        : { videoBitsPerSecond: bitrate * 1_000_000 }
+        ? { mimeType: chosenMime, bitsPerSecond: targetBitrateBps, videoBitsPerSecond: targetBitrateBps }
+        : { bitsPerSecond: targetBitrateBps, videoBitsPerSecond: targetBitrateBps }
     );
 
     mediaRecorder.ondataavailable = (e) => {
@@ -785,7 +841,11 @@ export async function renderHtmlToVideo(
     const recordedBlob = await recordPromise;
     const videoUrl = URL.createObjectURL(recordedBlob);
 
-    updateUIProgress(100, 'Selesai! Video siap diunduh.');
+    const effectiveBitrateBps = Math.round((recordedBlob.size * 8) / duration);
+    const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
+    const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
+
+    updateUIProgress(100, `Selesai! Video ${bitrateFormatted} siap diunduh.`);
     await new Promise((r) => setTimeout(r, 200));
 
     return {
@@ -793,6 +853,9 @@ export async function renderHtmlToVideo(
       url: videoUrl,
       format: 'mp4',
       sizeFormatted: `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
+      bitrateFormatted,
+      bitrateMbps: effectiveBitrateMbps,
+      targetBitrateMbps: bitrate,
       width,
       height,
       fps,
