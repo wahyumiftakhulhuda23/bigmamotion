@@ -138,8 +138,11 @@ class BackgroundRenderKeepAlive {
   private ctx: any = null;
   private osc: any = null;
   private gain: any = null;
+  private wakeLock: any = null;
+  private worker: Worker | null = null;
 
-  start() {
+  async start() {
+    // 1. Audio keep alive to prevent browser process suspension in background
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
@@ -157,9 +160,48 @@ class BackgroundRenderKeepAlive {
     } catch {
       // AudioContext not permitted or unsupported, proceed gracefully
     }
+
+    // 2. Screen WakeLock to prevent OS display sleep / GPU idling
+    try {
+      if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+        this.wakeLock = await (navigator as any).wakeLock.request('screen');
+      }
+    } catch {}
+
+    // 3. Web Worker heartbeat: Web Workers are on separate threads and NOT throttled to 1000ms by Chrome
+    try {
+      const workerScript = `
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) timer = setInterval(function() { self.postMessage('tick'); }, 20);
+          } else if (e.data === 'stop') {
+            if (timer) { clearInterval(timer); timer = null; }
+          }
+        };
+      `;
+      const blob = new Blob([workerScript], { type: 'application/javascript' });
+      this.worker = new Worker(URL.createObjectURL(blob));
+      this.worker.postMessage('start');
+    } catch {}
   }
 
   stop() {
+    try {
+      if (this.wakeLock) {
+        this.wakeLock.release().catch(() => {});
+      }
+    } catch {}
+    this.wakeLock = null;
+
+    try {
+      if (this.worker) {
+        this.worker.postMessage('stop');
+        this.worker.terminate();
+      }
+    } catch {}
+    this.worker = null;
+
     try {
       if (this.osc) {
         this.osc.stop();
@@ -232,6 +274,7 @@ export function prepareHtmlForVideo(
       (function() {
         let _stepCallback = null;
         window.__bigmaVirtualTimeMs = 0;
+        window.__bigmaVirtualStartTime = 1700000000000;
         window.__bigmaHasManualStepper = true;
 
         window.__bigmaStepFrame = function(targetMs) {
@@ -251,7 +294,16 @@ export function prepareHtmlForVideo(
           }
         };
 
-        const originalRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
+        // Deterministic clocks: completely decouple animation formulas from real browser sleep state
+        try {
+          window.performance.now = function() {
+            return window.__bigmaVirtualTimeMs || 0;
+          };
+          Date.now = function() {
+            return (window.__bigmaVirtualStartTime || 1700000000000) + (window.__bigmaVirtualTimeMs || 0);
+          };
+        } catch {}
+
         window.requestAnimationFrame = function(cb) {
           _stepCallback = cb;
           return 1;
@@ -443,7 +495,7 @@ export async function renderHtmlToVideo(
   };
 
   const keepAlive = new BackgroundRenderKeepAlive();
-  keepAlive.start();
+  await keepAlive.start();
 
   try {
     updateUIProgress(4, 'Menyiapkan canvas & aset rendering...');
@@ -476,7 +528,12 @@ export async function renderHtmlToVideo(
     // Micro-delay to ensure WebGL/Canvas 2D loop starts
     await new Promise((r) => setTimeout(r, 400));
 
-    const iframeCanvas = iframeDoc?.querySelector('canvas') as HTMLCanvasElement | null;
+    const getCanvas = (): HTMLCanvasElement | null => {
+      return (
+        iframe.contentDocument?.querySelector('canvas') ||
+        (iframe.contentWindow?.document?.querySelector('canvas') as HTMLCanvasElement | null)
+      );
+    };
 
     // Master High-Res Target Canvas strictly matching requested resolution
     const targetCanvas = document.createElement('canvas');
@@ -496,8 +553,9 @@ export async function renderHtmlToVideo(
     const drawCurrentFrameToTarget = () => {
       ctx.fillStyle = canvasBgColor;
       ctx.fillRect(0, 0, width, height);
-      if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
-        ctx.drawImage(iframeCanvas, 0, 0, width, height);
+      const canvasEl = getCanvas();
+      if (canvasEl && canvasEl.width > 0 && canvasEl.height > 0) {
+        ctx.drawImage(canvasEl, 0, 0, width, height);
       }
     };
 
@@ -589,13 +647,47 @@ export async function renderHtmlToVideo(
           });
 
           let encodeError: any = null;
+          const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
 
           const videoEncoder = new (window as any).VideoEncoder({
             output: (chunk: any, meta: any) => {
               try {
-                muxer.addVideoChunk(chunk, meta);
+                const chunkLen = chunk.byteLength;
+                // If chunk is smaller than targetBytesPerFrame, pad with standard H.264 NAL Unit 12 (filler_data_rbsp)
+                // ITU-T Rec. H.264 / ISO/IEC 14496-10 compliant CBR stuffing for exact microstock bitrate & file size
+                if (targetBytesPerFrame > chunkLen + 8) {
+                  const deficit = targetBytesPerFrame - chunkLen;
+                  const augmented = new Uint8Array(targetBytesPerFrame);
+                  chunk.copyTo(augmented.subarray(0, chunkLen));
+
+                  // In AVCC format (format: 'avc'): 4-byte big-endian length prefix followed by NAL unit
+                  const nalLen = deficit - 4;
+                  augmented[chunkLen + 0] = (nalLen >>> 24) & 0xff;
+                  augmented[chunkLen + 1] = (nalLen >>> 16) & 0xff;
+                  augmented[chunkLen + 2] = (nalLen >>> 8) & 0xff;
+                  augmented[chunkLen + 3] = nalLen & 0xff;
+                  // NAL header: forbidden_zero_bit (0), nal_ref_idc (00), nal_unit_type = 12 (0x0C)
+                  augmented[chunkLen + 4] = 0x0c;
+                  // Payload: standard H.264 filler bytes (0xFF)
+                  augmented.fill(0xff, chunkLen + 5, chunkLen + 4 + nalLen - 1);
+                  // rbsp_trailing_bits (0x80)
+                  augmented[chunkLen + 4 + nalLen - 1] = 0x80;
+
+                  muxer.addVideoChunkRaw(
+                    augmented,
+                    chunk.type,
+                    chunk.timestamp,
+                    chunk.duration || frameDurationUs,
+                    meta
+                  );
+                } else {
+                  muxer.addVideoChunk(chunk, meta);
+                }
               } catch (muxErr) {
                 console.warn('[Muxer Chunk Warning]', muxErr);
+                try {
+                  muxer.addVideoChunk(chunk, meta);
+                } catch {}
               }
             },
             error: (e: any) => {
@@ -643,15 +735,28 @@ export async function renderHtmlToVideo(
 
             if (encodeError) throw encodeError;
 
-            // CRITICAL LOW-SPEC FIX: Backpressure control with non-throttled queue wait
-            while (videoEncoder.encodeQueueSize > 2) {
+            // Multitasking-Safe Backpressure: never freeze if window is minimized or occluded
+            if (videoEncoder.encodeQueueSize > 8) {
               await new Promise<void>((resolve) => {
-                videoEncoder.ondequeue = () => resolve();
+                let resolved = false;
+                const done = () => {
+                  if (!resolved) {
+                    resolved = true;
+                    resolve();
+                  }
+                };
+                videoEncoder.ondequeue = done;
                 const mc = new MessageChannel();
-                mc.port1.onmessage = () => resolve();
+                mc.port1.onmessage = done;
                 mc.port2.postMessage(null);
-                setTimeout(resolve, 20);
+                setTimeout(done, 30);
               });
+            }
+
+            if (videoEncoder.encodeQueueSize > 24) {
+              try {
+                await videoEncoder.flush();
+              } catch {}
             }
 
             const timestampUs = Math.round(frame * frameDurationUs);
@@ -742,7 +847,7 @@ export async function renderHtmlToVideo(
     const stream =
       targetCanvas.captureStream
         ? targetCanvas.captureStream(fps)
-        : (iframeCanvas as any)?.captureStream(fps);
+        : (getCanvas() as any)?.captureStream(fps);
 
     if (!stream) {
       throw new Error('Perekam video tidak didukung pada browser ini.');
@@ -804,8 +909,9 @@ export async function renderHtmlToVideo(
       }
       ctx.fillStyle = canvasBgColor;
       ctx.fillRect(0, 0, width, height);
-      if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
-        ctx.drawImage(iframeCanvas, 0, 0, width, height);
+      const canvasEl = getCanvas();
+      if (canvasEl && canvasEl.width > 0 && canvasEl.height > 0) {
+        ctx.drawImage(canvasEl, 0, 0, width, height);
       }
       streamFrame++;
     };

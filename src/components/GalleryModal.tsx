@@ -266,13 +266,13 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 className="bg-transparent text-[11px] font-extrabold text-purple-300 focus:outline-none cursor-pointer"
                 title="Pilih Target Bitrate MP4 untuk Adobe Stock & Shutterstock"
               >
-                <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (Pro - Rekomendasi)</option>
-                <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (Ultra 60 FPS)</option>
-                <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (Shutterstock HD)</option>
-                <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (Microstock)</option>
-                <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (Standar HD)</option>
-                <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (Hemat File)</option>
-                <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (Master 4K)</option>
+                <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (~22.5 MB • Microstock Standar)</option>
+                <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (~31.2 MB • Pro Rekomendasi)</option>
+                <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (~37.5 MB • Ultra 60 FPS)</option>
+                <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (~25.0 MB • Shutterstock HD)</option>
+                <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (~18.7 MB • Standar Ringan)</option>
+                <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (~12.5 MB • Hemat File)</option>
+                <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (~62.5 MB • Master 4K)</option>
               </select>
             </div>
 
