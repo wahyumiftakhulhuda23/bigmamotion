@@ -528,6 +528,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                         <button
                           onClick={() => {
                             onOpenFullscreen(item);
+                            onClose();
                           }}
                           className="px-2.5 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
                           title="Buka Preview Layar Penuh"

@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { AnimationItem, LogItem } from '../types';
+import { HardwareProfile } from '../services/hardwareService';
 
 interface RightPanelProps {
   logs: LogItem[];
@@ -15,6 +16,7 @@ interface RightPanelProps {
   isExportingMp4Id?: string | null;
   exportBitrate?: number;
   onExportBitrateChange?: (bitrate: number) => void;
+  hwProfile?: HardwareProfile;
 }
 
 export const RightPanel: React.FC<RightPanelProps> = ({
@@ -31,6 +33,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   isExportingMp4Id,
   exportBitrate = 25,
   onExportBitrateChange,
+  hwProfile,
 }) => {
   const logConsoleRef = useRef<HTMLDivElement>(null);
   const [isLogExpanded, setIsLogExpanded] = useState(true);
@@ -287,6 +290,21 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           </div>
         </div>
       )}
+        {hwProfile && (
+          <div className="glass-card rounded-2xl p-4 border border-gray-800 bg-gray-950/50 space-y-2 mt-4">
+            <h3 className="font-bold text-gray-200 text-xs flex items-center gap-2">
+              <i className="fa-solid fa-microchip text-sky-400"></i> Spesifikasi Perangkat & Rekomendasi
+            </h3>
+            <p className="text-[10px] text-gray-400">
+              Perangkat: {hwProfile.osInfo} | RAM: {hwProfile.ramStr} | VGA: {hwProfile.gpuInfo} | CPU: {hwProfile.cpuCores} Cores
+            </p>
+            <p className="text-[11px] text-sky-300 font-medium">
+              Saran: {hwProfile.isLowSpec
+                ? `Gunakan setelan 720p 30 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk performa maksimal pada perangkat Anda.`
+                : `Perangkat Anda mendukung setelan 1080p 60 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk kualitas terbaik.`}
+            </p>
+          </div>
+        )}
     </section>
   );
 };

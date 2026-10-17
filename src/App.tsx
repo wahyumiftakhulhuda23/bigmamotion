@@ -38,6 +38,7 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
 import { getDefaultCategoryForType } from './constants/categories';
+import { detectDeviceHardware, HardwareProfile } from './services/hardwareService';
 
 const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
@@ -1513,6 +1514,7 @@ export default function App() {
           isExportingMp4Id={exportingMp4Id}
           exportBitrate={exportBitrate}
           onExportBitrateChange={handleExportBitrateChange}
+          hwProfile={detectDeviceHardware()}
         />
       </main>
 
@@ -1548,7 +1550,10 @@ export default function App() {
       <FullscreenModal
         isOpen={!!fullscreenItem}
         item={fullscreenItem}
-        onClose={() => setFullscreenItem(null)}
+        onClose={() => {
+          setFullscreenItem(null);
+          setIsGalleryModalOpen(true);
+        }}
         showToast={showToast}
       />
 
@@ -1560,6 +1565,14 @@ export default function App() {
         onClose={() => setIsApiModalOpen(false)}
         showToast={showToast}
         addLog={addLog}
+        renderResolution={{ width: 1920, height: 1080, label: '1080p Full HD' }}
+        onResolutionChange={() => {}}
+        renderFps={60}
+        onFpsChange={() => {}}
+        renderDuration={10}
+        onDurationChange={() => {}}
+        exportBitrate={exportBitrate}
+        onExportBitrateChange={handleExportBitrateChange}
       />
 
       {/* Prompt AI Auto Pilot Modal (Original) */}

@@ -127,21 +127,14 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* API & Model Status Trigger */}
+          {/* Settings Gear Button */}
           <button
             onClick={onOpenApiModal}
-            className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800/90 transition text-xs font-semibold text-gray-300 cursor-pointer shadow-sm active:scale-95"
-            title="Kelola Model AI & API Key Gemini"
+            className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800/90 transition text-xs font-semibold text-gray-300 cursor-pointer shadow-sm active:scale-95"
+            title="Pengaturan Aplikasi, API Key & Render"
           >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                apiKeyCount > 0 || hasServerKey ? 'bg-emerald-500' : 'bg-amber-500'
-              } animate-pulse`}
-            ></span>
-            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold border ${badge.color}`}>
-              {badge.label}
-            </span>
-            <i className="fa-solid fa-sliders text-sky-400 text-xs ml-0.5"></i>
+            <i className="fa-solid fa-gear text-sky-400 text-sm"></i>
+            <span className="hidden sm:inline">Setelan</span>
           </button>
 
 

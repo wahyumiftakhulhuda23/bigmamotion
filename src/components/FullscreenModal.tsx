@@ -7,9 +7,22 @@ interface FullscreenModalProps {
   item: AnimationItem | null;
   onClose: () => void;
   showToast?: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
+  renderResolution?: { width: number; height: number; label: string };
+  renderFps?: number;
+  renderDuration?: number;
+  exportBitrate?: number;
 }
 
-export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, onClose, showToast }) => {
+export const FullscreenModal: React.FC<FullscreenModalProps> = ({
+  isOpen,
+  item,
+  onClose,
+  showToast,
+  renderResolution = { width: 1920, height: 1080, label: '1080p Full HD' },
+  renderFps = 60,
+  renderDuration = 10,
+  exportBitrate = 18,
+}) => {
   const [isExporting, setIsExporting] = useState(false);
 
   if (!isOpen || !item) return null;
@@ -31,15 +44,15 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
 
   const handleExportMp4 = async () => {
     setIsExporting(true);
-    showToast?.('Merender video MP4 H.264 60 FPS...', 'info');
+    showToast?.(`Merender video MP4 H.264 (${renderResolution.width}x${renderResolution.height} @ ${renderFps}FPS • ${exportBitrate} Mbps)...`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.html, {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        duration: 10,
-        bitrate: 18,
+        width: renderResolution.width,
+        height: renderResolution.height,
+        fps: renderFps,
+        duration: renderDuration,
+        bitrate: exportBitrate,
         format: 'mp4',
         mode: item.type,
       });
@@ -48,13 +61,13 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${exportBitrate}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(result.url), 5000);
 
-      showToast?.(`Video MP4 (${result.sizeFormatted}) siap diputar!`, 'success');
+      showToast?.(`Video MP4 (${result.sizeFormatted} • ${result.bitrateFormatted}) berhasil diunduh!`, 'success');
     } catch (e: any) {
       showToast?.(`Gagal export MP4: ${e.message}`, 'error');
     } finally {
@@ -77,7 +90,7 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
             id="fullscreen-badge"
             className="text-xs bg-sky-900/60 text-sky-300 border border-sky-700/50 px-2.5 py-0.5 rounded-full font-bold"
           >
-            1080p 60 FPS
+            {renderResolution.width}x{renderResolution.height} • {renderFps} FPS
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -98,41 +111,29 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
               </>
             ) : (
               <>
-                <i className="fa-solid fa-film"></i> Export MP4 (H.264)
+                <i className="fa-solid fa-film"></i> Export MP4 ({exportBitrate}M)
               </>
             )}
           </button>
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 flex items-center justify-center text-base transition cursor-pointer"
+            className="w-9 h-9 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white flex items-center justify-center text-sm transition cursor-pointer ml-2"
+            title="Tutup Preview"
           >
             <i className="fa-solid fa-xmark"></i>
           </button>
         </div>
       </div>
 
-      <div className="flex-1 max-w-7xl mx-auto w-full flex items-center justify-center py-4 overflow-hidden">
-        <div className="w-full h-full max-h-[85vh] aspect-16-9 bg-black rounded-2xl overflow-hidden border border-gray-800 shadow-2xl relative flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center relative p-2 max-w-7xl mx-auto w-full overflow-hidden">
+        <div className="relative w-full h-full max-h-[82vh] rounded-2xl overflow-hidden shadow-2xl border border-gray-800 bg-slate-950 flex items-center justify-center">
           <iframe
-            id="fullscreen-iframe"
             srcDoc={item.html}
             title={item.title}
             className="w-full h-full border-0"
             sandbox="allow-scripts"
           />
         </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto w-full flex justify-between items-center pt-2">
-        <span className="text-xs text-gray-400 flex items-center gap-2">
-          <i className="fa-solid fa-circle-play text-sky-400"></i> Display Mode: Fullscreen Canvas 16:9 60 FPS
-        </span>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-semibold transition cursor-pointer"
-        >
-          Tutup Preview
-        </button>
       </div>
     </div>
   );
