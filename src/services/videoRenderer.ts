@@ -81,9 +81,9 @@ const CANDIDATE_CODECS = [
 ];
 
 const ACCELERATION_PREFERENCES: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
-  'no-preference', // Most compatible: lets the browser pick hardware GPU or built-in OpenH264/FFmpeg
-  'prefer-software', // Solid fallback for PCs without discrete GPU (like AMD Ryzen 3 / Radeon Vega)
-  'prefer-hardware',
+  'prefer-hardware', // Prioritize GPU hardware acceleration (GTX 1050, RTX, Intel QuickSync, Apple Silicon)
+  'no-preference',
+  'prefer-software',
 ];
 
 /**
@@ -347,9 +347,9 @@ export async function renderHtmlToVideo(
   const isLowSpec = devProfile.isLowSpec;
 
   const {
-    width = 1920,
-    height = 1080,
-    fps = options.renderPreset === 'standard_30' ? 30 : 60,
+    width = options.width || (isLowSpec ? 1280 : 1920),
+    height = options.height || (isLowSpec ? 720 : 1080),
+    fps = options.fps || (isLowSpec ? 30 : (options.renderPreset === 'standard_30' ? 30 : 60)),
     duration = 10,
     mode = 'auto',
     isGreenScreen = false,
@@ -606,9 +606,9 @@ export async function renderHtmlToVideo(
       ];
 
       const candidateAccels: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
+        'prefer-hardware',
         'no-preference',
         'prefer-software',
-        'prefer-hardware',
       ];
 
       // Build prioritized candidates
