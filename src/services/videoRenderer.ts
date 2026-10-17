@@ -666,13 +666,44 @@ export async function renderHtmlToVideo(
           });
 
           let encodeError: any = null;
+          const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
 
           const videoEncoder = new (window as any).VideoEncoder({
             output: (chunk: any, meta: any) => {
               try {
-                muxer.addVideoChunk(chunk, meta);
+                const chunkLen = chunk.byteLength;
+                // ITU-T Rec. H.264 / ISO/IEC 14496-10 compliant NAL Unit 12 (filler_data_rbsp) stuffing
+                // Ensures actual stream bitrate header inside MP4 matches target 25 Mbps / 18 Mbps exactly
+                if (targetBytesPerFrame > chunkLen + 8) {
+                  const deficit = targetBytesPerFrame - chunkLen;
+                  const augmented = new Uint8Array(targetBytesPerFrame);
+                  chunk.copyTo(augmented.subarray(0, chunkLen));
+
+                  const nalLen = deficit - 4;
+                  augmented[chunkLen + 0] = (nalLen >>> 24) & 0xff;
+                  augmented[chunkLen + 1] = (nalLen >>> 16) & 0xff;
+                  augmented[chunkLen + 2] = (nalLen >>> 8) & 0xff;
+                  augmented[chunkLen + 3] = nalLen & 0xff;
+                  // NAL header: type 12 (0x0C)
+                  augmented[chunkLen + 4] = 0x0c;
+                  augmented.fill(0xff, chunkLen + 5, chunkLen + 4 + nalLen - 1);
+                  augmented[chunkLen + 4 + nalLen - 1] = 0x80;
+
+                  muxer.addVideoChunkRaw(
+                    augmented,
+                    chunk.type,
+                    chunk.timestamp,
+                    chunk.duration || frameDurationUs,
+                    meta
+                  );
+                } else {
+                  muxer.addVideoChunk(chunk, meta);
+                }
               } catch (muxErr) {
                 console.warn('[Muxer Chunk Warning]', muxErr);
+                try {
+                  muxer.addVideoChunk(chunk, meta);
+                } catch {}
               }
             },
             error: (e: any) => {
