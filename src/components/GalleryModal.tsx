@@ -38,12 +38,13 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   const [downloadLogs, setDownloadLogs] = useState<{ text: string; type: 'info' | 'success' | 'error' }[]>([]);
   const [isDownloading, setIsDownloading] = useState(false);
   const [exportingMp4Id, setExportingMp4Id] = useState<string | null>(null);
+  const [exportingAccount, setExportingAccount] = useState<string | null>(null);
   const [isConfirmingClearAll, setIsConfirmingClearAll] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const uniqueAccounts = Array.from(new Set(animations.map((a) => a.account || 'Manual')));
+  const uniqueAccounts: string[] = Array.from(new Set(animations.map((a) => String(a.account || 'Manual'))));
 
   const filteredList =
     currentFilter === 'All'
@@ -104,53 +105,95 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
     }
   };
 
+  const handleBatchRenderAccount = async (accountName: string) => {
+    const itemsToRender = animations.filter((a) => (a.account || 'Manual') === accountName);
+    if (itemsToRender.length === 0) {
+      showToast(`Tidak ada animasi untuk akun ${accountName}`, 'warn');
+      return;
+    }
+
+    setExportingAccount(accountName);
+    setIsDownloading(true);
+    addDownloadLog(`[Batch Render] Akun "${accountName}" (${itemsToRender.length} video, ${exportBitrate} Mbps)...`, 'info');
+    showToast(`Memulai batch render akun ${accountName} (${itemsToRender.length} video)...`, 'info');
+
+    let successCount = 0;
+    for (let i = 0; i < itemsToRender.length; i++) {
+      const item = itemsToRender[i];
+      addDownloadLog(`Merender [${i + 1}/${itemsToRender.length}]: "${item.title.substring(0, 25)}..."`, 'info');
+
+      try {
+        const result = await renderHtmlToVideo(item.html, {
+          width: 1920,
+          height: 1080,
+          fps: 60,
+          duration: 10,
+          bitrate: exportBitrate,
+          mode: item.type,
+        });
+
+        const a = document.createElement('a');
+        a.href = result.url;
+        const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
+        const acc = item.account ? item.account.toLowerCase() : 'manual';
+        a.download = `microstock_${acc}_${item.type}_${safeTitle}_${result.bitrateMbps}Mbps.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(result.url), 5000);
+
+        successCount++;
+        addDownloadLog(`Selesai [${i + 1}/${itemsToRender.length}]: "${item.title}" (${result.sizeFormatted})`, 'success');
+        await new Promise((r) => setTimeout(r, 800));
+      } catch (e: any) {
+        addDownloadLog(`Gagal render #${i + 1}: ${e.message}`, 'error');
+      }
+    }
+
+    setIsDownloading(false);
+    setExportingAccount(null);
+    addDownloadLog(`[Batch Selesai] Akun "${accountName}": Berhasil ${successCount}/${itemsToRender.length} video.`, 'success');
+    showToast(`Batch render akun ${accountName} selesai (${successCount} video).`, 'success');
+  };
+
   const processDownloadQueue = async () => {
     if (downloadQueue.length === 0) {
-      showToast('Antrean unduhan kosong! Silakan pilih animasi terlebih dahulu.', 'warn');
+      showToast('Antrean unduhan kosong!', 'warn');
       return;
     }
 
     setIsDownloading(true);
-    setDownloadLogs([]);
     addDownloadLog(`Memulai unduhan masal ${downloadQueue.length} file...`, 'info');
 
     let successCount = 0;
-
     for (let i = 0; i < downloadQueue.length; i++) {
       const id = downloadQueue[i];
       const item = animations.find((a) => a.id === id);
-
       if (!item) continue;
-
-      addDownloadLog(`Mengunduh: ${item.title.substring(0, 25)}...`, 'info');
 
       try {
         const htmlBlob = new Blob([item.html], { type: 'text/html;charset=utf-8' });
         const downloadUrl = URL.createObjectURL(htmlBlob);
         const a = document.createElement('a');
         a.href = downloadUrl;
-
         const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
         const accountName = item.account ? item.account.toLowerCase() : 'manual';
         a.download = `microstock_${accountName}_${item.type}_${safeTitle}.html`;
-
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(downloadUrl), 5000);
 
         successCount++;
-        addDownloadLog(`Selesai: File #${i + 1} berhasil diunduh.`, 'success');
-
-        await new Promise((r) => setTimeout(r, 600));
+        addDownloadLog(`Selesai: File #${i + 1} diunduh.`, 'success');
+        await new Promise((r) => setTimeout(r, 500));
       } catch (e: any) {
-        addDownloadLog(`Gagal mengunduh #${i + 1}: ${e.message}`, 'error');
+        addDownloadLog(`Gagal #${i + 1}: ${e.message}`, 'error');
       }
     }
 
     setIsDownloading(false);
     onClearQueue();
-    addDownloadLog(`Proses Selesai! Berhasil mengunduh ${successCount} file.`, 'success');
     showToast(`Berhasil mengunduh ${successCount} file.`, 'success');
   };
 
@@ -166,11 +209,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
     }
 
     setIsDownloading(true);
-    addDownloadLog(`Mengompres ${itemsToZip.length} file animasi ke dalam ZIP...`, 'info');
+    addDownloadLog(`Mengompres ${itemsToZip.length} file ke ZIP...`, 'info');
 
     try {
       const zip = new JSZip();
-
       itemsToZip.forEach((item, index) => {
         const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 25);
         const acc = item.account ? item.account.replace(/[^a-z0-9_-]/gi, '_') : 'manual';
@@ -192,8 +234,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
       addDownloadLog(`Berhasil membuat paket ZIP (${itemsToZip.length} item).`, 'success');
       showToast(`Paket ZIP (${itemsToZip.length} file) berhasil diunduh!`, 'success');
     } catch (e: any) {
-      addDownloadLog(`Gagal membuat ZIP: ${e.message}`, 'error');
-      showToast(`Gagal membuat file ZIP: ${e.message}`, 'error');
+      addDownloadLog(`Gagal ZIP: ${e.message}`, 'error');
+      showToast(`Gagal ZIP: ${e.message}`, 'error');
     } finally {
       setIsDownloading(false);
     }
@@ -201,7 +243,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
   const handleDeleteItem = (id: string, title: string) => {
     onDeleteAnimation(id);
-    addDownloadLog(`[Hapus] Animasi "${title.substring(0, 25)}" telah dihapus dari galeri.`, 'info');
+    addDownloadLog(`[Hapus] "${title.substring(0, 25)}" dihapus.`, 'info');
     showToast(`Animasi berhasil dihapus.`, 'info');
     setDeletingId(null);
   };
@@ -209,7 +251,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   const handleConfirmClearAll = () => {
     onClearAllAnimations();
     setIsConfirmingClearAll(false);
-    addDownloadLog(`[Galeri] Seluruh riwayat galeri telah dibersihkan.`, 'info');
+    addDownloadLog(`Galeri dibersihkan.`, 'info');
     showToast('Galeri berhasil dibersihkan.', 'success');
   };
 
@@ -227,13 +269,13 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-gray-100 text-base">Galeri & Antrean Animasi</h3>
+                <h3 className="font-bold text-gray-100 text-base">Galeri & Daftar Render Akun</h3>
                 <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-bold border border-sky-500/30">
                   {animations.length} Item Tersimpan
                 </span>
               </div>
               <p className="text-xs text-gray-400">
-                Unduh file HTML atau langsung ekspor ke video MP4 (H.264 60 FPS) untuk microstock.
+                Daftar ringkas per akun dengan tombol preview satuan dan batch render MP4 (H.264 60 FPS).
               </p>
             </div>
           </div>
@@ -264,14 +306,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 value={exportBitrate}
                 onChange={(e) => onExportBitrateChange?.(Number(e.target.value))}
                 className="bg-transparent text-[11px] font-extrabold text-purple-300 focus:outline-none cursor-pointer"
-                title="Pilih Target Bitrate MP4 untuk Adobe Stock & Shutterstock"
+                title="Pilih Target Bitrate MP4"
               >
                 <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (~22.5 MB • Microstock Standar)</option>
                 <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (~31.2 MB • Pro Rekomendasi)</option>
                 <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (~37.5 MB • Ultra 60 FPS)</option>
                 <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (~25.0 MB • Shutterstock HD)</option>
-                <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (~18.7 MB • Standar Ringan)</option>
-                <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (~12.5 MB • Hemat File)</option>
+                <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (~18.7 MB • Ringan)</option>
+                <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (~12.5 MB • Hemat)</option>
                 <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (~62.5 MB • Master 4K)</option>
               </select>
             </div>
@@ -282,10 +324,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
               className="px-3.5 py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-sky-500/20 cursor-pointer disabled:opacity-50"
             >
               <i className="fa-solid fa-file-zipper"></i>
-              <span>Unduh ZIP</span>
+              <span>ZIP</span>
             </button>
 
-            {/* Clear All with in-app confirmation (No blocked window.confirm) */}
             {animations.length > 0 && (
               <>
                 {isConfirmingClearAll ? (
@@ -295,11 +336,11 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                       onClick={handleConfirmClearAll}
                       className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-[10px] font-bold cursor-pointer"
                     >
-                      Ya, Hapus
+                      Ya
                     </button>
                     <button
                       onClick={() => setIsConfirmingClearAll(false)}
-                      className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded text-[10px] cursor-pointer"
+                      className="px-2 py-1 bg-gray-800 text-gray-300 rounded text-[10px] cursor-pointer"
                     >
                       Batal
                     </button>
@@ -308,10 +349,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                   <button
                     onClick={() => setIsConfirmingClearAll(true)}
                     className="px-3 py-2 bg-gray-800 hover:bg-red-500/20 text-gray-400 hover:text-red-400 border border-gray-700 hover:border-red-500/30 rounded-xl text-xs transition cursor-pointer flex items-center gap-1"
-                    title="Hapus Seluruh Histori Galeri"
+                    title="Hapus Semua"
                   >
                     <i className="fa-solid fa-trash-can"></i>
-                    <span className="hidden sm:inline">Hapus Semua</span>
                   </button>
                 )}
               </>
@@ -323,10 +363,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
           </div>
         </div>
 
-        {/* Filter Tabs */}
+        {/* Filter Tabs by Account / Category */}
         {animations.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-gray-800 shrink-0">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-2 overflow-x-auto pb-1 items-center">
               <button
                 onClick={() => setCurrentFilter('All')}
                 className={`px-4 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap cursor-pointer ${
@@ -344,22 +384,36 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 const count = animations.filter((a) => (a.account || 'Manual') === acc).length;
 
                 return (
-                  <button
-                    key={acc}
-                    onClick={() => setCurrentFilter(acc)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                      isActive
-                        ? isBot
-                          ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 border border-amber-400'
-                          : 'bg-sky-500 text-white shadow-lg'
-                        : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
-                    }`}
-                  >
-                    <i className={`fa-solid ${isBot ? 'fa-robot' : 'fa-user'}`}></i>
-                    <span>
-                      {acc} ({count})
-                    </span>
-                  </button>
+                  <div key={acc} className="flex items-center gap-1 bg-gray-900/60 border border-gray-800 rounded-full p-0.5">
+                    <button
+                      onClick={() => setCurrentFilter(acc)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                        isActive
+                          ? isBot
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 border border-amber-400'
+                            : 'bg-sky-500 text-white shadow-lg'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                      }`}
+                    >
+                      <i className={`fa-solid ${isBot ? 'fa-robot' : 'fa-user'}`}></i>
+                      <span>
+                        {acc} ({count})
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleBatchRenderAccount(acc)}
+                      disabled={isDownloading}
+                      className="px-2.5 py-1 bg-purple-600/30 hover:bg-purple-600/60 text-purple-300 rounded-full text-[11px] font-bold transition flex items-center gap-1 cursor-pointer border border-purple-500/40 disabled:opacity-50 mr-0.5"
+                      title={`Batch Render Akun "${acc}" ke MP4`}
+                    >
+                      {exportingAccount === acc ? (
+                        <i className="fa-solid fa-spinner fa-spin text-purple-300"></i>
+                      ) : (
+                        <i className="fa-solid fa-film text-purple-400"></i>
+                      )}
+                      <span className="hidden sm:inline">Render Akun</span>
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -369,157 +423,141 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 onClick={onSelectAllToQueue}
                 className="text-[11px] px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700 transition cursor-pointer"
               >
-                Pilih Semua ke Antrean
+                Pilih Semua
               </button>
               {downloadQueue.length > 0 && (
                 <button
                   onClick={onClearQueue}
                   className="text-[11px] px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-amber-400 rounded-lg border border-gray-700 transition cursor-pointer"
                 >
-                  Kosongkan Antrean
+                  Kosongkan
                 </button>
               )}
             </div>
           </div>
         )}
 
-        {/* Content Area: Grid + Log Sidebar */}
+        {/* Content Area: Lightweight List View (No heavy iframes) + Log Sidebar */}
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-6 mt-2">
-          {/* Gallery Grid */}
-          <div className="flex-1 overflow-y-auto pr-2 pb-8 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max">
+          {/* Gallery List (Daftar Saja, Bukan Preview) */}
+          <div className="flex-1 overflow-y-auto pr-2 pb-8 space-y-2">
             {filteredList.length === 0 ? (
-              <div className="col-span-full text-center py-14 text-gray-500 text-xs italic">
+              <div className="text-center py-14 text-gray-500 text-xs italic">
                 Belum ada animasi di galeri untuk kategori ini.
               </div>
             ) : (
               filteredList.map((item, idx) => {
                 const isQueued = downloadQueue.includes(item.id);
                 const isRenderingMp4 = exportingMp4Id === item.id;
-                const borderClass = isQueued
-                  ? 'border-emerald-500 bg-emerald-950/30 ring-1 ring-emerald-500/50'
-                  : 'border-gray-800 bg-gray-900/40 hover:border-gray-700';
+                const rowBorder = isQueued
+                  ? 'border-emerald-500/60 bg-emerald-950/20 ring-1 ring-emerald-500/30'
+                  : 'border-gray-800/80 bg-gray-900/50 hover:border-gray-700';
 
                 return (
                   <div
                     key={`${item.id}_${idx}`}
-                    className={`glass-card rounded-xl overflow-hidden border transition flex flex-col justify-between ${borderClass} shadow-lg hover:shadow-sky-950/30`}
+                    className={`rounded-xl border ${rowBorder} p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition shadow-sm hover:shadow-md`}
                   >
-                    <div className="aspect-16-9 w-full bg-slate-950 relative overflow-hidden shrink-0 group">
-                      <iframe
-                        srcDoc={item.html}
-                        title={item.title}
-                        className="w-full h-full border-0 pointer-events-none"
-                        sandbox="allow-scripts"
-                      />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 p-2">
-                        <button
-                          onClick={() => onOpenFullscreen(item)}
-                          className="px-3 py-1.5 bg-sky-500 hover:bg-sky-400 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-lg flex items-center gap-1"
-                          title="Layar Penuh"
-                        >
-                          <i className="fa-solid fa-expand"></i> Fullscreen
-                        </button>
-                        <button
-                          onClick={() => handleExportSingleMp4(item)}
-                          disabled={isRenderingMp4}
-                          className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold transition cursor-pointer shadow-lg flex items-center gap-1 disabled:opacity-50"
-                          title={`Render ke MP4 H.264 @ ${exportBitrate} Mbps`}
-                        >
-                          <i className="fa-solid fa-film"></i> MP4 ({exportBitrate}M)
-                        </button>
-                      </div>
-                    </div>
+                    {/* Item Info */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <button
+                        onClick={() => onToggleQueue(item.id)}
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 border cursor-pointer transition ${
+                          isQueued
+                            ? 'bg-emerald-500 text-white border-emerald-400'
+                            : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'
+                        }`}
+                        title={isQueued ? 'Hapus dari antrean' : 'Tambah ke antrean'}
+                      >
+                        <i className={`fa-solid ${isQueued ? 'fa-check text-xs' : 'fa-plus text-[10px]'}`}></i>
+                      </button>
 
-                    <div className="p-3.5 flex flex-col justify-between items-start gap-3 flex-1 w-full bg-gray-950/40">
-                      <div className="w-full">
-                        <div className="flex items-start justify-between gap-2">
-                          <h3 className="font-bold text-gray-200 text-xs truncate flex-1" title={item.title}>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="font-bold text-gray-200 text-xs truncate" title={item.title}>
                             {item.title}
-                          </h3>
-                          {/* Individual item delete button */}
-                          {deletingId === item.id ? (
-                            <div className="flex items-center gap-1 shrink-0">
-                              <button
-                                onClick={() => handleDeleteItem(item.id, item.title)}
-                                className="text-[10px] px-1.5 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded font-bold cursor-pointer"
-                                title="Yakin Hapus"
-                              >
-                                Ya
-                              </button>
-                              <button
-                                onClick={() => setDeletingId(null)}
-                                className="text-[10px] px-1.5 py-0.5 bg-gray-800 text-gray-300 rounded cursor-pointer"
-                                title="Batal"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              onClick={() => setDeletingId(item.id)}
-                              className="text-gray-500 hover:text-red-400 p-1 cursor-pointer transition shrink-0"
-                              title="Hapus animasi ini"
-                            >
-                              <i className="fa-solid fa-trash-can text-xs"></i>
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className="text-[9px] bg-sky-950/80 text-sky-400 border border-sky-800/60 px-1.5 py-0.5 rounded font-bold uppercase">
+                          </h4>
+                          <span className="text-[9px] bg-sky-950 text-sky-400 border border-sky-800/60 px-1.5 py-0.2 rounded font-bold uppercase">
                             {item.type}
                           </span>
                           {(item.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(item.html)) && (
-                            <span className="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.5 rounded font-bold">
+                            <span className="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.2 rounded font-bold">
                               Green Screen
                             </span>
                           )}
-                          <span className="text-[9px] text-gray-500">•</span>
-                          <span className="text-[9px] text-gray-400 font-medium">
-                            {item.account || 'Manual'}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+                          <span className="text-amber-300 font-semibold flex items-center gap-1">
+                            <i className="fa-solid fa-user-tag text-[9px]"></i> {item.account || 'Manual'}
                           </span>
-                          <span className="text-[9px] text-gray-500">•</span>
-                          <span className="text-[9px] text-emerald-400 font-medium">1080p 60FPS</span>
+                          <span>•</span>
+                          <span className="text-emerald-400 font-medium">1080p 60FPS</span>
                         </div>
                       </div>
+                    </div>
 
-                      {/* Action buttons on card */}
-                      <div className="grid grid-cols-3 gap-1.5 w-full shrink-0 pt-2 border-t border-gray-800/80 mt-1">
-                        <button
-                          onClick={() => handleDownloadSingleHtml(item)}
-                          className="px-2 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-[11px] font-semibold flex items-center justify-center gap-1 transition cursor-pointer border border-gray-700"
-                          title="Unduh Kode HTML"
-                        >
-                          <i className="fa-solid fa-code text-sky-400"></i> HTML
-                        </button>
+                    {/* Action Buttons per Row */}
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      {/* Preview Button per Row */}
+                      <button
+                        onClick={() => onOpenFullscreen(item)}
+                        className="px-2.5 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-sm"
+                        title="Buka Preview Layar Penuh"
+                      >
+                        <i className="fa-solid fa-eye text-sky-400 text-xs"></i>
+                        <span>Preview</span>
+                      </button>
 
-                        <button
-                          onClick={() => handleExportSingleMp4(item)}
-                          disabled={isRenderingMp4}
-                          className="px-2 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border border-purple-500/40 disabled:opacity-50"
-                          title={`Export ke MP4 (H.264 @ ${exportBitrate} Mbps)`}
-                        >
-                          {isRenderingMp4 ? (
-                            <i className="fa-solid fa-circle-notch fa-spin text-purple-300"></i>
-                          ) : (
-                            <i className="fa-solid fa-film text-purple-400"></i>
-                          )}
-                          <span>MP4 ({exportBitrate}M)</span>
-                        </button>
+                      {/* Render MP4 Single Button */}
+                      <button
+                        onClick={() => handleExportSingleMp4(item)}
+                        disabled={isRenderingMp4}
+                        className="px-2.5 py-1.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer disabled:opacity-50 shadow-sm"
+                        title={`Render Satuan MP4 H.264 @ ${exportBitrate} Mbps`}
+                      >
+                        {isRenderingMp4 ? (
+                          <i className="fa-solid fa-spinner fa-spin text-purple-300"></i>
+                        ) : (
+                          <i className="fa-solid fa-film text-purple-400"></i>
+                        )}
+                        <span>MP4 ({exportBitrate}M)</span>
+                      </button>
 
+                      {/* Download HTML Button */}
+                      <button
+                        onClick={() => handleDownloadSingleHtml(item)}
+                        className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                        title="Unduh Kode HTML"
+                      >
+                        <i className="fa-solid fa-code text-emerald-400"></i>
+                        <span className="hidden md:inline">HTML</span>
+                      </button>
+
+                      {/* Delete item button */}
+                      {deletingId === item.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => handleDeleteItem(item.id, item.title)}
+                            className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded text-[10px] font-bold cursor-pointer"
+                          >
+                            Hapus
+                          </button>
+                          <button
+                            onClick={() => setDeletingId(null)}
+                            className="px-1.5 py-1 bg-gray-800 text-gray-300 rounded text-[10px] cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          onClick={() => onToggleQueue(item.id)}
-                          className={`px-2 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer border ${
-                            isQueued
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-sky-500/20 text-sky-300 border-sky-500/40 hover:bg-sky-500/30'
-                          }`}
-                          title={isQueued ? 'Hapus dari antrean' : 'Tambah ke antrean'}
+                          onClick={() => setDeletingId(item.id)}
+                          className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition cursor-pointer"
+                          title="Hapus"
                         >
-                          <i className={`fa-solid ${isQueued ? 'fa-check' : 'fa-plus'}`}></i>
-                          <span>{isQueued ? 'Antrean' : 'Pilih'}</span>
+                          <i className="fa-solid fa-trash-can text-xs"></i>
                         </button>
-                      </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -527,14 +565,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             )}
           </div>
 
-          {/* Download Logs Sidebar */}
+          {/* Download & Export Logs Sidebar */}
           <div className="w-full lg:w-80 flex flex-col gap-3 shrink-0">
             <div className="bg-gray-900/80 border border-gray-800 rounded-xl p-4 flex-1 flex flex-col max-h-48 lg:max-h-full">
               <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2">
                 <h4 className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                  <i className="fa-solid fa-terminal text-emerald-400"></i> Log Unduhan & Ekspor
+                  <i className="fa-solid fa-terminal text-emerald-400"></i> Log Render & Unduhan
                 </h4>
-                {(isDownloading || exportingMp4Id) && (
+                {(isDownloading || exportingMp4Id || exportingAccount) && (
                   <span className="text-emerald-400 text-xs animate-spin">
                     <i className="fa-solid fa-circle-notch"></i>
                   </span>
@@ -546,7 +584,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
               >
                 {downloadLogs.length === 0 ? (
                   <div className="italic text-gray-600">
-                    Pilih animasi lalu klik "Unduh Antrean", "Unduh ZIP", atau "MP4" untuk mengekspor...
+                    Pilih akun untuk "Render Akun", "Unduh Antrean", atau "MP4" per baris untuk memulai...
                   </div>
                 ) : (
                   downloadLogs.map((l, i) => (

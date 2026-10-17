@@ -13,7 +13,6 @@ interface HeaderProps {
   onOpenLicenseModal?: () => void;
   onOpenApiModal: () => void;
   onOpenAutoPilotModal: () => void;
-  onOpenVideoConverterModal: () => void;
   onOpenGalleryModal: () => void;
   onOpenTutorialModal?: () => void;
 }
@@ -30,7 +29,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenLicenseModal,
   onOpenApiModal,
   onOpenAutoPilotModal,
-  onOpenVideoConverterModal,
   onOpenGalleryModal,
   onOpenTutorialModal,
 }) => {
@@ -146,16 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
             <i className="fa-solid fa-sliders text-sky-400 text-xs ml-0.5"></i>
           </button>
 
-          {/* HTML to Video Converter Button */}
-          <button
-            onClick={onOpenVideoConverterModal}
-            className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-500/15 to-indigo-500/15 text-purple-300 border border-purple-500/30 hover:bg-purple-500/25 transition text-xs font-bold shadow-md shadow-purple-500/10 cursor-pointer active:scale-95"
-            title="Konversi HTML ke MP4 H.264 Universal"
-          >
-            <i className="fa-solid fa-film text-purple-400 text-xs"></i>
-            <span className="hidden sm:inline">HTML to MP4</span>
-            <span className="sm:hidden">MP4</span>
-          </button>
+
 
           {/* Auto Pilot Trigger Button */}
           <button

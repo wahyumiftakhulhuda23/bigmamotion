@@ -33,7 +33,6 @@ import { AutoPilotModal, FailedAutoPilotItem } from './components/AutoPilotModal
 import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
 import { FullscreenModal } from './components/FullscreenModal';
-import { VideoConverterModal } from './components/VideoConverterModal';
 import { TutorialModal } from './components/TutorialModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
@@ -214,7 +213,6 @@ export default function App() {
   const [isPromptAutoPilotModalOpen, setIsPromptAutoPilotModalOpen] = useState<boolean>(false);
   const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
-  const [isVideoConverterModalOpen, setIsVideoConverterModalOpen] = useState<boolean>(false);
   const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
 
@@ -1293,7 +1291,6 @@ export default function App() {
             setIsPromptAutoPilotModalOpen(true);
           }
         }}
-        onOpenVideoConverterModal={() => setIsVideoConverterModalOpen(true)}
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
         onOpenTutorialModal={() => setIsTutorialModalOpen(true)}
       />
@@ -1606,12 +1603,6 @@ export default function App() {
         showToast={showToast}
         exportBitrate={exportBitrate}
         onExportBitrateChange={handleExportBitrateChange}
-      />
-
-      <VideoConverterModal
-        isOpen={isVideoConverterModalOpen}
-        onClose={() => setIsVideoConverterModalOpen(false)}
-        showToast={showToast}
       />
 
       <TutorialModal
