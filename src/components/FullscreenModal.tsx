@@ -65,7 +65,7 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({ isOpen, item, 
   return (
     <div
       id="fullscreen-modal"
-      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col p-4 sm:p-6 transition-all duration-300"
+      className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-xl flex flex-col p-4 sm:p-6 transition-all duration-300"
     >
       <div className="flex justify-between items-center pb-4 border-b border-gray-800 max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-3">
