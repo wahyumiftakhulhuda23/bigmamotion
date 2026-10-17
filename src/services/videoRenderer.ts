@@ -344,11 +344,12 @@ export async function renderHtmlToVideo(
   options: VideoRenderOptions = {}
 ): Promise<VideoRenderResult> {
   const devProfile = getDevicePerformanceProfile();
+  const isLowSpec = devProfile.isLowSpec;
 
   const {
-    width = 1920,
-    height = 1080,
-    fps = options.renderPreset === 'standard_30' ? 30 : 60,
+    width = options.width || (isLowSpec ? 1280 : 1920),
+    height = options.height || (isLowSpec ? 720 : 1080),
+    fps = options.fps || (isLowSpec ? 30 : (options.renderPreset === 'standard_30' ? 30 : 60)),
     duration = 10,
     mode = 'auto',
     isGreenScreen = false,
