@@ -320,6 +320,9 @@ export function prepareHtmlForVideo(
         window.requestAnimationFrame = function(cb) {
           _stepCallback = cb;
           _lastCallback = cb;
+          try {
+            cb(window.__bigmaVirtualTimeMs || 0);
+          } catch (e) {}
           return 1;
         };
         window.cancelAnimationFrame = function() {};
