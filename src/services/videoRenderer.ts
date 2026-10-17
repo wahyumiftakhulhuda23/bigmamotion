@@ -742,6 +742,10 @@ export async function renderHtmlToVideo(
           engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
           updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
 
+          const profile = getDevicePerformanceProfile();
+          const maxQueue = profile.isLowSpec ? 3 : 8;
+          const yieldFrames = profile.isLowSpec ? 2 : 1;
+
           // Main Frame Loop with Deterministic Offline Virtual Stepping
           for (let frame = 1; frame < totalFrames; frame++) {
             if (isCancelled) {
@@ -751,8 +755,8 @@ export async function renderHtmlToVideo(
 
             if (encodeError) throw encodeError;
 
-            // Multitasking-Safe Backpressure: never freeze if window is minimized or occluded
-            if (videoEncoder.encodeQueueSize > 8) {
+            // Multitasking-Safe & Low-Spec Celeron CPU Protection Backpressure
+            if (videoEncoder.encodeQueueSize > maxQueue) {
               await new Promise<void>((resolve) => {
                 let resolved = false;
                 const done = () => {
@@ -765,11 +769,11 @@ export async function renderHtmlToVideo(
                 const mc = new MessageChannel();
                 mc.port1.onmessage = done;
                 mc.port2.postMessage(null);
-                setTimeout(done, 30);
+                setTimeout(done, profile.isLowSpec ? 15 : 30);
               });
             }
 
-            if (videoEncoder.encodeQueueSize > 24) {
+            if (videoEncoder.encodeQueueSize > (profile.isLowSpec ? 10 : 24)) {
               try {
                 await videoEncoder.flush();
               } catch {}
@@ -802,12 +806,16 @@ export async function renderHtmlToVideo(
               updateUIProgress(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
             }
 
-            // Yield execution via MessageChannel (immune to background tab timer throttling)
-            await new Promise<void>((resolve) => {
-              const ch = new MessageChannel();
-              ch.port1.onmessage = () => resolve();
-              ch.port2.postMessage(null);
-            });
+            // Cooperative Yielding: Give Celeron CPU breathing room every few frames to prevent 100% lockup
+            if (profile.isLowSpec && frame % yieldFrames === 0) {
+              await new Promise((r) => setTimeout(r, 3));
+            } else {
+              await new Promise<void>((resolve) => {
+                const ch = new MessageChannel();
+                ch.port1.onmessage = () => resolve();
+                ch.port2.postMessage(null);
+              });
+            }
           }
 
           updateUIProgress(94, 'Finalisasi berkas MP4 FastStart...');
