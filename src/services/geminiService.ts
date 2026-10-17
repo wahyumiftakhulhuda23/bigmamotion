@@ -579,8 +579,8 @@ ${colorMode === 'gradient' ? '- Gunakan createLinearGradient / createRadialGradi
 MANDATORY GREEN SCREEN / CHROMA KEY RULES:
 - Background HARUS hijau polos murni (#00ff00) untuk chroma key editing video.
 - DILARANG background gelap atau gradien hijau ke hitam.
-- Objek utama HARUS menggunakan warna kontras jelas (Cyan, Gold, Ungu, Putih, Oranye, Merah, Biru).
-- HINDARI memakai warna hijau #00ff00 pada objek utama agar tidak hilang saat di-chroma-key.`
+- Objek utama WAJIB menggunakan warna yang SANGAT KONTRAS tajam terhadap latar hijau (Misal: Putih Salju #FFFFFF, Kuning Emas #FFD700, Cyan Terang #00F3FF, Magenta #FF007F, Oranye Menyala #FF6B00, Merah Terang #FF3333).
+- HINDARI KERAS memakai warna hijau #00ff00, hijau lime, atau hijau tua pada objek utama agar objek tidak transparan/hilang saat di-chroma-key.`
     : '';
 
   const systemPrompt = `Anda adalah Lead HTML5 Motion Designer Spesialis Video Asset & Microstock (Shutterstock/Envato Standard).

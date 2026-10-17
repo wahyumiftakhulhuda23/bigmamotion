@@ -187,7 +187,7 @@ export default function App() {
         if (val > 0) return val;
       }
     } catch {}
-    return 25; // 25 Mbps: Standard Microstock Pro for Adobe Stock & Shutterstock
+    return 18; // 18 Mbps: Standard Microstock default
   });
 
   const handleExportBitrateChange = (val: number) => {
