@@ -40,6 +40,10 @@ interface ImageToMotionSectionProps {
   onOpenFullscreen: (item: AnimationItem) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
   addLog: (text: string, type?: 'info' | 'success' | 'error' | 'warn' | 'cyan' | 'green') => void;
+  renderResolution?: { width: number; height: number; label: string };
+  renderFps?: number;
+  renderDuration?: number;
+  exportBitrate?: number;
 }
 
 export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
@@ -60,6 +64,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   onOpenFullscreen,
   showToast,
   addLog,
+  renderResolution = { width: 1920, height: 1080, label: '1080p Full HD' },
+  renderFps = 60,
+  renderDuration = 10,
+  exportBitrate = 18,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isAutoPilotRunning, setIsAutoPilotRunning] = useState(false);
@@ -682,18 +690,18 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
         try {
           const result = await renderHtmlToVideo(item.animationResult.html, {
-            width: 1920,
-            height: 1080,
-            fps: 60,
-            duration: 10,
-            bitrate: 18,
+            width: renderResolution.width,
+            height: renderResolution.height,
+            fps: renderFps,
+            duration: renderDuration,
+            bitrate: exportBitrate,
             format: 'mp4',
             mode: 'icon',
             isGreenScreen: item.isGreenScreen,
           });
 
           const baseName = item.fileName.replace(/\.[^/.]+$/, '').replace(/[^a-z0-9]/gi, '_');
-          folder.file(`${i + 1}_${baseName}_1080p60.mp4`, result.blob);
+          folder.file(`${i + 1}_${baseName}_${renderResolution.height}p${renderFps}_${result.bitrateMbps}Mbps.mp4`, result.blob);
         } catch (renderErr: any) {
           addLog(`[Warning] Gagal merender "${item.fileName}": ${renderErr.message}`, 'warn');
         }
@@ -765,15 +773,15 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
   const handleExportSingleMp4 = async (item: ImageToMotionItem) => {
     if (!item.animationResult) return;
-    showToast(`Merender MP4 H.264 60 FPS untuk "${item.fileName}"...`, 'info');
+    showToast(`Merender MP4 H.264 (${renderResolution.width}x${renderResolution.height} @ ${renderFps}FPS • ${exportBitrate} Mbps) untuk "${item.fileName}"...`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.animationResult.html, {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        duration: 10,
-        bitrate: 18,
+        width: renderResolution.width,
+        height: renderResolution.height,
+        fps: renderFps,
+        duration: renderDuration,
+        bitrate: exportBitrate,
         format: 'mp4',
         mode: 'icon',
         isGreenScreen: item.isGreenScreen,
@@ -781,7 +789,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       const a = document.createElement('a');
       a.href = result.url;
-      a.download = `Motion_${item.fileName.replace(/\.[^/.]+$/, '')}_1080p60.mp4`;
+      a.download = `Motion_${item.fileName.replace(/\.[^/.]+$/, '')}_${renderResolution.height}p${renderFps}_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

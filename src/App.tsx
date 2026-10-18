@@ -188,13 +188,67 @@ export default function App() {
         if (val > 0) return val;
       }
     } catch {}
-    return 18; // 18 Mbps: Standard Microstock default
+    const hw = detectDeviceHardware();
+    return hw.recommendedBitrate || 18;
   });
 
   const handleExportBitrateChange = (val: number) => {
     setExportBitrate(val);
     try {
       localStorage.setItem('bigma_export_bitrate', String(val));
+    } catch {}
+  };
+
+  const [renderResolution, setRenderResolution] = useState<{ width: number; height: number; label: string }>(() => {
+    try {
+      const saved = localStorage.getItem('bigma_render_resolution');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    const hw = detectDeviceHardware();
+    return hw.recommendedResolution;
+  });
+
+  const handleResolutionChange = (res: { width: number; height: number; label: string }) => {
+    setRenderResolution(res);
+    try {
+      localStorage.setItem('bigma_render_resolution', JSON.stringify(res));
+    } catch {}
+  };
+
+  const [renderFps, setRenderFps] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bigma_render_fps');
+      if (saved) {
+        const val = Number(saved);
+        if (val > 0) return val;
+      }
+    } catch {}
+    const hw = detectDeviceHardware();
+    return hw.recommendedFps;
+  });
+
+  const handleFpsChange = (val: number) => {
+    setRenderFps(val);
+    try {
+      localStorage.setItem('bigma_render_fps', String(val));
+    } catch {}
+  };
+
+  const [renderDuration, setRenderDuration] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('bigma_render_duration');
+      if (saved) {
+        const val = Number(saved);
+        if (val > 0) return val;
+      }
+    } catch {}
+    return 10;
+  });
+
+  const handleDurationChange = (val: number) => {
+    setRenderDuration(val);
+    try {
+      localStorage.setItem('bigma_render_duration', String(val));
     } catch {}
   };
 
@@ -1131,15 +1185,15 @@ export default function App() {
   const handleExportMp4Single = async (item: AnimationItem, customBitrate?: number) => {
     const chosenBitrate = customBitrate ?? exportBitrate ?? 25;
     setExportingMp4Id(item.id);
-    showToast(`Memulai render MP4 H.264 60 FPS (${chosenBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
-    addLog(`[Export MP4] Merender "${item.title}" ke format MP4 H.264 Universal (1080p 60 FPS • ${chosenBitrate} Mbps CBR)...`, 'info');
+    showToast(`Memulai render MP4 H.264 (${renderResolution.width}x${renderResolution.height} @ ${renderFps}FPS • ${chosenBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
+    addLog(`[Export MP4] Merender "${item.title}" (${renderResolution.label} @ ${renderFps}FPS • ${chosenBitrate} Mbps CBR)...`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.html, {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        duration: 10,
+        width: renderResolution.width,
+        height: renderResolution.height,
+        fps: renderFps,
+        duration: renderDuration,
         bitrate: chosenBitrate,
         format: 'mp4',
         mode: item.type,
@@ -1155,7 +1209,7 @@ export default function App() {
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${result.bitrateMbps}Mbps.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${renderResolution.height}p${renderFps}_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -1487,6 +1541,10 @@ export default function App() {
             onOpenFullscreen={(item) => setFullscreenItem(item)}
             showToast={showToast}
             addLog={addLog}
+            renderResolution={renderResolution}
+            renderFps={renderFps}
+            renderDuration={renderDuration}
+            exportBitrate={exportBitrate}
           />
         )}
 
@@ -1549,6 +1607,10 @@ export default function App() {
           setIsGalleryModalOpen(true);
         }}
         showToast={showToast}
+        renderResolution={renderResolution}
+        renderFps={renderFps}
+        renderDuration={renderDuration}
+        exportBitrate={exportBitrate}
       />
 
       <ApiKeyModal
@@ -1559,12 +1621,12 @@ export default function App() {
         onClose={() => setIsApiModalOpen(false)}
         showToast={showToast}
         addLog={addLog}
-        renderResolution={{ width: 1920, height: 1080, label: '1080p Full HD' }}
-        onResolutionChange={() => {}}
-        renderFps={60}
-        onFpsChange={() => {}}
-        renderDuration={10}
-        onDurationChange={() => {}}
+        renderResolution={renderResolution}
+        onResolutionChange={handleResolutionChange}
+        renderFps={renderFps}
+        onFpsChange={handleFpsChange}
+        renderDuration={renderDuration}
+        onDurationChange={handleDurationChange}
         exportBitrate={exportBitrate}
         onExportBitrateChange={handleExportBitrateChange}
       />
@@ -1610,6 +1672,9 @@ export default function App() {
         showToast={showToast}
         exportBitrate={exportBitrate}
         onExportBitrateChange={handleExportBitrateChange}
+        renderResolution={renderResolution}
+        renderFps={renderFps}
+        renderDuration={renderDuration}
       />
 
       <TutorialModal

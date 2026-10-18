@@ -87,7 +87,15 @@ const ACCELERATION_PREFERENCES: ('prefer-hardware' | 'no-preference' | 'prefer-s
 ];
 
 // In-memory cache for working WebCodecs config to eliminate candidate scanning delays on sequential renders
-let cachedWorkingEncoderConfig: { codec: string; hardwareAcceleration: 'prefer-hardware' | 'no-preference' | 'prefer-software' } | null = null;
+let cachedWorkingEncoderConfig: { codec: string; hardwareAcceleration: 'prefer-hardware' | 'no-preference' | 'prefer-software' } | null = (() => {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('bigma_working_codec');
+      if (saved) return JSON.parse(saved);
+    }
+  } catch {}
+  return null;
+})();
 
 /**
  * Silent AudioContext & Worker Keep-Alive service.
@@ -231,6 +239,15 @@ export function prepareHtmlForVideo(
     </style>
     <script>
       (function() {
+        // Enforce 1:1 DevicePixelRatio during headless video capture
+        // Prevents retina/high-DPI screens from inflating frame buffer to 4K unnecessarily
+        try {
+          Object.defineProperty(window, 'devicePixelRatio', {
+            get: function() { return 1; },
+            configurable: true
+          });
+        } catch {}
+
         let _stepCallback = null;
         let _lastCallback = null;
         window.__bigmaVirtualTimeMs = 0;
@@ -278,9 +295,6 @@ export function prepareHtmlForVideo(
         window.requestAnimationFrame = function(cb) {
           _stepCallback = cb;
           _lastCallback = cb;
-          try {
-            cb(window.__bigmaVirtualTimeMs || 0);
-          } catch (e) {}
           return 1;
         };
         window.cancelAnimationFrame = function() {};
@@ -357,6 +371,18 @@ export async function renderHtmlToVideo(
   const keepAlive = new BackgroundRenderKeepAlive();
   await keepAlive.start();
 
+  // High-performance zero-delay microtask yield (avoids setTimeout 4ms nested clamp)
+  const fastYield = () =>
+    new Promise<void>((resolve) => {
+      if (typeof MessageChannel !== 'undefined') {
+        const mc = new MessageChannel();
+        mc.port1.onmessage = () => resolve();
+        mc.port2.postMessage(null);
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+
   try {
     onProgress?.(3, 'Menyiapkan canvas & aset rendering...');
 
@@ -382,38 +408,54 @@ export async function renderHtmlToVideo(
       } catch {}
     }
 
-    // Brief 50ms tick to ensure scripts initialize
-    await new Promise((r) => setTimeout(r, 50));
+    // Brief 30ms tick to ensure scripts initialize
+    await new Promise((r) => setTimeout(r, 30));
 
-    const getCanvas = (): HTMLCanvasElement | null => {
-      return (
-        hiddenIframe.contentDocument?.querySelector('canvas') ||
-        (hiddenIframe.contentWindow?.document?.querySelector('canvas') as HTMLCanvasElement | null)
-      );
+    const iframeCanvas =
+      hiddenIframe.contentDocument?.querySelector('canvas') ||
+      (hiddenIframe.contentWindow?.document?.querySelector('canvas') as HTMLCanvasElement | null);
+
+    if (iframeCanvas) {
+      iframeCanvas.width = width;
+      iframeCanvas.height = height;
+    }
+
+    // Fallback Target Canvas (only used if iframe canvas dimensions ever mismatch)
+    let targetCanvas: HTMLCanvasElement | null = null;
+    let targetCtx: CanvasRenderingContext2D | null = null;
+
+    const getTargetCanvas = () => {
+      if (!targetCanvas) {
+        targetCanvas = document.createElement('canvas');
+        targetCanvas.width = width;
+        targetCanvas.height = height;
+        targetCtx = targetCanvas.getContext('2d', {
+          alpha: false,
+          willReadFrequently: false,
+          desynchronized: true,
+        });
+      }
+      return { targetCanvas, targetCtx };
     };
 
-    // Master High-Res Target Canvas strictly matching requested resolution
-    const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = width;
-    targetCanvas.height = height;
-
-    const ctx = targetCanvas.getContext('2d', {
-      alpha: false,
-      willReadFrequently: false,
-      desynchronized: true,
-    });
-
-    if (!ctx) throw new Error('Tidak dapat membuat Canvas 2D context');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-
-    const drawCurrentFrameToTarget = () => {
-      ctx.fillStyle = canvasBgColor;
-      ctx.fillRect(0, 0, width, height);
-      const canvasEl = getCanvas();
-      if (canvasEl && canvasEl.width > 0 && canvasEl.height > 0) {
-        ctx.drawImage(canvasEl, 0, 0, width, height);
+    const drawFallbackTarget = () => {
+      const { targetCanvas: tC, targetCtx: tCtx } = getTargetCanvas();
+      if (tCtx && tC) {
+        tCtx.fillStyle = canvasBgColor;
+        tCtx.fillRect(0, 0, width, height);
+        if (iframeCanvas && iframeCanvas.width > 0 && iframeCanvas.height > 0) {
+          tCtx.drawImage(iframeCanvas, 0, 0, width, height);
+        }
       }
+      return tC;
+    };
+
+    // Zero-Copy fast-path: directly read from iframeCanvas in GPU VRAM whenever dimensions match
+    const getSourceFrameCanvas = (): CanvasImageSource => {
+      if (iframeCanvas && iframeCanvas.width === width && iframeCanvas.height === height) {
+        return iframeCanvas;
+      }
+      return drawFallbackTarget()!;
     };
 
     // =========================================================================
@@ -424,9 +466,18 @@ export async function renderHtmlToVideo(
     let engineUsed: 'webcodecs-hardware' | 'webcodecs-software' = 'webcodecs-hardware';
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
+      // Prioritize fast, universally hardware-accelerated Baseline/Main profiles
+      const priorityCodecs = [
+        'avc1.420028', // Baseline Profile Level 4.0 - Fastest GPU encoding across all GPUs
+        'avc1.4d0028', // Main Profile Level 4.0
+        'avc1.640028', // High Profile Level 4.0
+        'avc1.42001e', // Baseline Level 3.0
+        'avc1.42E01E', // Constrained Baseline
+      ];
+
       const encoderConfigsToTry: { codec: string; accel: 'prefer-hardware' | 'no-preference' | 'prefer-software'; rc: any }[] = [];
 
-      // If we already verified a working config previously, try that FIRST for instantaneous launch!
+      // 1. Try cached working config first for instantaneous launch
       if (cachedWorkingEncoderConfig) {
         encoderConfigsToTry.push({
           codec: cachedWorkingEncoderConfig.codec,
@@ -435,27 +486,28 @@ export async function renderHtmlToVideo(
         });
       }
 
-      for (const accel of ACCELERATION_PREFERENCES) {
-        for (const codec of CANDIDATE_CODECS) {
-          if (cachedWorkingEncoderConfig && cachedWorkingEncoderConfig.codec === codec && cachedWorkingEncoderConfig.hardwareAcceleration === accel) {
-            continue;
-          }
-          encoderConfigsToTry.push({
-            codec,
-            accel,
-            rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
-          });
-          encoderConfigsToTry.push({
-            codec,
-            accel,
-            rc: { bitrateMode: 'variable', latencyMode: 'realtime' },
-          });
-          encoderConfigsToTry.push({
-            codec,
-            accel,
-            rc: {},
-          });
-        }
+      // 2. Hardware acceleration first
+      for (const codec of priorityCodecs) {
+        if (cachedWorkingEncoderConfig?.codec === codec && cachedWorkingEncoderConfig.hardwareAcceleration === 'prefer-hardware') continue;
+        encoderConfigsToTry.push({
+          codec,
+          accel: 'prefer-hardware',
+          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+        });
+      }
+
+      // 3. Fallback no-preference / software if hardware not available
+      for (const codec of priorityCodecs) {
+        encoderConfigsToTry.push({
+          codec,
+          accel: 'no-preference',
+          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+        });
+        encoderConfigsToTry.push({
+          codec,
+          accel: 'prefer-software',
+          rc: {},
+        });
       }
 
       for (const candidate of encoderConfigsToTry) {
@@ -484,7 +536,7 @@ export async function renderHtmlToVideo(
             }
           }
 
-          onProgress?.(8, `Inisialisasi encoder H.264 (${codec} @ ${bitrate} Mbps)...`);
+          onProgress?.(6, `Inisialisasi Hardware Encoder (${codec} @ ${bitrate} Mbps)...`);
 
           const muxer = new Muxer({
             target: new ArrayBufferTarget(),
@@ -499,41 +551,13 @@ export async function renderHtmlToVideo(
           });
 
           let encodeError: any = null;
-          const targetBytesPerFrame = Math.round((targetBitrateBps / 8) / fps);
 
           const videoEncoder = new (window as any).VideoEncoder({
             output: (chunk: any, meta: any) => {
               try {
-                const chunkLen = chunk.byteLength;
-                // ITU-T Rec. H.264 / ISO/IEC 14496-10 compliant NAL Unit 12 (filler_data_rbsp) stuffing
-                if (targetBytesPerFrame > chunkLen + 8) {
-                  const deficit = targetBytesPerFrame - chunkLen;
-                  const augmented = new Uint8Array(targetBytesPerFrame);
-                  chunk.copyTo(augmented.subarray(0, chunkLen));
-
-                  const nalLen = deficit - 4;
-                  augmented[chunkLen + 0] = (nalLen >>> 24) & 0xff;
-                  augmented[chunkLen + 1] = (nalLen >>> 16) & 0xff;
-                  augmented[chunkLen + 2] = (nalLen >>> 8) & 0xff;
-                  augmented[chunkLen + 3] = nalLen & 0xff;
-                  augmented[chunkLen + 4] = 0x0c;
-                  augmented.fill(0xff, chunkLen + 5, chunkLen + 4 + nalLen - 1);
-                  augmented[chunkLen + 4 + nalLen - 1] = 0x80;
-
-                  muxer.addVideoChunkRaw(
-                    augmented,
-                    chunk.type,
-                    chunk.timestamp,
-                    chunk.duration || frameDurationUs,
-                    meta
-                  );
-                } else {
-                  muxer.addVideoChunk(chunk, meta);
-                }
+                muxer.addVideoChunk(chunk, meta);
               } catch (muxErr) {
-                try {
-                  muxer.addVideoChunk(chunk, meta);
-                } catch {}
+                // Ignore transient chunk error
               }
             },
             error: (e: any) => {
@@ -551,33 +575,39 @@ export async function renderHtmlToVideo(
             try { iframeWin.animate(0); } catch {}
           }
 
-          drawCurrentFrameToTarget();
-          const testFrame = new (window as any).VideoFrame(targetCanvas, {
+          const firstSource = getSourceFrameCanvas();
+          const testFrame = new (window as any).VideoFrame(firstSource, {
             timestamp: 0,
             duration: frameDurationUs,
           });
           videoEncoder.encode(testFrame, { keyFrame: true });
           testFrame.close();
 
-          await new Promise((r) => setTimeout(r, 20));
+          await fastYield();
 
           if (encodeError) {
             try { videoEncoder.close(); } catch {}
             continue;
           }
 
-          // Cache working config for instant sequential renders
+          // Cache verified working config for 0ms sequential renders
           cachedWorkingEncoderConfig = { codec, hardwareAcceleration: accel };
+          try {
+            localStorage.setItem('bigma_working_codec', JSON.stringify(cachedWorkingEncoderConfig));
+          } catch {}
           engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
 
-          onProgress?.(10, `Merender MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
+          onProgress?.(8, `Merender MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
 
-          // High-Performance Frame Loop (Unthrottled in background & multitasking)
+          const yieldEvery = isLowSpec ? 15 : 25;
+          const maxQueueSize = isLowSpec ? 16 : 30;
+
+          // High-Performance Zero-Copy Frame Loop (Unthrottled in background & multitasking)
           for (let frame = 1; frame < totalFrames; frame++) {
             if (encodeError) throw encodeError;
 
-            // Non-blocking backpressure
-            if (videoEncoder.encodeQueueSize > 24) {
+            // Non-blocking hardware backpressure
+            if (videoEncoder.encodeQueueSize > maxQueueSize) {
               await new Promise<void>((resolve) => {
                 let resolved = false;
                 const done = () => {
@@ -587,7 +617,7 @@ export async function renderHtmlToVideo(
                   }
                 };
                 videoEncoder.ondequeue = done;
-                setTimeout(done, 15);
+                setTimeout(done, 4);
               });
             }
 
@@ -600,11 +630,10 @@ export async function renderHtmlToVideo(
               try { iframeWin.animate(targetTimeMs); } catch {}
             }
 
-            drawCurrentFrameToTarget();
-
             const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
+            const currentSource = getSourceFrameCanvas();
 
-            const videoFrame = new (window as any).VideoFrame(targetCanvas, {
+            const videoFrame = new (window as any).VideoFrame(currentSource, {
               timestamp: timestampUs,
               duration: frameDurationUs,
             });
@@ -612,11 +641,11 @@ export async function renderHtmlToVideo(
             videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
             videoFrame.close();
 
-            // Periodic progress update using setTimeout(0) — DOES NOT STALL WHEN WINDOW IS MINIMIZED OR OCCLUDED!
-            if (frame % 25 === 0 || frame === totalFrames - 1) {
-              const pct = Math.round(10 + (frame / totalFrames) * 82);
-              onProgress?.(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
-              await new Promise((r) => setTimeout(r, 0));
+            // Periodic zero-delay yield keeps UI responsive & multitasking fluid on all devices
+            if (frame % yieldEvery === 0 || frame === totalFrames - 1) {
+              const pct = Math.round(8 + (frame / totalFrames) * 84);
+              onProgress?.(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}% • ${bitrate} Mbps)...`);
+              await fastYield();
             }
           }
 
@@ -684,10 +713,11 @@ export async function renderHtmlToVideo(
     // =========================================================================
     onProgress?.(10, `Mengaktifkan Universal Stream Engine (${width}x${height} @ ${fps}fps)...`);
 
+    const { targetCanvas: fallbackCanvas } = getTargetCanvas();
     const stream =
-      targetCanvas.captureStream
-        ? targetCanvas.captureStream(fps)
-        : (getCanvas() as any)?.captureStream(fps);
+      fallbackCanvas.captureStream
+        ? fallbackCanvas.captureStream(fps)
+        : (getSourceFrameCanvas() as any)?.captureStream(fps);
 
     if (!stream) {
       throw new Error('Perekam video tidak didukung pada browser ini.');
@@ -747,11 +777,12 @@ export async function renderHtmlToVideo(
       } else if (iframeWin && typeof iframeWin.animate === 'function') {
         try { iframeWin.animate(targetTimeMs); } catch {}
       }
-      ctx.fillStyle = canvasBgColor;
-      ctx.fillRect(0, 0, width, height);
-      const canvasEl = getCanvas();
-      if (canvasEl && canvasEl.width > 0 && canvasEl.height > 0) {
-        ctx.drawImage(canvasEl, 0, 0, width, height);
+      const { targetCanvas: tC, targetCtx: tCtx } = getTargetCanvas();
+      if (tCtx && tC) {
+        tCtx.fillStyle = canvasBgColor;
+        tCtx.fillRect(0, 0, width, height);
+        const sourceC = getSourceFrameCanvas();
+        tCtx.drawImage(sourceC, 0, 0, width, height);
       }
       streamFrame++;
     }, 1000 / fps);

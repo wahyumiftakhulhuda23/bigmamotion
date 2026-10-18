@@ -17,6 +17,9 @@ interface GalleryModalProps {
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
   exportBitrate?: number;
   onExportBitrateChange?: (bitrate: number) => void;
+  renderResolution?: { width: number; height: number; label: string };
+  renderFps?: number;
+  renderDuration?: number;
 }
 
 interface ItemRenderProgress {
@@ -42,6 +45,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   showToast,
   exportBitrate = 18,
   onExportBitrateChange,
+  renderResolution = { width: 1920, height: 1080, label: '1080p Full HD' },
+  renderFps = 60,
+  renderDuration = 10,
 }) => {
   const [currentFilter, setCurrentFilter] = useState<string>('All');
   const [downloadLogs, setDownloadLogs] = useState<{ text: string; type: 'info' | 'success' | 'error' }[]>([]);
@@ -256,15 +262,15 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
       [item.id]: { percent: 5, message: 'Menyiapkan render...', status: 'rendering' },
     }));
 
-    addDownloadLog(`[Render Satuan] Memulai render 1080p 60FPS (${exportBitrate} Mbps): "${item.title.substring(0, 25)}..."`, 'info');
-    showToast(`Merender MP4 H.264 (${exportBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
+    addDownloadLog(`[Render Satuan] Memulai render ${renderResolution.label} @ ${renderFps}FPS (${exportBitrate} Mbps): "${item.title.substring(0, 25)}..."`, 'info');
+    showToast(`Merender MP4 H.264 (${renderResolution.width}x${renderResolution.height} @ ${renderFps}FPS • ${exportBitrate} Mbps) untuk "${item.title.substring(0, 20)}..."`, 'info');
 
     try {
       const result = await renderHtmlToVideo(item.html, {
-        width: 1920,
-        height: 1080,
-        fps: 60,
-        duration: 10,
+        width: renderResolution.width,
+        height: renderResolution.height,
+        fps: renderFps,
+        duration: renderDuration,
         bitrate: exportBitrate,
         mode: item.type,
         onProgress: (pct, msg) => {
@@ -302,7 +308,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   const startSequentialBatchRender = async (chosenAccounts: string[]) => {
     setIsDownloading(true);
     setDownloadLogs([]);
-    addDownloadLog(`[Batch Render Dimulai] Menjalankan render berurutan untuk akun: ${chosenAccounts.join(', ')} (@ ${exportBitrate} Mbps)...`, 'info');
+    addDownloadLog(`[Batch Render Dimulai] Menjalankan render berurutan untuk akun: ${chosenAccounts.join(', ')} (${renderResolution.label} @ ${renderFps}FPS • ${exportBitrate} Mbps)...`, 'info');
     showToast(`Memulai batch render untuk ${chosenAccounts.length} akun...`, 'info');
 
     let totalSaved = 0;
@@ -329,10 +335,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
           try {
             const result = await renderHtmlToVideo(item.html, {
-              width: 1920,
-              height: 1080,
-              fps: 60,
-              duration: 10,
+              width: renderResolution.width,
+              height: renderResolution.height,
+              fps: renderFps,
+              duration: renderDuration,
               bitrate: exportBitrate,
               mode: item.type,
               onProgress: (pct, msg) => {
