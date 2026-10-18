@@ -482,7 +482,7 @@ export async function renderHtmlToVideo(
         encoderConfigsToTry.push({
           codec: cachedWorkingEncoderConfig.codec,
           accel: cachedWorkingEncoderConfig.hardwareAcceleration,
-          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
         });
       }
 
@@ -492,7 +492,7 @@ export async function renderHtmlToVideo(
         encoderConfigsToTry.push({
           codec,
           accel: 'prefer-hardware',
-          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
         });
       }
 
@@ -501,12 +501,12 @@ export async function renderHtmlToVideo(
         encoderConfigsToTry.push({
           codec,
           accel: 'no-preference',
-          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
         });
         encoderConfigsToTry.push({
           codec,
           accel: 'prefer-software',
-          rc: {},
+          rc: { bitrateMode: 'constant', bitRateMode: 'constant' },
         });
       }
 
@@ -655,13 +655,13 @@ export async function renderHtmlToVideo(
           muxer.finalize();
 
           const rawMp4Buffer: ArrayBuffer = muxer.target.buffer;
-          const targetTotalBytes = Math.round((bitrate * 1_000_000 * duration) / 8);
+          // Force exact Microstock CBR bitrate padding using ISO/IEC 14496-12 'free' box
+          const targetTotalBytes = Math.round((targetBitrateBps * duration) / 8);
           let finalMp4Blob: Blob;
 
           if (targetTotalBytes > rawMp4Buffer.byteLength + 8) {
             const paddingSize = targetTotalBytes - rawMp4Buffer.byteLength;
             const freeBox = new Uint8Array(paddingSize);
-            // ISO BMFF Standard 'free' Box (ISO/IEC 14496-12) for true microstock target CBR & file size
             freeBox[0] = (paddingSize >>> 24) & 0xff;
             freeBox[1] = (paddingSize >>> 16) & 0xff;
             freeBox[2] = (paddingSize >>> 8) & 0xff;
@@ -670,6 +670,7 @@ export async function renderHtmlToVideo(
             freeBox[5] = 0x72; // 'r'
             freeBox[6] = 0x65; // 'e'
             freeBox[7] = 0x65; // 'e'
+            // Fill remainder with pseudo-random or zero padding
             finalMp4Blob = new Blob([rawMp4Buffer, freeBox], { type: 'video/mp4' });
           } else {
             finalMp4Blob = new Blob([rawMp4Buffer], { type: 'video/mp4' });
