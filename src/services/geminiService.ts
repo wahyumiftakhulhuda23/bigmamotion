@@ -349,8 +349,14 @@ async function generatePromptsDirect(
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
+  const entropySalt = Math.random().toString(36).substring(2) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
+
   const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${count} professional, highly marketable, and semantically rich animation prompts in English.
+
+CRITICAL UNIQUENESS MANDATE (CROSS-ACCOUNT & CROSS-DAY ANTI-SIMILARITY):
+- Every time this prompt is invoked, you MUST generate completely fresh, unique, and distinct subjects, angles, and object compositions that have never been generated before.
+- Even for the same category across different user accounts or different days (Entropy Salt: ${entropySalt}), ensure 100% variance, novel variations, and distinct visual concepts. Never repeat previous ideas.
 
 MANDATORY RULES FOR HIGH-QUALITY SHAPES & MEANING (ANTI-DEFECT):
 1. MEANINGFUL & RECOGNIZABLE SUBJECT:
@@ -381,7 +387,7 @@ Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptContent }] }],
           generationConfig: {
-            temperature: 0.75,
+            temperature: 0.95,
             responseMimeType: 'application/json',
           },
         }),
