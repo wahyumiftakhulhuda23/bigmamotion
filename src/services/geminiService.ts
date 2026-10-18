@@ -593,8 +593,8 @@ MANDATORY GREEN SCREEN / CHROMA KEY RULES:
 - HINDARI KERAS memakai warna hijau #00ff00, hijau lime, atau hijau tua pada objek utama agar objek tidak transparan/hilang saat di-chroma-key.`
     : '';
 
-  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer Spesialis Video Asset & Microstock (Shutterstock/Envato Standard).
-Tugas: Buat 1 file HTML animasi Canvas 2D yang bervariasi, dinamis, dan MINIM BUG BENTUK/GERAKAN.
+  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT/LEPAS.
 
 PARAMETER TERPILIH:
 - Subjek/Prompt: "${promptTopic}"
@@ -602,8 +602,8 @@ PARAMETER TERPILIH:
 - Kategori Microstock: ${catInfo}
 - Gaya Visual: ${style}
 - Mode Warna: ${colorMode.toUpperCase()}
-- Status Neon Glow: ${neonGlow ? 'AKTIF' : 'NONAKTIF (Flat / Tanpa Blur)'}
-- Gerakan: LINEAR MOTION (Selaras & terintegrasi dengan deskripsi Prompt)
+- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
+- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
 ${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
 
 ${typeInstructions}
@@ -611,42 +611,59 @@ ${motionGuide}
 ${styleAndColorGuide}
 ${greenScreenDirective}
 
-ATURAN ANTI-BUG, ANTI-CACAT BENTUK & KUALITAS SEMANTIK TINGGI (MANDATORY):
-1. MAKNA BENTUK NYATA & BERKUALITAS TINGGI (HIGH SEMANTIC RECOGNITION):
-   - Bentuk yang digambar WAJIB merepresentasikan subjek secara akurat, bermakna, dan langsung dikenali secara visual tanpa keraguan!
-   - DILARANG KERAS menghasilkan bentuk cacat, poligon tak beraturan yang aneh, garis meliuk tak bermakna, atau lingkaran/kotak polos tanpa anatomi subjek.
-   - ANATOMI SUBJEK WAJIB LENGKAP:
-     * Finansial/Koin: Wajib bodi koin 3D dengan beveled rim ganda, simbol timbul di tengah ($, €, ₿, bintang, atau grafik naik), dan kilau cahaya sapuan (specular gleam).
-     * Keranjang / E-Commerce: Wajib rangka keranjang kawat melengkung rapi, pegangan sudut dengan grip bar, 2 roda berporos rapi, dan bingkisan/paket di dalamnya.
-     * Transportasi / Mobil: Wajib bodi sasis aerodinamis terpadu, lekukan kaca kabin, 2 roda ban tebal dengan velg berputar di pusat poros, dan lampu depan.
-     * Teknologi / AI / Server: Wajib chip silikon/prosesor dengan pin emas, jalur sirkuit bercahaya yang presisi, dan inti core yang berdenyut ritmis.
-     * Medis / Biotech: Wajib salib simetris dengan bevel halus atau heliks DNA berputar dengan anak tangga basa nukleotida yang presisi.
-2. GEOMETRI VEKTOR BERSIH & JALUR TERTUTUP (ZERO SHAPE DEFECTS):
-   - Setiap bidang bentuk WAJIB menggunakan ctx.beginPath() dan diakhiri ctx.closePath() sebelum ctx.fill() atau ctx.stroke().
-   - Gunakan kurva matematika mulus: ctx.roundRect(), ctx.arc(), ctx.ellipse(), dan bezierCurveTo dengan titik kontrol tangen yang seimbang.
-   - DILARANG titik vertex melenceng tajam atau kurva terbuka yang membuat bentuk tampak bocor/cacat.
-3. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - ANTI-DETACH):
-   - Seluruh bagian suatu objek WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
+ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
+1. DEKONSTRUKSI ANATOMI SUBJEK SECARA AKURAT (HIGH SEMANTIC RECOGNITION):
+   - Wajib gambar bentuk yang secara instan dikenali sebagai subjek dalam prompt: "${promptTopic}".
+   - Pecah subjek menjadi siluet bentuk primer yang solid, kokoh, proporsional, dan terdefinisi jelas.
+   - DILARANG KERAS menggambar bentuk poligon acak, garis meliuk tak bermakna, atau lingkaran/kotak polos tanpa anatomi subjek!
+   - Contoh representasi akurat per tema:
+     * Hearing Aid / Alat Bantu Dengar: Badan casing melengkung ergonomis di belakang telinga, tabung suara transparan/fleksibel melengkung, earpiece/mold masuk telinga, dan busur gelombang suara konsentris memancar keluar dari speaker dengan pemudaran halus (alpha = 1 - progress).
+     * Prosthetic Limb / Kaki Palsu: Soket paha/betis aerodinamis, engsel lutut/pergelangan mekanis bersumbu baut presisi, dan bilah kaki carbon-fiber melengkung dinamis yang mengayun pada poros engsel.
+     * Physical Therapy / Resistance Band: Pita karet lateks elastis dengan tekstur grip ganda di kedua ujung, berosilasi meregang secara harmonis dan elastis.
+     * Walker / Tongkat Lansia: Rangka pipa aluminium berbentuk U ganda dengan 4 kaki berkaret hitam di bawah, pegangan grip busa, dan palang penguat horizontal.
+     * Pediatric / Baby: Stetoskop dengan liontin boneka teddy bear imut / botol susu berkontur dengan dot silikon bening dan indikator mililiter timbul.
+     * Medis / Cross / Biotech: Salib medis simetris tebal dengan bevel 3D dan garis denyut ECG elektrokardiogram bercahaya yang bergerak di tengahnya.
+     * Koin / Finansial / Bisnis: Koin emas bertekstur beveled rim tebal dengan logo mata uang timbul dan kilau specular shine.
+     * Kendaraan / Transportasi: Sasis aerodinamis dengan spakbor roda, roda ban terpasang mati di sasis dengan velg berputar di poros tengah.
+
+2. ATURAN HIERARKI TUNGGAL & DILARANG KERAS OBJEK TERPISAH (ANTI-DETACH HIERARCHICAL RIGGING):
+   - SEMUA komponen suatu objek WAJIB berada di dalam SATU BLOK MATRIX INDUK:
      ctx.save();
-     ctx.translate(posX, posY); // posX = cx, posY = cy + floating/bounce
-     ctx.rotate(rot);
-     ctx.scale(scaleX, scaleY);
-     // SEMUA SUB-KOMPONEN DIGAMBAR RELATIF TERHADAP (0, 0)!
+     ctx.translate(cx, cy); // pusat canvas
+     ctx.translate(0, floatY); // osilasi halus seluruh objek bersamaan
+     ctx.rotate(rootRot); // rotasi seluruh objek bersamaan
+     ctx.scale(rootScale, rootScale);
+     
+     // SELURUH KOMPONEN DIGAMBAR RELATIF TERHADAP (0, 0)!
+     // DILARANG KERAS memberikan translate independen atau rumus gelombang Math.sin berbeda pada komponen terpisah yang membuat bagian tubuh/alat lepas mengambang!
+     
+     // Jika suatu sub-bagian berotasi/mengayun (misal: engsel sendi, jarum indikator, roda velg, tuas):
+     // Wajib pasang di titik sendi fisik aslinya (jointAnchorX, jointAnchorY):
+     ctx.save();
+     ctx.translate(jointAnchorX, jointAnchorY);
+     ctx.rotate(jointAngle);
+     // gambar sub-bagian relatif terhadap titik sendi ini
      ctx.restore();
-4. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH:
-   - Setiap bagian komponen harus melekat kokoh dan proporsional pada bodi utama (tidak boleh ada roda yang melayang di luar bodi, tidak boleh ada gagang yang melayang terpisah).
-5. ISOLASI TOTAL ICON (ZERO PARTIKEL & ZERO NOISE LUAR):
-   - Untuk tipe ICON: Kanvas di sekeliling icon HARUS 100% bersih, kosong, dan polos. DILARANG KERAS memunculkan partikel melayang, debu berterbangan, bintik-bintik random, percikan/sparks liar, cincin orbit aneh, serpihan, pecahan, atau objek lain di luar bentuk icon utama!
-6. PENCAHAYAAN MIKROSTOK & SPECULAR BEAM:
-   - Terapkan dual-tone gradient untuk volume (bagian atas lebih terang, bagian bawah lebih teduh).
-   - Tambahkan sapuan pantulan cahaya berkilau (specular highlight beam) yang melintasi permukaan objek secara periodik.
-7. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';).
-8. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);).
-9. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL:
-   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
-   - Objek Icon / Grafis harus proporsional & memenuhi frame sekitar 80-88% tinggi canvas dengan margin aman.
-10. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.10), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal yang halus).
-11. RINGKAS & TUNTAS: Buat kode efisien 180 - 280 baris yang langsung looping 60 FPS tanpa henti.
+
+     ctx.restore();
+
+3. GERAKAN KINETIK PROFESIONAL 60 FPS (NON-DEFORMING & PURPOSEFUL):
+   - DILARANG squash & stretch ekstrem yang merusak bentuk objek menjadi seperti jelly/gelatin lembek.
+   - Gerakan objek utama harus elegan dan menjaga integritas bentuk:
+     * Gentle Float: const floatY = Math.sin(t * 1.8) * 10;
+     * Gentle Root Sway: const rootRot = Math.sin(t * 1.4) * 0.04;
+     * Gentle Breath: const rootScale = 1 + Math.sin(t * 2.0) * 0.015;
+   - Implementasikan gerakan kinetik yang secara langsung mencerminkan kata kerja dalam prompt:
+     * Jika "rotating / berputar": putar objek atau elemen indikatornya secara mulus pada poros tengahnya: ctx.rotate(t * speed);
+     * Jika "pulse / gelombang / soundwaves / sinyal": gambar 2-3 cincin atau busur gelombang yang memancar dari lubang emitor/speaker, membesar secara proporsional dan memudar (ctx.globalAlpha = 1 - progress);
+     * Jika "articulated / mekanis / mengayun": ayunkan bagian sendi dengan osilasi sudut halus: const jointAngle = Math.sin(t * 2.5) * 0.25;
+     * Jika "stretching / lentur": ubah jarak ujung peregang secara elastis tanpa merusak ketebalan pita.
+
+4. ISOLASI TOTAL & KEBERSIHAN KANVAS:
+   - DILARANG memunculkan partikel mengambang, debu liar, bintik acak, atau serpihan di luar objek utama!
+   - Background canvas harus bersih, solid, dan kontras.
+   - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
+   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -723,7 +740,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: systemPrompt }] }],
           generationConfig: {
-            temperature: 0.65,
+            temperature: 0.15,
+            maxOutputTokens: 8192,
           },
         }),
       });
@@ -1578,11 +1596,385 @@ ${shapeAnalysisJson}
       ctx.lineTo(0, R * 0.6 + flameLen);
       ctx.lineTo(R * 0.18, R * 0.6);
       ctx.closePath();
+    } else if (title.includes('hearing') || title.includes('ear') || title.includes('telinga') || title.includes('aid') || title.includes('audio') || title.includes('sound')) {
+      // 11. HEARING AID (Behind-The-Ear Casing, Acoustic Tube, Earpiece, Radiating Soundwaves)
+      const haw = R * 1.1;
+      const hah = R * 1.35;
+      
+      // Main BTE (Behind-The-Ear) Ergonomic Casing
+      ctx.beginPath();
+      ctx.moveTo(-haw * 0.15, -hah * 0.38);
+      ctx.bezierCurveTo(haw * 0.45, -hah * 0.38, haw * 0.48, hah * 0.22, -haw * 0.05, hah * 0.38);
+      ctx.bezierCurveTo(-haw * 0.35, hah * 0.42, -haw * 0.38, -hah * 0.15, -haw * 0.15, -hah * 0.38);
+      ctx.closePath();
+      const haGrad = ctx.createLinearGradient(-haw * 0.3, -hah * 0.4, haw * 0.4, hah * 0.4);
+      haGrad.addColorStop(0, "${glowColor}");
+      haGrad.addColorStop(0.5, "${secondaryColor}");
+      haGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = haGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Metallic Volume Dial & Mic Ports
       ctx.fillStyle = "${accentColor}";
+      ctx.beginPath();
+      ctx.arc(haw * 0.12, -hah * 0.12, 6, 0, Math.PI * 2);
+      ctx.arc(haw * 0.16, 0, 5, 0, Math.PI * 2);
       ctx.fill();
 
+      // Transparent Acoustic Ear Hook Tube (Firmly anchored at top of casing)
+      ctx.beginPath();
+      ctx.moveTo(-haw * 0.12, -hah * 0.35);
+      ctx.bezierCurveTo(-haw * 0.52, -hah * 0.50, -haw * 0.65, -hah * 0.10, -haw * 0.45, hah * 0.05);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.stroke();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Soft In-Ear Mold (Ear Tip)
+      ctx.beginPath();
+      ctx.arc(-haw * 0.45, hah * 0.05, 12, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Concentric Radiating Sound Waves (Smooth expanding pulse from earpiece)
+      for (let sw = 0; sw < 3; sw++) {
+        const waveProgress = ((t * 1.5 + sw * 0.33) % 1);
+        const waveRadius = 14 + waveProgress * (R * 0.45);
+        const waveAlpha = Math.max(0, 1 - waveProgress);
+        ctx.save();
+        ctx.globalAlpha = waveAlpha;
+        ctx.strokeStyle = "${glowColor}";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(-haw * 0.45, hah * 0.05, waveRadius, -Math.PI * 0.65, Math.PI * 0.65);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+    } else if (title.includes('prosthetic') || title.includes('limb') || title.includes('bionic') || title.includes('palsu') || title.includes('leg') || title.includes('foot') || title.includes('kaki')) {
+      // 12. PROSTHETIC LIMB (Carbon Socket, Articulated Knee Hinge, Dynamic Blade Foot)
+      const plw = R * 0.75;
+      const plh = R * 1.5;
+
+      // Upper Titanium Socket (Thigh / Shank Adapter)
+      ctx.beginPath();
+      ctx.moveTo(-plw * 0.42, -plh * 0.45);
+      ctx.lineTo(plw * 0.42, -plh * 0.45);
+      ctx.lineTo(plw * 0.28, -plh * 0.08);
+      ctx.lineTo(-plw * 0.28, -plh * 0.08);
+      ctx.closePath();
+      const socketGrad = ctx.createLinearGradient(-plw * 0.5, -plh * 0.45, plw * 0.5, -plh * 0.08);
+      socketGrad.addColorStop(0, '#475569');
+      socketGrad.addColorStop(0.5, "${glowColor}");
+      socketGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = socketGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Articulated Knee/Ankle Hinge Pivot (Joint Anchor at [0, -plh * 0.06])
+      const kneeY = -plh * 0.06;
+      ctx.save();
+      ctx.translate(0, kneeY);
+      const kneeFlex = Math.sin(t * 3.0) * 0.16; // Smooth natural walking flex
+      ctx.rotate(kneeFlex);
+
+      // Central Joint Bolt
+      ctx.beginPath();
+      ctx.arc(0, 0, 14, 0, Math.PI * 2);
+      ctx.fillStyle = '#1e293b';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+
+      // Aerodynamic Carbon Pylon Tube
+      ctx.beginPath();
+      ctx.moveTo(-plw * 0.12, 0);
+      ctx.lineTo(plw * 0.12, 0);
+      ctx.lineTo(plw * 0.08, plh * 0.38);
+      ctx.lineTo(-plw * 0.08, plh * 0.38);
+      ctx.closePath();
+      ctx.fillStyle = "${secondaryColor}";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Curved Dynamic Running Blade / Foot Spring (C-shaped carbon fiber)
+      ctx.beginPath();
+      ctx.moveTo(-plw * 0.08, plh * 0.38);
+      ctx.bezierCurveTo(-plw * 0.08, plh * 0.55, plw * 0.65, plh * 0.55, plw * 0.55, plh * 0.48);
+      ctx.lineWidth = 8;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+
+      // Rubber Sole Grip
+      ctx.beginPath();
+      ctx.moveTo(plw * 0.15, plh * 0.54);
+      ctx.lineTo(plw * 0.52, plh * 0.50);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      ctx.restore();
+
+    } else if (title.includes('therapy') || title.includes('band') || title.includes('resistance') || title.includes('fisioterapi') || title.includes('fitness') || title.includes('exercise') || title.includes('gym')) {
+      // 13. PHYSICAL THERAPY RESISTANCE BAND & DUMBBELL
+      const tbw = R * 1.45;
+      const tbh = R * 0.85;
+
+      // Elastic Stretching Resistance Ribbon (Smooth sinusoidal stretch)
+      const stretchAmp = Math.sin(t * 3.2) * 22;
+      ctx.beginPath();
+      ctx.moveTo(-tbw * 0.45, -16 + stretchAmp * 0.5);
+      ctx.bezierCurveTo(-tbw * 0.15, 28 - stretchAmp, tbw * 0.15, -28 + stretchAmp, tbw * 0.45, 16 - stretchAmp * 0.5);
+      ctx.lineWidth = 18;
+      const bandGrad = ctx.createLinearGradient(-tbw * 0.5, 0, tbw * 0.5, 0);
+      bandGrad.addColorStop(0, "${glowColor}");
+      bandGrad.addColorStop(0.5, "${secondaryColor}");
+      bandGrad.addColorStop(1, "${accentColor}");
+      ctx.strokeStyle = bandGrad;
+      ctx.stroke();
+
+      // Inner Highlight Sheen Line
+      ctx.beginPath();
+      ctx.moveTo(-tbw * 0.42, -16 + stretchAmp * 0.5);
+      ctx.bezierCurveTo(-tbw * 0.15, 28 - stretchAmp, tbw * 0.15, -28 + stretchAmp, tbw * 0.42, 16 - stretchAmp * 0.5);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Dual Ergonomic Foam Handles
+      function drawBandHandle(hx, hy) {
+        ctx.save();
+        ctx.translate(hx, hy);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(-8, -24, 16, 48, 8);
+        } else {
+          ctx.rect(-8, -24, 16, 48);
+        }
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+        // Inner comfort ridges
+        for (let r = -12; r <= 12; r += 8) {
+          ctx.fillStyle = "${accentColor}";
+          ctx.fillRect(-6, r - 1.5, 12, 3);
+        }
+        ctx.restore();
+      }
+
+      drawBandHandle(-tbw * 0.48, -16 + stretchAmp * 0.5);
+      drawBandHandle(tbw * 0.48, 16 - stretchAmp * 0.5);
+
+    } else if (title.includes('walker') || title.includes('walking') || title.includes('tongkat') || title.includes('elderly') || title.includes('lansia') || title.includes('rehab') || title.includes('crutch')) {
+      // 14. MOBILITY WALKER / WALKING FRAME FOR ELDERLY
+      const wkw = R * 1.35;
+      const wkh = R * 1.45;
+      
+      // Top Curved Handle Grip Bar
+      ctx.beginPath();
+      ctx.moveTo(-wkw * 0.42, -wkh * 0.42);
+      ctx.lineTo(wkw * 0.42, -wkh * 0.42);
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.stroke();
+      
+      // Soft Foam Hand Grips (Left & Right)
+      ctx.lineWidth = 16;
+      ctx.strokeStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.moveTo(-wkw * 0.40, -wkh * 0.42);
+      ctx.lineTo(-wkw * 0.18, -wkh * 0.42);
+      ctx.moveTo(wkw * 0.18, -wkh * 0.42);
+      ctx.lineTo(wkw * 0.40, -wkh * 0.42);
+      ctx.stroke();
+
+      // Dual Cross-Brace Stabilizer Bars
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.beginPath();
+      ctx.moveTo(-wkw * 0.38, -wkh * 0.15);
+      ctx.lineTo(wkw * 0.38, -wkh * 0.15);
+      ctx.moveTo(-wkw * 0.40, wkh * 0.12);
+      ctx.lineTo(wkw * 0.40, wkh * 0.12);
+      ctx.stroke();
+
+      // 4 Robust Legs (Tapered outward for stability)
+      const legs = [-wkw * 0.38, -wkw * 0.22, wkw * 0.22, wkw * 0.38];
+      for (const lx of legs) {
+        ctx.beginPath();
+        ctx.moveTo(lx * 0.9, -wkh * 0.42);
+        ctx.lineTo(lx * 1.15, wkh * 0.45);
+        ctx.lineWidth = 6;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        // Heavy-Duty Non-Slip Rubber Stoppers (Feet)
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(lx * 1.15 - 9, wkh * 0.45 - 2, 18, 12, 4);
+        } else {
+          ctx.rect(lx * 1.15 - 9, wkh * 0.45 - 2, 18, 12);
+        }
+        ctx.fillStyle = "${accentColor}";
+        ctx.fill();
+      }
+
+    } else if (title.includes('pediatric') || title.includes('baby') || title.includes('cradle') || title.includes('bottle') || title.includes('infant') || title.includes('bayi') || title.includes('anak')) {
+      // 15. PEDIATRIC & BABY HEALTHCARE (Nurturing Bottle & Heartbeat / Stethoscope)
+      const bbw = R * 0.85;
+      const bbh = R * 1.45;
+
+      // Baby Bottle Clear Body
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-bbw * 0.45, -bbh * 0.15, bbw * 0.9, bbh * 0.62, 18);
+      } else {
+        ctx.rect(-bbw * 0.45, -bbh * 0.15, bbw * 0.9, bbh * 0.62);
+      }
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+
+      // Warm Glowing Milk Level (Gentle fluid ripple inside)
+      ctx.save();
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-bbw * 0.42, 0, bbw * 0.84, bbh * 0.45, 14);
+      } else {
+        ctx.rect(-bbw * 0.42, 0, bbw * 0.84, bbh * 0.45);
+      }
+      const milkGrad = ctx.createLinearGradient(0, 0, 0, bbh * 0.45);
+      milkGrad.addColorStop(0, '#ffffff');
+      milkGrad.addColorStop(1, "${accentColor}");
+      ctx.fillStyle = milkGrad;
+      ctx.fill();
+      ctx.restore();
+
+      // Measurement Markings (ml Scale)
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2.5;
+      for (let m = -bbh * 0.05; m <= bbh * 0.35; m += 14) {
+        ctx.beginPath();
+        ctx.moveTo(-bbw * 0.40, m);
+        ctx.lineTo(-bbw * 0.22, m);
+        ctx.stroke();
+      }
+
+      // Bottle Screw Collar Ring
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-bbw * 0.48, -bbh * 0.26, bbw * 0.96, 16, 6);
+      } else {
+        ctx.rect(-bbw * 0.48, -bbh * 0.26, bbw * 0.96, 16);
+      }
+      ctx.fillStyle = "${secondaryColor}";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Soft Silicone Teat / Nipple
+      ctx.beginPath();
+      ctx.moveTo(-bbw * 0.22, -bbh * 0.26);
+      ctx.bezierCurveTo(-bbw * 0.22, -bbh * 0.52, bbw * 0.22, -bbh * 0.52, bbw * 0.22, -bbh * 0.26);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+    } else if (title.includes('coin') || title.includes('finance') || title.includes('money') || title.includes('crypto') || title.includes('koin') || title.includes('uang') || title.includes('dollar')) {
+      // 16. FINANCIAL 3D EMBOSSED COIN
+      const cr = R * 0.85;
+
+      // Outer Beveled Coin Rim
+      ctx.beginPath();
+      ctx.arc(0, 0, cr, 0, Math.PI * 2);
+      const coinGrad = ctx.createLinearGradient(-cr, -cr, cr, cr);
+      coinGrad.addColorStop(0, '#ffd700');
+      coinGrad.addColorStop(0.4, '#fffbeb');
+      coinGrad.addColorStop(0.7, '#d97706');
+      coinGrad.addColorStop(1, '#78350f');
+      ctx.fillStyle = coinGrad;
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Inner Coin Ring
+      ctx.beginPath();
+      ctx.arc(0, 0, cr * 0.82, 0, Math.PI * 2);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.stroke();
+
+      // Embossed Currency Dollar / Crypto Emblem
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold ' + Math.floor(cr * 0.95) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('$', 0, 4);
+
+    } else if (title.includes('leaf') || title.includes('solar') || title.includes('eco') || title.includes('energy') || title.includes('green') || title.includes('daun') || title.includes('wind')) {
+      // 17. ECO / CLEAN GREEN ENERGY (Botanical Sprout & Solar Grid)
+      const lr = R * 0.95;
+
+      // Sculpted Natural Leaf Silhouette
+      ctx.beginPath();
+      ctx.moveTo(0, lr * 0.65);
+      ctx.bezierCurveTo(lr * 0.75, lr * 0.35, lr * 0.65, -lr * 0.45, 0, -lr * 0.75);
+      ctx.bezierCurveTo(-lr * 0.65, -lr * 0.45, -lr * 0.75, lr * 0.35, 0, lr * 0.65);
+      ctx.closePath();
+      const leafGrad = ctx.createLinearGradient(0, -lr * 0.75, 0, lr * 0.65);
+      leafGrad.addColorStop(0, '#4ade80');
+      leafGrad.addColorStop(0.5, '#16a34a');
+      leafGrad.addColorStop(1, '#064e3b');
+      ctx.fillStyle = leafGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Central Pulsing Vein & Offshoots
+      ctx.beginPath();
+      ctx.moveTo(0, lr * 0.62);
+      ctx.lineTo(0, -lr * 0.68);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.stroke();
+
+      for (let v = -lr * 0.35; v <= lr * 0.25; v += 18) {
+        ctx.beginPath();
+        ctx.moveTo(0, v);
+        ctx.lineTo(lr * 0.28, v - 16);
+        ctx.moveTo(0, v);
+        ctx.lineTo(-lr * 0.28, v - 16);
+        ctx.stroke();
+      }
+
     } else {
-      // 11. MASTER HIGH-TECH GEOMETRIC CORE (Pristine Hexagonal Vector Emblem)
+      // 18. MASTER HIGH-TECH GEOMETRIC CORE (Pristine Hexagonal Vector Emblem)
       ctx.beginPath();
       for (let s = 0; s < 6; s++) {
         const ang = (s / 6) * Math.PI * 2 - Math.PI / 2;
@@ -1838,7 +2230,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
             },
           ],
           generationConfig: {
-            temperature: 0.25,
+            temperature: 0.15,
             maxOutputTokens: 8192,
           },
         }),
