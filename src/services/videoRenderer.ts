@@ -29,7 +29,7 @@ export interface VideoRenderResult {
 }
 
 /**
- * Detects device hardware profile to optimize encoding parameters for low-spec PCs and phones.
+ * Detects device hardware profile to optimize encoding parameters.
  */
 export function getDevicePerformanceProfile(): {
   isLowSpec: boolean;
@@ -61,7 +61,7 @@ export function getDevicePerformanceProfile(): {
     suggestedFps: isLowSpec ? 30 : 60,
     suggestedBitrate: isLowSpec ? 15 : 25,
     description: isMobile
-      ? 'Mobile Device (Optimized for Battery & Smoothness)'
+      ? 'Mobile Device'
       : isLowSpec
       ? `Entry-Level / Low-Spec PC (${cpuCores} Cores, ~${deviceMemoryGb}GB RAM)`
       : `High-Performance PC (${cpuCores} Cores, ~${deviceMemoryGb}GB+ RAM)`,
@@ -69,7 +69,7 @@ export function getDevicePerformanceProfile(): {
 }
 
 const CANDIDATE_CODECS = [
-  'avc1.420028', // Baseline Profile Level 4.0 (Fastest CPU encoding on Celeron)
+  'avc1.420028', // Baseline Profile Level 4.0 (Fastest CPU/GPU encoding)
   'avc1.4d0028', // Main Profile Level 4.0
   'avc1.42001e', // Baseline Level 3.0
   'avc1.42002a', // Baseline Level 4.2
@@ -80,67 +80,29 @@ const CANDIDATE_CODECS = [
   'avc1.42E01E', // Constrained Baseline
 ];
 
-const ACCELERATION_PREFERENCES: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
-  'prefer-hardware', // Prioritize GPU hardware acceleration (GTX 1050, RTX, Intel QuickSync, Apple Silicon)
+const ACCELERATION_PREFERENCES: ('prefer-hardware' | 'no-preference' | 'prefer-software')[] = [
+  'prefer-hardware',
   'no-preference',
   'prefer-software',
 ];
 
-/**
- * Checks and finds a working H.264 WebCodecs configuration.
- */
-export async function findWorkingWebCodecsConfig(
-  width = 1920,
-  height = 1080,
-  fps = 60,
-  bitrateMbps = 25
-): Promise<{ supported: boolean; codec: string; hardwareAcceleration: 'no-preference' | 'prefer-hardware' | 'prefer-software' }> {
-  if (typeof window === 'undefined' || !('VideoEncoder' in window) || !('VideoFrame' in window)) {
-    return { supported: false, codec: '', hardwareAcceleration: 'no-preference' };
-  }
-
-  for (const accel of ACCELERATION_PREFERENCES) {
-    for (const codec of CANDIDATE_CODECS) {
-      try {
-        const support = await (window as any).VideoEncoder.isConfigSupported({
-          codec,
-          width,
-          height,
-          bitrate: bitrateMbps * 1_000_000,
-          bitrateMode: 'constant',
-          latencyMode: 'quality',
-          framerate: fps,
-          hardwareAcceleration: accel,
-          avc: { format: 'avc' },
-        });
-
-        if (support && support.supported) {
-          return { supported: true, codec, hardwareAcceleration: accel };
-        }
-      } catch {
-        continue;
-      }
-    }
-  }
-
-  return { supported: false, codec: '', hardwareAcceleration: 'no-preference' };
-}
+// In-memory cache for working WebCodecs config to eliminate candidate scanning delays on sequential renders
+let cachedWorkingEncoderConfig: { codec: string; hardwareAcceleration: 'prefer-hardware' | 'no-preference' | 'prefer-software' } | null = null;
 
 /**
- * Silent AudioContext Keep-Alive service.
- * In modern web browsers (Chrome, Edge, Safari, Firefox), when an audio session is active,
- * the browser classifies the tab as a priority media process and NEVER puts its JavaScript execution
- * or timers to sleep, even when the user minimizes the browser, covers it with other software, or switches tabs.
+ * Silent AudioContext & Worker Keep-Alive service.
+ * In modern web browsers (Chrome, Edge, Safari, Firefox), when an audio session plays actively,
+ * the browser classifies the tab as a media process and NEVER throttles its JavaScript execution
+ * or timers, even when the user minimizes the browser, covers it with other software, or switches tabs.
  */
 class BackgroundRenderKeepAlive {
   private ctx: any = null;
-  private osc: any = null;
-  private gain: any = null;
+  private source: any = null;
   private wakeLock: any = null;
   private worker: Worker | null = null;
 
   async start() {
-    // 1. Audio keep alive to prevent browser process suspension in background
+    // 1. Audio keep alive: looping silent audio buffer ensures media playback priority
     try {
       const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
@@ -148,31 +110,30 @@ class BackgroundRenderKeepAlive {
         if (this.ctx.state === 'suspended') {
           this.ctx.resume().catch(() => {});
         }
-        this.osc = this.ctx.createOscillator();
-        this.gain = this.ctx.createGain();
-        this.gain.gain.value = 0.00001; // completely silent / inaudible
-        this.osc.connect(this.gain);
-        this.gain.connect(this.ctx.destination);
-        this.osc.start();
+        // Create 1-second silent audio buffer
+        const buffer = this.ctx.createBuffer(1, 22050, 22050);
+        this.source = this.ctx.createBufferSource();
+        this.source.buffer = buffer;
+        this.source.loop = true;
+        this.source.connect(this.ctx.destination);
+        this.source.start(0);
       }
-    } catch {
-      // AudioContext not permitted or unsupported, proceed gracefully
-    }
+    } catch {}
 
-    // 2. Screen WakeLock to prevent OS display sleep / GPU idling
+    // 2. Screen WakeLock to prevent OS display sleep & GPU idling
     try {
       if ('wakeLock' in navigator && (navigator as any).wakeLock) {
         this.wakeLock = await (navigator as any).wakeLock.request('screen');
       }
     } catch {}
 
-    // 3. Web Worker heartbeat: Web Workers are on separate threads and NOT throttled to 1000ms by Chrome
+    // 3. Web Worker heartbeat: Web Workers run on separate thread, immune to background tab throttling
     try {
       const workerScript = `
         let timer = null;
         self.onmessage = function(e) {
           if (e.data === 'start') {
-            if (!timer) timer = setInterval(function() { self.postMessage('tick'); }, 20);
+            if (!timer) timer = setInterval(function() { self.postMessage('tick'); }, 25);
           } else if (e.data === 'stop') {
             if (timer) { clearInterval(timer); timer = null; }
           }
@@ -201,27 +162,21 @@ class BackgroundRenderKeepAlive {
     this.worker = null;
 
     try {
-      if (this.osc) {
-        this.osc.stop();
-        this.osc.disconnect();
-      }
-      if (this.gain) {
-        this.gain.disconnect();
+      if (this.source) {
+        this.source.stop();
+        this.source.disconnect();
       }
       if (this.ctx) {
         this.ctx.close();
       }
     } catch {}
     this.ctx = null;
-    this.osc = null;
-    this.gain = null;
+    this.source = null;
   }
 }
 
 /**
  * Injects styling and deterministic virtual frame stepping into animation HTML.
- * Ensures the canvas scales responsively and animations can be stepped frame-by-frame
- * offline without requiring the browser window to be visible or focused.
  */
 export function prepareHtmlForVideo(
   htmlContent: string,
@@ -243,9 +198,15 @@ export function prepareHtmlForVideo(
   finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.30/g, 'Math.min(w, h) * 0.44');
   finalHtml = finalHtml.replace(/Math\.min\(\s*w\s*,\s*h\s*\)\s*\*\s*0\.3\b/g, 'Math.min(w, h) * 0.44');
 
-  // Strip out semi-transparent background trails/ghosting artifacts to enforce 100% clean solid frame clearing
-  finalHtml = finalHtml.replace(/ctx\.fillStyle\s*=\s*['"]rgba\(\s*8\s*,\s*12\s*,\s*20\s*,\s*0\.[0-9]+\s*\)['"];?\s*ctx\.fillRect\(\s*0\s*,\s*0\s*,\s*w\s*,\s*h\s*\);?/g, `ctx.clearRect(0, 0, w, h); ctx.fillStyle = '${bgColor}'; ctx.fillRect(0, 0, w, h);`);
-  finalHtml = finalHtml.replace(/ctx\.fillStyle\s*=\s*['"]rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\.[0-9]+\s*\)['"];?\s*ctx\.fillRect\(\s*0\s*,\s*0\s*,\s*w\s*,\s*h\s*\);?/g, `ctx.clearRect(0, 0, w, h); ctx.fillStyle = '${bgColor}'; ctx.fillRect(0, 0, w, h);`);
+  // Strip out semi-transparent background trails to enforce 100% clean solid frame clearing
+  finalHtml = finalHtml.replace(
+    /ctx\.fillStyle\s*=\s*['"]rgba\(\s*8\s*,\s*12\s*,\s*20\s*,\s*0\.[0-9]+\s*\)['"];?\s*ctx\.fillRect\(\s*0\s*,\s*0\s*,\s*w\s*,\s*h\s*\);?/g,
+    `ctx.clearRect(0, 0, w, h); ctx.fillStyle = '${bgColor}'; ctx.fillRect(0, 0, w, h);`
+  );
+  finalHtml = finalHtml.replace(
+    /ctx\.fillStyle\s*=\s*['"]rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\.[0-9]+\s*\)['"];?\s*ctx\.fillRect\(\s*0\s*,\s*0\s*,\s*w\s*,\s*h\s*\);?/g,
+    `ctx.clearRect(0, 0, w, h); ctx.fillStyle = '${bgColor}'; ctx.fillRect(0, 0, w, h);`
+  );
 
   const injected = `
     <style>
@@ -314,7 +275,6 @@ export function prepareHtmlForVideo(
           };
         } catch {}
 
-        const originalRaf = window.requestAnimationFrame ? window.requestAnimationFrame.bind(window) : null;
         window.requestAnimationFrame = function(cb) {
           _stepCallback = cb;
           _lastCallback = cb;
@@ -335,9 +295,10 @@ export function prepareHtmlForVideo(
 }
 
 /**
- * Universal, Crash-Proof Video Renderer.
- * Optimized for low-spec PCs (e.g. AMD Ryzen 3, Radeon Vega, Intel Celeron/i3, 4GB-8GB RAM),
- * mobile phones, and all major operating systems (Windows, macOS, Linux, Android, iOS).
+ * Universal, Ultra-Fast, Crash-Proof Video Renderer.
+ * - NO BLOCKING MODAL POPUP OR OVERLAY: Operates entirely headless in offscreen canvas & hidden iframe.
+ * - TRUE MULTITASKING: Non-throttled event loop yields (no requestAnimationFrame stalls when minimized/occluded).
+ * - SPEED & ACCURACY: Hardware-accelerated WebCodecs with cached config, deterministic frame stepping, and exact bitrate CBR.
  */
 export async function renderHtmlToVideo(
   htmlContent: string,
@@ -356,7 +317,6 @@ export async function renderHtmlToVideo(
     onProgress,
   } = options;
 
-  // Intelligent adaptive bitrate based on microstock agency standards (Adobe Stock & Shutterstock)
   let bitrate = options.bitrate;
   if (!bitrate || bitrate <= 0) {
     if (options.renderPreset === 'lowspec_720') {
@@ -364,7 +324,7 @@ export async function renderHtmlToVideo(
     } else if (width >= 3840) {
       bitrate = fps >= 50 ? 50 : 40;
     } else if (width >= 1920) {
-      bitrate = fps >= 50 ? 25 : 20; // 25 Mbps is the gold standard for Adobe Stock & Shutterstock Full HD 60fps
+      bitrate = fps >= 50 ? 25 : 20;
     } else {
       bitrate = fps >= 50 ? 15 : 10;
     }
@@ -377,178 +337,58 @@ export async function renderHtmlToVideo(
 
   const totalFrames = Math.max(1, Math.round(fps * duration));
   const frameDurationUs = Math.round(1_000_000 / fps);
-  const frameIntervalMs = 1000 / fps;
   const targetBitrateBps = Math.round(bitrate * 1_000_000);
 
-  let isCancelled = false;
-
-  // Active rendering overlay container to prevent background tab throttling
-  const overlay = document.createElement('div');
-  overlay.id = 'bigma-render-overlay';
-  overlay.style.position = 'fixed';
-  overlay.style.inset = '0';
-  overlay.style.zIndex = '99999';
-  overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.94)';
-  overlay.style.backdropFilter = 'blur(16px)';
-  overlay.style.display = 'flex';
-  overlay.style.flexDirection = 'column';
-  overlay.style.alignItems = 'center';
-  overlay.style.justifyContent = 'center';
-  overlay.style.gap = '14px';
-  overlay.style.padding = '16px';
-  overlay.style.pointerEvents = 'auto';
-
-  const card = document.createElement('div');
-  card.style.width = '100%';
-  card.style.maxWidth = '520px';
-  card.style.backgroundColor = '#0b1120';
-  card.style.border = '1px solid rgba(56, 189, 248, 0.35)';
-  card.style.borderRadius = '20px';
-  card.style.padding = '18px';
-  card.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(56, 189, 248, 0.15)';
-  card.style.display = 'flex';
-  card.style.flexDirection = 'column';
-  card.style.gap = '12px';
-
-  const headerDiv = document.createElement('div');
-  headerDiv.style.display = 'flex';
-  headerDiv.style.alignItems = 'center';
-  headerDiv.style.justifyContent = 'space-between';
-  headerDiv.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <div style="width: 32px; height: 32px; border-radius: 10px; background: rgba(56, 189, 248, 0.2); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; color: #38bdf8; font-size: 13px;">
-        <i class="fa-solid fa-film"></i>
-      </div>
-      <div>
-        <div style="font-weight: 800; font-size: 13px; color: #f8fafc; font-family: sans-serif; letter-spacing: -0.2px;">Rendering Video MP4 (H.264)</div>
-        <div style="font-size: 10px; color: #94a3b8; font-family: sans-serif;">${width}x${height} • ${fps} FPS • ${duration}s • Target ${bitrate} Mbps</div>
-      </div>
-    </div>
-    <button id="bigma-cancel-render-btn" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; font-size: 11px; padding: 4px 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-family: sans-serif;">
-      Batal
-    </button>
-  `;
-
-  // Natural 16:9 preview box
-  const previewBox = document.createElement('div');
-  previewBox.style.width = '100%';
-  previewBox.style.aspectRatio = `${width}/${height}`;
-  previewBox.style.maxHeight = '240px';
-  previewBox.style.backgroundColor = canvasBgColor;
-  previewBox.style.borderRadius = '12px';
-  previewBox.style.overflow = 'hidden';
-  previewBox.style.position = 'relative';
-  previewBox.style.border = '1px solid rgba(30, 41, 59, 0.8)';
-
-  const iframeWrapper = document.createElement('div');
-  iframeWrapper.style.width = `${width}px`;
-  iframeWrapper.style.height = `${height}px`;
-  iframeWrapper.style.position = 'absolute';
-  iframeWrapper.style.top = '0';
-  iframeWrapper.style.left = '0';
-  iframeWrapper.style.transformOrigin = 'top left';
-
-  const iframe = document.createElement('iframe');
-  iframe.style.width = `${width}px`;
-  iframe.style.height = `${height}px`;
-  iframe.style.border = 'none';
-  iframe.style.display = 'block';
-  iframe.sandbox.add('allow-scripts', 'allow-same-origin');
-
-  iframeWrapper.appendChild(iframe);
-  previewBox.appendChild(iframeWrapper);
-
-  const updatePreviewScale = () => {
-    const boxW = previewBox.clientWidth || 480;
-    const scale = boxW / width;
-    iframeWrapper.style.transform = `scale(${scale})`;
-  };
-
-  window.addEventListener('resize', updatePreviewScale);
-
-  const statusText = document.createElement('div');
-  statusText.style.display = 'flex';
-  statusText.style.justifyContent = 'space-between';
-  statusText.style.fontSize = '11px';
-  statusText.style.fontWeight = '600';
-  statusText.style.color = '#38bdf8';
-  statusText.style.fontFamily = 'sans-serif';
-  statusText.innerHTML = `<span>Inisialisasi engine MP4...</span><span>0%</span>`;
-
-  const progressBarContainer = document.createElement('div');
-  progressBarContainer.style.width = '100%';
-  progressBarContainer.style.height = '7px';
-  progressBarContainer.style.backgroundColor = '#1e293b';
-  progressBarContainer.style.borderRadius = '9999px';
-  progressBarContainer.style.overflow = 'hidden';
-
-  const progressBar = document.createElement('div');
-  progressBar.style.width = '0%';
-  progressBar.style.height = '100%';
-  progressBar.style.background = 'linear-gradient(90deg, #38bdf8, #818cf8, #34d399)';
-  progressBar.style.transition = 'width 0.1s ease-out';
-  progressBarContainer.appendChild(progressBar);
-
-  card.appendChild(headerDiv);
-  card.appendChild(previewBox);
-  card.appendChild(statusText);
-  card.appendChild(progressBarContainer);
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-
-  const cancelBtn = headerDiv.querySelector('#bigma-cancel-render-btn');
-  if (cancelBtn) {
-    cancelBtn.addEventListener('click', () => {
-      isCancelled = true;
-      statusText.innerHTML = `<span style="color: #ef4444;">Membatalkan proses...</span><span>Batal</span>`;
-    });
-  }
-
-  const updateUIProgress = (pct: number, msg: string) => {
-    if (isCancelled) return;
-    progressBar.style.width = `${pct}%`;
-    statusText.innerHTML = `<span>${msg}</span><span>${pct}%</span>`;
-    onProgress?.(pct, msg);
-  };
+  // Dedicated hidden offscreen iframe to execute animation code cleanly without popup DOM overhead
+  const hiddenIframe = document.createElement('iframe');
+  hiddenIframe.style.position = 'fixed';
+  hiddenIframe.style.left = '-99999px';
+  hiddenIframe.style.top = '-99999px';
+  hiddenIframe.style.width = `${width}px`;
+  hiddenIframe.style.height = `${height}px`;
+  hiddenIframe.style.opacity = '0';
+  hiddenIframe.style.pointerEvents = 'none';
+  hiddenIframe.style.border = 'none';
+  hiddenIframe.setAttribute('tabindex', '-1');
+  hiddenIframe.setAttribute('aria-hidden', 'true');
+  hiddenIframe.sandbox.add('allow-scripts', 'allow-same-origin');
+  document.body.appendChild(hiddenIframe);
 
   const keepAlive = new BackgroundRenderKeepAlive();
   await keepAlive.start();
 
   try {
-    updateUIProgress(4, 'Menyiapkan canvas & aset rendering...');
-    updatePreviewScale();
+    onProgress?.(3, 'Menyiapkan canvas & aset rendering...');
 
     const preparedHtml = prepareHtmlForVideo(htmlContent, mode, width, height, fps, isGreenScreen);
     const blobHtml = new Blob([preparedHtml], { type: 'text/html;charset=utf-8' });
     const iframeUrl = URL.createObjectURL(blobHtml);
 
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Timeout memuat animasi HTML')), 12000);
-      iframe.onload = () => {
+      const timeout = setTimeout(() => reject(new Error('Timeout memuat animasi HTML')), 10000);
+      hiddenIframe.onload = () => {
         clearTimeout(timeout);
         resolve();
       };
-      iframe.src = iframeUrl;
+      hiddenIframe.src = iframeUrl;
     });
 
     URL.revokeObjectURL(iframeUrl);
 
-    if (isCancelled) throw new Error('Render dibatalkan oleh pengguna.');
-
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+    const iframeDoc = hiddenIframe.contentDocument || hiddenIframe.contentWindow?.document;
     if (iframeDoc && (iframeDoc as any).fonts) {
       try {
         await (iframeDoc as any).fonts.ready;
       } catch {}
     }
 
-    // Micro-delay to ensure WebGL/Canvas 2D loop starts
-    await new Promise((r) => setTimeout(r, 400));
+    // Brief 50ms tick to ensure scripts initialize
+    await new Promise((r) => setTimeout(r, 50));
 
     const getCanvas = (): HTMLCanvasElement | null => {
       return (
-        iframe.contentDocument?.querySelector('canvas') ||
-        (iframe.contentWindow?.document?.querySelector('canvas') as HTMLCanvasElement | null)
+        hiddenIframe.contentDocument?.querySelector('canvas') ||
+        (hiddenIframe.contentWindow?.document?.querySelector('canvas') as HTMLCanvasElement | null)
       );
     };
 
@@ -577,52 +417,49 @@ export async function renderHtmlToVideo(
     };
 
     // =========================================================================
-    // TIER 1: High-Performance WebCodecs FastStart MP4 with Strict Backpressure
+    // TIER 1: Blazing Fast WebCodecs H.264 MP4 with Hardware Acceleration
     // =========================================================================
     let webCodecsSuccess = false;
     let mp4Result: VideoRenderResult | null = null;
     let engineUsed: 'webcodecs-hardware' | 'webcodecs-software' = 'webcodecs-hardware';
 
     if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      // Form candidate configurations ordered by profile/level and rate-control capability
-      const candidateCodecs = [
-        'avc1.420028', // Baseline Profile Level 4.0 (Fastest CPU encoding on Celeron)
-        'avc1.4d0028', // Main Profile Level 4.0
-        'avc1.42001e', // Baseline Level 3.0
-        'avc1.42002a', // Baseline Level 4.2
-        'avc1.4d002a', // Main Profile Level 4.2
-        'avc1.640028', // High Profile Level 4.0
-        'avc1.64002a', // High Profile Level 4.2
-        'avc1.640033', // High Profile Level 5.1
-        'avc1.42E01E', // Constrained Baseline
-      ];
+      const encoderConfigsToTry: { codec: string; accel: 'prefer-hardware' | 'no-preference' | 'prefer-software'; rc: any }[] = [];
 
-      const rateControlProfiles: { bitrateMode?: 'constant' | 'variable'; latencyMode?: 'realtime' | 'quality' }[] = [
-        { bitrateMode: 'constant', latencyMode: 'realtime' }, // Strict forward display order (smooth 60 FPS, zero B-frame stutter)
-        { bitrateMode: 'variable', latencyMode: 'realtime' },
-        { latencyMode: 'realtime' },
-        { bitrateMode: 'constant' },
-        {},
-      ];
+      // If we already verified a working config previously, try that FIRST for instantaneous launch!
+      if (cachedWorkingEncoderConfig) {
+        encoderConfigsToTry.push({
+          codec: cachedWorkingEncoderConfig.codec,
+          accel: cachedWorkingEncoderConfig.hardwareAcceleration,
+          rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+        });
+      }
 
-      const candidateAccels: ('no-preference' | 'prefer-software' | 'prefer-hardware')[] = [
-        'prefer-hardware',
-        'no-preference',
-        'prefer-software',
-      ];
-
-      // Build prioritized candidates
-      const encoderConfigsToTry: { codec: string; accel: 'no-preference' | 'prefer-software' | 'prefer-hardware'; rc: any }[] = [];
-      for (const accel of candidateAccels) {
-        for (const codec of candidateCodecs) {
-          for (const rc of rateControlProfiles) {
-            encoderConfigsToTry.push({ codec, accel, rc });
+      for (const accel of ACCELERATION_PREFERENCES) {
+        for (const codec of CANDIDATE_CODECS) {
+          if (cachedWorkingEncoderConfig && cachedWorkingEncoderConfig.codec === codec && cachedWorkingEncoderConfig.hardwareAcceleration === accel) {
+            continue;
           }
+          encoderConfigsToTry.push({
+            codec,
+            accel,
+            rc: { bitrateMode: 'constant', latencyMode: 'realtime' },
+          });
+          encoderConfigsToTry.push({
+            codec,
+            accel,
+            rc: { bitrateMode: 'variable', latencyMode: 'realtime' },
+          });
+          encoderConfigsToTry.push({
+            codec,
+            accel,
+            rc: {},
+          });
         }
       }
 
       for (const candidate of encoderConfigsToTry) {
-        if (webCodecsSuccess || isCancelled) break;
+        if (webCodecsSuccess) break;
 
         const { codec, accel, rc } = candidate;
 
@@ -638,7 +475,6 @@ export async function renderHtmlToVideo(
             ...rc,
           };
 
-          // Pre-check support if API available
           if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
             try {
               const check = await (window as any).VideoEncoder.isConfigSupported(encoderConfig);
@@ -648,7 +484,7 @@ export async function renderHtmlToVideo(
             }
           }
 
-          updateUIProgress(8, `Inisialisasi encoder H.264 (${codec} @ ${bitrate} Mbps)...`);
+          onProgress?.(8, `Inisialisasi encoder H.264 (${codec} @ ${bitrate} Mbps)...`);
 
           const muxer = new Muxer({
             target: new ArrayBufferTarget(),
@@ -670,7 +506,6 @@ export async function renderHtmlToVideo(
               try {
                 const chunkLen = chunk.byteLength;
                 // ITU-T Rec. H.264 / ISO/IEC 14496-10 compliant NAL Unit 12 (filler_data_rbsp) stuffing
-                // Ensures actual stream bitrate header inside MP4 matches target 25 Mbps / 18 Mbps exactly
                 if (targetBytesPerFrame > chunkLen + 8) {
                   const deficit = targetBytesPerFrame - chunkLen;
                   const augmented = new Uint8Array(targetBytesPerFrame);
@@ -681,7 +516,6 @@ export async function renderHtmlToVideo(
                   augmented[chunkLen + 1] = (nalLen >>> 16) & 0xff;
                   augmented[chunkLen + 2] = (nalLen >>> 8) & 0xff;
                   augmented[chunkLen + 3] = nalLen & 0xff;
-                  // NAL header: type 12 (0x0C)
                   augmented[chunkLen + 4] = 0x0c;
                   augmented.fill(0xff, chunkLen + 5, chunkLen + 4 + nalLen - 1);
                   augmented[chunkLen + 4 + nalLen - 1] = 0x80;
@@ -697,22 +531,20 @@ export async function renderHtmlToVideo(
                   muxer.addVideoChunk(chunk, meta);
                 }
               } catch (muxErr) {
-                console.warn('[Muxer Chunk Warning]', muxErr);
                 try {
                   muxer.addVideoChunk(chunk, meta);
                 } catch {}
               }
             },
             error: (e: any) => {
-              console.warn('[WebCodecs Warning]', e);
               encodeError = e;
             },
           });
 
           await videoEncoder.configure(encoderConfig);
 
-          // Test first frame encoding with deterministic stepper
-          const iframeWin = iframe.contentWindow as any;
+          // Test first frame encoding
+          const iframeWin = hiddenIframe.contentWindow as any;
           if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
             iframeWin.__bigmaStepFrame(0);
           } else if (iframeWin && typeof iframeWin.animate === 'function') {
@@ -727,29 +559,25 @@ export async function renderHtmlToVideo(
           videoEncoder.encode(testFrame, { keyFrame: true });
           testFrame.close();
 
-          // Wait a tick to detect immediate encoder rejection
-          await new Promise((r) => setTimeout(r, 40));
+          await new Promise((r) => setTimeout(r, 20));
 
           if (encodeError) {
             try { videoEncoder.close(); } catch {}
             continue;
           }
 
-          // Encoder successfully verified!
+          // Cache working config for instant sequential renders
+          cachedWorkingEncoderConfig = { codec, hardwareAcceleration: accel };
           engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
-          updateUIProgress(10, `Memulai render MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
 
-          // Main Frame Loop with Blazing Fast Pipeline Execution (Zero artificial delay)
+          onProgress?.(10, `Merender MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
+
+          // High-Performance Frame Loop (Unthrottled in background & multitasking)
           for (let frame = 1; frame < totalFrames; frame++) {
-            if (isCancelled) {
-              try { videoEncoder.close(); } catch {}
-              throw new Error('Render dibatalkan oleh pengguna.');
-            }
-
             if (encodeError) throw encodeError;
 
-            // High-throughput backpressure: only pause if encoder queue is getting full
-            if (videoEncoder.encodeQueueSize > 16) {
+            // Non-blocking backpressure
+            if (videoEncoder.encodeQueueSize > 24) {
               await new Promise<void>((resolve) => {
                 let resolved = false;
                 const done = () => {
@@ -766,7 +594,6 @@ export async function renderHtmlToVideo(
             const timestampUs = Math.round((frame * 1_000_000) / fps);
             const targetTimeMs = (frame * 1000) / fps;
 
-            // Deterministic frame update (Immune to window minimizing, tab switching, and occlusion)
             if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
               iframeWin.__bigmaStepFrame(targetTimeMs);
             } else if (iframeWin && typeof iframeWin.animate === 'function') {
@@ -783,16 +610,17 @@ export async function renderHtmlToVideo(
             });
 
             videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
-            videoFrame.close(); // Immediate memory release
+            videoFrame.close();
 
-            if (frame % 15 === 0) {
+            // Periodic progress update using setTimeout(0) — DOES NOT STALL WHEN WINDOW IS MINIMIZED OR OCCLUDED!
+            if (frame % 25 === 0 || frame === totalFrames - 1) {
               const pct = Math.round(10 + (frame / totalFrames) * 82);
-              updateUIProgress(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
-              await new Promise((r) => requestAnimationFrame(r));
+              onProgress?.(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}%)...`);
+              await new Promise((r) => setTimeout(r, 0));
             }
           }
 
-          updateUIProgress(94, 'Finalisasi berkas MP4 FastStart...');
+          onProgress?.(94, 'Finalisasi berkas MP4 FastStart...');
           await videoEncoder.flush();
           videoEncoder.close();
           muxer.finalize();
@@ -819,13 +647,11 @@ export async function renderHtmlToVideo(
           }
 
           const videoUrl = URL.createObjectURL(finalMp4Blob);
-
           const effectiveBitrateBps = Math.round((finalMp4Blob.size * 8) / duration);
           const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
           const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
 
-          updateUIProgress(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted} (${(finalMp4Blob.size / (1024 * 1024)).toFixed(2)} MB)`);
-          await new Promise((r) => setTimeout(r, 250));
+          onProgress?.(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted}`);
 
           mp4Result = {
             blob: finalMp4Blob,
@@ -844,7 +670,6 @@ export async function renderHtmlToVideo(
           webCodecsSuccess = true;
           break;
         } catch (candidateErr) {
-          console.warn(`WebCodecs codec ${codec} (${accel}) error, trying next candidate...`, candidateErr);
           continue;
         }
       }
@@ -854,12 +679,10 @@ export async function renderHtmlToVideo(
       return mp4Result;
     }
 
-    if (isCancelled) throw new Error('Render dibatalkan.');
-
     // =========================================================================
-    // TIER 2: Resilient Universal Stream Engine (For Older Browsers / Fallback)
+    // TIER 2: Fallback Stream Engine (For Older Browsers)
     // =========================================================================
-    updateUIProgress(10, `Mengaktifkan Universal Stream Engine (1080p @ ${fps}fps)...`);
+    onProgress?.(10, `Mengaktifkan Universal Stream Engine (${width}x${height} @ ${fps}fps)...`);
 
     const stream =
       targetCanvas.captureStream
@@ -913,10 +736,10 @@ export async function renderHtmlToVideo(
     mediaRecorder.start(100);
 
     let isRecordingActive = true;
-    const iframeWin = iframe.contentWindow as any;
+    const iframeWin = hiddenIframe.contentWindow as any;
     let streamFrame = 0;
 
-    const renderLoop = () => {
+    const streamInterval = setInterval(() => {
       if (!isRecordingActive) return;
       const targetTimeMs = (streamFrame / fps) * 1000;
       if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
@@ -931,22 +754,13 @@ export async function renderHtmlToVideo(
         ctx.drawImage(canvasEl, 0, 0, width, height);
       }
       streamFrame++;
-    };
-
-    const streamInterval = setInterval(renderLoop, frameIntervalMs);
+    }, 1000 / fps);
 
     const startTime = performance.now();
     const progressInterval = setInterval(() => {
-      if (isCancelled) {
-        clearInterval(progressInterval);
-        clearInterval(streamInterval);
-        isRecordingActive = false;
-        if (mediaRecorder.state === 'recording') mediaRecorder.stop();
-        return;
-      }
       const elapsed = (performance.now() - startTime) / 1000;
       const pct = Math.min(92, Math.round(10 + (elapsed / duration) * 82));
-      updateUIProgress(pct, `Merekam video (${pct}%)...`);
+      onProgress?.(pct, `Merekam video (${pct}%)...`);
     }, 250);
 
     await new Promise((r) => setTimeout(r, duration * 1000));
@@ -954,13 +768,11 @@ export async function renderHtmlToVideo(
     clearInterval(streamInterval);
     isRecordingActive = false;
 
-    if (isCancelled) throw new Error('Render dibatalkan.');
-
     if (mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
 
-    updateUIProgress(96, 'Menyusun berkas video...');
+    onProgress?.(96, 'Menyusun berkas video...');
     const recordedBlob = await recordPromise;
     let finalRecordedBlob = recordedBlob;
     const targetTotalBytes = Math.round((bitrate * 1_000_000 * duration) / 8);
@@ -971,10 +783,10 @@ export async function renderHtmlToVideo(
       freeBox[1] = (padSize >>> 16) & 0xff;
       freeBox[2] = (padSize >>> 8) & 0xff;
       freeBox[3] = padSize & 0xff;
-      freeBox[4] = 0x66; // 'f'
-      freeBox[5] = 0x72; // 'r'
-      freeBox[6] = 0x65; // 'e'
-      freeBox[7] = 0x65; // 'e'
+      freeBox[4] = 0x66;
+      freeBox[5] = 0x72;
+      freeBox[6] = 0x65;
+      freeBox[7] = 0x65;
       finalRecordedBlob = new Blob([recordedBlob, freeBox], { type: 'video/mp4' });
     }
     const videoUrl = URL.createObjectURL(finalRecordedBlob);
@@ -983,8 +795,7 @@ export async function renderHtmlToVideo(
     const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
     const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
 
-    updateUIProgress(100, `Selesai! Video ${bitrateFormatted} siap diunduh.`);
-    await new Promise((r) => setTimeout(r, 200));
+    onProgress?.(100, `Selesai! Video ${bitrateFormatted} siap diunduh.`);
 
     return {
       blob: finalRecordedBlob,
@@ -1002,9 +813,8 @@ export async function renderHtmlToVideo(
     };
   } finally {
     keepAlive.stop();
-    window.removeEventListener('resize', updatePreviewScale);
-    if (document.body.contains(overlay)) {
-      document.body.removeChild(overlay);
+    if (document.body.contains(hiddenIframe)) {
+      document.body.removeChild(hiddenIframe);
     }
   }
 }

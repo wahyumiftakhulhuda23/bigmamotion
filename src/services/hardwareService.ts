@@ -18,7 +18,7 @@ export function detectDeviceHardware(): HardwareProfile {
   let gpuInfo = 'GPU / Hardware Acceleration Active';
   try {
     const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    const gl = (canvas.getContext('webgl') || canvas.getContext('experimental-webgl')) as any;
     if (gl) {
       const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
       if (debugInfo) {

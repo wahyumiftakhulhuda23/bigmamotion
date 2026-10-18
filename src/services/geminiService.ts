@@ -349,12 +349,22 @@ async function generatePromptsDirect(
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
-  const promptContent = `Generate exactly ${count} highly descriptive, creative, and professional microstock animation prompts in English with NO word count limitations (do NOT limit or truncate words; create detailed, vivid, and comprehensive prompts).
+  const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly ${count} professional, highly marketable, and semantically rich animation prompts in English.
+
+MANDATORY RULES FOR HIGH-QUALITY SHAPES & MEANING (ANTI-DEFECT):
+1. MEANINGFUL & RECOGNIZABLE SUBJECT:
+   - Each prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Gold Crypto Coin with dimensional beveled rim and glowing holographic currency symbol", "Precision E-Commerce Shopping Cart with curved basket, rolling wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
+   - STRICTLY FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague ambiguous geometry.
+2. DETAILED SHAPE ANATOMY:
+   - Clearly specify the primary body, secondary sub-components, physical joints, and dimensional lighting (specular reflection beam, gradient bevels, ambient inner glow).
+3. COHERENT KINETIC MOTION:
+   - Detail the coordinated continuous linear motion for each part (e.g. body breathes gently 0.96x-1.04x and floats ±10px on Y axis, wheels/gears rotate in sync, highlight beam sweeps across the surface, status lights cycle with smooth easing).
+
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
-Special Directive: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-LINEAR MOTION INTEGRATION (MANDATORY):
-Every prompt MUST seamlessly synthesize both the subject's iconic form AND its linear kinetic motion in the prompt itself (e.g. describing how the icon parts rotate, pulse, expand, articulate, or cycle with smooth linear continuity, or how the background waves and grid flow linearly). The motion must be linear, coherent, and inseparable from the visual subject.
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+
 Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
 
   let lastDirectError: any = null;
@@ -601,34 +611,42 @@ ${motionGuide}
 ${styleAndColorGuide}
 ${greenScreenDirective}
 
-ATURAN ANTI-BUG & ANTI-GHOSTING / BEKAS GERAKAN (MANDATORY):
-1. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - WAJIB ANTI-DETACH):
-   - Seluruh bagian suatu objek (misal: badan tas + gagang; bodi mobil + roda; bodi smartphone + layar + kamera; cangkir + pegangan; kamera + lensa + shutter) WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
+ATURAN ANTI-BUG, ANTI-CACAT BENTUK & KUALITAS SEMANTIK TINGGI (MANDATORY):
+1. MAKNA BENTUK NYATA & BERKUALITAS TINGGI (HIGH SEMANTIC RECOGNITION):
+   - Bentuk yang digambar WAJIB merepresentasikan subjek secara akurat, bermakna, dan langsung dikenali secara visual tanpa keraguan!
+   - DILARANG KERAS menghasilkan bentuk cacat, poligon tak beraturan yang aneh, garis meliuk tak bermakna, atau lingkaran/kotak polos tanpa anatomi subjek.
+   - ANATOMI SUBJEK WAJIB LENGKAP:
+     * Finansial/Koin: Wajib bodi koin 3D dengan beveled rim ganda, simbol timbul di tengah ($, €, ₿, bintang, atau grafik naik), dan kilau cahaya sapuan (specular gleam).
+     * Keranjang / E-Commerce: Wajib rangka keranjang kawat melengkung rapi, pegangan sudut dengan grip bar, 2 roda berporos rapi, dan bingkisan/paket di dalamnya.
+     * Transportasi / Mobil: Wajib bodi sasis aerodinamis terpadu, lekukan kaca kabin, 2 roda ban tebal dengan velg berputar di pusat poros, dan lampu depan.
+     * Teknologi / AI / Server: Wajib chip silikon/prosesor dengan pin emas, jalur sirkuit bercahaya yang presisi, dan inti core yang berdenyut ritmis.
+     * Medis / Biotech: Wajib salib simetris dengan bevel halus atau heliks DNA berputar dengan anak tangga basa nukleotida yang presisi.
+2. GEOMETRI VEKTOR BERSIH & JALUR TERTUTUP (ZERO SHAPE DEFECTS):
+   - Setiap bidang bentuk WAJIB menggunakan ctx.beginPath() dan diakhiri ctx.closePath() sebelum ctx.fill() atau ctx.stroke().
+   - Gunakan kurva matematika mulus: ctx.roundRect(), ctx.arc(), ctx.ellipse(), dan bezierCurveTo dengan titik kontrol tangen yang seimbang.
+   - DILARANG titik vertex melenceng tajam atau kurva terbuka yang membuat bentuk tampak bocor/cacat.
+3. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - ANTI-DETACH):
+   - Seluruh bagian suatu objek WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
      ctx.save();
      ctx.translate(posX, posY); // posX = cx, posY = cy + floating/bounce
      ctx.rotate(rot);
      ctx.scale(scaleX, scaleY);
      // SEMUA SUB-KOMPONEN DIGAMBAR RELATIF TERHADAP (0, 0)!
-     // DILARANG MEMBERI TRANSLASI POSISI X/Y TERPISAH PADA GAGANG ATAU RODA YANG MEMBUATNYA LEPAS DARI BADAN!
      ctx.restore();
-2. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH:
-   - TAS & KOPER: Badan tas simetris (roundRect). Gagang/tali tas WAJIB menempel menyatu kokoh di bibir atas badan tas pada (-strapOffset, topBagY) dan (+strapOffset, topBagY). DILARANG gagang melayang terpisah dari tas!
-   - KENDARAAN & MOBIL: Bodi mobil aerodinamis dengan spakbor (wheel arches). Roda mobil WAJIB tertanam presisi di dalam lubang spakbor sasis bawah di (-wheelDist, axleY) dan (+wheelDist, axleY). Roda bergerak 100% mengikuti bodi sasis; hanya velg di dalam ban yang berputar di pusat roda masing-masing (ctx.rotate(t * speed)). DILARANG roda terpental, melayang liar, atau berada di luar bodi!
-   - SMARTPHONE & GADGET: Bodi ponsel WAJIB berbentuk persegi panjang dengan sudut membulat sempurna (rasio standar 9:19.5, ctx.roundRect(-w/2, -h/2, w, h, 20)), bezel tipis simetris, dynamic island terpusat di atas, home bar di bawah, dan layar kaca menyala di dalam bezel. DILARANG bentuk tidak beraturan atau poligon asimetris cacat!
-   - KAMERA, CANGKIR, JAM, LAPTOP, DLL: Setiap bagian harus memiliki hubungan geometris yang logis dan melekat kokoh (lensa di tengah bodi kamera, pegangan cangkir di samping bodi, jarum jam tertancap di poros tengah 0,0).
-3. ISOLASI TOTAL ICON (ZERO PARTIKEL & ZERO NOISE LUAR):
+4. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH:
+   - Setiap bagian komponen harus melekat kokoh dan proporsional pada bodi utama (tidak boleh ada roda yang melayang di luar bodi, tidak boleh ada gagang yang melayang terpisah).
+5. ISOLASI TOTAL ICON (ZERO PARTIKEL & ZERO NOISE LUAR):
    - Untuk tipe ICON: Kanvas di sekeliling icon HARUS 100% bersih, kosong, dan polos. DILARANG KERAS memunculkan partikel melayang, debu berterbangan, bintik-bintik random, percikan/sparks liar, cincin orbit aneh, serpihan, pecahan, atau objek lain di luar bentuk icon utama!
-4. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';) agar pendaran tidak bocor atau meninggalkan jejak/bekas gerakan (ghosting artifacts) di frame berikutnya.
-5. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);). DILARANG KERAS menggunakan rgba(...) semi-transparan untuk clear background karena akan membuat jejak/bekas gerakan kotor di belakang objek yang bergerak.
-6. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL (TIDAK BOLEH ZOOM-OUT / TERLALU KECIL):
+6. PENCAHAYAAN MIKROSTOK & SPECULAR BEAM:
+   - Terapkan dual-tone gradient untuk volume (bagian atas lebih terang, bagian bawah lebih teduh).
+   - Tambahkan sapuan pantulan cahaya berkilau (specular highlight beam) yang melintasi permukaan objek secara periodik.
+7. ISOLASI CANVAS CONTEXT & NEON GLOW: Setiap elemen WAJIB dibungkus ctx.save() dan ctx.restore(). Jika menggunakan efek Neon/Glow (ctx.shadowBlur, ctx.shadowColor), HANYA terapkan saat menggambar objek bersangkutan dan segera reset (ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';).
+8. HILANGKAN BEKAS GERAKAN / ZERO MOTION TRAILS: Setiap frame baru WAJIB diawali dengan pembersihan kanvas total (ctx.clearRect(0, 0, w, h); lalu ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);).
+9. KOORDINAT TERPUSAT & FRAMING PROPOSIONAL:
    - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
-   - Objek Icon / Grafis harus proporsional & memenuhi frame sekitar 80-88% tinggi canvas dengan margin aman (tidak terpotong dan tidak tampak kecil di tengah).
-   - Background Motion harus menyebar ke seluruh kanvas (w, h) hingga ke sudut-sudut tanpa ruang hitam kosong.
-7. REPRODUKSI KEMIRIPAN TINGGI (KODE WARNA HEX, ANATOMI GEOMETRIS & GERAKAN 60 FPS):
-   - Jika di dalam prompt terdapat deskripsi anatomi subjek, sub-komponen, spesifikasi kode warna hex (#XXXXXX), atau detail gerakan kinetik:
-     AI WAJIB 100% MENGIKUTI deskripsi geometri, kode warna hex, dan pola gerakan kinetik tersebut pada Canvas 2D agar visual yang dirender semirip dan sedinamis mungkin dengan gambar referensi aslinya!
-8. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.12), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal).
-9. RINGKAS & TUNTAS: Buat kode efisien 180 - 280 baris yang langsung looping 60 FPS tanpa henti.
+   - Objek Icon / Grafis harus proporsional & memenuhi frame sekitar 80-88% tinggi canvas dengan margin aman.
+10. GERAKAN KINETIK NYATA 60 FPS LINEAR: Objek HARUS memiliki gerakan aktif yang linear dan selaras dengan prompt (floating osilasi Y ±(S*0.10), breathing scale pulse 0.96x-1.04x, artikulasi rotasi/transformasi internal yang halus).
+11. RINGKAS & TUNTAS: Buat kode efisien 180 - 280 baris yang langsung looping 60 FPS tanpa henti.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
