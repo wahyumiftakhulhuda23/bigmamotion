@@ -1360,7 +1360,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectPromptSubTab('prompt_to_motion')}
-                  className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer relative overflow-hidden group ${
+                  className={`p-3 rounded-xl border text-left transition flex items-center gap-2.5 cursor-pointer relative overflow-hidden group ${
                     promptSubTab === 'prompt_to_motion'
                       ? 'bg-gradient-to-br from-sky-500/20 via-indigo-500/15 to-slate-900 border-sky-400 text-white shadow-lg shadow-sky-500/15 ring-1 ring-sky-400/40'
                       : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
@@ -1382,9 +1382,6 @@ export default function App() {
                         Generator
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">
-                      Parameter visual & input/drag-drop notepad batch (.txt)
-                    </p>
                   </div>
                 </button>
 
@@ -1392,7 +1389,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => handleSelectPromptSubTab('image_to_prompt')}
-                  className={`p-3 rounded-xl border text-left transition flex items-start gap-2.5 cursor-pointer relative overflow-hidden group ${
+                  className={`p-3 rounded-xl border text-left transition flex items-center gap-2.5 cursor-pointer relative overflow-hidden group ${
                     promptSubTab === 'image_to_prompt'
                       ? 'bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-slate-900 border-indigo-400 text-white shadow-lg shadow-indigo-500/15 ring-1 ring-indigo-400/40'
                       : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
@@ -1414,9 +1411,6 @@ export default function App() {
                         Vision AI
                       </span>
                     </div>
-                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-2 leading-tight">
-                      Analisa gambar per project & unduh notepad prompt murni
-                    </p>
                   </div>
                 </button>
               </div>

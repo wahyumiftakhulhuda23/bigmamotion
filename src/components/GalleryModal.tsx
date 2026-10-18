@@ -489,69 +489,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                     {animations.length} Item Tersimpan
                   </span>
                 </div>
-                <p className="text-xs text-gray-400">
-                  Target folder per akun • Render otomatis satu per satu ke folder • Bebas beban ZIP & RAM
-                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Manage Bulk Folders Button */}
-              {animations.length > 0 && (
-                <button
-                  onClick={openBulkFolderModal}
-                  className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-                  title="Atur penargetan folder untuk semua akun sekaligus"
-                >
-                  <i className="fa-solid fa-folder-gear text-amber-400"></i>
-                  <span className="hidden sm:inline">Kelola Target Folder</span>
-                </button>
-              )}
-
-              {/* Batch Render Button */}
-              {animations.length > 0 && (
-                <button
-                  onClick={handleOpenBatchModal}
-                  disabled={isDownloading}
-                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-500/20 cursor-pointer disabled:opacity-50"
-                  title="Pilih akun dan render otomatis ke target folder masing-masing"
-                >
-                  <i className="fa-solid fa-bolt"></i>
-                  <span>Batch Render Semua Akun</span>
-                </button>
-              )}
-
-              {/* Target Bitrate Selector in Gallery */}
-              <div className="flex items-center gap-1.5 bg-gray-900/90 border border-purple-500/30 rounded-xl px-2.5 py-1.5 shadow-sm">
-                <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1">
-                  <i className="fa-solid fa-sliders text-purple-400 text-[10px]"></i>
-                  <span className="hidden md:inline">Bitrate:</span>
-                </span>
-                <select
-                  value={exportBitrate}
-                  onChange={(e) => onExportBitrateChange?.(Number(e.target.value))}
-                  className="bg-transparent text-[11px] font-extrabold text-purple-300 focus:outline-none cursor-pointer"
-                  title="Pilih Target Bitrate MP4"
-                >
-                  <option value={18} className="bg-gray-950 text-gray-200">18 Mbps (~22.5 MB • Microstock Standar)</option>
-                  <option value={25} className="bg-gray-950 text-gray-200">25 Mbps (~31.2 MB • Pro Rekomendasi)</option>
-                  <option value={30} className="bg-gray-950 text-gray-200">30 Mbps (~37.5 MB • Ultra 60 FPS)</option>
-                  <option value={20} className="bg-gray-950 text-gray-200">20 Mbps (~25.0 MB • Shutterstock HD)</option>
-                  <option value={15} className="bg-gray-950 text-gray-200">15 Mbps (~18.7 MB • Ringan)</option>
-                  <option value={10} className="bg-gray-950 text-gray-200">10 Mbps (~12.5 MB • Hemat)</option>
-                  <option value={50} className="bg-gray-950 text-gray-200">50 Mbps (~62.5 MB • Master 4K)</option>
-                </select>
-              </div>
-
-              <button
-                onClick={downloadAllAsZip}
-                disabled={isDownloading || animations.length === 0}
-                className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-sky-300 border border-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                title="Unduh Kode HTML ke ZIP"
-              >
-                <i className="fa-solid fa-code"></i>
-                <span className="hidden sm:inline">HTML ZIP</span>
-              </button>
 
               {animations.length > 0 && (
                 <>
