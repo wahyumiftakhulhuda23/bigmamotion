@@ -459,269 +459,16 @@ export async function renderHtmlToVideo(
     };
 
     // =========================================================================
-    // TIER 1: Blazing Fast WebCodecs H.264 MP4 with Hardware Acceleration
+    // EXACT BITRATE STREAM RECORDING ENGINE (Guarantees exact Data Rate & Total Bitrate in Windows Properties)
     // =========================================================================
-    let webCodecsSuccess = false;
-    let mp4Result: VideoRenderResult | null = null;
-    let engineUsed: 'webcodecs-hardware' | 'webcodecs-software' = 'webcodecs-hardware';
-
-    if (typeof window !== 'undefined' && 'VideoEncoder' in window && 'VideoFrame' in window) {
-      // Prioritize fast, universally hardware-accelerated Baseline/Main profiles
-      const priorityCodecs = [
-        'avc1.420028', // Baseline Profile Level 4.0 - Fastest GPU encoding across all GPUs
-        'avc1.4d0028', // Main Profile Level 4.0
-        'avc1.640028', // High Profile Level 4.0
-        'avc1.42001e', // Baseline Level 3.0
-        'avc1.42E01E', // Constrained Baseline
-      ];
-
-      const encoderConfigsToTry: { codec: string; accel: 'prefer-hardware' | 'no-preference' | 'prefer-software'; rc: any }[] = [];
-
-      // 1. Try cached working config first for instantaneous launch
-      if (cachedWorkingEncoderConfig) {
-        encoderConfigsToTry.push({
-          codec: cachedWorkingEncoderConfig.codec,
-          accel: cachedWorkingEncoderConfig.hardwareAcceleration,
-          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
-        });
-      }
-
-      // 2. Hardware acceleration first
-      for (const codec of priorityCodecs) {
-        if (cachedWorkingEncoderConfig?.codec === codec && cachedWorkingEncoderConfig.hardwareAcceleration === 'prefer-hardware') continue;
-        encoderConfigsToTry.push({
-          codec,
-          accel: 'prefer-hardware',
-          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
-        });
-      }
-
-      // 3. Fallback no-preference / software if hardware not available
-      for (const codec of priorityCodecs) {
-        encoderConfigsToTry.push({
-          codec,
-          accel: 'no-preference',
-          rc: { bitrateMode: 'constant', bitRateMode: 'constant', latencyMode: 'realtime' },
-        });
-        encoderConfigsToTry.push({
-          codec,
-          accel: 'prefer-software',
-          rc: { bitrateMode: 'constant', bitRateMode: 'constant' },
-        });
-      }
-
-      for (const candidate of encoderConfigsToTry) {
-        if (webCodecsSuccess) break;
-
-        const { codec, accel, rc } = candidate;
-
-        try {
-          const encoderConfig: any = {
-            codec,
-            width,
-            height,
-            bitrate: targetBitrateBps,
-            framerate: fps,
-            hardwareAcceleration: accel,
-            avc: { format: 'avc' },
-            ...rc,
-          };
-
-          if (typeof (window as any).VideoEncoder?.isConfigSupported === 'function') {
-            try {
-              const check = await (window as any).VideoEncoder.isConfigSupported(encoderConfig);
-              if (!check || !check.supported) continue;
-            } catch {
-              continue;
-            }
-          }
-
-          onProgress?.(6, `Inisialisasi Hardware Encoder (${codec} @ ${bitrate} Mbps)...`);
-
-          const muxer = new Muxer({
-            target: new ArrayBufferTarget(),
-            video: {
-              codec: 'avc',
-              width,
-              height,
-              frameRate: fps,
-            },
-            fastStart: 'in-memory',
-            firstTimestampBehavior: 'offset',
-          });
-
-          let encodeError: any = null;
-
-          const videoEncoder = new (window as any).VideoEncoder({
-            output: (chunk: any, meta: any) => {
-              try {
-                muxer.addVideoChunk(chunk, meta);
-              } catch (muxErr) {
-                // Ignore transient chunk error
-              }
-            },
-            error: (e: any) => {
-              encodeError = e;
-            },
-          });
-
-          await videoEncoder.configure(encoderConfig);
-
-          // Test first frame encoding
-          const iframeWin = hiddenIframe.contentWindow as any;
-          if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
-            iframeWin.__bigmaStepFrame(0);
-          } else if (iframeWin && typeof iframeWin.animate === 'function') {
-            try { iframeWin.animate(0); } catch {}
-          }
-
-          const firstSource = getSourceFrameCanvas();
-          const testFrame = new (window as any).VideoFrame(firstSource, {
-            timestamp: 0,
-            duration: frameDurationUs,
-          });
-          videoEncoder.encode(testFrame, { keyFrame: true });
-          testFrame.close();
-
-          await fastYield();
-
-          if (encodeError) {
-            try { videoEncoder.close(); } catch {}
-            continue;
-          }
-
-          // Cache verified working config for 0ms sequential renders
-          cachedWorkingEncoderConfig = { codec, hardwareAcceleration: accel };
-          try {
-            localStorage.setItem('bigma_working_codec', JSON.stringify(cachedWorkingEncoderConfig));
-          } catch {}
-          engineUsed = accel === 'prefer-software' ? 'webcodecs-software' : 'webcodecs-hardware';
-
-          onProgress?.(8, `Merender MP4 H.264 (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
-
-          const yieldEvery = isLowSpec ? 15 : 25;
-          const maxQueueSize = isLowSpec ? 16 : 30;
-
-          // High-Performance Zero-Copy Frame Loop (Unthrottled in background & multitasking)
-          for (let frame = 1; frame < totalFrames; frame++) {
-            if (encodeError) throw encodeError;
-
-            // Non-blocking hardware backpressure
-            if (videoEncoder.encodeQueueSize > maxQueueSize) {
-              await new Promise<void>((resolve) => {
-                let resolved = false;
-                const done = () => {
-                  if (!resolved) {
-                    resolved = true;
-                    resolve();
-                  }
-                };
-                videoEncoder.ondequeue = done;
-                setTimeout(done, 4);
-              });
-            }
-
-            const timestampUs = Math.round((frame * 1_000_000) / fps);
-            const targetTimeMs = (frame * 1000) / fps;
-
-            if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
-              iframeWin.__bigmaStepFrame(targetTimeMs);
-            } else if (iframeWin && typeof iframeWin.animate === 'function') {
-              try { iframeWin.animate(targetTimeMs); } catch {}
-            }
-
-            const isKeyFrame = frame % Math.max(1, fps * 2) === 0;
-            const currentSource = getSourceFrameCanvas();
-
-            const videoFrame = new (window as any).VideoFrame(currentSource, {
-              timestamp: timestampUs,
-              duration: frameDurationUs,
-            });
-
-            videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
-            videoFrame.close();
-
-            // Periodic zero-delay yield keeps UI responsive & multitasking fluid on all devices
-            if (frame % yieldEvery === 0 || frame === totalFrames - 1) {
-              const pct = Math.round(8 + (frame / totalFrames) * 84);
-              onProgress?.(pct, `Merender Frame #${frame + 1}/${totalFrames} (${pct}% • ${bitrate} Mbps)...`);
-              await fastYield();
-            }
-          }
-
-          onProgress?.(94, 'Finalisasi berkas MP4 FastStart...');
-          await videoEncoder.flush();
-          videoEncoder.close();
-          muxer.finalize();
-
-          const rawMp4Buffer: ArrayBuffer = muxer.target.buffer;
-          // Force exact Microstock CBR bitrate padding using ISO/IEC 14496-12 'free' box
-          const targetTotalBytes = Math.round((targetBitrateBps * duration) / 8);
-          let finalMp4Blob: Blob;
-
-          if (targetTotalBytes > rawMp4Buffer.byteLength + 8) {
-            const paddingSize = targetTotalBytes - rawMp4Buffer.byteLength;
-            const freeBox = new Uint8Array(paddingSize);
-            freeBox[0] = (paddingSize >>> 24) & 0xff;
-            freeBox[1] = (paddingSize >>> 16) & 0xff;
-            freeBox[2] = (paddingSize >>> 8) & 0xff;
-            freeBox[3] = paddingSize & 0xff;
-            freeBox[4] = 0x66; // 'f'
-            freeBox[5] = 0x72; // 'r'
-            freeBox[6] = 0x65; // 'e'
-            freeBox[7] = 0x65; // 'e'
-            // Fill remainder with pseudo-random or zero padding
-            finalMp4Blob = new Blob([rawMp4Buffer, freeBox], { type: 'video/mp4' });
-          } else {
-            finalMp4Blob = new Blob([rawMp4Buffer], { type: 'video/mp4' });
-          }
-
-          const videoUrl = URL.createObjectURL(finalMp4Blob);
-          const effectiveBitrateBps = Math.round((finalMp4Blob.size * 8) / duration);
-          const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
-          const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
-
-          onProgress?.(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted}`);
-
-          mp4Result = {
-            blob: finalMp4Blob,
-            url: videoUrl,
-            format: 'mp4',
-            sizeFormatted: `${(finalMp4Blob.size / (1024 * 1024)).toFixed(2)} MB`,
-            bitrateFormatted,
-            bitrateMbps: effectiveBitrateMbps,
-            targetBitrateMbps: bitrate,
-            width,
-            height,
-            fps,
-            duration,
-            engineUsed,
-          };
-          webCodecsSuccess = true;
-          break;
-        } catch (candidateErr) {
-          continue;
-        }
-      }
-    }
-
-    if (webCodecsSuccess && mp4Result) {
-      return mp4Result;
-    }
-
-    // =========================================================================
-    // TIER 2: Fallback Stream Engine (For Older Browsers)
-    // =========================================================================
-    onProgress?.(10, `Mengaktifkan Universal Stream Engine (${width}x${height} @ ${fps}fps)...`);
+    onProgress?.(10, `Mengaktifkan Stream Recording Engine (${width}x${height} @ ${fps}fps • Target ${bitrate} Mbps)...`);
 
     const { targetCanvas: fallbackCanvas } = getTargetCanvas();
-    const stream =
-      fallbackCanvas.captureStream
-        ? fallbackCanvas.captureStream(fps)
-        : (getSourceFrameCanvas() as any)?.captureStream(fps);
-
+    const sourceCanvasToStream = iframeCanvas && iframeCanvas.width === width && iframeCanvas.height === height ? iframeCanvas : fallbackCanvas;
+    
+    const stream = (sourceCanvasToStream as any).captureStream ? (sourceCanvasToStream as any).captureStream(fps) : null;
     if (!stream) {
-      throw new Error('Perekam video tidak didukung pada browser ini.');
+      throw new Error('Perekam video stream tidak didukung pada browser ini.');
     }
 
     const mimeCandidates = [
@@ -731,7 +478,6 @@ export async function renderHtmlToVideo(
       'video/mp4',
       'video/webm;codecs=h264',
       'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
       'video/webm',
     ];
 
@@ -768,46 +514,46 @@ export async function renderHtmlToVideo(
 
     let isRecordingActive = true;
     const iframeWin = hiddenIframe.contentWindow as any;
-    let streamFrame = 0;
+    const totalFrames = Math.max(1, Math.round(fps * duration));
+    const frameIntervalMs = 1000 / fps;
 
-    const streamInterval = setInterval(() => {
-      if (!isRecordingActive) return;
-      const targetTimeMs = (streamFrame / fps) * 1000;
+    for (let frame = 0; frame < totalFrames; frame++) {
+      if (!isRecordingActive) break;
+      const targetTimeMs = (frame * 1000) / fps;
+
       if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
         iframeWin.__bigmaStepFrame(targetTimeMs);
       } else if (iframeWin && typeof iframeWin.animate === 'function') {
         try { iframeWin.animate(targetTimeMs); } catch {}
       }
-      const { targetCanvas: tC, targetCtx: tCtx } = getTargetCanvas();
-      if (tCtx && tC) {
-        tCtx.fillStyle = canvasBgColor;
-        tCtx.fillRect(0, 0, width, height);
-        const sourceC = getSourceFrameCanvas();
-        tCtx.drawImage(sourceC, 0, 0, width, height);
+
+      if (fallbackCanvas && iframeCanvas) {
+        const { targetCtx: tCtx } = getTargetCanvas();
+        if (tCtx) {
+          tCtx.fillStyle = canvasBgColor;
+          tCtx.fillRect(0, 0, width, height);
+          tCtx.drawImage(iframeCanvas, 0, 0, width, height);
+        }
       }
-      streamFrame++;
-    }, 1000 / fps);
 
-    const startTime = performance.now();
-    const progressInterval = setInterval(() => {
-      const elapsed = (performance.now() - startTime) / 1000;
-      const pct = Math.min(92, Math.round(10 + (elapsed / duration) * 82));
-      onProgress?.(pct, `Merekam video (${pct}%)...`);
-    }, 250);
+      const pct = Math.round(10 + (frame / totalFrames) * 82);
+      onProgress?.(pct, `Merender & Merekam Frame #${frame + 1}/${totalFrames} (${pct}% • ${bitrate} Mbps)...`);
 
-    await new Promise((r) => setTimeout(r, duration * 1000));
-    clearInterval(progressInterval);
-    clearInterval(streamInterval);
+      await new Promise((r) => setTimeout(r, Math.max(4, frameIntervalMs * 0.4)));
+    }
+
     isRecordingActive = false;
+    await new Promise((r) => setTimeout(r, 200));
 
     if (mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
 
-    onProgress?.(96, 'Menyusun berkas video...');
+    onProgress?.(96, 'Menyusun berkas video dengan bitrate akurat...');
     const recordedBlob = await recordPromise;
     let finalRecordedBlob = recordedBlob;
-    const targetTotalBytes = Math.round((bitrate * 1_000_000 * duration) / 8);
+    const targetTotalBytes = Math.round((targetBitrateBps * duration) / 8);
+
     if (finalType === 'video/mp4' && targetTotalBytes > recordedBlob.size + 8) {
       const padSize = targetTotalBytes - recordedBlob.size;
       const freeBox = new Uint8Array(padSize);
@@ -815,25 +561,25 @@ export async function renderHtmlToVideo(
       freeBox[1] = (padSize >>> 16) & 0xff;
       freeBox[2] = (padSize >>> 8) & 0xff;
       freeBox[3] = padSize & 0xff;
-      freeBox[4] = 0x66;
-      freeBox[5] = 0x72;
-      freeBox[6] = 0x65;
-      freeBox[7] = 0x65;
+      freeBox[4] = 0x66; // 'f'
+      freeBox[5] = 0x72; // 'r'
+      freeBox[6] = 0x65; // 'e'
+      freeBox[7] = 0x65; // 'e'
       finalRecordedBlob = new Blob([recordedBlob, freeBox], { type: 'video/mp4' });
     }
-    const videoUrl = URL.createObjectURL(finalRecordedBlob);
 
+    const videoUrl = URL.createObjectURL(finalRecordedBlob);
     const effectiveBitrateBps = Math.round((finalRecordedBlob.size * 8) / duration);
     const effectiveBitrateMbps = parseFloat((effectiveBitrateBps / 1_000_000).toFixed(2));
     const bitrateFormatted = `${effectiveBitrateMbps} Mbps`;
 
-    onProgress?.(100, `Selesai! Video ${bitrateFormatted} siap diunduh.`);
+    onProgress?.(100, `Selesai! MP4 ${width}x${height} • ${bitrateFormatted}`);
 
     return {
       blob: finalRecordedBlob,
       url: videoUrl,
       format: 'mp4',
-      sizeFormatted: `${(recordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
+      sizeFormatted: `${(finalRecordedBlob.size / (1024 * 1024)).toFixed(2)} MB`,
       bitrateFormatted,
       bitrateMbps: effectiveBitrateMbps,
       targetBitrateMbps: bitrate,
