@@ -63,10 +63,14 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
 
   const dirHandlesRef = useRef<Record<string, any>>({});
 
-  // Account Folder Configuration Modal State
+  // Single Account Folder Modal State
   const [isFolderPickerModalOpen, setIsFolderPickerModalOpen] = useState(false);
   const [targetAccountForFolder, setTargetAccountForFolder] = useState<string>('');
   const [manualFolderNameInput, setManualFolderNameInput] = useState<string>('');
+
+  // Bulk Folder Management Modal State
+  const [isBulkFolderModalOpen, setIsBulkFolderModalOpen] = useState(false);
+  const [bulkFolderInputs, setBulkFolderInputs] = useState<Record<string, string>>({});
 
   // Batch Render Modal State
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
@@ -140,6 +144,59 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
     setIsFolderPickerModalOpen(true);
   };
 
+  // Open Bulk Folder Modal
+  const openBulkFolderModal = () => {
+    const current: Record<string, string> = {};
+    uniqueAccounts.forEach((acc) => {
+      current[acc] = accountFolders[acc] || acc;
+    });
+    setBulkFolderInputs(current);
+    setIsBulkFolderModalOpen(true);
+  };
+
+  // Bulk Pick 1 Master Directory for all accounts
+  const handleSelectMasterDirectoryForBulk = async () => {
+    try {
+      if ('showDirectoryPicker' in window) {
+        const masterHandle = await (window as any).showDirectoryPicker({
+          mode: 'readwrite',
+        });
+        if (masterHandle && masterHandle.name) {
+          const updated: Record<string, string> = { ...accountFolders };
+          for (const acc of uniqueAccounts) {
+            const safeSub = (bulkFolderInputs[acc] || acc).replace(/[^a-z0-9_-]/gi, '_');
+            try {
+              const subHandle = await masterHandle.getDirectoryHandle(safeSub, { create: true });
+              dirHandlesRef.current[acc] = subHandle;
+              updated[acc] = `${masterHandle.name}/${safeSub}`;
+            } catch {
+              updated[acc] = `${masterHandle.name}/${safeSub}`;
+            }
+          }
+          setAccountFolders(updated);
+          setBulkFolderInputs(updated);
+          showToast(`Berhasil mengatur target folder untuk semua ${uniqueAccounts.length} akun ke dalam "${masterHandle.name}"!`, 'success');
+          addDownloadLog(`[Master Folder Set] Seluruh ${uniqueAccounts.length} akun terhubung ke sub-folder di dalam: "${masterHandle.name}"`, 'success');
+        }
+      } else {
+        showToast('Browser ini tidak mendukung File System Access API. Silakan isi nama folder manual di bawah.', 'info');
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        showToast('Akses folder dibatalkan.', 'warn');
+      }
+    }
+  };
+
+  // Save all manual bulk folder inputs
+  const handleSaveBulkFolders = () => {
+    const updated = { ...accountFolders, ...bulkFolderInputs };
+    setAccountFolders(updated);
+    showToast(`Target folder untuk seluruh akun berhasil disimpan!`, 'success');
+    addDownloadLog(`[Bulk Folder Saved] Target folder untuk ${Object.keys(updated).length} akun diperbarui.`, 'info');
+    setIsBulkFolderModalOpen(false);
+  };
+
   const handleDownloadSingleHtml = (item: AnimationItem) => {
     const htmlBlob = new Blob([item.html], { type: 'text/html;charset=utf-8' });
     const downloadUrl = URL.createObjectURL(htmlBlob);
@@ -170,8 +227,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
         const writable = await fileHandle.createWritable();
         await writable.write(result.blob);
         await writable.close();
-        addDownloadLog(`[Tersimpan ke Folder] "${fileName}" berhasil ditulis ke "${dirHandle.name}"!`, 'success');
-        return { success: true, method: 'direct-disk', folder: dirHandle.name };
+        addDownloadLog(`[Tersimpan ke Folder] "${fileName}" berhasil ditulis ke "${dirHandle.name || targetFolderLabel}"!`, 'success');
+        return { success: true, method: 'direct-disk', folder: dirHandle.name || targetFolderLabel };
       } catch (err: any) {
         console.warn('Gagal menulis langsung ke disk handle, fallback ke unduh browser...', err);
       }
@@ -433,12 +490,24 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-gray-400">
-                  Target folder wajib per akun • Render satu per satu otomatis ke folder • Bebas beban ZIP & RAM
+                  Target folder per akun • Render otomatis satu per satu ke folder • Bebas beban ZIP & RAM
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              {/* Manage Bulk Folders Button */}
+              {animations.length > 0 && (
+                <button
+                  onClick={openBulkFolderModal}
+                  className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-amber-300 border border-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="Atur penargetan folder untuk semua akun sekaligus"
+                >
+                  <i className="fa-solid fa-folder-gear text-amber-400"></i>
+                  <span className="hidden sm:inline">Kelola Target Folder</span>
+                </button>
+              )}
+
               {/* Batch Render Button */}
               {animations.length > 0 && (
                 <button
@@ -447,8 +516,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                   className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-500/20 cursor-pointer disabled:opacity-50"
                   title="Pilih akun dan render otomatis ke target folder masing-masing"
                 >
-                  <i className="fa-solid fa-folder-arrow-down"></i>
-                  <span>Batch Render ke Folder</span>
+                  <i className="fa-solid fa-bolt"></i>
+                  <span>Batch Render Semua Akun</span>
                 </button>
               )}
 
@@ -520,7 +589,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             </div>
           </div>
 
-          {/* Filter Tabs & Per-Account Target Folder Controls */}
+          {/* Clean Account Selection Tabs (NO BUTTONS SIDE-BY-SIDE IN TAB BAR!) */}
           {animations.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-gray-800 shrink-0">
               <div className="flex gap-2 overflow-x-auto pb-1 items-center max-w-full">
@@ -539,51 +608,24 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                   const isActive = currentFilter === acc;
                   const isBot = acc !== 'Manual';
                   const count = animations.filter((a) => (a.account || 'Manual') === acc).length;
-                  const folder = accountFolders[acc];
 
                   return (
-                    <div key={acc} className="flex items-center gap-1">
-                      <button
-                        onClick={() => setCurrentFilter(acc)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
-                          isActive
-                            ? isBot
-                              ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 border border-amber-400'
-                              : 'bg-sky-500 text-white shadow-lg'
-                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
-                        }`}
-                      >
-                        <i className={`fa-solid ${isBot ? 'fa-robot' : 'fa-user'}`}></i>
-                        <span>
-                          {acc} ({count})
-                        </span>
-                      </button>
-
-                      {/* Folder indicator / picker button */}
-                      <button
-                        onClick={() => openFolderPickerModalForAccount(acc)}
-                        className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition flex items-center gap-1 cursor-pointer ${
-                          folder
-                            ? 'bg-emerald-950/60 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/60'
-                            : 'bg-red-950/60 text-red-300 border-red-500/40 hover:bg-red-900/60 animate-pulse'
-                        }`}
-                        title={folder ? `Target Folder: "${folder}" (Klik untuk ganti)` : `Target Folder belum diset (Wajib diatur)`}
-                      >
-                        <i className={`fa-solid ${folder ? 'fa-folder-check' : 'fa-folder-plus'}`}></i>
-                        <span className="max-w-[100px] truncate">{folder || 'Set Folder'}</span>
-                      </button>
-
-                      {/* Render Account Button */}
-                      <button
-                        onClick={() => handleRenderSingleAccount(acc)}
-                        disabled={isDownloading}
-                        className="px-2 py-1 rounded-lg text-[10px] font-bold bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
-                        title={`Render seluruh video milik akun "${acc}" satu per satu ke folder`}
-                      >
-                        <i className="fa-solid fa-play text-[9px]"></i>
-                        <span>Render</span>
-                      </button>
-                    </div>
+                    <button
+                      key={acc}
+                      onClick={() => setCurrentFilter(acc)}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                        isActive
+                          ? isBot
+                            ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/20 border border-amber-400'
+                            : 'bg-sky-500 text-white shadow-lg'
+                          : 'bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700'
+                      }`}
+                    >
+                      <i className={`fa-solid ${isBot ? 'fa-robot' : 'fa-user'}`}></i>
+                      <span>
+                        {acc} ({count})
+                      </span>
+                    </button>
                   );
                 })}
               </div>
@@ -607,8 +649,110 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             </div>
           )}
 
+          {/* Dedicated Account Action Banner (INSIDE THE ACCOUNT VIEW - NOT CRAMMED IN TAB BAR!) */}
+          {animations.length > 0 && currentFilter !== 'All' && (
+            <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-3.5 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shadow-md shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400 text-base shrink-0">
+                  <i className="fa-solid fa-folder-tree"></i>
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-extrabold text-gray-100">{currentFilter}</h4>
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.5 rounded-full font-bold">
+                      {filteredList.length} Video Terdaftar
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-400 mt-1 flex-wrap">
+                    <span className="font-semibold text-gray-300">Target Folder:</span>
+                    {accountFolders[currentFilter] ? (
+                      <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                        <i className="fa-solid fa-circle-check text-[11px]"></i>
+                        <span className="font-mono bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded">
+                          {accountFolders[currentFilter]}
+                        </span>
+                        {dirHandlesRef.current[currentFilter] && (
+                          <span className="text-[9px] bg-emerald-900 text-emerald-200 border border-emerald-600 px-1.5 py-0.5 rounded font-bold uppercase">
+                            Direct Disk
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="text-red-400 font-semibold flex items-center gap-1 animate-pulse">
+                        <i className="fa-solid fa-triangle-exclamation text-[11px]"></i>
+                        Belum diset (Wajib diatur sebelum render)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={() => openFolderPickerModalForAccount(currentFilter)}
+                  className="px-3.5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <i className="fa-solid fa-folder-open text-amber-400"></i>
+                  <span>{accountFolders[currentFilter] ? 'Ganti Target Folder' : 'Atur Target Folder'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleRenderSingleAccount(currentFilter)}
+                  disabled={isDownloading || filteredList.length === 0}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-500/20 cursor-pointer disabled:opacity-50"
+                  title={`Render seluruh video milik akun "${currentFilter}" satu per satu ke folder target`}
+                >
+                  <i className="fa-solid fa-play text-xs"></i>
+                  <span>Render Akun Ini ({filteredList.length} Video)</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Overview Banner for "All Accounts" view */}
+          {animations.length > 0 && currentFilter === 'All' && (
+            <div className="bg-gray-900/70 border border-gray-800 rounded-2xl p-3 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 text-sm">
+                  <i className="fa-solid fa-info"></i>
+                </div>
+                <div>
+                  <div className="text-xs font-bold text-gray-200">
+                    Menampilkan total {animations.length} animasi dari {uniqueAccounts.length} akun
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Anda dapat mengatur target folder seluruh akun sekaligus atau langsung menjalankan batch render massal.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openBulkFolderModal}
+                  className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 border border-gray-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fa-solid fa-folder-gear text-amber-400"></i>
+                  <span>Kelola Folder Semua Akun</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenBatchModal}
+                  disabled={isDownloading || animations.length === 0}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-purple-500/20 cursor-pointer disabled:opacity-50"
+                >
+                  <i className="fa-solid fa-bolt text-xs"></i>
+                  <span>Batch Render Semua Akun</span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Content Area: Lightweight List View with In-Place Progress Bars + Log Sidebar */}
-          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-6 mt-2">
+          <div className="flex-1 overflow-hidden flex flex-col lg:flex-row gap-6 mt-1">
             {/* Gallery List */}
             <div className="flex-1 overflow-y-auto pr-2 pb-8 space-y-2.5">
               {filteredList.length === 0 ? (
@@ -680,9 +824,9 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                               <span className="text-gray-400 flex items-center gap-1">
                                 <i className="fa-solid fa-folder text-purple-400 text-[9px]"></i>
                                 {targetFolder ? (
-                                  <span className="text-purple-300 font-medium">/{targetFolder}</span>
+                                  <span className="text-purple-300 font-medium font-mono">/{targetFolder}</span>
                                 ) : (
-                                  <span className="text-red-400 italic">Belum diset</span>
+                                  <span className="text-red-400 italic">Folder belum diset</span>
                                 )}
                               </span>
                               <span>•</span>
@@ -819,7 +963,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 >
                   {downloadLogs.length === 0 ? (
                     <div className="italic text-gray-600">
-                      Tentukan target folder akun lalu klik "Render" atau "Batch Render ke Folder"...
+                      Pilih akun untuk melihat setelan folder & render, atau gunakan tombol batch di atas...
                     </div>
                   ) : (
                     downloadLogs.map((l, i) => (
@@ -844,13 +988,13 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
         </div>
       </div>
 
-      {/* Target Folder Configuration Modal */}
+      {/* Single Account Target Folder Configuration Modal */}
       {isFolderPickerModalOpen && (
         <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
           <div className="glass-card rounded-2xl max-w-md w-full border border-gray-800 p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b border-gray-800 pb-3">
               <h3 className="font-bold text-gray-100 text-sm flex items-center gap-2">
-                <i className="fa-solid fa-folder-open text-amber-400"></i> Tentukan Target Folder Akun: "{targetAccountForFolder}"
+                <i className="fa-solid fa-folder-open text-amber-400"></i> Target Folder Akun: "{targetAccountForFolder}"
               </h3>
               <button
                 onClick={() => setIsFolderPickerModalOpen(false)}
@@ -861,17 +1005,17 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
             </div>
 
             <p className="text-xs text-gray-300 leading-relaxed">
-              Sesuai alur baru, setiap video yang selesai dirender akan langsung diunduh otomatis satu per satu ke folder target tanpa membuat file ZIP raksasa yang membebani memori browser.
+              Setiap video dari akun <strong>"{targetAccountForFolder}"</strong> yang selesai dirender akan langsung otomatis tersimpan ke folder ini satu per satu.
             </p>
 
             {/* Option A: Native OS Directory Picker (Direct Disk Write) */}
             {'showDirectoryPicker' in window && (
               <div className="p-3 bg-sky-950/30 border border-sky-500/30 rounded-xl space-y-2">
                 <div className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
-                  <i className="fa-solid fa-hard-drive"></i> Simpan Langsung ke Harddisk Komputer (Direkomendasikan)
+                  <i className="fa-solid fa-hard-drive"></i> Simpan Langsung ke Harddisk Komputer
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Pilih folder di PC/Laptop Anda sekali saja. Setiap video akan langsung tertulis ke harddisk saat render selesai.
+                  Pilih folder di PC/Laptop Anda. Berkas MP4 akan langsung ditulis ke folder tersebut tanpa membebani browser.
                 </p>
                 <button
                   type="button"
@@ -884,10 +1028,10 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
               </div>
             )}
 
-            {/* Option B: Folder Name Label (Automatic sequential download fallback) */}
+            {/* Option B: Folder Name Label */}
             <div className="space-y-2 pt-1">
               <label className="block text-xs font-bold text-gray-300">
-                Atau Tentukan Nama Sub-Folder Akun:
+                Nama Sub-Folder / Label Unduhan:
               </label>
               <input
                 type="text"
@@ -897,7 +1041,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 className="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-xs font-semibold text-gray-200 focus:outline-none focus:border-purple-500"
               />
               <p className="text-[10px] text-gray-500">
-                File MP4 akan diberi nama prefix sesuai folder ini dan otomatis tersimpan saat tiap video selesai diproses.
+                File MP4 akan diberi nama prefix sesuai folder ini saat diunduh otomatis.
               </p>
             </div>
 
@@ -922,14 +1066,157 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
         </div>
       )}
 
-      {/* Batch Render Account Selection Modal */}
+      {/* Bulk Target Folder Management Modal (Atur Semua Folder Secara Massal) */}
+      {isBulkFolderModalOpen && (
+        <div className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="glass-card rounded-2xl max-w-2xl w-full border border-gray-800 p-6 space-y-4 shadow-2xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <i className="fa-solid fa-folder-gear"></i>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-100 text-sm">
+                    Pengaturan Target Folder Massal ({uniqueAccounts.length} Akun)
+                  </h3>
+                  <p className="text-[11px] text-gray-400">
+                    Tentukan target folder untuk seluruh akun di satu tempat
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBulkFolderModalOpen(false)}
+                className="text-gray-400 hover:text-white cursor-pointer"
+              >
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            {/* Master Root Directory 1-Click Setup */}
+            {'showDirectoryPicker' in window && (
+              <div className="p-3.5 bg-gradient-to-r from-sky-950/40 via-indigo-950/30 to-purple-950/40 border border-sky-500/40 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-bold text-sky-200 flex items-center gap-1.5">
+                    <i className="fa-solid fa-wand-magic-sparkles text-sky-400"></i>
+                    <span>Atur Otomatis dengan 1 Folder Induk Komputer</span>
+                  </div>
+                  <span className="text-[9px] bg-sky-900 text-sky-300 px-2 py-0.5 rounded-full font-bold">
+                    Super Praktis
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-300 leading-relaxed">
+                  Pilih 1 folder utama di PC Anda (misal: <code>D:/Koleksi_Microstock/</code>). Sistem akan secara otomatis membuat dan menghubungkan sub-folder terpisah untuk setiap akun ke dalam folder tersebut hanya dalam 1 klik!
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSelectMasterDirectoryForBulk}
+                  className="w-full py-2 bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <i className="fa-solid fa-folder-plus text-sm"></i>
+                  <span>Pilih Folder Induk Komputer (Auto-Assign Semua Akun)</span>
+                </button>
+              </div>
+            )}
+
+            {/* List of all accounts & their folder destinations */}
+            <div className="flex-1 overflow-y-auto space-y-2.5 pr-1 py-1">
+              {uniqueAccounts.map((acc) => {
+                const count = animations.filter((a) => (a.account || 'Manual') === acc).length;
+                const isConfigured = !!accountFolders[acc];
+                const currentVal = bulkFolderInputs[acc] ?? (accountFolders[acc] || acc);
+
+                return (
+                  <div
+                    key={acc}
+                    className="p-3 rounded-xl bg-gray-900/80 border border-gray-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 sm:w-1/3">
+                      <div className="font-bold text-xs text-gray-200 truncate flex items-center gap-1.5">
+                        <i className="fa-solid fa-user-tag text-purple-400 text-[10px]"></i>
+                        <span>{acc}</span>
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">
+                        {count} video • {isConfigured ? (
+                          <span className="text-emerald-400 font-semibold">Folder aktif</span>
+                        ) : (
+                          <span className="text-amber-400 font-semibold">Belum diset</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex-1 w-full sm:w-auto flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-2.5 top-2 text-[10px] text-gray-500">📁</span>
+                        <input
+                          type="text"
+                          value={currentVal}
+                          onChange={(e) =>
+                            setBulkFolderInputs((prev) => ({ ...prev, [acc]: e.target.value }))
+                          }
+                          placeholder={`Folder untuk ${acc}`}
+                          className="w-full bg-gray-950 border border-gray-800 rounded-lg pl-7 pr-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-purple-500 font-mono"
+                        />
+                      </div>
+
+                      {'showDirectoryPicker' in window && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectFolderViaNativePicker(acc)}
+                          className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-sky-300 border border-gray-700 rounded-lg text-[11px] font-semibold transition shrink-0 cursor-pointer"
+                          title="Pilih folder komputer khusus untuk akun ini"
+                        >
+                          <i className="fa-solid fa-folder-tree mr-1"></i>
+                          <span>Pilih</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-gray-800">
+              <span className="text-[11px] text-gray-400">
+                Semua target folder akan tersimpan untuk render massal.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsBulkFolderModalOpen(false)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveBulkFolders}
+                  className="px-5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-purple-500/20 cursor-pointer flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-check text-xs"></i>
+                  <span>Simpan Semua Target Folder</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Render All / Selected Accounts Modal (Render Massal Otomatis Sesuai Target Masing-Masing) */}
       {isBatchModalOpen && (
         <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="glass-card rounded-2xl max-w-md w-full border border-gray-800 p-6 space-y-4 shadow-2xl">
+          <div className="glass-card rounded-2xl max-w-lg w-full border border-gray-800 p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b border-gray-800 pb-3">
-              <h3 className="font-bold text-gray-100 text-sm flex items-center gap-2">
-                <i className="fa-solid fa-folder-arrow-down text-purple-400"></i> Pilih Akun untuk Batch Render ke Folder
-              </h3>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-400">
+                  <i className="fa-solid fa-bolt"></i>
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-100 text-sm">Batch Render Massal Semua Akun</h3>
+                  <p className="text-[11px] text-gray-400">
+                    Otomatis diproses satu per satu ke folder target masing-masing
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setIsBatchModalOpen(false)}
                 className="text-gray-400 hover:text-white cursor-pointer"
@@ -938,8 +1225,8 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
               </button>
             </div>
 
-            <p className="text-xs text-gray-400">
-              Pilih akun mana saja yang ingin dirender ke MP4 (@ {exportBitrate} Mbps). Setiap 1 video yang selesai akan langsung tersimpan otomatis ke target folder akun tanpa membebani memori.
+            <p className="text-xs text-gray-300 leading-relaxed">
+              Pilih akun yang ingin diproses secara massal. Sistem akan merender seluruh video dari akun yang dicentang secara berurutan dan <strong>langsung menyimpannya ke folder target yang telah ditentukan untuk masing-masing akun</strong> tanpa perlu menjalankan satu per satu.
             </p>
 
             <div className="space-y-2 max-h-60 overflow-y-auto py-1">
@@ -953,7 +1240,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                     key={acc}
                     className="flex items-center justify-between p-2.5 rounded-xl bg-gray-900/80 border border-gray-800 hover:border-purple-500/40 transition"
                   >
-                    <label className="flex items-center gap-2.5 cursor-pointer flex-1">
+                    <label className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0">
                       <input
                         type="checkbox"
                         checked={isChecked}
@@ -962,43 +1249,54 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                         }
                         className="w-4 h-4 rounded border-gray-700 text-purple-600 focus:ring-purple-500 bg-gray-950 cursor-pointer"
                       />
-                      <span className="font-bold text-xs text-gray-200">{acc}</span>
-                      <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold">
-                        {count} video
-                      </span>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs text-gray-200 truncate">{acc}</div>
+                        <div className="text-[10px] text-gray-400 flex items-center gap-1 truncate">
+                          <span>Target:</span>
+                          {folder ? (
+                            <span className="text-purple-300 font-mono">/{folder}</span>
+                          ) : (
+                            <span className="text-red-400 font-semibold">⚠️ Belum ada folder</span>
+                          )}
+                        </div>
+                      </div>
                     </label>
 
-                    <button
-                      type="button"
-                      onClick={() => openFolderPickerModalForAccount(acc)}
-                      className={`text-[10px] font-bold px-2 py-1 rounded-lg border cursor-pointer ${
-                        folder
-                          ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/40'
-                          : 'text-red-400 border-red-500/40 bg-red-950/40 animate-pulse'
-                      }`}
-                      title="Klik untuk ubah folder target"
-                    >
-                      {folder ? `📁 ${folder}` : '⚠️ Set Folder'}
-                    </button>
+                    <span className="text-[10px] bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-bold shrink-0 ml-2">
+                      {count} video
+                    </span>
                   </div>
                 );
               })}
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-800">
+            <div className="flex items-center justify-between pt-2 border-t border-gray-800">
               <button
-                onClick={() => setIsBatchModalOpen(false)}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setIsBatchModalOpen(false);
+                  openBulkFolderModal();
+                }}
+                className="text-xs text-amber-300 hover:text-amber-200 underline cursor-pointer"
               >
-                Batal
+                Ubah Target Folder Akun
               </button>
-              <button
-                onClick={handleStartBatchCheckFolders}
-                className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-purple-500/20 cursor-pointer flex items-center gap-1.5"
-              >
-                <i className="fa-solid fa-play text-xs"></i>
-                <span>Mulai Render Berurutan</span>
-              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setIsBatchModalOpen(false)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleStartBatchCheckFolders}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white rounded-xl text-xs font-bold transition shadow-lg shadow-purple-500/20 cursor-pointer flex items-center gap-1.5"
+                >
+                  <i className="fa-solid fa-play text-xs"></i>
+                  <span>Jalankan Render Massal</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
