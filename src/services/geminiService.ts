@@ -36,7 +36,7 @@ export function getStoredModel(): GeminiModel {
   } catch (e) {
     console.error('Failed to load model', e);
   }
-  return 'gemini-3.1-pro-preview';
+  return 'gemini-2.5-flash';
 }
 
 export function saveStoredModel(model: GeminiModel): void {
@@ -86,44 +86,7 @@ export function isRateLimitOrQuotaError(err: any): boolean {
   );
 }
 
-// Track exhausted keys per model
-const exhaustedKeysMap: Record<string, Set<string>> = {
-  'gemini-3.1-pro-preview': new Set<string>(),
-  'gemini-3.1-flash-lite': new Set<string>(),
-  'gemini-2.5-flash': new Set<string>(),
-};
-
-export function recordKeyExhausted(key: string, model: GeminiModel): void {
-  const normModel = sanitizeModel(model);
-  if (!exhaustedKeysMap[normModel]) {
-    exhaustedKeysMap[normModel] = new Set<string>();
-  }
-  if (key && key.trim().length > 0) {
-    exhaustedKeysMap[normModel].add(key.trim());
-  }
-}
-
-export function resetExhaustedKeys(model?: GeminiModel): void {
-  if (model) {
-    const normModel = sanitizeModel(model);
-    exhaustedKeysMap[normModel]?.clear();
-  } else {
-    Object.keys(exhaustedKeysMap).forEach((m) => exhaustedKeysMap[m].clear());
-  }
-}
-
-export function isKeyExhausted(key: string, model: GeminiModel): boolean {
-  if (!key) return false;
-  const normModel = sanitizeModel(model);
-  return exhaustedKeysMap[normModel]?.has(key.trim()) || false;
-}
-
-export function getAvailableKeysForModel(apiKeys: string[], model: GeminiModel): string[] {
-  const normModel = sanitizeModel(model);
-  const exhausted = exhaustedKeysMap[normModel] || new Set<string>();
-  return (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0 && !exhausted.has(k));
-}
-
+// Simple round-robin key rotation without tracking exhaustion
 let currentKeyIndex = 0;
 
 export function getRotatedKey(apiKeys: string[], model?: GeminiModel): string | undefined {
@@ -133,20 +96,16 @@ export function getRotatedKey(apiKeys: string[], model?: GeminiModel): string | 
   const cleanKeys = apiKeys.map((k) => k.trim()).filter((k) => k.length > 0);
   if (cleanKeys.length === 0) return undefined;
 
-  if (model) {
-    const normModel = sanitizeModel(model);
-    const available = getAvailableKeysForModel(cleanKeys, normModel);
-    if (available.length > 0) {
-      const chosen = available[currentKeyIndex % available.length];
-      currentKeyIndex = (currentKeyIndex + 1) % available.length;
-      return chosen;
-    }
-  }
-
   const key = cleanKeys[currentKeyIndex % cleanKeys.length];
   currentKeyIndex = (currentKeyIndex + 1) % cleanKeys.length;
   return key;
 }
+
+// Stubs for removed functions to maintain compilation
+export function recordKeyExhausted(key: string, model: GeminiModel): void {}
+export function resetExhaustedKeys(model?: GeminiModel): void {}
+export function isKeyExhausted(key: string, model: GeminiModel): boolean { return false; }
+export function getAvailableKeysForModel(apiKeys: string[], model: GeminiModel): string[] { return apiKeys; }
 
 function extractHTML(text: string): string {
   let cleanHTML = text;

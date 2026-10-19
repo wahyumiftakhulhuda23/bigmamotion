@@ -42,7 +42,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   // API Key State
   const [textValue, setTextValue] = useState('');
-  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-3.1-pro-preview');
+  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-2.5-flash');
   const [isTesting, setIsTesting] = useState(false);
   const [testingRowIndex, setTestingRowIndex] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<ApiKeyTestResult[]>([]);
