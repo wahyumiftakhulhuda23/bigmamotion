@@ -529,13 +529,7 @@ export async function generatePromptsViaGemini(
 ): Promise<string[]> {
   const cleanKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
   const targetModel = sanitizeModel(model);
-
-  if (cleanKeys.length > 0) {
-    const available = getAvailableKeysForModel(cleanKeys, targetModel);
-    if (available.length === 0) {
-      throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
-    }
-  }
+  resetExhaustedKeys(targetModel);
 
   const maxAttempts = Math.max(cleanKeys.length * 2, 2);
   let lastError: any = null;
@@ -954,14 +948,7 @@ export async function generateSingleAnimationCode(
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const cleanKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
   const targetModel = sanitizeModel(model);
-
-  // If user provided keys and all are already exhausted on targetModel, throw immediately so modal appears
-  if (cleanKeys.length > 0) {
-    const available = getAvailableKeysForModel(cleanKeys, targetModel);
-    if (available.length === 0) {
-      throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
-    }
-  }
+  resetExhaustedKeys(targetModel);
 
   const totalAttempts = Math.max(cleanKeys.length * 2, maxRetries);
   let lastError: any = null;
