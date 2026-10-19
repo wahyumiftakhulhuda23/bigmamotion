@@ -711,7 +711,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.15,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 3072,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -2066,7 +2066,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       (currentModel) => {
         const config: any = {
           temperature: 0.15,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 3072,
         };
         const fastThinking = getFastThinkingConfig(currentModel);
         if (fastThinking) config.thinkingConfig = fastThinking;

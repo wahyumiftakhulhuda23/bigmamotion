@@ -895,7 +895,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
       contents: [{ parts: [{ text: systemPrompt }] }],
       generationConfig: {
         temperature: 0.15,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 3072,
       },
     }),
   });
@@ -2443,7 +2443,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
           ],
           generationConfig: {
             temperature: 0.15,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 3072,
           },
         }),
       });
