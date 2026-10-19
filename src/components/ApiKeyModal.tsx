@@ -42,7 +42,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   // API Key State
   const [textValue, setTextValue] = useState('');
-  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-2.5-flash');
+  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-3.1-pro-preview');
   const [isTesting, setIsTesting] = useState(false);
   const [testingRowIndex, setTestingRowIndex] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<ApiKeyTestResult[]>([]);
@@ -53,8 +53,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setTextValue(apiKeys.join('\n'));
-      const safeModel = (selectedModel as string) === 'gemini-3.7-flash' ? 'gemini-2.5-flash' : selectedModel;
-      setModelValue(safeModel || 'gemini-2.5-flash');
+      const safeModel = (selectedModel as string) === 'gemini-3.7-flash' ? 'gemini-3.1-pro-preview' : (selectedModel || 'gemini-3.1-pro-preview');
+      setModelValue(safeModel);
       setIsTesting(false);
       setTestingRowIndex(null);
       setHwProfile(detectDeviceHardware());
@@ -240,9 +240,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Sangat Cepat & Direkomendasikan)</option>
-                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi & Detail Kompleks)</option>
-                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Ringan & Cepat)</option>
+                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Default & Kualitas Masterpiece)</option>
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Ringan, Super Cepat & Kuota Tinggi)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Cepat & Stabil)</option>
                 </select>
               </div>
 

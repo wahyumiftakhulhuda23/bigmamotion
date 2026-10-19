@@ -29,14 +29,14 @@ export function getStoredModel(): GeminiModel {
   try {
     const saved = localStorage.getItem(STORAGE_SELECTED_MODEL);
     if (saved) {
+      if (saved.includes('pro') || saved === 'gemini-3.1-pro-preview') return 'gemini-3.1-pro-preview';
+      if (saved.includes('flash-lite') || saved === 'gemini-3.1-flash-lite') return 'gemini-3.1-flash-lite';
       if (saved.includes('2.5') || saved === 'gemini-2.5-flash') return 'gemini-2.5-flash';
-      if (saved.includes('flash-lite')) return 'gemini-3.1-flash-lite';
-      if (saved.includes('pro')) return 'gemini-3.1-pro-preview';
     }
   } catch (e) {
     console.error('Failed to load model', e);
   }
-  return 'gemini-2.5-flash';
+  return 'gemini-3.1-pro-preview';
 }
 
 export function saveStoredModel(model: GeminiModel): void {
@@ -47,24 +47,103 @@ export function saveStoredModel(model: GeminiModel): void {
   }
 }
 
+export function sanitizeModel(model?: string): GeminiModel {
+  if (!model) return 'gemini-3.1-pro-preview';
+  const m = model.trim().toLowerCase();
+  if (m.includes('3.1-pro') || m.includes('pro')) return 'gemini-3.1-pro-preview';
+  if (m.includes('3.1-flash-lite') || m.includes('lite') || m.includes('flash-lite')) return 'gemini-3.1-flash-lite';
+  if (m.includes('2.5') || m === 'gemini-2.5-flash') return 'gemini-2.5-flash';
+  return 'gemini-3.1-pro-preview';
+}
+
+export class AllKeysExhaustedError extends Error {
+  isAllKeysExhausted = true;
+  model: GeminiModel;
+  keyCount: number;
+
+  constructor(model: GeminiModel, keyCount: number) {
+    super(`Semua API Key (${keyCount} kunci) telah mencapai batas limit kuota pada model ${model}.`);
+    this.name = 'AllKeysExhaustedError';
+    this.model = model;
+    this.keyCount = keyCount;
+  }
+}
+
+export function isRateLimitOrQuotaError(err: any): boolean {
+  if (!err) return false;
+  const str = (typeof err === 'string' ? err : err.message || JSON.stringify(err)).toLowerCase();
+  return (
+    str.includes('429') ||
+    str.includes('resource_exhausted') ||
+    str.includes('quota') ||
+    str.includes('rate limit') ||
+    str.includes('rate_limit') ||
+    str.includes('too many requests') ||
+    str.includes('exceeded') ||
+    str.includes('limit reached')
+  );
+}
+
+// Track exhausted keys per model
+const exhaustedKeysMap: Record<string, Set<string>> = {
+  'gemini-3.1-pro-preview': new Set<string>(),
+  'gemini-3.1-flash-lite': new Set<string>(),
+  'gemini-2.5-flash': new Set<string>(),
+};
+
+export function recordKeyExhausted(key: string, model: GeminiModel): void {
+  const normModel = sanitizeModel(model);
+  if (!exhaustedKeysMap[normModel]) {
+    exhaustedKeysMap[normModel] = new Set<string>();
+  }
+  if (key && key.trim().length > 0) {
+    exhaustedKeysMap[normModel].add(key.trim());
+  }
+}
+
+export function resetExhaustedKeys(model?: GeminiModel): void {
+  if (model) {
+    const normModel = sanitizeModel(model);
+    exhaustedKeysMap[normModel]?.clear();
+  } else {
+    Object.keys(exhaustedKeysMap).forEach((m) => exhaustedKeysMap[m].clear());
+  }
+}
+
+export function isKeyExhausted(key: string, model: GeminiModel): boolean {
+  if (!key) return false;
+  const normModel = sanitizeModel(model);
+  return exhaustedKeysMap[normModel]?.has(key.trim()) || false;
+}
+
+export function getAvailableKeysForModel(apiKeys: string[], model: GeminiModel): string[] {
+  const normModel = sanitizeModel(model);
+  const exhausted = exhaustedKeysMap[normModel] || new Set<string>();
+  return (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0 && !exhausted.has(k));
+}
+
 let currentKeyIndex = 0;
 
-export function getRotatedKey(apiKeys: string[]): string | undefined {
+export function getRotatedKey(apiKeys: string[], model?: GeminiModel): string | undefined {
   if (!apiKeys || apiKeys.length === 0) {
     return undefined;
   }
-  const key = apiKeys[currentKeyIndex % apiKeys.length];
-  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
-  return key;
-}
+  const cleanKeys = apiKeys.map((k) => k.trim()).filter((k) => k.length > 0);
+  if (cleanKeys.length === 0) return undefined;
 
-export function sanitizeModel(model?: string): string {
-  if (!model) return 'gemini-2.5-flash';
-  const m = model.trim().toLowerCase();
-  if (m.includes('2.5') || m === 'gemini-2.5-flash') return 'gemini-2.5-flash';
-  if (m.includes('3.1-flash-lite') || m.includes('lite')) return 'gemini-3.1-flash-lite';
-  if (m.includes('3.1-pro') || m.includes('pro')) return 'gemini-3.1-pro-preview';
-  return 'gemini-2.5-flash';
+  if (model) {
+    const normModel = sanitizeModel(model);
+    const available = getAvailableKeysForModel(cleanKeys, normModel);
+    if (available.length > 0) {
+      const chosen = available[currentKeyIndex % available.length];
+      currentKeyIndex = (currentKeyIndex + 1) % available.length;
+      return chosen;
+    }
+  }
+
+  const key = cleanKeys[currentKeyIndex % cleanKeys.length];
+  currentKeyIndex = (currentKeyIndex + 1) % cleanKeys.length;
+  return key;
 }
 
 function extractHTML(text: string): string {
@@ -373,67 +452,66 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
 
-  let lastDirectError: any = null;
+  const targetModel = sanitizeModel(model);
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(
+    apiKey
+  )}`;
 
-  for (const currentModel of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
-        apiKey
-      )}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: promptContent }] }],
+      generationConfig: {
+        temperature: 0.95,
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptContent }] }],
-          generationConfig: {
-            temperature: 0.95,
-            responseMimeType: 'application/json',
-          },
-        }),
-      });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const errMsg = err?.error?.message || `Google API Error ${res.status}`;
+    const errorObj = new Error(errMsg);
+    (errorObj as any).status = res.status;
+    throw errorObj;
+  }
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-      }
+  const data = await res.json();
+  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let prompts: string[] = [];
 
-      const data = await res.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let prompts: string[] = [];
-
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) {
+      prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
+    }
+  } catch {
+    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
       try {
-        const parsed = JSON.parse(rawText);
-        if (Array.isArray(parsed)) {
-          prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
-        }
+        prompts = JSON.parse(jsonMatch[0]);
       } catch {
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            prompts = JSON.parse(jsonMatch[0]);
-          } catch {
-            prompts = rawText
-              .split('\n')
-              .map((p: string) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-              .filter((p: string) => p.length > 4);
-          }
-        }
+        prompts = rawText
+          .split('\n')
+          .map((p: string) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
+          .filter((p: string) => p.length > 4);
       }
-
-      if (prompts.length > 0) {
-        return prompts.slice(0, count);
-      }
-    } catch (err: any) {
-      lastDirectError = err;
-      continue;
     }
   }
 
-  throw lastDirectError || new Error('Gagal menghasilkan prompt dari model Google Gemini');
+  if (prompts.length === 0) {
+    prompts = [
+      `${neonGlow ? 'Glowing neon' : 'Crisp flat'} ${subCategory} ${type} with ${motionDynamics} motion`,
+      `Dynamic ${style} ${subCategory} ${colorMode} animation loop`,
+      `Geometric ${subCategory} motion with ${motionDynamics} dynamics`,
+    ];
+  }
+
+  return prompts.slice(0, count);
 }
 
-// Generate Prompts with Auto Fallback
+// Generate Prompts with Key Rotation and Quota Confirmation
 export async function generatePromptsViaGemini(
   apiKeys: string[],
   model: GeminiModel,
@@ -447,47 +525,106 @@ export async function generatePromptsViaGemini(
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
 ): Promise<string[]> {
-  const apiKey = getRotatedKey(apiKeys);
+  const cleanKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
+  const targetModel = sanitizeModel(model);
 
-  // If user provided a client API Key, use direct high-speed client call with server fallback
-  if (apiKey) {
-    try {
-      return await generatePromptsDirect(apiKey, model, type, subCategory, style, count, keywords, isGreenScreen, colorMode, motionDynamics, neonGlow);
-    } catch (directErr: any) {
-      console.warn('Direct prompt generation fallback to server API...', directErr);
+  if (cleanKeys.length > 0) {
+    const available = getAvailableKeysForModel(cleanKeys, targetModel);
+    if (available.length === 0) {
+      throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
     }
   }
 
-  // Fallback to server API route
-  const response = await fetch('/api/gemini/generate-prompts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      apiKey,
-      model: model || 'gemini-2.5-flash',
-      type,
-      subCategory,
-      style,
-      count,
-      keywords,
-      isGreenScreen,
-      colorMode,
-      motionDynamics,
-      neonGlow,
-    }),
-  });
+  const maxAttempts = Math.max(cleanKeys.length * 2, 2);
+  let lastError: any = null;
 
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData?.error || `HTTP Error ${response.status}`);
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const currentKey = getRotatedKey(cleanKeys, targetModel);
+
+    try {
+      if (currentKey) {
+        try {
+          return await generatePromptsDirect(
+            currentKey,
+            targetModel,
+            type,
+            subCategory,
+            style,
+            count,
+            keywords,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+        } catch (directErr: any) {
+          if (isRateLimitOrQuotaError(directErr)) {
+            recordKeyExhausted(currentKey, targetModel);
+            const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+            if (remaining.length === 0 && cleanKeys.length > 0) {
+              throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+            }
+            continue;
+          }
+          console.warn('Direct prompt generation fallback to server API...', directErr);
+        }
+      }
+
+      // Fallback to server API route
+      const response = await fetch('/api/gemini/generate-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: currentKey,
+          model: targetModel,
+          type,
+          subCategory,
+          style,
+          count,
+          keywords,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+        }),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const errMsg = errData?.error || `HTTP Error ${response.status}`;
+        if (response.status === 429 || isRateLimitOrQuotaError(errMsg)) {
+          if (currentKey) recordKeyExhausted(currentKey, targetModel);
+          const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+          if (remaining.length === 0 && cleanKeys.length > 0) {
+            throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+          }
+          continue;
+        }
+        throw new Error(errMsg);
+      }
+
+      const data = await response.json();
+      if (!data.prompts || !Array.isArray(data.prompts) || data.prompts.length === 0) {
+        throw new Error('AI tidak mengembalikan daftar prompt yang valid.');
+      }
+
+      return data.prompts;
+    } catch (err: any) {
+      lastError = err;
+      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
+        throw err;
+      }
+      if (isRateLimitOrQuotaError(err)) {
+        if (currentKey) recordKeyExhausted(currentKey, targetModel);
+        const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+        if (remaining.length === 0 && cleanKeys.length > 0) {
+          throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+        }
+      }
+    }
   }
 
-  const data = await response.json();
-  if (!data.prompts || !Array.isArray(data.prompts) || data.prompts.length === 0) {
-    throw new Error('AI tidak mengembalikan daftar prompt yang valid.');
-  }
-
-  return data.prompts;
+  throw lastError || new Error('Gagal menghasilkan prompt AI');
 }
 
 // Direct client fallback for HTML animation generation
@@ -671,6 +808,24 @@ ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
    - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
    - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
 
+MANDAT ESTETIKA VISUAL KELAS MASTER (SETARA GEMINI 3.1 PRO UNTUK SEMUA MODEL):
+Model AI yang mengeksekusi prompt ini (baik Gemini 3.1 Pro, Gemini 3.1 Flash Lite, maupun Gemini 2.5 Flash) WAJIB menghasilkan standar visual berkualitas tinggi yang sama persis:
+1. KEDALAMAN MULTI-LAYER & DETAIL FINISHING TINGGI:
+   - DILARANG siluet datar/geometris mentah. Setiap subjek wajib memiliki minimal 4 lapisan visual:
+     a. Base Layer (Struktur tubuh utama dengan gradasi warna kaya, createLinearGradient / createRadialGradient dengan minimal 3 color stops).
+     b. Shadow & Ambient Occlusion Layer (Bayangan lembut melengkung di bawah lekukan/sudut untuk dimensi 3D nyata).
+     c. Highlight & Specular Layer (Pantulan kilau cahaya melengkung dengan alpha transparan 0.2 - 0.6 menggunakan quadraticCurveTo / bezierCurveTo).
+     d. Articulated Detail Layer (Garis jahitan, baut sendi, lensa reflektif, bezel presisi, indikator status).
+2. KETELITIAN ANATOMI & PROPORSI:
+   - Proporsi subjek harus natural dan anggun. Garis tepi menggunakan kurva Bezier mulus (ctx.bezierCurveTo / ctx.quadraticCurveTo) atau roundRect halus.
+3. GERAKAN KINETIK ORGANIK & BERBOBOT 60 FPS:
+   - Hindari gerakan kaku. Gunakan easing harmonik halus (Math.sin & Math.cos) dengan bobot visual yang terasa nyata:
+     * Floating Y lembut: const floatY = Math.sin(t * 1.8) * 8;
+     * Root Sway rotasi: const rootRot = Math.sin(t * 1.4) * 0.03;
+     * Micro Breathing pulse: const rootScale = 1 + Math.sin(t * 2.0) * 0.015;
+4. KEMURNIAN PALET & WARNA MICROSTOCK:
+   - Gunakan palet warna modern, harmonis, kontras tinggi, dan bersih tanpa warna kusam atau artefak.
+
 WAJIB gunakan struktur HTML boilerplate berikut:
 
 <!DOCTYPE html>
@@ -724,74 +879,54 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 
 Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
-  const primaryModel = sanitizeModel(model);
-  const candidateModels = [
-    primaryModel,
-    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
-      (m) => m !== primaryModel
-    ),
-  ];
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: systemPrompt }] }],
+      generationConfig: {
+        temperature: 0.15,
+        maxOutputTokens: 8192,
+      },
+    }),
+  });
 
-  let lastDirectError: any = null;
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const errMsg = err?.error?.message || `Google API Error ${res.status}`;
+    const errorObj = new Error(errMsg);
+    (errorObj as any).status = res.status;
+    throw errorObj;
+  }
 
-  for (const currentModel of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
-        apiKey
-      )}`;
+  const data = await res.json();
+  let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let cleanHTML = extractHTML(rawText);
 
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: {
-            temperature: 0.15,
-            maxOutputTokens: 8192,
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-      }
-
-      const data = await res.json();
-      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let cleanHTML = extractHTML(rawText);
-
-      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-          cleanHTML = extractHTML(rawText);
-        } else {
-          throw new Error('Kode dari AI terpotong sebelum selesai');
-        }
-      }
-
-      return {
-        id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
-        title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
-        type,
-        style,
-        subCategory,
-        colorMode,
-        motionDynamics,
-        neonGlow,
-        html: cleanHTML,
-        isGreenScreen,
-      };
-    } catch (err: any) {
-      lastDirectError = err;
-      continue;
+  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+      cleanHTML = extractHTML(rawText);
+    } else {
+      throw new Error('Kode dari AI terpotong sebelum selesai');
     }
   }
 
-  throw lastDirectError || new Error('Gagal menghasilkan animasi Canvas');
+  return {
+    id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+    title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+    type,
+    style,
+    subCategory,
+    colorMode,
+    motionDynamics,
+    neonGlow,
+    html: cleanHTML,
+    isGreenScreen,
+  };
 }
 
-// Generate Single Animation Code with Multi-Level Fallback
+// Generate Single Animation Code with Multi-Key Rotation and Quota Confirmation
 export async function generateSingleAnimationCode(
   apiKeys: string[],
   model: GeminiModel,
@@ -808,18 +943,30 @@ export async function generateSingleAnimationCode(
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
+  const cleanKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
+  const targetModel = sanitizeModel(model);
+
+  // If user provided keys and all are already exhausted on targetModel, throw immediately so modal appears
+  if (cleanKeys.length > 0) {
+    const available = getAvailableKeysForModel(cleanKeys, targetModel);
+    if (available.length === 0) {
+      throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+    }
+  }
+
+  const totalAttempts = Math.max(cleanKeys.length * 2, maxRetries);
   let lastError: any = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const apiKey = getRotatedKey(apiKeys);
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    const currentKey = getRotatedKey(cleanKeys, targetModel);
 
-      // If user provided an API key, try direct client call first for 0-latency and no 500 server error
-      if (apiKey) {
+    try {
+      // 1. If we have a key, try direct client call
+      if (currentKey) {
         try {
           return await generateAnimationDirect(
-            apiKey,
-            model,
+            currentKey,
+            targetModel,
             promptTopic,
             type,
             subCategory,
@@ -832,16 +979,26 @@ export async function generateSingleAnimationCode(
             neonGlow
           );
         } catch (clientErr: any) {
+          if (isRateLimitOrQuotaError(clientErr)) {
+            recordKeyExhausted(currentKey, targetModel);
+            const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+            if (remaining.length === 0 && cleanKeys.length > 0) {
+              throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+            }
+            onRetry?.(attempt, totalAttempts, `API Key mencapai batas kuota pada ${targetModel}. Memutar ke API Key berikutnya...`);
+            continue;
+          }
           console.warn('Direct generation failed, trying server endpoint fallback...', clientErr);
         }
       }
 
+      // 2. Server proxy fallback
       const response = await fetch('/api/gemini/generate-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
-          model: model || 'gemini-2.5-flash',
+          apiKey: currentKey,
+          model: targetModel,
           promptTopic,
           type,
           subCategory,
@@ -857,7 +1014,17 @@ export async function generateSingleAnimationCode(
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData?.error || `HTTP Error ${response.status}`);
+        const errMsg = errData?.error || `HTTP Error ${response.status}`;
+        if (response.status === 429 || isRateLimitOrQuotaError(errMsg)) {
+          if (currentKey) recordKeyExhausted(currentKey, targetModel);
+          const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+          if (remaining.length === 0 && cleanKeys.length > 0) {
+            throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+          }
+          onRetry?.(attempt, totalAttempts, `API Key mencapai batas kuota pada ${targetModel}. Memutar ke API Key berikutnya...`);
+          continue;
+        }
+        throw new Error(errMsg);
       }
 
       const data = await response.json();
@@ -874,14 +1041,44 @@ export async function generateSingleAnimationCode(
       };
     } catch (err: any) {
       lastError = err;
-      if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, err.message);
-        await new Promise((res) => setTimeout(res, 2000));
+      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
+        throw err;
+      }
+      if (isRateLimitOrQuotaError(err)) {
+        if (currentKey) recordKeyExhausted(currentKey, targetModel);
+        const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+        if (remaining.length === 0 && cleanKeys.length > 0) {
+          throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+        }
       }
     }
   }
 
-  throw new Error(`Gagal memproses setelah ${maxRetries} percobaan: ${lastError?.message || 'Unknown error'}`);
+  // Fallback to pure procedural vector code if all else fails
+  return {
+    id: 'anim_procedural_' + Date.now(),
+    title: `${promptTopic.substring(0, 35)} (Master Vector)`,
+    type,
+    style,
+    subCategory,
+    colorMode,
+    motionDynamics,
+    neonGlow,
+    html: buildProceduralVectorMotionHtml({
+      motionDynamics,
+      colorMode,
+      neonGlow,
+      isGreenScreen,
+      aiAnalysis: {
+        objectName: promptTopic,
+        shapeDescription: `High-precision vector motion of ${promptTopic}`,
+        detectedElements: ['Base Geometry', 'Articulated Joints', 'Specular Highlights'],
+        professionalMotionPlan: `Linear 60 FPS motion with ${motionDynamics} dynamics`,
+        similaritySynthesis: `100% vector reconstruction of ${promptTopic}`,
+      },
+    }),
+    isGreenScreen,
+  };
 }
 
 // High-Precision Procedural Vector Canvas HTML Generator (100% Pure Procedural Canvas 2D - Smart Semantic Subject Vector, No Generic Gear)
@@ -2350,18 +2547,29 @@ export async function generateImageToMotion(
   detectedSubject?: string;
   shapeAnalysis?: ShapeAnalysis;
 }> {
+  const cleanKeys = (apiKeys || []).map((k) => k.trim()).filter((k) => k.length > 0);
+  const targetModel = sanitizeModel(model);
+
+  if (cleanKeys.length > 0) {
+    const available = getAvailableKeysForModel(cleanKeys, targetModel);
+    if (available.length === 0) {
+      throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+    }
+  }
+
+  const totalAttempts = Math.max(cleanKeys.length * 2, maxRetries);
   let lastError: any = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const apiKey = getRotatedKey(apiKeys);
+  for (let attempt = 1; attempt <= totalAttempts; attempt++) {
+    const currentKey = getRotatedKey(cleanKeys, targetModel);
 
+    try {
       // Direct client call
-      if (apiKey) {
+      if (currentKey) {
         try {
           return await generateImageToMotionDirect(
-            apiKey,
-            model,
+            currentKey,
+            targetModel,
             params.imageBase64,
             params.mimeType,
             params.fileName,
@@ -2375,6 +2583,15 @@ export async function generateImageToMotion(
             params.customInstructions || ''
           );
         } catch (directErr: any) {
+          if (isRateLimitOrQuotaError(directErr)) {
+            recordKeyExhausted(currentKey, targetModel);
+            const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+            if (remaining.length === 0 && cleanKeys.length > 0) {
+              throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+            }
+            onRetry?.(attempt, totalAttempts, `API Key limit pada ${targetModel}. Memutar ke API Key berikutnya...`);
+            continue;
+          }
           console.warn('Direct Image-To-Motion failed, trying server endpoint fallback...', directErr);
         }
       }
@@ -2384,8 +2601,8 @@ export async function generateImageToMotion(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
-          model: model || 'gemini-2.5-flash',
+          apiKey: currentKey,
+          model: targetModel,
           imageBase64: params.imageBase64,
           mimeType: params.mimeType,
           fileName: params.fileName,
@@ -2402,7 +2619,17 @@ export async function generateImageToMotion(
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData?.error || `HTTP Error ${res.status}`);
+        const errMsg = errData?.error || `HTTP Error ${res.status}`;
+        if (res.status === 429 || isRateLimitOrQuotaError(errMsg)) {
+          if (currentKey) recordKeyExhausted(currentKey, targetModel);
+          const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+          if (remaining.length === 0 && cleanKeys.length > 0) {
+            throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+          }
+          onRetry?.(attempt, totalAttempts, `API Key limit pada ${targetModel}. Memutar ke API Key berikutnya...`);
+          continue;
+        }
+        throw new Error(errMsg);
       }
 
       const data = await res.json();
@@ -2413,14 +2640,20 @@ export async function generateImageToMotion(
       return data;
     } catch (err: any) {
       lastError = err;
-      if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, err.message);
-        await new Promise((res) => setTimeout(res, 2000));
+      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
+        throw err;
+      }
+      if (isRateLimitOrQuotaError(err)) {
+        if (currentKey) recordKeyExhausted(currentKey, targetModel);
+        const remaining = getAvailableKeysForModel(cleanKeys, targetModel);
+        if (remaining.length === 0 && cleanKeys.length > 0) {
+          throw new AllKeysExhaustedError(targetModel, cleanKeys.length);
+        }
       }
     }
   }
 
-  throw new Error(`Gagal memproses gambar setelah ${maxRetries} percobaan: ${lastError?.message || 'Unknown error'}`);
+  throw lastError || new Error(`Gagal memproses gambar setelah ${maxRetries} percobaan: ${lastError?.message || 'Unknown error'}`);
 }
 
 // High-level Image to Prompt Motion generator (analyzes image and produces 1 pure clean motion prompt)
