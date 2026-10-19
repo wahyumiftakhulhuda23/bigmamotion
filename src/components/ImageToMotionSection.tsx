@@ -7,7 +7,7 @@ import {
   AnimationItem,
   GeminiModel,
 } from '../types';
-import { generateImageToMotion, AllKeysExhaustedError } from '../services/geminiService';
+import { generateImageToMotion } from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
 import JSZip from 'jszip';
 
@@ -38,7 +38,6 @@ interface ImageToMotionSectionProps {
   onAddAnimation: (item: AnimationItem) => void;
   onPreviewAnimation: (item: AnimationItem) => void;
   onOpenFullscreen: (item: AnimationItem) => void;
-  onModelQuotaExceeded?: (currentModel: GeminiModel) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'warn' | 'error') => void;
   addLog: (text: string, type?: 'info' | 'success' | 'error' | 'warn' | 'cyan' | 'green') => void;
   renderResolution?: { width: number; height: number; label: string };
@@ -63,7 +62,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   onAddAnimation,
   onPreviewAnimation,
   onOpenFullscreen,
-  onModelQuotaExceeded,
   showToast,
   addLog,
   renderResolution = { width: 1920, height: 1080, label: '1080p Full HD' },
@@ -431,11 +429,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       addLog(`[Image to Motion] [${accName}] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
       return true;
     } catch (err: any) {
-      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
-        if (onModelQuotaExceeded) {
-          onModelQuotaExceeded(selectedModel);
-        }
-      }
       const errorMsg = err?.message || 'Gagal memproses animasi gambar';
       onUpdateItem(item.id, { status: 'error', progress: 0, error: errorMsg });
       addLog(`[Error Image to Motion] [${accName}] "${item.fileName}": ${errorMsg}`, 'error');

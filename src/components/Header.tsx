@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   apiKeyCount,
   hasServerKey = true,
   animationCount,
-  selectedModel = 'gemini-3.1-pro-preview',
+  selectedModel = 'gemini-2.5-flash',
   isTrialActive = false,
   trialRemainingText = '',
   activeTab = 'prompt',
@@ -32,36 +32,16 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenGalleryModal,
   onOpenTutorialModal,
 }) => {
-  const getModelBadge = (model: GeminiModel | string = 'gemini-3.1-pro-preview') => {
+  const getModelBadge = (model: GeminiModel | string = 'gemini-2.5-flash') => {
     switch (model) {
-      case 'gemini-3.1-pro-preview':
-        return {
-          label: '3.1 Pro',
-          fullName: 'Gemini 3.1 Pro Preview (Masterpiece)',
-          color: 'text-purple-300 bg-purple-500/20 border-purple-500/50 shadow-purple-500/20 hover:bg-purple-500/30',
-          dotColor: 'bg-purple-400',
-        };
-      case 'gemini-3.1-flash-lite':
-        return {
-          label: '3.1 Lite',
-          fullName: 'Gemini 3.1 Flash Lite (Ringan & Cepat)',
-          color: 'text-amber-300 bg-amber-500/20 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/30',
-          dotColor: 'bg-amber-400',
-        };
       case 'gemini-2.5-flash':
-        return {
-          label: '2.5 Flash',
-          fullName: 'Gemini 2.5 Flash (Stabil)',
-          color: 'text-emerald-300 bg-emerald-500/20 border-emerald-500/50 shadow-emerald-500/20 hover:bg-emerald-500/30',
-          dotColor: 'bg-emerald-400',
-        };
+        return { label: '2.5 Flash', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
+      case 'gemini-3.1-pro-preview':
+        return { label: '3.1 Pro', color: 'text-purple-400 bg-purple-500/10 border-purple-500/30' };
+      case 'gemini-3.1-flash-lite':
+        return { label: '3.1 Lite', color: 'text-amber-400 bg-amber-500/10 border-amber-500/30' };
       default:
-        return {
-          label: '3.1 Pro',
-          fullName: 'Gemini 3.1 Pro Preview',
-          color: 'text-purple-300 bg-purple-500/20 border-purple-500/50 shadow-purple-500/20 hover:bg-purple-500/30',
-          dotColor: 'bg-purple-400',
-        };
+        return { label: '2.5 Flash', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30' };
     }
   };
 
@@ -146,21 +126,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="sm:hidden">Panduan</span>
             </button>
           )}
-
-          {/* Active AI Model Indicator */}
-          <button
-            onClick={onOpenApiModal}
-            className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold transition cursor-pointer shadow-sm active:scale-95 ${badge.color}`}
-            title={`Model AI Aktif: ${badge.fullName}. Klik untuk ganti model atau kelola API Key.`}
-          >
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${badge.dotColor}`}></span>
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${badge.dotColor}`}></span>
-            </span>
-            <i className="fa-solid fa-microchip text-[11px]"></i>
-            <span className="hidden sm:inline text-[10px] font-semibold opacity-80">AI:</span>
-            <span className="font-extrabold tracking-wide uppercase text-[11px]">{badge.label}</span>
-          </button>
 
           {/* Settings Gear Button */}
           <button

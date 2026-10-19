@@ -21,7 +21,6 @@ import {
   saveStoredModel,
   generatePromptsViaGemini,
   generateSingleAnimationCode,
-  AllKeysExhaustedError,
 } from './services/geminiService';
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
@@ -30,7 +29,6 @@ import { ImageToPromptSection } from './components/ImageToPromptSection';
 import { ImageToMotionSection } from './components/ImageToMotionSection';
 import { RightPanel } from './components/RightPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
-import { ModelRotationModal } from './components/ModelRotationModal';
 import { AutoPilotModal, FailedAutoPilotItem } from './components/AutoPilotModal';
 import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
@@ -267,26 +265,11 @@ export default function App() {
 
   // Modals
   const [isApiModalOpen, setIsApiModalOpen] = useState<boolean>(false);
-  const [isModelRotationModalOpen, setIsModelRotationModalOpen] = useState<boolean>(false);
   const [isPromptAutoPilotModalOpen, setIsPromptAutoPilotModalOpen] = useState<boolean>(false);
   const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
-
-  const handleModelQuotaExceeded = (_model: GeminiModel) => {
-    setIsModelRotationModalOpen(true);
-    addLog(`⚠️ [Rotasi Model AI] Semua API Key mencapai batas kuota pada model ${_model}. Membuka dialog konfirmasi rotasi model.`, 'warn');
-    showToast(`Semua API Key limit pada model ${_model}. Silakan konfirmasi rotasi model.`, 'warn');
-  };
-
-  const handleConfirmModelSwitch = (newModel: GeminiModel) => {
-    setSelectedModel(newModel);
-    saveStoredModel(newModel);
-    setIsModelRotationModalOpen(false);
-    addLog(`✅ [Rotasi Model AI] Berhasil beralih ke model ${newModel}.`, 'success');
-    showToast(`Berhasil beralih ke model ${newModel}!`, 'success');
-  };
 
   // Auto Pilot Trigger Token for ImageToMotionSection
   const [autoPilotTriggerToken, setAutoPilotTriggerToken] = useState<number | undefined>(undefined);
@@ -484,9 +467,6 @@ export default function App() {
       addLog(`Berhasil mendapatkan ${prompts.length} prompt AI.`, 'success');
       showToast(`Berhasil membuat ${prompts.length} prompt AI.`, 'success');
     } catch (err: any) {
-      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
-        handleModelQuotaExceeded(selectedModel);
-      }
       addLog(`Gagal generate prompt: ${err.message}`, 'error');
       showToast(`Gagal membuat prompt: ${err.message}`, 'error');
       if (err.message && err.message.toLowerCase().includes('api key')) {
@@ -576,10 +556,6 @@ export default function App() {
           addLog(`Berhasil merender animasi #${i + 1}.`, 'success');
         }
       } catch (e: any) {
-        if (e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted) {
-          handleModelQuotaExceeded(selectedModel);
-          break;
-        }
         addLog(`Error pada animasi #${i + 1}: ${e.message}. Menyimpan untuk fitur coba ulang...`, 'error');
         showToast(`Kendala pada prompt #${i + 1}: ${e.message}`, 'error');
         caughtFailures.push(currentPrompt);
@@ -1563,7 +1539,6 @@ export default function App() {
             onAddAnimation={handleAddAnimation}
             onPreviewAnimation={handlePreviewAnimation}
             onOpenFullscreen={(item) => setFullscreenItem(item)}
-            onModelQuotaExceeded={handleModelQuotaExceeded}
             showToast={showToast}
             addLog={addLog}
             renderResolution={renderResolution}
@@ -1654,18 +1629,6 @@ export default function App() {
         onDurationChange={handleDurationChange}
         exportBitrate={exportBitrate}
         onExportBitrateChange={handleExportBitrateChange}
-      />
-
-      <ModelRotationModal
-        isOpen={isModelRotationModalOpen}
-        currentModel={selectedModel}
-        keyCount={apiKeys.length}
-        onConfirmSwitch={handleConfirmModelSwitch}
-        onOpenApiSettings={() => {
-          setIsModelRotationModalOpen(false);
-          setIsApiModalOpen(true);
-        }}
-        onClose={() => setIsModelRotationModalOpen(false)}
       />
 
       {/* Prompt AI Auto Pilot Modal (Original) */}

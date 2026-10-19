@@ -22,7 +22,7 @@ export function getClient(apiKey?: string) {
 
 export function getFastThinkingConfig(targetModel: string): any {
   if (targetModel.includes("2.5")) {
-    return undefined;
+    return { thinkingBudget: 1024 };
   }
   if (targetModel.includes("3.1-flash-lite")) {
     return { thinkingLevel: ThinkingLevel.LOW };
@@ -34,13 +34,13 @@ export function getFastThinkingConfig(targetModel: string): any {
 }
 
 export function sanitizeModel(model?: string): string {
-  if (!model) return "gemini-3.1-pro-preview";
+  if (!model) return "gemini-2.5-flash";
   const m = model.trim().toLowerCase();
-  if (m.includes("3.1-pro") || m.includes("pro")) return "gemini-3.1-pro-preview";
-  if (m.includes("3.1-flash-lite") || m.includes("flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
   if (m.includes("2.5") || m === "gemini-2.5-flash") return "gemini-2.5-flash";
+  if (m.includes("3.1-flash-lite") || m.includes("flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
+  if (m.includes("3.1-pro") || m.includes("pro")) return "gemini-3.1-pro-preview";
   if (m === "gemini-flash-latest") return "gemini-flash-latest";
-  return "gemini-3.1-pro-preview";
+  return "gemini-2.5-flash";
 }
 
 export function cleanErrorMessage(err: any): string {
@@ -108,11 +108,10 @@ export async function generateContentWithFallback(
 
         const isQuota =
           msg.includes("quota") ||
+          msg.includes("exceeded") ||
           msg.includes("resource_exhausted") ||
           msg.includes("429") ||
-          msg.includes("billing") ||
-          msg.includes("quota exceeded") ||
-          msg.includes("rate limit exceeded");
+          msg.includes("billing");
 
         const isOverloaded =
           msg.includes("503") ||
@@ -121,9 +120,7 @@ export async function generateContentWithFallback(
           msg.includes("overloaded");
 
         if (isQuota) {
-          const quotaErr: any = new Error(cleanErrorMessage(lastError));
-          quotaErr.status = 429;
-          throw quotaErr;
+          break;
         } else if (isOverloaded && attempt < allowedAttempts) {
           await new Promise((res) => setTimeout(res, 400 * attempt));
         } else {
@@ -634,24 +631,6 @@ ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
    - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
    - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
 
-MANDAT ESTETIKA VISUAL KELAS MASTER (SETARA GEMINI 3.1 PRO UNTUK SEMUA MODEL):
-Model AI yang mengeksekusi prompt ini (baik Gemini 3.1 Pro, Gemini 3.1 Flash Lite, maupun Gemini 2.5 Flash) WAJIB menghasilkan standar visual berkualitas tinggi yang sama persis:
-1. KEDALAMAN MULTI-LAYER & DETAIL FINISHING TINGGI:
-   - DILARANG siluet datar/geometris mentah. Setiap subjek wajib memiliki minimal 4 lapisan visual:
-     a. Base Layer (Struktur tubuh utama dengan gradasi warna kaya, createLinearGradient / createRadialGradient dengan minimal 3 color stops).
-     b. Shadow & Ambient Occlusion Layer (Bayangan lembut melengkung di bawah lekukan/sudut untuk dimensi 3D nyata).
-     c. Highlight & Specular Layer (Pantulan kilau cahaya melengkung dengan alpha transparan 0.2 - 0.6 menggunakan quadraticCurveTo / bezierCurveTo).
-     d. Articulated Detail Layer (Garis jahitan, baut sendi, lensa reflektif, bezel presisi, indikator status).
-2. KETELITIAN ANATOMI & PROPORSI:
-   - Proporsi subjek harus natural dan anggun. Garis tepi menggunakan kurva Bezier mulus (ctx.bezierCurveTo / ctx.quadraticCurveTo) atau roundRect halus.
-3. GERAKAN KINETIK ORGANIK & BERBOBOT 60 FPS:
-   - Hindari gerakan kaku. Gunakan easing harmonik halus (Math.sin & Math.cos) dengan bobot visual yang terasa nyata:
-     * Floating Y lembut: const floatY = Math.sin(t * 1.8) * 8;
-     * Root Sway rotasi: const rootRot = Math.sin(t * 1.4) * 0.03;
-     * Micro Breathing pulse: const rootScale = 1 + Math.sin(t * 2.0) * 0.015;
-4. KEMURNIAN PALET & WARNA MICROSTOCK:
-   - Gunakan palet warna modern, harmonis, kontras tinggi, dan bersih tanpa warna kusam atau artefak.
-
 WAJIB gunakan struktur HTML boilerplate berikut:
 
 <!DOCTYPE html>
@@ -711,7 +690,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.15,
-        maxOutputTokens: 3072,
+        maxOutputTokens: 8192,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -2066,7 +2045,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       (currentModel) => {
         const config: any = {
           temperature: 0.15,
-          maxOutputTokens: 3072,
+          maxOutputTokens: 8192,
         };
         const fastThinking = getFastThinkingConfig(currentModel);
         if (fastThinking) config.thinkingConfig = fastThinking;
