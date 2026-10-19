@@ -108,10 +108,11 @@ export async function generateContentWithFallback(
 
         const isQuota =
           msg.includes("quota") ||
-          msg.includes("exceeded") ||
           msg.includes("resource_exhausted") ||
           msg.includes("429") ||
-          msg.includes("billing");
+          msg.includes("billing") ||
+          msg.includes("quota exceeded") ||
+          msg.includes("rate limit exceeded");
 
         const isOverloaded =
           msg.includes("503") ||

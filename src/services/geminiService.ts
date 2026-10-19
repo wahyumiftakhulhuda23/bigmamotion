@@ -79,8 +79,10 @@ export function isRateLimitOrQuotaError(err: any): boolean {
     str.includes('rate limit') ||
     str.includes('rate_limit') ||
     str.includes('too many requests') ||
-    str.includes('exceeded') ||
-    str.includes('limit reached')
+    str.includes('limit reached') ||
+    str.includes('quota exceeded') ||
+    str.includes('rate limit exceeded') ||
+    str.includes('spend limit')
   );
 }
 
@@ -825,6 +827,9 @@ Model AI yang mengeksekusi prompt ini (baik Gemini 3.1 Pro, Gemini 3.1 Flash Lit
      * Micro Breathing pulse: const rootScale = 1 + Math.sin(t * 2.0) * 0.015;
 4. KEMURNIAN PALET & WARNA MICROSTOCK:
    - Gunakan palet warna modern, harmonis, kontras tinggi, dan bersih tanpa warna kusam atau artefak.
+5. OPTIMALISASI PERFORMA LOW-SPEC (PENTIUM, CELERON, AMD):
+   - Gunakan kode rendering Canvas 2D yang ringan dan efisien.
+   - Hindari alokasi objek/array baru di dalam loop 'animate()' untuk mencegah Garbage Collection pauses dan menjaga kelancaran 60 FPS pada CPU/GPU spesifikasi rendah.
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
