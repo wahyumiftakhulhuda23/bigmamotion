@@ -879,6 +879,10 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 
 Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(
+    apiKey
+  )}`;
+
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
