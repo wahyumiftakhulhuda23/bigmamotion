@@ -88,6 +88,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       onResolutionChange(hwProfile.recommendedResolution);
       onFpsChange(hwProfile.recommendedFps);
       onExportBitrateChange(hwProfile.recommendedBitrate);
+      if (hwProfile.recommendedDuration) {
+        onDurationChange(hwProfile.recommendedDuration);
+      }
       showToast('Setelan optimal telah diterapkan berdasarkan spesifikasi hardware Anda!', 'success');
     }
   };
@@ -346,9 +349,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                     onChange={(e) => onDurationChange(Number(e.target.value))}
                     className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-purple-500 cursor-pointer"
                   >
+                    <option value={5}>5 Detik (Klip Pendek)</option>
+                    <option value={8}>8 Detik (Standar Pendek)</option>
                     <option value={10}>10 Detik (Standar Microstock)</option>
-                    <option value={5}>5 Detik (Klips Pendek)</option>
-                    <option value={15}>15 Detik (Extended)</option>
+                    <option value={15}>15 Detik (Extended Stock)</option>
+                    <option value={20}>20 Detik (Durasi Panjang)</option>
                   </select>
                 </div>
               </div>

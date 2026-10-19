@@ -222,7 +222,7 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
   ) => {
     const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 22);
     const safeAcc = accName.replace(/[^a-z0-9_-]/gi, '_');
-    const fileName = `${indexPrefix ? `${indexPrefix}_` : ''}microstock_${safeAcc}_${item.type}_${safeTitle}_${result.bitrateMbps}Mbps.mp4`;
+    const fileName = `${indexPrefix ? `${indexPrefix}_` : ''}microstock_${safeAcc}_${item.type}_${safeTitle}_${renderDuration}s_${result.bitrateMbps}Mbps.mp4`;
 
     const dirHandle = dirHandlesRef.current[accName];
     const targetFolderLabel = accountFolders[accName] || accName;

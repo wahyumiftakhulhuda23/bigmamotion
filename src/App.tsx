@@ -1209,7 +1209,7 @@ export default function App() {
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${renderResolution.height}p${renderFps}_${result.bitrateMbps}Mbps.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${renderResolution.height}p${renderFps}_${renderDuration}s_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

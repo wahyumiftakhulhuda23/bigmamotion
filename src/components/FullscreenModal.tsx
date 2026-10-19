@@ -61,7 +61,7 @@ export const FullscreenModal: React.FC<FullscreenModalProps> = ({
       a.href = result.url;
       const safeTitle = item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase().substring(0, 20);
       const acc = item.account ? item.account.toLowerCase() : 'manual';
-      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${exportBitrate}Mbps.mp4`;
+      a.download = `microstock_${acc}_${item.type}_${safeTitle}_${renderDuration}s_${exportBitrate}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);

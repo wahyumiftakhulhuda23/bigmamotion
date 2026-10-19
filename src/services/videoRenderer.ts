@@ -512,19 +512,23 @@ export async function renderHtmlToVideo(
 
     mediaRecorder.start(100);
 
-    let isRecordingActive = true;
     const iframeWin = hiddenIframe.contentWindow as any;
-    const totalFrames = Math.max(1, Math.round(fps * duration));
+    const targetDurationMs = Math.round(duration * 1000);
     const frameIntervalMs = 1000 / fps;
+    const recordStartTime = performance.now();
+    let frameIndex = 0;
 
-    for (let frame = 0; frame < totalFrames; frame++) {
-      if (!isRecordingActive) break;
-      const targetTimeMs = (frame * 1000) / fps;
+    // Record for the exact wall-clock duration selected by the user
+    while (true) {
+      const now = performance.now();
+      const elapsedMs = now - recordStartTime;
+      if (elapsedMs >= targetDurationMs) break;
 
+      // Animate frame precisely synchronized to elapsed recording time
       if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
-        iframeWin.__bigmaStepFrame(targetTimeMs);
+        iframeWin.__bigmaStepFrame(elapsedMs);
       } else if (iframeWin && typeof iframeWin.animate === 'function') {
-        try { iframeWin.animate(targetTimeMs); } catch {}
+        try { iframeWin.animate(elapsedMs); } catch {}
       }
 
       if (fallbackCanvas && iframeCanvas) {
@@ -536,20 +540,40 @@ export async function renderHtmlToVideo(
         }
       }
 
-      const pct = Math.round(10 + (frame / totalFrames) * 82);
-      onProgress?.(pct, `Merender & Merekam Frame #${frame + 1}/${totalFrames} (${pct}% • ${bitrate} Mbps)...`);
+      frameIndex++;
+      const currentSec = (elapsedMs / 1000).toFixed(1);
+      const pct = Math.min(94, Math.round(10 + (elapsedMs / targetDurationMs) * 84));
+      onProgress?.(pct, `Merender & Merekam Video (${pct}% • ${currentSec}s / ${duration}s • ${bitrate} Mbps)...`);
 
-      await new Promise((r) => setTimeout(r, Math.max(4, frameIntervalMs * 0.4)));
+      // Sleep until the exact next frame tick
+      const nextTick = recordStartTime + (frameIndex * frameIntervalMs);
+      const sleepMs = Math.max(2, nextTick - performance.now());
+      await new Promise((r) => setTimeout(r, sleepMs));
     }
 
-    isRecordingActive = false;
-    await new Promise((r) => setTimeout(r, 200));
+    // Step final frame precisely at the target duration limit
+    if (iframeWin && typeof iframeWin.__bigmaStepFrame === 'function') {
+      iframeWin.__bigmaStepFrame(targetDurationMs);
+    } else if (iframeWin && typeof iframeWin.animate === 'function') {
+      try { iframeWin.animate(targetDurationMs); } catch {}
+    }
+    if (fallbackCanvas && iframeCanvas) {
+      const { targetCtx: tCtx } = getTargetCanvas();
+      if (tCtx) {
+        tCtx.fillStyle = canvasBgColor;
+        tCtx.fillRect(0, 0, width, height);
+        tCtx.drawImage(iframeCanvas, 0, 0, width, height);
+      }
+    }
+
+    // Brief 60ms buffer to ensure final frame packet is flushed to MediaRecorder
+    await new Promise((r) => setTimeout(r, 60));
 
     if (mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
     }
 
-    onProgress?.(96, 'Menyusun berkas video dengan bitrate akurat...');
+    onProgress?.(96, `Menyusun berkas MP4 durasi ${duration} detik (${bitrate} Mbps)...`);
     const recordedBlob = await recordPromise;
     let finalRecordedBlob = recordedBlob;
     const targetTotalBytes = Math.round((targetBitrateBps * duration) / 8);

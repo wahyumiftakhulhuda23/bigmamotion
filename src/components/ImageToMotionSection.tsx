@@ -789,7 +789,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       const a = document.createElement('a');
       a.href = result.url;
-      a.download = `Motion_${item.fileName.replace(/\.[^/.]+$/, '')}_${renderResolution.height}p${renderFps}_${result.bitrateMbps}Mbps.mp4`;
+      a.download = `Motion_${item.fileName.replace(/\.[^/.]+$/, '')}_${renderResolution.height}p${renderFps}_${renderDuration}s_${result.bitrateMbps}Mbps.mp4`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
