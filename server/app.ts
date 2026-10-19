@@ -22,7 +22,7 @@ export function getClient(apiKey?: string) {
 
 export function getFastThinkingConfig(targetModel: string): any {
   if (targetModel.includes("2.5")) {
-    return { thinkingBudget: 1024 };
+    return undefined;
   }
   if (targetModel.includes("3.1-flash-lite")) {
     return { thinkingLevel: ThinkingLevel.LOW };
