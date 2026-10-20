@@ -2641,6 +2641,11 @@ ${shapeAnalysisJson}
 
     // Specular Gleam Sweep (Dynamic light sheen across surface)
     ctx.save();
+    // CLIPPING: Apply clip to ensure gleam stays inside main object
+    ctx.beginPath();
+    ctx.arc(0, 0, R * 1.05, 0, Math.PI * 2); // Approximation of main shape silhouette
+    ctx.clip();
+    
     const gleamX = ((t * 1.4) % 3 - 1.5) * R * 2.2;
     const gleamGrad = ctx.createLinearGradient(gleamX - 35, -R, gleamX + 35, R);
     gleamGrad.addColorStop(0, 'rgba(255,255,255,0)');
