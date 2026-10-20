@@ -680,6 +680,11 @@ ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
    - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
    - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
 
+5. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW - SANGAT PENTING):
+   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip, atau light flare) pada objek WAJIB menggunakan ctx.save(); ctx.beginPath(); [gambar bentuk geometri objek utama]; ctx.clip(); sebelum menggambar kilau!
+   - DILARANG KERAS menggambar kilau cahaya atau kotak/stripe kilau yang keluar melampaui batas (overflow) bentuk objek utama atau merembes ke latar belakang hijau (#00ff00).
+   - Seluruh efek pantulan cahaya harus 100% berada di dalam batasan siluet objek.
+
 WAJIB gunakan struktur HTML boilerplate berikut:
 
 <!DOCTYPE html>
@@ -739,7 +744,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.1,
-        maxOutputTokens: 3800,
+        maxOutputTokens: 2200,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
