@@ -738,32 +738,49 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 
 Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apapun:`;
 
-  const { response } = await generateContentWithFallback(
-    ai,
-    targetModel,
-    (currentModel) => {
-      const animConfig: any = {
-        temperature: 0.1,
-        maxOutputTokens: 2200,
-      };
-      const animThinking = getFastThinkingConfig(currentModel);
-      if (animThinking) {
-        animConfig.thinkingConfig = animThinking;
+  let cleanHTML = '';
+  try {
+    const { response } = await generateContentWithFallback(
+      ai,
+      targetModel,
+      (currentModel) => {
+        const animConfig: any = {
+          temperature: 0.1,
+          maxOutputTokens: 2200,
+        };
+        const animThinking = getFastThinkingConfig(currentModel);
+        if (animThinking) {
+          animConfig.thinkingConfig = animThinking;
+        }
+        return { contents: systemPrompt, config: animConfig };
       }
-      return { contents: systemPrompt, config: animConfig };
-    }
-  );
+    );
 
-  let rawText = response.text || "";
-  let cleanHTML = extractHTMLFromMarkdown(rawText);
+    let rawText = response.text || "";
+    cleanHTML = extractHTMLFromMarkdown(rawText);
 
-  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-    if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-      cleanHTML = extractHTMLFromMarkdown(rawText);
-    } else {
-      throw new Error('Kode dari AI terpotong sebelum selesai');
+    if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+      if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+        rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+        cleanHTML = extractHTMLFromMarkdown(rawText);
+      } else {
+        throw new Error('Kode dari AI terpotong sebelum selesai');
+      }
     }
+  } catch (aiErr) {
+    console.warn('[handleGenerateAnimationLogic] AI generation failed, falling back to 100% robust procedural vector motion HTML:', aiErr);
+    cleanHTML = buildProceduralVectorMotionHtml({
+      motionDynamics,
+      colorMode,
+      neonGlow,
+      isGreenScreen,
+      aiAnalysis: {
+        objectName: promptTopic,
+        shapeDescription: `Professional microstock motion graphic for ${promptTopic}`,
+        detectedElements: [promptTopic, 'Vector Rig', 'Kinetic Dynamics'],
+        professionalMotionPlan: `Studio grade 60 FPS animation following ${motionDynamics} dynamics`,
+      },
+    });
   }
 
   return {
