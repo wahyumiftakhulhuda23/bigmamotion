@@ -955,7 +955,7 @@ export default function App() {
         }
 
         if (completedOverall < totalPromptsOverall) {
-          await new Promise((res) => setTimeout(res, 500));
+          await new Promise((res) => setTimeout(res, 3000));
         }
       }
     }
@@ -1088,7 +1088,7 @@ export default function App() {
             neonGlow: acc.neonGlow ?? true,
             error: e.message || 'Gagal merender animasi',
           });
-          await new Promise((res) => setTimeout(res, 2000));
+          await new Promise((res) => setTimeout(res, 3000));
           continue;
         }
       }

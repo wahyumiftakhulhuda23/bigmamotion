@@ -558,7 +558,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       // Small breather between items
       if (autoPilotRef.current.isRunning && i < targetItems.length - 1) {
-        await new Promise((res) => setTimeout(res, 800));
+        await new Promise((res) => setTimeout(res, 3000));
       }
     }
 
@@ -638,7 +638,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       }
 
       if (autoPilotRef.current.isRunning && i < failedItems.length - 1) {
-        await new Promise((res) => setTimeout(res, 800));
+        await new Promise((res) => setTimeout(res, 3000));
       }
     }
 
