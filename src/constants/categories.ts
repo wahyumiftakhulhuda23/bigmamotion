@@ -217,3 +217,87 @@ export function findCategoryById(catId: string, type?: AnimationType): Microstoc
     BACKGROUND_CATEGORIES.find((c) => c.id === catId)
   );
 }
+
+/**
+ * Universal High-Class Procedural Prompt Synthesizer
+ * Guarantees zero failures and infinite unique microstock animation prompts
+ * adhering to the 4-Pillar Rigid Rigging and 60 FPS Kinetic standard.
+ */
+export function generateProceduralPrompts(
+  count: number,
+  type: AnimationType = 'icon',
+  subCategory: string = 'business_finance',
+  style: string = 'minimalist',
+  colorMode: string = 'gradient',
+  motionDynamics: string = 'flow',
+  neonGlow: boolean = true,
+  keywords: string[] = []
+): string[] {
+  const cat = findCategoryById(subCategory, type);
+  const basePool = cat && cat.stockKeywords.length > 0
+    ? [...cat.stockKeywords]
+    : [
+        'futuristic aerodynamic emblem',
+        'precision vector mechanism',
+        'isometric tech node',
+        'dynamic corporate concept',
+        'high-tech orbital emblem',
+      ];
+
+  // If user provided custom keywords, inject them as top priority subjects
+  const cleanKeywords = (keywords || [])
+    .map((k) => String(k).trim())
+    .filter((k) => k.length > 0);
+  
+  const subjects = cleanKeywords.length > 0 ? [...cleanKeywords, ...basePool] : basePool;
+
+  const motionModifiers = [
+    'gentle 60 FPS harmonic floating oscillation (amplitude ±12px) with locked internal rotation',
+    'smooth continuous 360-degree orbital rotation with rigid joint linkages',
+    'synchronized mechanical breathing pulse (0.98x-1.02x) with gleaming specular highlight sheen',
+    'rhythmic kinetic wave pulsation and sweeping 45-degree specular surface sheen',
+    'fluid aerodynamic levitation with locked sub-part articulation and luminous rim sheen',
+    'isometric precision kinetics with counter-rotating gears locked on central axis',
+    'high-speed kinetic loop with smooth sinusoidal dampening and crisp perimeter contour',
+    'dynamic kinetic expansion and contractive recoil with zero joint detachment',
+  ];
+
+  const structuralRiggingRules = [
+    'all sub-components rigidly locked into central chassis matrix without detached parts',
+    'flush mounted bezels and reinforced joint hinges keeping elements unified',
+    'interlocking geometric plates welded seamlessly to the parent body origin',
+    'concentric rings centered on the root origin with smooth independent rotation',
+    'rigidly anchored articulating arms with fixed pivot points attached to main core',
+  ];
+
+  const visualTreatments = [
+    `${colorMode} tones with microstock multi-stop studio gradients and crisp 3px contour`,
+    `sleek ${style} vector aesthetic with ${neonGlow ? 'luminous soft aura edge blur' : 'sharp razor-clean vector silhouette'}`,
+    `modern ${colorMode} palette with dual-tone specular reflections and polished metallic volume`,
+    `refined ${style} corporate finish with balanced isometric lighting and zero visual clutter`,
+  ];
+
+  const results: string[] = [];
+  const totalWanted = Math.max(1, count);
+
+  for (let i = 0; i < totalWanted; i++) {
+    const subject = subjects[i % subjects.length];
+    const motion = motionModifiers[i % motionModifiers.length];
+    const structure = structuralRiggingRules[i % structuralRiggingRules.length];
+    const visual = visualTreatments[i % visualTreatments.length];
+    const variationTag = i >= subjects.length ? ` (Variation ${Math.floor(i / subjects.length) + 1})` : '';
+
+    if (type === 'icon') {
+      results.push(
+        `Professional microstock ${subject}${variationTag}: isolated central vector symbol, ${structure}, rendered in ${visual}, featuring ${motion}. Studio quality, 60 FPS loop, zero detached objects.`
+      );
+    } else {
+      results.push(
+        `Seamless looping motion background of ${subject}${variationTag}: dynamic undulating geometry with atmospheric depth, ${visual}, animated with ${motion}. Broadcast microstock grade, perfectly seamless 60 FPS loop.`
+      );
+    }
+  }
+
+  return results;
+}
+

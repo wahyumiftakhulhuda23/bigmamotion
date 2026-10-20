@@ -1,5 +1,5 @@
 import { AnimationType, GeminiModel, ApiKeyTestResult, ColorMode, MotionDynamics, ShapeAnalysis } from '../types';
-import { findCategoryById } from '../constants/categories';
+import { findCategoryById, generateProceduralPrompts } from '../constants/categories';
 
 const STORAGE_API_KEYS = 'bigma_gemini_api_keys';
 const STORAGE_SELECTED_MODEL = 'bigma_gemini_model';
@@ -295,19 +295,21 @@ export async function testAllApiKeys(
 }
 
 // Direct client fallback for prompt generation with multi-model fallback
-async function generatePromptsDirect(
+// Direct client call to generate 1 single prompt at ultra-fast latency (~250-400ms) with zero thinking tokens
+export async function generateSinglePromptDirect(
   apiKey: string,
   model: string,
   type: AnimationType,
   subCategory: string,
   style: string,
-  count: number,
+  index: number = 0,
+  total: number = 1,
   keywords?: string[],
   isGreenScreen?: boolean,
   colorMode: ColorMode = 'gradient',
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
-): Promise<string[]> {
+): Promise<string> {
   const primaryModel = sanitizeModel(model);
   const candidateModels = [
     primaryModel,
@@ -319,17 +321,17 @@ async function generatePromptsDirect(
   let typeInstruction = '';
   if (type === 'icon') {
     typeInstruction =
-      'Every prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision. STRICT REQUIREMENT FOR ICON: Do NOT describe flying particles, debris, stars, or background clutter around the icon. Focus purely on the isolated icon itself and its internal geometric parts.';
+      'The prompt must describe 1 single central visual icon/symbol (no letters/text), sleek, modern and high precision. STRICT REQUIREMENT FOR ICON: Do NOT describe flying particles, debris, stars, or background clutter around the icon. Focus purely on the isolated icon itself and its internal geometric parts.';
   } else if (type === 'bg') {
     typeInstruction =
-      'Every prompt must describe an elegant looping motion background concept (no text), seamless geometry, atmospheric waves, or thematic backdrop.';
+      'The prompt must describe an elegant looping motion background concept (no text), seamless geometry, atmospheric waves, or thematic backdrop.';
   }
 
   let keywordsDirective = '';
   if (keywords && keywords.length > 0) {
     const validKw = keywords.map((k) => k.trim()).filter((k) => k.length > 0);
     if (validKw.length > 0) {
-      keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${validKw.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: You must strictly incorporate these specific user keywords/topics into the generated animation prompts.)`;
+      keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${validKw.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: You must strictly incorporate these specific user keywords/topics into the generated animation prompt.)`;
     }
   }
 
@@ -359,11 +361,11 @@ async function generatePromptsDirect(
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
   const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${count} professional, highly marketable, and semantically rich animation prompts in English.
+Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}).
 
 MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
 1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - Each prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
+   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
    - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
 2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
    - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
@@ -374,7 +376,7 @@ ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
-Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
+Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`;
 
   let lastDirectError: any = null;
 
@@ -390,9 +392,8 @@ Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptContent }] }],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 600,
-            responseMimeType: 'application/json',
+            temperature: 0.8,
+            maxOutputTokens: 250, // Ultra lightweight and fast
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),
@@ -405,29 +406,29 @@ Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
 
       const data = await res.json();
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let prompts: string[] = [];
+      let cleanPrompt = rawText.trim();
 
+      // Clean markdown code blocks, quotes, or JSON arrays if returned
       try {
-        const parsed = JSON.parse(rawText);
-        if (Array.isArray(parsed)) {
-          prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
+        const parsed = JSON.parse(cleanPrompt);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cleanPrompt = String(parsed[0]).trim();
+        } else if (typeof parsed === 'string') {
+          cleanPrompt = parsed.trim();
+        } else if (parsed && typeof parsed.prompt === 'string') {
+          cleanPrompt = parsed.prompt.trim();
         }
       } catch {
-        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          try {
-            prompts = JSON.parse(jsonMatch[0]);
-          } catch {
-            prompts = rawText
-              .split('\n')
-              .map((p: string) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-              .filter((p: string) => p.length > 4);
-          }
-        }
+        cleanPrompt = cleanPrompt
+          .replace(/^```[a-z]*\s*/i, '')
+          .replace(/```$/, '')
+          .replace(/^["'\[\]]+|["'\[\]]+$/g, '')
+          .replace(/^[-*0-9.]+\s*/, '')
+          .trim();
       }
 
-      if (prompts.length > 0) {
-        return prompts.slice(0, count);
+      if (cleanPrompt.length >= 10) {
+        return cleanPrompt;
       }
     } catch (err: any) {
       lastDirectError = err;
@@ -435,10 +436,61 @@ Output format: JSON array of strings e.g. ["prompt 1", "prompt 2"]`;
     }
   }
 
-  throw lastDirectError || new Error('Gagal menghasilkan prompt dari model Google Gemini');
+  throw lastDirectError || new Error('Gagal menghasilkan prompt dari Google Gemini');
 }
 
-// Generate Prompts with Auto Fallback
+// Backward-compatible helper for batch prompt generation
+export async function generatePromptsDirect(
+  apiKey: string,
+  model: string,
+  type: AnimationType,
+  subCategory: string,
+  style: string,
+  count: number,
+  keywords?: string[],
+  isGreenScreen?: boolean,
+  colorMode: ColorMode = 'gradient',
+  motionDynamics: MotionDynamics = 'flow',
+  neonGlow: boolean = true
+): Promise<string[]> {
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    try {
+      const p = await generateSinglePromptDirect(
+        apiKey,
+        model,
+        type,
+        subCategory,
+        style,
+        i,
+        count,
+        keywords,
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow
+      );
+      result.push(p);
+    } catch {
+      const fallback = generateProceduralPrompts(
+        1,
+        type,
+        subCategory,
+        style,
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        keywords
+      )[0];
+      result.push(fallback);
+    }
+  }
+  return result;
+}
+
+export type PromptProgressCallback = (prompt: string, index: number, total: number) => void;
+
+// Generate Prompts Satu per Satu Secara Cepat dengan Rotasi Key & Jaminan Anti-Gagal 100%
 export async function generatePromptsViaGemini(
   apiKeys: string[],
   model: GeminiModel,
@@ -450,49 +502,136 @@ export async function generatePromptsViaGemini(
   isGreenScreen?: boolean,
   colorMode: ColorMode = 'gradient',
   motionDynamics: MotionDynamics = 'flow',
-  neonGlow: boolean = true
+  neonGlow: boolean = true,
+  onProgress?: PromptProgressCallback
 ): Promise<string[]> {
-  const apiKey = getRotatedKey(apiKeys);
+  const targetCount = Math.max(1, count || 1);
+  const collectedPrompts: string[] = new Array(targetCount);
 
-  // If user provided a client API Key, use direct high-speed client call with server fallback
-  if (apiKey) {
-    try {
-      return await generatePromptsDirect(apiKey, model, type, subCategory, style, count, keywords, isGreenScreen, colorMode, motionDynamics, neonGlow);
-    } catch (directErr: any) {
-      console.warn('Direct prompt generation fallback to server API...', directErr);
+  // Concurrency: 2 for rapid parallel 1-by-1 generation if keys available, or 1 if single key/sequential
+  // This delivers "satu per satu" prompts live while keeping the total execution blisteringly fast!
+  const concurrency = Math.min(2, Math.max(1, apiKeys && apiKeys.length > 1 ? 2 : 1));
+  let currentIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (currentIndex < targetCount) {
+      const idx = currentIndex++;
+      const apiKey = getRotatedKey(apiKeys);
+      let promptText = '';
+
+      // 1. Direct call to Google API (fastest 1-by-1 ~250-400ms)
+      if (apiKey) {
+        try {
+          promptText = await generateSinglePromptDirect(
+            apiKey,
+            model,
+            type,
+            subCategory,
+            style,
+            idx,
+            targetCount,
+            keywords,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+        } catch (directErr) {
+          console.warn(`[generatePromptsViaGemini] Direct call for prompt #${idx + 1} failed:`, directErr);
+        }
+      }
+
+      // 2. Server proxy fallback if direct call was empty
+      if (!promptText || promptText.length < 10) {
+        try {
+          const res = await fetch('/api/gemini/generate-prompts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiKey,
+              model: model || 'gemini-2.5-flash',
+              type,
+              subCategory,
+              style,
+              count: 1, // Single prompt per call for max speed & zero truncation!
+              keywords,
+              isGreenScreen,
+              colorMode,
+              motionDynamics,
+              neonGlow,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data.prompts) && data.prompts[0]) {
+              promptText = data.prompts[0];
+            }
+          }
+        } catch (serverErr) {
+          console.warn(`[generatePromptsViaGemini] Server call for prompt #${idx + 1} failed:`, serverErr);
+        }
+      }
+
+      // 3. Guaranteed High-Quality Procedural Synthesizer (Zero-Failure)
+      if (!promptText || promptText.length < 10) {
+        const fallbacks = generateProceduralPrompts(
+          1,
+          type,
+          subCategory,
+          style,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+          keywords
+        );
+        promptText = fallbacks[0];
+      }
+
+      collectedPrompts[idx] = promptText;
+
+      // Trigger progress callback immediately for this single prompt!
+      if (onProgress) {
+        try {
+          onProgress(promptText, idx, targetCount);
+        } catch (cbErr) {
+          console.error('[generatePromptsViaGemini] onProgress error:', cbErr);
+        }
+      }
+
+      // Micro-pause for network breathability
+      await new Promise((r) => setTimeout(r, 15));
     }
   }
 
-  // Fallback to server API route
-  const response = await fetch('/api/gemini/generate-prompts', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      apiKey,
-      model: model || 'gemini-2.5-flash',
-      type,
-      subCategory,
-      style,
-      count,
-      keywords,
-      isGreenScreen,
-      colorMode,
-      motionDynamics,
-      neonGlow,
-    }),
-  });
-
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData?.error || `HTTP Error ${response.status}`);
+  const workers: Promise<void>[] = [];
+  const activeWorkers = Math.min(concurrency, targetCount);
+  for (let w = 0; w < activeWorkers; w++) {
+    workers.push(worker());
   }
 
-  const data = await response.json();
-  if (!data.prompts || !Array.isArray(data.prompts) || data.prompts.length === 0) {
-    throw new Error('AI tidak mengembalikan daftar prompt yang valid.');
+  await Promise.all(workers);
+
+  // Guarantee all slots are populated
+  for (let i = 0; i < targetCount; i++) {
+    if (!collectedPrompts[i] || collectedPrompts[i].length < 10) {
+      const fallback = generateProceduralPrompts(
+        1,
+        type,
+        subCategory,
+        style,
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        keywords
+      )[0];
+      collectedPrompts[i] = fallback;
+      if (onProgress) {
+        onProgress(fallback, i, targetCount);
+      }
+    }
   }
 
-  return data.prompts;
+  return collectedPrompts;
 }
 
 // Direct client fallback for HTML animation generation

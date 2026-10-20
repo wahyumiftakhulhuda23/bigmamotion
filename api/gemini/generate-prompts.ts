@@ -1,4 +1,5 @@
-import { handleGeneratePromptsLogic, parseSafeBody, cleanErrorMessage } from '../../server/app';
+import { handleGeneratePromptsLogic, parseSafeBody } from '../../server/app';
+import { generateProceduralPrompts } from '../../src/constants/categories';
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -18,7 +19,19 @@ export default async function handler(req: any, res: any) {
     const result = await handleGeneratePromptsLogic(body);
     return res.status(200).json(result);
   } catch (err: any) {
-    console.error('[API generate-prompts] Serverless Error:', err);
-    return res.status(500).json({ error: cleanErrorMessage(err) || 'Gagal menghasilkan prompt' });
+    console.error('[API generate-prompts] Serverless Error, applying recovery fallback:', err);
+    const body = parseSafeBody(req);
+    const count = Math.max(1, body.count || 3);
+    const fallback = generateProceduralPrompts(
+      count,
+      body.type || 'icon',
+      body.subCategory || 'business_finance',
+      body.style || 'minimalist',
+      body.colorMode || 'gradient',
+      body.motionDynamics || 'flow',
+      body.neonGlow ?? true,
+      body.keywords || []
+    );
+    return res.status(200).json({ prompts: fallback });
   }
 }

@@ -351,10 +351,10 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             <input
               type="number"
               min="1"
-              max="20"
+              max="200"
               value={promptCount}
               onChange={(e) => onChangePromptCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-12 bg-gray-950/80 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
+              className="w-14 bg-gray-950/80 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
             />
           </div>
         </div>

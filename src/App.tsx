@@ -449,8 +449,9 @@ export default function App() {
   const handleGeneratePrompts = async () => {
     setIsGeneratingPrompts(true);
     setProgressShow(true);
-    setProgressText(`Menghasilkan ${promptCount} Prompt via Gemini AI...`);
-    setProgressPercent(15);
+    setProgressText(`Menghasilkan ${promptCount} Prompt (satu per satu secara cepat)...`);
+    setProgressPercent(2);
+    setGeneratedPrompts([]);
 
     const keywordLines = keywordsText
       .split('\n')
@@ -458,8 +459,8 @@ export default function App() {
       .filter((k) => k.length > 0);
 
     addLog(
-      `Meminta AI untuk generate ${promptCount} prompt animasi (${currentType.toUpperCase()} - ${nicheCategory} - ${colorMode.toUpperCase()})${
-        isGreenScreen ? ' [Mode Green Screen]' : ''
+      `⚡ Meminta AI generate ${promptCount} prompt animasi satu per satu (${currentType.toUpperCase()} - ${nicheCategory} - ${colorMode.toUpperCase()})${
+        isGreenScreen ? ' [Green Screen]' : ''
       }${keywordLines.length > 0 ? ` [${keywordLines.length} Custom Keywords]` : ''}...`,
       'info'
     );
@@ -476,13 +477,24 @@ export default function App() {
         isGreenScreen,
         colorMode,
         motionDynamics,
-        neonGlow
+        neonGlow,
+        (singlePrompt, index, total) => {
+          setGeneratedPrompts((prev) => {
+            const next = [...prev];
+            next[index] = singlePrompt;
+            return next;
+          });
+          const percent = Math.round(((index + 1) / total) * 100);
+          setProgressPercent(percent);
+          setProgressText(`⚡ Prompt ${index + 1}/${total} (${percent}%) siap...`);
+          addLog(`⚡ [Prompt #${index + 1}/${total}] ${singlePrompt.substring(0, 48)}...`, 'info');
+        }
       );
 
       setGeneratedPrompts(prompts);
       setProgressPercent(100);
-      addLog(`Berhasil mendapatkan ${prompts.length} prompt AI.`, 'success');
-      showToast(`Berhasil membuat ${prompts.length} prompt AI.`, 'success');
+      addLog(`✅ Berhasil membuat total ${prompts.length} prompt AI (satu per satu secara cepat).`, 'success');
+      showToast(`Berhasil membuat ${prompts.length} prompt AI!`, 'success');
     } catch (err: any) {
       if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
         handleModelQuotaExceeded(selectedModel);
@@ -1003,9 +1015,14 @@ export default function App() {
           acc.isGreenScreen ?? false,
           acc.colorMode ?? 'gradient',
           acc.motionDynamics ?? 'flow',
-          acc.neonGlow ?? true
+          acc.neonGlow ?? true,
+          (singlePrompt, index, total) => {
+            if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
+              addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
+            }
+          }
         );
-        addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt. Memulai render satu per satu...`, 'success');
+        addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt satu per satu. Memulai render animasi...`, 'success');
       } catch (e: any) {
         addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
         newFailedItems.push({

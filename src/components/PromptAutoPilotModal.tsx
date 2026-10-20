@@ -211,7 +211,7 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                     <input
                       type="number"
                       min="1"
-                      max="20"
+                      max="200"
                       value={acc.promptCount}
                       onChange={(e) =>
                         onUpdateAccount(index, { promptCount: Math.max(1, parseInt(e.target.value) || 1) })

@@ -1,7 +1,7 @@
 import express, { Router, Request, Response } from "express";
 import dotenv from "dotenv";
 import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
-import { findCategoryById } from "../src/constants/categories";
+import { findCategoryById, generateProceduralPrompts } from "../src/constants/categories";
 
 dotenv.config();
 
@@ -363,8 +363,37 @@ export async function handleGeneratePromptsLogic(body: any) {
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
-  const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${count} professional, highly marketable, and semantically rich animation prompts in English.
+  const targetCount = Math.max(1, count || 1);
+  const CHUNK_SIZE = 12;
+  const numChunks = Math.ceil(targetCount / CHUNK_SIZE);
+  let allPrompts: string[] = [];
+
+  for (let c = 0; c < numChunks; c++) {
+    const needed = targetCount - allPrompts.length;
+    if (needed <= 0) break;
+    const batchCount = Math.min(CHUNK_SIZE, needed);
+
+    const isSingle = batchCount === 1;
+    const promptContent = isSingle
+      ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English.
+
+MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
+1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
+   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
+   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
+2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
+   - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis.
+3. 60 FPS COORDINATED KINETIC DYNAMICS:
+   - Unified parent floating oscillation (amplitude ±12px) and gentle breathing scale (0.98x-1.02x), paired with continuous synchronized rotation of internal wheels/gears/dial needles on their locked anchors, plus a dynamic 45-degree diagonal specular gleam sweep across surfaces.
+
+${categoryLine}Animation Type: ${String(type).toUpperCase()}
+Visual Style: ${style}${colorModeDirective}${glowDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+
+Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto Gold Coin with beveled edge and glowing currency core..."]`
+      : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly ${batchCount} professional, highly marketable, and semantically rich animation prompts in English (Batch ${c + 1}).
 
 MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
 1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
@@ -377,67 +406,104 @@ MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}`;
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
-  const { response } = await generateContentWithFallback(
-    ai,
-    targetModel,
-    (currentModel) => {
-      const config: any = {
-        temperature: 0.7,
-        maxOutputTokens: 600,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-          },
-        },
-      };
-      const thinkingConfig = getFastThinkingConfig(currentModel);
-      if (thinkingConfig) {
-        config.thinkingConfig = thinkingConfig;
-      }
-      return { contents: promptContent, config };
-    }
-  );
+Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]`;
 
-  const rawText = (response.text || "").trim();
-  let prompts: string[] = [];
+    try {
+      const { response } = await generateContentWithFallback(
+        ai,
+        targetModel,
+        (currentModel) => {
+          const batchMaxTokens = isSingle ? 250 : Math.min(2500, Math.max(400, batchCount * 100));
+          const config: any = {
+            temperature: 0.8,
+            maxOutputTokens: batchMaxTokens,
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.STRING,
+              },
+            },
+          };
+          const thinkingConfig = getFastThinkingConfig(currentModel);
+          if (thinkingConfig) {
+            config.thinkingConfig = thinkingConfig;
+          }
+          return { contents: promptContent, config };
+        }
+      );
 
-  try {
-    const parsed = JSON.parse(rawText);
-    if (Array.isArray(parsed)) {
-      prompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
-    }
-  } catch {
-    const jsonMatch = rawText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
+      const rawText = (response.text || "").trim();
+      let chunkPrompts: string[] = [];
+
       try {
-        prompts = JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(rawText);
+        if (Array.isArray(parsed)) {
+          chunkPrompts = parsed.map((p: any) => String(p).trim()).filter((p: string) => p.length > 0);
+        }
       } catch {
-        prompts = rawText
-          .split('\n')
-          .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-          .filter((p) => p.length > 4);
+        const jsonMatch = rawText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          try {
+            chunkPrompts = JSON.parse(jsonMatch[0]);
+          } catch {
+            chunkPrompts = rawText
+              .split('\n')
+              .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
+              .filter((p) => p.length > 4);
+          }
+        }
       }
-    } else {
-      prompts = rawText
-        .split('\n')
-        .map((p) => p.replace(/^[-*0-9.]+\s*/, '').replace(/["'[\]]/g, '').trim())
-        .filter((p) => p.length > 4);
+
+      if (chunkPrompts.length > 0) {
+        allPrompts = [...allPrompts, ...chunkPrompts.slice(0, batchCount)];
+      } else {
+        const fallbackBatch = generateProceduralPrompts(
+          batchCount,
+          type,
+          subCategory,
+          style,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+          parsedKeywords
+        );
+        allPrompts = [...allPrompts, ...fallbackBatch];
+      }
+    } catch (chunkErr) {
+      console.warn(`[handleGeneratePromptsLogic] Batch ${c + 1} fallback to procedural synthesizer:`, chunkErr);
+      const fallbackBatch = generateProceduralPrompts(
+        batchCount,
+        type,
+        subCategory,
+        style,
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        parsedKeywords
+      );
+      allPrompts = [...allPrompts, ...fallbackBatch];
     }
   }
 
-  if (prompts.length === 0) {
-    prompts = [
-      `${neonGlow ? 'Glowing neon' : 'Crisp flat'} ${subCategory} ${type} with ${motionDynamics} motion`,
-      `Dynamic ${style} ${subCategory} ${colorMode} animation loop`,
-      `Geometric ${subCategory} motion with ${motionDynamics} dynamics`,
-    ];
+  if (allPrompts.length < targetCount) {
+    const diff = targetCount - allPrompts.length;
+    const extra = generateProceduralPrompts(
+      diff,
+      type,
+      subCategory,
+      style,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      parsedKeywords
+    );
+    allPrompts = [...allPrompts, ...extra];
   }
 
-  return { prompts: prompts.slice(0, count) };
+  return { prompts: allPrompts.slice(0, targetCount) };
 }
 
 // Logic for generating animation HTML
@@ -2774,8 +2840,20 @@ export function createApiRouter(): Router {
       const result = await handleGeneratePromptsLogic(body);
       res.json(result);
     } catch (err: any) {
-      console.error("[GeneratePrompts] Error:", err);
-      res.status(500).json({ error: cleanErrorMessage(err) || "Gagal menghasilkan prompt" });
+      console.error("[GeneratePrompts] Recovered from error:", err);
+      const body = parseSafeBody(req);
+      const count = Math.max(1, body.count || 3);
+      const fallback = generateProceduralPrompts(
+        count,
+        body.type || 'icon',
+        body.subCategory || 'business_finance',
+        body.style || 'minimalist',
+        body.colorMode || 'gradient',
+        body.motionDynamics || 'flow',
+        body.neonGlow ?? true,
+        body.keywords || []
+      );
+      res.status(200).json({ prompts: fallback });
     }
   };
   router.post("/gemini/generate-prompts", generatePromptsHandler);
