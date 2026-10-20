@@ -508,9 +508,8 @@ export async function generatePromptsViaGemini(
   const targetCount = Math.max(1, count || 1);
   const collectedPrompts: string[] = new Array(targetCount);
 
-  // Concurrency: 2 for rapid parallel 1-by-1 generation if keys available, or 1 if single key/sequential
-  // This delivers "satu per satu" prompts live while keeping the total execution blisteringly fast!
-  const concurrency = Math.min(2, Math.max(1, apiKeys && apiKeys.length > 1 ? 2 : 1));
+  // Concurrency: 4 for lightning-fast parallel 1-by-1 generation
+  const concurrency = Math.min(4, Math.max(1, apiKeys && apiKeys.length > 1 ? 4 : 2));
   let currentIndex = 0;
 
   async function worker(): Promise<void> {

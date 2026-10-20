@@ -21,18 +21,8 @@ export function getClient(apiKey?: string) {
 }
 
 export function getFastThinkingConfig(targetModel: string): any {
-  const m = (targetModel || "").toLowerCase();
-  if (m.includes("2.5")) {
-    // 0 thinking budget disables token-wasting reasoning steps for ultra-fast response & zero token waste
-    return { thinkingBudget: 0 };
-  }
-  if (m.includes("3.1-flash-lite") || m.includes("lite")) {
-    return { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (m.includes("pro") || m.includes("3.1")) {
-    return { thinkingLevel: ThinkingLevel.LOW };
-  }
-  return undefined;
+  // Force 0 thinking budget across all models for lightning-fast output and zero token waste
+  return { thinkingBudget: 0 };
 }
 
 export function sanitizeModel(model?: string): string {
