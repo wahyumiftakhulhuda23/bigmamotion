@@ -21,13 +21,15 @@ export function getClient(apiKey?: string) {
 }
 
 export function getFastThinkingConfig(targetModel: string): any {
-  if (targetModel.includes("2.5")) {
-    return { thinkingBudget: 1024 };
+  const m = (targetModel || "").toLowerCase();
+  if (m.includes("2.5")) {
+    // 0 thinking budget disables token-wasting reasoning steps for ultra-fast response & zero token waste
+    return { thinkingBudget: 0 };
   }
-  if (targetModel.includes("3.1-flash-lite")) {
+  if (m.includes("3.1-flash-lite") || m.includes("lite")) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
-  if (targetModel.includes("pro") || targetModel.includes("3.1")) {
+  if (m.includes("pro") || m.includes("3.1")) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
   return undefined;
@@ -361,23 +363,17 @@ export async function handleGeneratePromptsLogic(body: any) {
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
-  const entropySalt = Math.random().toString(36).substring(2) + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000000);
-
   const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${count} professional, highly marketable, and semantically rich animation prompts in English.
 
-CRITICAL UNIQUENESS MANDATE (CROSS-ACCOUNT & CROSS-DAY ANTI-SIMILARITY):
-- Every time this prompt is invoked, you MUST generate completely fresh, unique, and distinct subjects, angles, and object compositions that have never been generated before.
-- Even for the same category across different user accounts or different days (Entropy Salt: ${entropySalt}), ensure 100% variance, novel variations, and distinct visual concepts. Never repeat previous ideas.
-
-MANDATORY RULES FOR HIGH-QUALITY SHAPES & MEANING (ANTI-DEFECT):
-1. MEANINGFUL & RECOGNIZABLE SUBJECT:
-   - Each prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Gold Crypto Coin with dimensional beveled rim and glowing holographic currency symbol", "Precision E-Commerce Shopping Cart with curved basket, rolling wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
-   - STRICTLY FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague ambiguous geometry.
-2. DETAILED SHAPE ANATOMY:
-   - Clearly specify the primary body, secondary sub-components, physical joints, and dimensional lighting (specular reflection beam, gradient bevels, ambient inner glow).
-3. COHERENT KINETIC MOTION:
-   - Detail the coordinated continuous linear motion for each part (e.g. body breathes gently 0.96x-1.04x and floats ±10px on Y axis, wheels/gears rotate in sync, highlight beam sweeps across the surface, status lights cycle with smooth easing).
+MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
+1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
+   - Each prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
+   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
+2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
+   - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
+3. 60 FPS COORDINATED KINETIC DYNAMICS:
+   - Unified parent floating oscillation (amplitude ±12px) and gentle breathing scale (0.98x-1.02x), paired with continuous synchronized rotation of internal wheels/gears/dial needles on their locked anchors, plus a dynamic 45-degree diagonal specular gleam sweep across surfaces.
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -388,7 +384,8 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
     targetModel,
     (currentModel) => {
       const config: any = {
-        temperature: 0.95,
+        temperature: 0.7,
+        maxOutputTokens: 600,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -592,24 +589,20 @@ ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
      * Koin / Finansial / Bisnis: Koin emas bertekstur beveled rim tebal dengan logo mata uang timbul dan kilau specular shine.
      * Kendaraan / Transportasi: Sasis aerodinamis dengan spakbor roda, roda ban terpasang mati di sasis dengan velg berputar di poros tengah.
 
-2. ATURAN HIERARKI TUNGGAL & DILARANG KERAS OBJEK TERPISAH (ANTI-DETACH HIERARCHICAL RIGGING):
-   - SEMUA komponen suatu objek WAJIB berada di dalam SATU BLOK MATRIX INDUK:
+2. ATURAN HIERARKI TUNGGAL & ZERO OBJEK TERPISAH (RIGID PARENT-CHILD MATRIX RIGGING):
+   - SEMUA komponen suatu objek WAJIB berada di dalam SATU MATRIX INDUK BERSAMA:
      ctx.save();
-     ctx.translate(cx, cy); // pusat canvas
-     ctx.translate(0, floatY); // osilasi halus seluruh objek bersamaan
-     ctx.rotate(rootRot); // rotasi seluruh objek bersamaan
-     ctx.scale(rootScale, rootScale);
+     ctx.translate(cx, cy + floatY); // Osilasi/floating hanya di root matrix
+     ctx.rotate(rootRot);             // Kemiringan hanya di root matrix
+     ctx.scale(rootScale, rootScale); // Breathing scale hanya di root matrix
      
-     // SELURUH KOMPONEN DIGAMBAR RELATIF TERHADAP (0, 0)!
-     // DILARANG KERAS memberikan translate independen atau rumus gelombang Math.sin berbeda pada komponen terpisah yang membuat bagian tubuh/alat lepas mengambang!
-     
-     // Jika suatu sub-bagian berotasi/mengayun (misal: engsel sendi, jarum indikator, roda velg, tuas):
-     // Wajib pasang di titik sendi fisik aslinya (jointAnchorX, jointAnchorY):
-     ctx.save();
-     ctx.translate(jointAnchorX, jointAnchorY);
-     ctx.rotate(jointAngle);
-     // gambar sub-bagian relatif terhadap titik sendi ini
-     ctx.restore();
+     // ATURAN ANATOMI TERIKAT (PHYSICAL JOINT ANCHORS):
+     // 1. RODA MOBIL/GEROBAK: Axle roda WAJIB terpasang di (-axleX, axleY) dan (+axleX, axleY) sasis!
+     //    Hanya velg di dalam ban yang berputar (ctx.rotate(t * 8)), posisi roda 100% terkunci mati di sasis!
+     // 2. GAGANG TAS / MUG: Titik ujung pegangan WAJIB menempel persis di bibir objek!
+     // 3. LAYAR HP/LAPTOP: Seluruh interface & wallpaper WAJIB di dalam bezel bodi (ctx.clip())!
+     // 4. BALING-BALING/ROTOR/SENDI: Terpasang di sumbu pusat fisik komponen (ctx.translate(jointX, jointY); ctx.rotate(ang);)!
+     // DILARANG KERAS menerapkan translate independen yang menyebabkan bagian tubuh atau aksesori melayang terpisah!
 
      ctx.restore();
 
@@ -689,8 +682,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.15,
-        maxOutputTokens: 8192,
+        temperature: 0.1,
+        maxOutputTokens: 3800,
       };
       const animThinking = getFastThinkingConfig(currentModel);
       if (animThinking) {
@@ -1821,8 +1814,456 @@ ${shapeAnalysisJson}
         ctx.stroke();
       }
 
+    } else if (title.includes('drone') || title.includes('quadcopter') || title.includes('uav')) {
+      // 18. DRONE / QUADCOPTER (Central Aerodynamic Pod, 4 Rigid Arms, 4 Rotating Propellers)
+      const dw = R * 1.35;
+      const dh = R * 1.0;
+
+      // 4 Carbon Fiber Arms (Rigidly welded to center body)
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#334155';
+      ctx.beginPath();
+      ctx.moveTo(-dw * 0.45, -dh * 0.45);
+      ctx.lineTo(dw * 0.45, dh * 0.45);
+      ctx.moveTo(dw * 0.45, -dh * 0.45);
+      ctx.lineTo(-dw * 0.45, dh * 0.45);
+      ctx.stroke();
+
+      // 4 Propeller Rotors (Locked at exact arm tips, spinning at high FPS)
+      const motors = [
+        [-dw * 0.45, -dh * 0.45],
+        [dw * 0.45, -dh * 0.45],
+        [-dw * 0.45, dh * 0.45],
+        [dw * 0.45, dh * 0.45],
+      ];
+      for (const [mx, my] of motors) {
+        ctx.save();
+        ctx.translate(mx, my);
+        // Motor Mount
+        ctx.beginPath();
+        ctx.arc(0, 0, 9, 0, Math.PI * 2);
+        ctx.fillStyle = "${accentColor}";
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        // High-Speed Spinning Twin Blades
+        ctx.rotate(t * 18);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, R * 0.32, 4, 0, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Central Aerodynamic Fuselage Pod
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-dw * 0.22, -dh * 0.28, dw * 0.44, dh * 0.56, 16);
+      } else {
+        ctx.rect(-dw * 0.22, -dh * 0.28, dw * 0.44, dh * 0.56);
+      }
+      const droneGrad = ctx.createLinearGradient(-dw * 0.25, -dh * 0.3, dw * 0.25, dh * 0.3);
+      droneGrad.addColorStop(0, "${glowColor}");
+      droneGrad.addColorStop(0.5, "${secondaryColor}");
+      droneGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = droneGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Front 4K Sensor Camera Dome
+      ctx.beginPath();
+      ctx.arc(0, dh * 0.28, 12, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+    } else if (title.includes('headset') || title.includes('headphone') || title.includes('earphone') || title.includes('audio')) {
+      // 19. PROFESSIONAL STUDIO HEADPHONES (Ergonomic Padded Arch & Cushioned Ear Cups)
+      const hsw = R * 1.35;
+      const hsh = R * 1.25;
+
+      // Padded Arch Headband (Stretching symmetrically across the top)
+      ctx.beginPath();
+      ctx.arc(0, -hsh * 0.08, hsw * 0.48, Math.PI * 0.88, Math.PI * 0.12, true);
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(0, -hsh * 0.08, hsw * 0.48, Math.PI * 0.88, Math.PI * 0.12, true);
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Dual Cushioned Ear Cups (Locked at left & right ends)
+      function drawEarCup(ex, isLeft) {
+        ctx.save();
+        ctx.translate(ex, hsh * 0.12);
+        ctx.beginPath();
+        if (typeof ctx.roundRect === 'function') {
+          ctx.roundRect(-14, -hsh * 0.28, 28, hsh * 0.56, 12);
+        } else {
+          ctx.rect(-14, -hsh * 0.28, 28, hsh * 0.56);
+        }
+        const cupGrad = ctx.createLinearGradient(-14, -hsh * 0.28, 14, hsh * 0.28);
+        cupGrad.addColorStop(0, "${glowColor}");
+        cupGrad.addColorStop(0.5, '#1e293b');
+        cupGrad.addColorStop(1, '#020617');
+        ctx.fillStyle = cupGrad;
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
+
+        // Glowing Core Ring
+        ctx.beginPath();
+        ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fillStyle = "${accentColor}";
+        ctx.fill();
+        ctx.restore();
+      }
+
+      drawEarCup(-hsw * 0.48, true);
+      drawEarCup(hsw * 0.48, false);
+
+    } else if (title.includes('watch') || title.includes('clock') || title.includes('jam') || title.includes('smartwatch')) {
+      // 20. LUXURY SMARTWATCH (Circular Bezel, Attached Straps, Smooth Sweeping Hands)
+      const wr = R * 0.68;
+
+      // Upper & Lower Textured Straps (Firmly anchored to casing)
+      ctx.beginPath();
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(-wr * 0.42, -R * 0.95, wr * 0.84, R * 0.95);
+      ctx.fillRect(-wr * 0.42, 0, wr * 0.84, R * 0.95);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.strokeRect(-wr * 0.42, -R * 0.95, wr * 0.84, R * 1.90);
+
+      // Circular Watch Chassis & Bezel
+      ctx.beginPath();
+      ctx.arc(0, 0, wr, 0, Math.PI * 2);
+      const watchGrad = ctx.createLinearGradient(-wr, -wr, wr, wr);
+      watchGrad.addColorStop(0, "${glowColor}");
+      watchGrad.addColorStop(0.5, '#0f172a');
+      watchGrad.addColorStop(1, "${accentColor}");
+      ctx.fillStyle = watchGrad;
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // OLED Dial Face
+      ctx.beginPath();
+      ctx.arc(0, 0, wr * 0.82, 0, Math.PI * 2);
+      ctx.fillStyle = '#020617';
+      ctx.fill();
+
+      // Sweeping Clock Hands (Smooth continuous 60 FPS sweep)
+      ctx.save();
+      ctx.rotate(t * 1.5);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -wr * 0.65);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = "${glowColor}";
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate(t * 0.25);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(wr * 0.45, 0);
+      ctx.lineWidth = 4.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.restore();
+
+      // Center Pin
+      ctx.beginPath();
+      ctx.arc(0, 0, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+
+    } else if (title.includes('box') || title.includes('paket') || title.includes('delivery') || title.includes('kurir') || title.includes('kardus') || title.includes('shipping') || title.includes('package')) {
+      // 21. DELIVERY PARCEL & LOGISTICS PACKAGE (3D Isometric Box, Packaging Tape, Glowing Barcode)
+      const bw = R * 1.25;
+      const bh = R * 1.05;
+
+      // Isometric Carton Box
+      ctx.beginPath();
+      ctx.moveTo(0, -bh * 0.45);
+      ctx.lineTo(bw * 0.45, -bh * 0.2);
+      ctx.lineTo(bw * 0.45, bh * 0.35);
+      ctx.lineTo(0, bh * 0.58);
+      ctx.lineTo(-bw * 0.45, bh * 0.35);
+      ctx.lineTo(-bw * 0.45, -bh * 0.2);
+      ctx.closePath();
+      const boxGrad = ctx.createLinearGradient(-bw * 0.5, -bh * 0.5, bw * 0.5, bh * 0.5);
+      boxGrad.addColorStop(0, '#f59e0b');
+      boxGrad.addColorStop(0.5, '#d97706');
+      boxGrad.addColorStop(1, '#78350f');
+      ctx.fillStyle = boxGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Center Sealing Tape
+      ctx.beginPath();
+      ctx.moveTo(0, -bh * 0.45);
+      ctx.lineTo(0, bh * 0.58);
+      ctx.lineWidth = 14;
+      ctx.strokeStyle = 'rgba(254, 243, 199, 0.45)';
+      ctx.stroke();
+
+      // Glowing Shipping Barcode Tag
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(-bw * 0.28, -bh * 0.05, bw * 0.22, bh * 0.22);
+      ctx.strokeStyle = '#020617';
+      ctx.lineWidth = 2;
+      for (let bc = -bw * 0.25; bc <= -bw * 0.08; bc += 5) {
+        ctx.beginPath();
+        ctx.moveTo(bc, -bh * 0.02);
+        ctx.lineTo(bc, bh * 0.14);
+        ctx.stroke();
+      }
+
+    } else if (title.includes('robot') || title.includes('cyborg') || title.includes('bot') || title.includes('ai') || title.includes('mascot')) {
+      // 22. AI CYBORG / ROBOT MASCOT (Attached Antenna, Visor Display, Articulated Head)
+      const rw = R * 1.15;
+      const rh = R * 1.15;
+
+      // Top Antenna Pin (Locked to head crown)
+      ctx.beginPath();
+      ctx.moveTo(0, -rh * 0.45);
+      ctx.lineTo(0, -rh * 0.68);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, -rh * 0.68, 8, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+
+      // Robot Rounded Head
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-rw * 0.42, -rh * 0.45, rw * 0.84, rh * 0.75, 18);
+      } else {
+        ctx.rect(-rw * 0.42, -rh * 0.45, rw * 0.84, rh * 0.75);
+      }
+      const robGrad = ctx.createLinearGradient(-rw * 0.5, -rh * 0.5, rw * 0.5, rh * 0.5);
+      robGrad.addColorStop(0, "${glowColor}");
+      robGrad.addColorStop(0.5, "${secondaryColor}");
+      robGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = robGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Glowing Cyber Visor
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-rw * 0.32, -rh * 0.22, rw * 0.64, rh * 0.28, 10);
+      } else {
+        ctx.rect(-rw * 0.32, -rh * 0.22, rw * 0.64, rh * 0.28);
+      }
+      ctx.fillStyle = '#020617';
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+      // Visor Eye Pulse
+      ctx.beginPath();
+      ctx.arc(-16, -rh * 0.08, 6, 0, Math.PI * 2);
+      ctx.arc(16, -rh * 0.08, 6, 0, Math.PI * 2);
+      ctx.fillStyle = "${accentColor}";
+      ctx.fill();
+
+    } else if (title.includes('bulb') || title.includes('lampu') || title.includes('idea') || title.includes('inovasi') || title.includes('creativity')) {
+      // 23. INNOVATION LIGHTBULB (Glass Bulb Contour, Radiant Filament, Threaded Screw Base)
+      const lr = R * 0.72;
+
+      // Bottom Screw Base (Firmly welded to bulb neck)
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-lr * 0.35, lr * 0.65, lr * 0.70, lr * 0.38, 4);
+      } else {
+        ctx.rect(-lr * 0.35, lr * 0.65, lr * 0.70, lr * 0.38);
+      }
+      ctx.fillStyle = '#475569';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Glass Bulb Sphere & Tapered Neck
+      ctx.beginPath();
+      ctx.arc(0, -lr * 0.15, lr, Math.PI * 0.75, Math.PI * 0.25);
+      ctx.lineTo(lr * 0.35, lr * 0.65);
+      ctx.lineTo(-lr * 0.35, lr * 0.65);
+      ctx.closePath();
+      const bulbGrad = ctx.createRadialGradient(0, -lr * 0.15, 10, 0, -lr * 0.15, lr * 1.1);
+      bulbGrad.addColorStop(0, '#fef08a');
+      bulbGrad.addColorStop(0.5, "${glowColor}");
+      bulbGrad.addColorStop(1, 'rgba(15, 23, 42, 0.45)');
+      ctx.fillStyle = bulbGrad;
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Glowing Tungsten Filament
+      ctx.beginPath();
+      ctx.moveTo(-lr * 0.22, lr * 0.35);
+      ctx.lineTo(-lr * 0.12, -lr * 0.15);
+      ctx.lineTo(0, -lr * 0.35);
+      ctx.lineTo(lr * 0.12, -lr * 0.15);
+      ctx.lineTo(lr * 0.22, lr * 0.35);
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+    } else if (title.includes('plane') || title.includes('pesawat') || title.includes('airplane') || title.includes('jet') || title.includes('flight')) {
+      // 24. AERO JET / AIRPLANE (Streamlined Fuselage, Swept Wings, Jet Thrusters)
+      const pw = R * 1.45;
+      const ph = R * 1.45;
+
+      // Swept Wings (Locked rigidly across middle fuselage)
+      ctx.beginPath();
+      ctx.moveTo(0, -ph * 0.1);
+      ctx.lineTo(pw * 0.52, ph * 0.22);
+      ctx.lineTo(pw * 0.42, ph * 0.32);
+      ctx.lineTo(-pw * 0.42, ph * 0.32);
+      ctx.lineTo(-pw * 0.52, ph * 0.22);
+      ctx.closePath();
+      ctx.fillStyle = "${secondaryColor}";
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Main Aerodynamic Fuselage
+      ctx.beginPath();
+      ctx.moveTo(0, -ph * 0.55);
+      ctx.bezierCurveTo(pw * 0.15, -ph * 0.25, pw * 0.15, ph * 0.35, 0, ph * 0.52);
+      ctx.bezierCurveTo(-pw * 0.15, ph * 0.35, -pw * 0.15, -ph * 0.25, 0, -ph * 0.55);
+      ctx.closePath();
+      const jetGrad = ctx.createLinearGradient(-pw * 0.15, -ph * 0.55, pw * 0.15, ph * 0.52);
+      jetGrad.addColorStop(0, '#ffffff');
+      jetGrad.addColorStop(0.5, "${glowColor}");
+      jetGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = jetGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Cockpit Windshield
+      ctx.beginPath();
+      ctx.ellipse(0, -ph * 0.32, pw * 0.06, ph * 0.08, 0, 0, Math.PI * 2);
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "${accentColor}";
+      ctx.stroke();
+
+    } else if (title.includes('mic') || title.includes('mikrofon') || title.includes('podcast') || title.includes('broadcast')) {
+      // 25. STUDIO BROADCAST MICROPHONE (Mesh Capsule, Metal Body, Tripod Stand)
+      const mw = R * 0.65;
+      const mh = R * 1.35;
+
+      // Heavy Metal Base & Stand
+      ctx.beginPath();
+      ctx.moveTo(-mw * 0.65, mh * 0.48);
+      ctx.lineTo(mw * 0.65, mh * 0.48);
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = '#334155';
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, mh * 0.48);
+      ctx.lineTo(0, mh * 0.08);
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = '#64748b';
+      ctx.stroke();
+
+      // Mic Body & Mesh Capsule
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(-mw * 0.45, -mh * 0.45, mw * 0.90, mh * 0.52, 16);
+      } else {
+        ctx.rect(-mw * 0.45, -mh * 0.45, mw * 0.90, mh * 0.52);
+      }
+      const micGrad = ctx.createLinearGradient(-mw * 0.5, -mh * 0.45, mw * 0.5, mh * 0.07);
+      micGrad.addColorStop(0, "${glowColor}");
+      micGrad.addColorStop(0.5, "${secondaryColor}");
+      micGrad.addColorStop(1, '#0f172a');
+      ctx.fillStyle = micGrad;
+      ctx.fill();
+      ctx.lineWidth = 3.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
+      // Mesh Cross-Hatch Lines
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+      ctx.lineWidth = 1.5;
+      for (let my = -mh * 0.38; my <= -mh * 0.05; my += 8) {
+        ctx.beginPath();
+        ctx.moveTo(-mw * 0.38, my);
+        ctx.lineTo(mw * 0.38, my);
+        ctx.stroke();
+      }
+
+    } else if (title.includes('book') || title.includes('buku') || title.includes('learn') || title.includes('study') || title.includes('belajar')) {
+      // 26. OPEN KNOWLEDGE BOOK (Hardcover Spine, Curving Pages, Glowing Aura)
+      const bkw = R * 1.35;
+      const bkh = R * 0.95;
+
+      // Hardcover Backing
+      ctx.beginPath();
+      ctx.moveTo(-bkw * 0.48, -bkh * 0.38);
+      ctx.quadraticCurveTo(-bkw * 0.25, -bkh * 0.45, 0, -bkh * 0.32);
+      ctx.quadraticCurveTo(bkw * 0.25, -bkh * 0.45, bkw * 0.48, -bkh * 0.38);
+      ctx.lineTo(bkw * 0.45, bkh * 0.42);
+      ctx.quadraticCurveTo(bkw * 0.25, bkh * 0.35, 0, bkh * 0.48);
+      ctx.quadraticCurveTo(-bkw * 0.25, bkh * 0.35, -bkw * 0.45, bkh * 0.42);
+      ctx.closePath();
+      ctx.fillStyle = '#0f172a';
+      ctx.fill();
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "${secondaryColor}";
+      ctx.stroke();
+
+      // Glowing Open Pages (Gentle flutter effect)
+      ctx.beginPath();
+      ctx.moveTo(-bkw * 0.42, -bkh * 0.32);
+      ctx.quadraticCurveTo(-bkw * 0.22, -bkh * 0.38, 0, -bkh * 0.28);
+      ctx.quadraticCurveTo(bkw * 0.22, -bkh * 0.38, bkw * 0.42, -bkh * 0.32);
+      ctx.lineTo(bkw * 0.40, bkh * 0.36);
+      ctx.quadraticCurveTo(bkw * 0.22, bkh * 0.30, 0, bkh * 0.40);
+      ctx.quadraticCurveTo(-bkw * 0.22, bkh * 0.30, -bkw * 0.40, bkh * 0.36);
+      ctx.closePath();
+      const pageGrad = ctx.createLinearGradient(0, -bkh * 0.4, 0, bkh * 0.4);
+      pageGrad.addColorStop(0, '#ffffff');
+      pageGrad.addColorStop(1, "${glowColor}");
+      ctx.fillStyle = pageGrad;
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#ffffff';
+      ctx.stroke();
+
     } else {
-      // 18. MASTER HIGH-TECH GEOMETRIC CORE (Pristine Hexagonal Vector Emblem)
+      // 27. MASTER HIGH-TECH GEOMETRIC CORE (Pristine Hexagonal Vector Emblem)
       ctx.beginPath();
       for (let s = 0; s < 6; s++) {
         const ang = (s / 6) * Math.PI * 2 - Math.PI / 2;
@@ -2044,8 +2485,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       targetModel,
       (currentModel) => {
         const config: any = {
-          temperature: 0.15,
-          maxOutputTokens: 8192,
+          temperature: 0.1,
+          maxOutputTokens: 3800,
         };
         const fastThinking = getFastThinkingConfig(currentModel);
         if (fastThinking) config.thinkingConfig = fastThinking;
@@ -2170,8 +2611,8 @@ CRITICAL RULES:
     targetModel,
     (currentModel) => {
       const config: any = {
-        temperature: 0.35,
-        maxOutputTokens: 2048,
+        temperature: 0.3,
+        maxOutputTokens: 600,
       };
       const fastThinking = getFastThinkingConfig(currentModel);
       if (fastThinking) config.thinkingConfig = fastThinking;

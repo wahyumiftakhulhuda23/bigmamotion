@@ -234,16 +234,24 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-gray-300 mb-1">Pilih Model AI Gemini:</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-gray-300">Pilih Model AI Gemini:</label>
+                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <i className="fa-solid fa-bolt"></i> Ultra Fast & Anti-Boros Aktif
+                  </span>
+                </div>
                 <select
                   value={modelValue}
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Sangat Cepat & Direkomendasikan)</option>
-                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi & Detail Kompleks)</option>
-                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Ringan & Cepat)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Cepat ~1.2s • Hemat Kuota • Direkomendasikan)</option>
+                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi, Detail Kompleks & Rigging Presisi)</option>
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Super Ringan & Efisiensi Token Tinggi)</option>
                 </select>
+                <p className="text-[11px] text-sky-400/90 mt-1.5 flex items-center gap-1">
+                  <i className="fa-solid fa-circle-check"></i> Seluruh model kini dilengkapi Hierarchical Rigid Rigging (bentuk proporsional, bebas salah gerak, dan objek tidak terpisah).
+                </p>
               </div>
 
               {currentLines.length > 0 && (
