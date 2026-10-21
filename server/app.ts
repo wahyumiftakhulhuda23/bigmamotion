@@ -108,16 +108,26 @@ export async function generateContentWithFallback(
           msg.includes("429") ||
           msg.includes("billing");
 
-        const isOverloaded =
+        const isTransient =
+          msg.includes("500") ||
           msg.includes("503") ||
+          msg.includes("504") ||
+          msg.includes("502") ||
+          msg.includes("timeout") ||
+          msg.includes("network") ||
           msg.includes("high demand") ||
           msg.includes("unavailable") ||
-          msg.includes("overloaded");
+          msg.includes("overloaded") ||
+          msg.includes("internal");
 
         if (isQuota) {
           break;
-        } else if (isOverloaded && attempt < allowedAttempts) {
-          await new Promise((res) => setTimeout(res, 400 * attempt));
+        } else if (isTransient && attempt < allowedAttempts + 1) {
+          await new Promise((res) => setTimeout(res, 800 * attempt));
+          continue;
+        } else if (attempt < allowedAttempts) {
+          await new Promise((res) => setTimeout(res, 500 * attempt));
+          continue;
         } else {
           break;
         }
