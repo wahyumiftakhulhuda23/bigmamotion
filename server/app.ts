@@ -398,14 +398,26 @@ Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto G
       : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${batchCount} professional, highly marketable, and semantically rich animation prompts in English (Batch ${c + 1}).
 
-MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
-1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - Each prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
+MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
+1. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
+   - EACH prompt in this batch MUST have a COMPLETELY DIFFERENT sentence structure, vocabulary, and thematic focus.
+   - You MUST vary the descriptive style for each:
+     - Prompt 1: Focus on industrial technical aesthetics (chassis, bolts, mechanical joints).
+     - Prompt 2: Focus on minimalist, fluid, data-driven flow and abstract gradients.
+     - Prompt 3: Focus on complex, isometric geometric structures and depth.
+     - (And continue with highly distinct technical/artistic angles for subsequent prompts).
+   - NEVER use the same adjective, phrasing, or sentence structure twice in the same batch.
+   - Each prompt must describe a distinct concrete, clearly identifiable, meaningful visual object or scene from the category: ${catMeta?.enName || subCategory}.
+
+2. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
+   - Each prompt must describe a unique, highly marketable object (e.g., "Bionic robotic hand with articulated fingers and neural circuit pathways", "Fluid abstract gradient sphere morphing into sharp geometric shards", "Data-driven digital dashboard with floating volumetric bar charts").
    - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
-2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
-   - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
-3. 60 FPS COORDINATED KINETIC DYNAMICS:
-   - Unified parent floating oscillation (amplitude ±12px) and gentle breathing scale (0.98x-1.02x), paired with continuous synchronized rotation of internal wheels/gears/dial needles on their locked anchors, plus a dynamic 45-degree diagonal specular gleam sweep across surfaces.
+
+3. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
+   - Explicitly specify how components are attached: e.g., "locked inside wheel arches", "welded firmly to bag rim", "flush mounted to chassis".
+
+4. 60 FPS COORDINATED KINETIC DYNAMICS:
+   - Vary the kinetic motion description for each prompt (e.g., use "harmonic floating oscillation", "rhythmic breathing pulse", "stepped quantum rotation", "articulated mechanical swing").
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
