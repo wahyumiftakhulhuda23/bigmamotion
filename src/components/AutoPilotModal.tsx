@@ -27,6 +27,7 @@ interface AutoPilotModalProps {
   onClose: () => void;
   failedItems?: FailedAutoPilotItem[];
   onRetryFailedItems?: () => void;
+  onRetrySingleFailedItem?: (item: FailedAutoPilotItem) => void;
 }
 
 export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
@@ -40,6 +41,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
   onClose,
   failedItems = [],
   onRetryFailedItems,
+  onRetrySingleFailedItem,
 }) => {
   const [selectedTargetAccount, setSelectedTargetAccount] = React.useState<string>('ALL');
 
@@ -282,14 +284,27 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                 </button>
               )}
             </div>
-            <div className="max-h-24 overflow-y-auto space-y-1 pr-1 text-[11px] text-gray-300">
+            <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 text-[11px] text-gray-300">
               {failedItems.map((fi, fIdx) => (
-                <div key={fi.id || fIdx} className="flex items-center justify-between bg-black/40 px-2 py-1 rounded border border-rose-900/60">
-                  <div className="truncate pr-2">
-                    <span className="font-bold text-amber-300 mr-1.5">[{fi.accountName}]</span>
-                    <span>{fi.prompt}</span>
+                <div key={fi.id || fIdx} className="flex items-center justify-between bg-black/50 px-2.5 py-1.5 rounded-lg border border-rose-900/60 gap-2">
+                  <div className="truncate pr-2 min-w-0 flex-1">
+                    <span className="font-bold text-amber-300 mr-1.5 shrink-0">[{fi.accountName}]</span>
+                    <span className="text-gray-200">{fi.prompt}</span>
                   </div>
-                  <span className="text-rose-400 text-[10px] shrink-0">{fi.error}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-rose-400 text-[10px] hidden sm:inline">{fi.error}</span>
+                    {onRetrySingleFailedItem && !isAutoPilotRunning && (
+                      <button
+                        type="button"
+                        onClick={() => onRetrySingleFailedItem(fi)}
+                        className="px-2 py-0.5 rounded bg-rose-600/40 hover:bg-rose-600/70 border border-rose-500/50 text-rose-200 text-[10px] font-bold transition flex items-center gap-1 cursor-pointer active:scale-95"
+                        title="Coba ulang animasi ini secara satuan"
+                      >
+                        <i className="fa-solid fa-rotate-right text-[8px]"></i>
+                        <span>Ulangi</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

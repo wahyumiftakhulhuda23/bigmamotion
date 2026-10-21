@@ -15,6 +15,8 @@ interface HeaderProps {
   onOpenAutoPilotModal: () => void;
   onOpenGalleryModal: () => void;
   onOpenTutorialModal?: () => void;
+  failedCount?: number;
+  onOpenFailedModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -31,6 +33,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAutoPilotModal,
   onOpenGalleryModal,
   onOpenTutorialModal,
+  failedCount = 0,
+  onOpenFailedModal,
 }) => {
   const getModelBadge = (model: GeminiModel | string = 'gemini-3.1-pro-preview') => {
     switch (model) {
@@ -173,6 +177,19 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
 
+
+          {/* Failed Animations Badge / Trigger */}
+          {failedCount > 0 && onOpenFailedModal && (
+            <button
+              onClick={onOpenFailedModal}
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/50 transition text-xs font-black shadow-md shadow-rose-500/20 cursor-pointer active:scale-95 animate-pulse"
+              title={`Terdapat ${failedCount} animasi yang gagal dibuat. Klik untuk melihat daftar dan coba ulang.`}
+            >
+              <i className="fa-solid fa-triangle-exclamation text-rose-400 text-xs"></i>
+              <span className="hidden sm:inline">Gagal:</span>
+              <span className="font-extrabold">{failedCount}</span>
+            </button>
+          )}
 
           {/* Auto Pilot Trigger Button */}
           <button

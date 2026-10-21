@@ -36,6 +36,7 @@ import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
 import { FullscreenModal } from './components/FullscreenModal';
 import { TutorialModal } from './components/TutorialModal';
+import { FailedAnimationsModal } from './components/FailedAnimationsModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
@@ -272,6 +273,7 @@ export default function App() {
   const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
   const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
+  const [isFailedAnimationsModalOpen, setIsFailedAnimationsModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
 
   const handleModelQuotaExceeded = (_model: GeminiModel) => {
@@ -587,6 +589,11 @@ export default function App() {
           saveAnimationsToStorage(currentAnimList);
           addLog(`Berhasil merender animasi #${i + 1}.`, 'success');
         }
+
+        // Delay 3 detik antar animasi sukses untuk mencegah limit API / error 500
+        if (i < total - 1) {
+          await new Promise((res) => setTimeout(res, 3000));
+        }
       } catch (e: any) {
         if (e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted) {
           handleModelQuotaExceeded(selectedModel);
@@ -664,6 +671,11 @@ export default function App() {
           saveAnimationsToStorage(currentAnimList);
           addLog(`[Sukses Diperbaiki] Prompt: "${currentPrompt.substring(0, 35)}..." berhasil dirender!`, 'success');
           showToast(`Berhasil memperbaiki animasi untuk prompt #${i + 1}!`, 'success');
+        }
+
+        // Delay 3 detik antar percobaan sukses
+        if (i < total - 1) {
+          await new Promise((res) => setTimeout(res, 3000));
         }
       } catch (e: any) {
         addLog(`[Masih Kendala] Prompt #${i + 1}: ${e.message}`, 'error');
@@ -1023,6 +1035,8 @@ export default function App() {
           }
         );
         addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt satu per satu. Memulai render animasi...`, 'success');
+        addLog(`⏳ [${acc.name}] Menyiapkan antrian render berurutan satu per satu (jeda 2.5s pendinginan kuota API)...`, 'info');
+        await new Promise((res) => setTimeout(res, 2500));
       } catch (e: any) {
         addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
         newFailedItems.push({
@@ -1071,10 +1085,15 @@ export default function App() {
             };
             currentAnimList = [newAnimItem, ...currentAnimList];
             saveAnimationsToStorage(currentAnimList);
-            addLog(`✅ [${acc.name}] Animasi #${j + 1} berhasil dibuat & disimpan ke Galeri!`, 'success');
+            addLog(`✅ [${acc.name}] Animasi #${j + 1}/${prompts.length} berhasil dibuat & disimpan ke Galeri!`, 'success');
+          }
+
+          // Delay 3 detik antar animasi sukses untuk kestabilan token API dan anti limit
+          if (j < prompts.length - 1) {
+            await new Promise((res) => setTimeout(res, 3000));
           }
         } catch (e: any) {
-          addLog(`⚠️ [${acc.name}] Error animasi #${j + 1}: ${e.message}. Menyimpan untuk fitur coba ulang kesalahan...`, 'error');
+          addLog(`⚠️ [${acc.name}] Lewati animasi #${j + 1}: ${e.message}. Menyimpan untuk fitur coba ulang kesalahan...`, 'warn');
           newFailedItems.push({
             id: 'fail_' + Date.now() + '_' + j + '_' + Math.random().toString(36).substring(7),
             accountName: acc.name,
@@ -1088,7 +1107,9 @@ export default function App() {
             neonGlow: acc.neonGlow ?? true,
             error: e.message || 'Gagal merender animasi',
           });
-          await new Promise((res) => setTimeout(res, 3000));
+          if (j < prompts.length - 1) {
+            await new Promise((res) => setTimeout(res, 3000));
+          }
           continue;
         }
       }
@@ -1156,6 +1177,11 @@ export default function App() {
           saveAnimationsToStorage(currentAnimList);
           addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi selesai & disimpan ke Galeri!`, 'success');
           showToast(`✅ [${item.accountName}] Animasi berhasil diperbaiki!`, 'success');
+        }
+
+        // Delay 3 detik antar percobaan sukses
+        if (i < total - 1) {
+          await new Promise((res) => setTimeout(res, 3000));
         }
       } catch (e: any) {
         addLog(`❌ [Masih Kendala] [${item.accountName}]: ${e.message}`, 'error');
@@ -1389,6 +1415,8 @@ export default function App() {
         }}
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
         onOpenTutorialModal={() => setIsTutorialModalOpen(true)}
+        failedCount={failedPrompts.length + failedAutoPilotItems.length}
+        onOpenFailedModal={() => setIsFailedAnimationsModalOpen(true)}
       />
 
       {/* Prominent Mobile & Tablet Navigation Switcher */}
@@ -1743,6 +1771,61 @@ export default function App() {
           setIsTutorialModalOpen(false);
           setIsApiModalOpen(true);
         }}
+      />
+
+      <FailedAnimationsModal
+        isOpen={isFailedAnimationsModalOpen}
+        onClose={() => setIsFailedAnimationsModalOpen(false)}
+        failedManualPrompts={failedPrompts}
+        failedAutoPilotItems={failedAutoPilotItems}
+        onRetrySingleManualPrompt={handleRetrySinglePrompt}
+        onRetrySingleAutoPilotItem={async (item) => {
+          try {
+            const anim = await generateSingleAnimationCode(
+              apiKeys,
+              selectedModel,
+              item.prompt,
+              item.type || currentType,
+              item.subCategory || nicheCategory,
+              item.style || visualStyle,
+              1,
+              1,
+              undefined,
+              3,
+              item.isGreenScreen ?? false,
+              item.colorMode ?? colorMode,
+              item.motionDynamics ?? motionDynamics,
+              item.neonGlow ?? neonGlow
+            );
+            if (anim) {
+              const newAnimItem: AnimationItem = {
+                ...anim,
+                account: item.accountName,
+                createdAt: Date.now(),
+              };
+              const updated = [newAnimItem, ...animations];
+              saveAnimationsToStorage(updated);
+              setAnimations(updated);
+              setFailedAutoPilotItems((prev) => prev.filter((f) => f.id !== item.id));
+              showToast(`Animasi [${item.accountName}] berhasil diperbaiki!`, 'success');
+              addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi tersimpan ke Galeri!`, 'success');
+            }
+          } catch (e: any) {
+            showToast(`Gagal mencoba ulang: ${e.message}`, 'error');
+            addLog(`❌ [Gagal Diperbaiki] [${item.accountName}]: ${e.message}`, 'error');
+          }
+        }}
+        onRetryAllFailedManual={handleRetryFailedPrompts}
+        onRetryAllFailedAutoPilot={handleRetryFailedAutoPilot}
+        onClearAllFailed={() => {
+          setFailedPrompts([]);
+          setFailedAutoPilotItems([]);
+          showToast('Daftar animasi gagal dibersihkan.', 'info');
+        }}
+        onSendToPromptList={(prompts) => {
+          handleSendPromptsToWorkflow(prompts);
+        }}
+        isProcessing={isGeneratingAnimations || isAutoPilotRunning}
       />
 
       {/* Toast Notifications */}

@@ -297,7 +297,7 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
       if (ok) successCount++;
 
       if (i < pendingItems.length - 1 && !abortBatchRef.current) {
-        await new Promise((r) => setTimeout(r, 600));
+        await new Promise((r) => setTimeout(r, 1500));
       }
     }
 
