@@ -489,12 +489,16 @@ export const GalleryModal: React.FC<GalleryModalProps> = ({
                 <i className="fa-solid fa-layer-group text-lg"></i>
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-gray-100 text-base">Galeri & Render Akun Otomatis</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-xs font-bold border border-sky-500/30">
-                    {animations.length} Item Tersimpan
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-xs font-black border border-emerald-500/40 flex items-center gap-1 shadow-sm">
+                    <i className="fa-solid fa-circle-check text-[10px]"></i>
+                    <span>Berhasil: {animations.length}</span>
                   </span>
                 </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Menampilkan seluruh koleksi animasi microstock 60 FPS yang berhasil dirender.
+                </p>
               </div>
             </div>
 
