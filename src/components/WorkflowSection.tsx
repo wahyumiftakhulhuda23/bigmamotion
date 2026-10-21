@@ -579,7 +579,7 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                 </label>
                 <textarea
                   rows={3}
-                  value={manualText}
+                  value={manualText ?? ''}
                   onChange={(e) => setManualText(e.target.value)}
                   className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono"
                   placeholder="Ketik prompt Anda di sini... (Satu prompt per baris)"
@@ -671,7 +671,7 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
                     </span>
                     <input
                       type="text"
-                      value={promptText}
+                      value={promptText ?? ''}
                       onChange={(e) => onUpdatePrompt(idx, e.target.value)}
                       className="w-full bg-transparent text-xs text-gray-200 focus:outline-none font-medium px-1"
                     />
