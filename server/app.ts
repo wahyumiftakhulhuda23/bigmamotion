@@ -396,7 +396,7 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto Gold Coin with beveled edge and glowing currency core..."]`
       : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} unique, highly creative, and semantically diverse animation prompts in English (Batch ${c + 1}).
+Generate exactly ${batchCount} UNIQUE animation prompts. STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_PULSE], [VAULT_SAFE], [TREND_GRAPH]).
 
 MANDATORY RULES FOR DIVERSITY:
 1. NO REPETITION: Each prompt MUST describe a COMPLETELY DIFFERENT visual subject. NEVER repeat starting phrases.
