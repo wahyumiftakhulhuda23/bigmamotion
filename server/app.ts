@@ -396,7 +396,12 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto Gold Coin with beveled edge and glowing currency core..."]`
       : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} professional, highly marketable, and semantically rich animation prompts in English (Batch ${c + 1}).
+Generate exactly ${batchCount} unique, highly creative, and semantically diverse animation prompts in English (Batch ${c + 1}).
+
+MANDATORY RULES FOR DIVERSITY:
+1. NO REPETITION: Each prompt MUST describe a COMPLETELY DIFFERENT visual subject. NEVER repeat starting phrases.
+2. UNIQUE SEMANTIC ID: Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_PULSE], [VAULT_SAFE], [TREND_GRAPH]).
+3. VARIETY: Vary the subject matter (e.g., instead of just chart, use: piggy bank, credit chip, digital vault, ticker tape, or flow).
 
 MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
 1. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
@@ -432,7 +437,7 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
         (currentModel) => {
           const batchMaxTokens = isSingle ? 250 : Math.min(2500, Math.max(400, batchCount * 100));
           const config: any = {
-            temperature: 0.8,
+            temperature: 0.95,
             maxOutputTokens: batchMaxTokens,
             responseMimeType: "application/json",
             responseSchema: {
