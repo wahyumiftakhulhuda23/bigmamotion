@@ -360,7 +360,27 @@ export async function generateSinglePromptDirect(
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
-  const promptContent = `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+  const isBackground = type === 'bg';
+
+  const promptContent = isBackground
+    ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Collection item #${index + 1} of ${total}).
+
+MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS:
+1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
+   - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Interconnected particle plexus constellation with drifting nodes and dynamic energy filaments across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
+   - FORBIDDEN: Isolated centered icons, symbols, floating emblems, logos, or empty border margins.
+2. 3-TIER ATMOSPHERIC DEPTH:
+   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light swells.
+3. 60 FPS SEAMLESS HARMONIC LOOP:
+   - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
+
+${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
+Visual Style: ${style}${colorModeDirective}${glowDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+
+Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`
+    : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}).
 
 MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
@@ -480,7 +500,8 @@ export async function generatePromptsDirect(
         colorMode,
         motionDynamics,
         neonGlow,
-        keywords
+        keywords,
+        i
       )[0];
       result.push(fallback);
     }
@@ -508,8 +529,8 @@ export async function generatePromptsViaGemini(
   const targetCount = Math.max(1, count || 1);
   const collectedPrompts: string[] = new Array(targetCount);
 
-  // Concurrency: 3 for safe, balanced 1-by-1 generation without hitting API rate limits
-  const concurrency = Math.min(3, Math.max(1, apiKeys && apiKeys.length > 1 ? 3 : 2));
+  // Concurrency: 1 for single key to prevent 429 quota exhaustion, max 2 for multiple keys
+  const concurrency = Math.min(2, Math.max(1, apiKeys && apiKeys.length > 1 ? 2 : 1));
   let currentIndex = 0;
 
   async function worker(): Promise<void> {
@@ -558,6 +579,7 @@ export async function generatePromptsViaGemini(
               colorMode,
               motionDynamics,
               neonGlow,
+              startIndex: idx,
             }),
           });
           if (res.ok) {
@@ -571,7 +593,7 @@ export async function generatePromptsViaGemini(
         }
       }
 
-      // 3. Guaranteed High-Quality Procedural Synthesizer (Zero-Failure)
+      // 3. Guaranteed High-Quality Procedural Synthesizer with distinct offset index
       if (!promptText || promptText.length < 10) {
         const fallbacks = generateProceduralPrompts(
           1,
@@ -581,7 +603,8 @@ export async function generatePromptsViaGemini(
           colorMode,
           motionDynamics,
           neonGlow,
-          keywords
+          keywords,
+          idx
         );
         promptText = fallbacks[0];
       }
@@ -598,7 +621,7 @@ export async function generatePromptsViaGemini(
       }
 
       // Pacing pause for network breathability and API quota safety
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
 
@@ -610,7 +633,7 @@ export async function generatePromptsViaGemini(
 
   await Promise.all(workers);
 
-  // Guarantee all slots are populated
+  // Guarantee all slots are populated with unique procedural prompts
   for (let i = 0; i < targetCount; i++) {
     if (!collectedPrompts[i] || collectedPrompts[i].length < 10) {
       const fallback = generateProceduralPrompts(
@@ -621,7 +644,8 @@ export async function generatePromptsViaGemini(
         colorMode,
         motionDynamics,
         neonGlow,
-        keywords
+        keywords,
+        i
       )[0];
       collectedPrompts[i] = fallback;
       if (onProgress) {
@@ -742,24 +766,38 @@ MANDATORY GREEN SCREEN / CHROMA KEY RULES:
 - HINDARI KERAS memakai warna hijau #00ff00, hijau lime, atau hijau tua pada objek utama agar objek tidak transparan/hilang saat di-chroma-key.`
     : '';
 
-  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT/LEPAS.
+  const isBackground = type === 'bg';
 
-PARAMETER TERPILIH:
-- Subjek/Prompt: "${promptTopic}"
-- Tipe Animasi: ${String(type).toUpperCase()}
-- Kategori Microstock: ${catInfo}
-- Gaya Visual: ${style}
-- Mode Warna: ${colorMode.toUpperCase()}
-- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
-- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
-${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
+  const typeSpecificRules = isBackground
+    ? `
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE CANVAS):
+1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
+   - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
+   - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
+   - DILARANG menyisakan ruang kosong, tepi mati, atau batas kanvas kosong yang tidak terisi gerakan motion graphics.
+   - Gerakan visual mengalir secara dinamis melintasi seluruh lebar dan tinggi layar (widescreen viewport).
 
-${typeInstructions}
-${motionGuide}
-${styleAndColorGuide}
-${greenScreenDirective}
+2. ARSITEKTUR 3 LAPIS KEDALAMAN MOTION BACKGROUND (3-TIER PARALLAX DEPTH):
+   a. Lapisan Dasar / Deep Atmosphere (Background Depth):
+      - Gradien atmosfer dinamis atau mesh halus yang bergeser perlahan memberikan nuansa ruang dan kedalaman (misal: shifting linear/radial gradient, ambient dark glow).
+   b. Lapisan Gerakan Utama (Dynamic Flow Graphics):
+      - Elemen utama sesuai prompt yang mengalir secara kontinu:
+        * Jika Wave / Fluid / Ribbon: 3-5 lapisan gelombang sinusoidal bezier (ctx.bezierCurveTo / ctx.quadraticCurveTo) yang bertumpuk dengan opasitas berbeda, mengalir lembut secara horizontal atau diagonal melintasi kanvas penuh.
+        * Jika Cyber Grid / Topografi: Garis perspektif 3D yang membentang ke cakrawala dengan vanishing point atau jaring kawat topografi bergerak yang membentang dari kiri ke kanan.
+        * Jika Plexus / Constellation: 35-60 titik/node bercahaya yang melayang di seluruh viewport kanvas dengan garis koneksi otomatis dinamis antara node yang berdekatan (distance < threshold, ctx.globalAlpha = 1 - d/threshold).
+        * Jika Silk / Luxury Auroral: Pita cahaya satin lembut bertingkat dengan gradien multi-stop berkilau yang meliuk elegan di seluruh layar.
+        * Jika Speed / Energy Tunnel: Garis-garis energi berkecepatan tinggi yang memancar dari titik fokus ke seluruh tepi layar.
+   c. Lapisan Ambient Glow & Specular Light:
+      - Pendaran cahaya lembut (ambient light swells) dan partikel cahaya halus yang mengambang perlahan memperkaya atmosfer sinematik.
 
+3. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
+   - Waktu t dihitung dari timestamp (t = time * 0.001).
+   - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) sehingga animasi berputar (loop) secara mulus tanpa sentakan tajam (seamless infinite loop).
+   - Pergerakan terasa elegan, modern, profesional, dan bernilai jual tinggi layaknya motion background kelas studio Adobe Stock / Shutterstock.
+
+4. TIDAK BOLEH ADA TEKS / HURUF / ANGKA:
+   - Murni motion graphics visual canvas 2D yang bersih dan profesional.`
+    : `
 ATURAN WAJIB AKURASI BENTUK TINGGI, IDEAL, SOLID & SATU KESATUAN (PROFESSIONAL MICROSTOCK & LOTTIE STANDARD):
 1. ANATOMI REALISTIS, BERMAKNA, & PRESISI TINGGI (ZERO RANDOM / ZERO CACAT):
    - Wajib gambar bentuk yang secara instan dikenali sebagai subjek dalam prompt: "${promptTopic}".
@@ -787,29 +825,38 @@ ATURAN WAJIB AKURASI BENTUK TINGGI, IDEAL, SOLID & SATU KESATUAN (PROFESSIONAL M
 3. PENCAHAYAAN VEKTOR STUDIO (2-TONE SHADING & HIGH CONTRAST VOLUME):
    - Gunakan gradien linier dinamis (ctx.createLinearGradient) dari sudut kiri-atas (highlight terang) ke kanan-bawah (shadow dalam) untuk memberikan volume 3D realistis berbobot.
    - Garis kontur tebal, bersih, dan tegas (ctx.lineWidth = 3 hingga 5, ctx.lineCap = 'round', ctx.lineJoin = 'round').
-   - Jika Green Screen (#00FF00), gunakan palet kontras tinggi yang menyala tajam (Emas Murni, Putih Salju, Cyan Terang, Magenta, Oranye Api, Merah) dan 100% BEBAS DARI WARNA HIJAU agar hasil chroma key video editor sempurna tanpa lubang.
 
 4. GERAKAN KINETIK PROFESIONAL 60 FPS (ELEGANT & NON-DEFORMING):
    - DILARANG squash & stretch ekstrem yang merusak bentuk objek menjadi lembek atau cacat.
-   - Gerakan objek utama harus elegan dan menjaga integritas bentuk fisik:
-     * Gentle Float: const floatY = Math.sin(t * 2.0) * 10;
-     * Gentle Root Sway: const rootRot = Math.sin(t * 1.5) * 0.04;
-     * Gentle Breath: const rootScale = 1 + Math.sin(t * 2.5) * 0.02;
-   - Implementasikan gerakan kinetik internal yang secara langsung mencerminkan kata kerja dalam prompt:
-     * Jika "rotating / berputar": putar elemen fungsionalnya pada poros tengahnya: ctx.rotate(t * speed);
-     * Jika "pulse / gelombang / sinyal": pancarkan 2-3 cincin gelombang dari lubang emitor/sensor, membesar dan memudar halus (ctx.globalAlpha = 1 - progress);
-     * Jika "articulated / mekanis / mengayun": ayunkan bagian sendi dengan osilasi sudut halus: const jointAngle = Math.sin(t * 2.5) * 0.25;
+   - Gerakan objek utama harus elegan dan menjaga integritas bentuk fisik.
 
 5. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - DILARANG memunculkan partikel mengambang, debu liar, bintik acak, atau serpihan di luar objek utama!
-   - Background canvas harus 100% bersih, solid, dan kontras.
-   - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
-   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
+   - Background canvas di sekeliling icon harus 100% bersih, solid, dan kontras.
+   - Skala S = Math.min(w, h) * 0.44; Objek terpusat di (cx, cy).
 
-6. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW - SANGAT PENTING):
-   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip, atau light flare) pada objek WAJIB menggunakan ctx.save(); ctx.beginPath(); [gambar bentuk geometri objek utama]; ctx.clip(); sebelum menggambar kilau!
-   - DILARANG KERAS menggambar kilau cahaya atau kotak/stripe kilau yang keluar melampaui batas (overflow) bentuk objek utama atau merembes ke latar belakang hijau (#00ff00).
-   - Seluruh efek pantulan cahaya harus 100% berada di dalam batasan siluet objek.
+6. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW):
+   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip, atau light flare) pada objek WAJIB menggunakan ctx.save(); ctx.beginPath(); [gambar bentuk geometri objek utama]; ctx.clip(); sebelum menggambar kilau!`;
+
+  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
+
+PARAMETER TERPILIH:
+- Subjek/Prompt: "${promptTopic}"
+- Tipe Animasi: ${String(type).toUpperCase()} ${isBackground ? '(FULL-FRAME MOTION BACKGROUND)' : '(CENTRAL RIGGED ICON)'}
+- Kategori Microstock: ${catInfo}
+- Gaya Visual: ${style}
+- Mode Warna: ${colorMode.toUpperCase()}
+- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
+- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
+${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
+
+${typeInstructions}
+${motionGuide}
+${styleAndColorGuide}
+${greenScreenDirective}
+
+${typeSpecificRules}
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -840,7 +887,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
-    S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
+    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
   }
   window.addEventListener('resize', resize);
   resize();
@@ -949,7 +996,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
   throw lastDirectError || new Error('Gagal menghasilkan animasi Canvas');
 }
 
-// Generate Single Animation Code with Multi-Level Fallback
+// Generate Single Animation Code with Multi-Level Fallback & Resilient Rate-Limit Handling
 export async function generateSingleAnimationCode(
   apiKeys: string[],
   model: GeminiModel,
@@ -967,11 +1014,13 @@ export async function generateSingleAnimationCode(
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   let lastError: any = null;
-  // Delay berjenjang sesuai instruksi pengguna: 3s (percobaan 1 gagal), 5s (percobaan 2 gagal), 10s (percobaan 3 gagal)
-  const retryDelays = [3000, 5000, 10000];
+  // Delay berjenjang adaptif untuk pemulihan kuota Gemini (15 RPM leaky-bucket):
+  // Percobaan 1 gagal: 6s, Percobaan 2 gagal: 10s, Percobaan 3 gagal: 15s
+  const retryDelays = [6000, 10000, 15000];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      // Rotasi API key setiap percobaan untuk bypass rate limit per-key
       const apiKey = getRotatedKey(apiKeys);
 
       // If user provided an API key, try direct client call first for 0-latency
@@ -1037,7 +1086,7 @@ export async function generateSingleAnimationCode(
       };
     } catch (err: any) {
       lastError = err;
-      const delayMs = retryDelays[attempt - 1] || 3000;
+      const delayMs = retryDelays[attempt - 1] || 6000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (menunggu jeda ${delayMs / 1000}s)`);
@@ -1049,8 +1098,8 @@ export async function generateSingleAnimationCode(
     }
   }
 
-  // Jika gagal 3x bertahap (3s, 5s, 10s), lewati prompt ini dan lemparkan pesan jelas agar dicatat ke daftar coba ulang (tanpa membuatkan dummy)
-  throw new Error(`Gagal setelah 3x percobaan bertahap (3s, 5s, 10s): ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
+  // Jika gagal 3x bertahap (6s, 10s, 15s), lewati prompt ini dan simpan ke daftar coba ulang
+  throw new Error(`Gagal setelah 3x percobaan bertahap (6s, 10s, 15s): ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.

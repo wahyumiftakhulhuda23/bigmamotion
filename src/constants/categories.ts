@@ -220,8 +220,8 @@ export function findCategoryById(catId: string, type?: AnimationType): Microstoc
 
 /**
  * Universal High-Class Procedural Prompt Synthesizer
- * Guarantees zero failures and infinite unique microstock animation prompts
- * adhering to the 4-Pillar Rigid Rigging and 60 FPS Kinetic standard.
+ * Generates truly unique, non-repetitive, studio-grade microstock prompts
+ * with varied sentence structures, distinct subjects, and zero boilerplate duplication.
  */
 export function generateProceduralPrompts(
   count: number,
@@ -231,73 +231,252 @@ export function generateProceduralPrompts(
   colorMode: string = 'gradient',
   motionDynamics: string = 'flow',
   neonGlow: boolean = true,
-  keywords: string[] = []
+  keywords: string[] = [],
+  startIndex: number = 0
 ): string[] {
   const cat = findCategoryById(subCategory, type);
-  const basePool = cat && cat.stockKeywords.length > 0
-    ? [...cat.stockKeywords]
-    : [
-        'futuristic aerodynamic emblem',
-        'precision vector mechanism',
-        'isometric tech node',
-        'dynamic corporate concept',
-        'high-tech orbital emblem',
-      ];
+  
+  // Rich, extensive subject pool per domain to guarantee uniqueness
+  const domainSubjectPools: Record<string, string[]> = {
+    // Icons: Finance
+    business_finance: [
+      'cryptocurrency gold bullion coin with beveled rim',
+      'biometric vault safe with rotating gear-lock mechanism',
+      'digital fintech smartcard with glowing EMV chip',
+      'ascending volumetric candlestick trading chart',
+      'leather luxury executive wallet with emerging currency notes',
+      'precision stock market bar graph with glowing apex nodes',
+      'isometric bank treasury fortress with column portico',
+      'decentralized blockchain ledger cube with tethered token rings',
+      'mechanical investment balance scale weighing crypto assets',
+      'cashless payment POS terminal with dynamic NFC wave pulse',
+      'golden piggy bank vault with automated coin intake',
+      'financial growth percentage rocket booster emblem',
+    ],
+    // Icons: Technology & AI
+    technology_ai: [
+      'neural synthetic brain with pulsing synaptic node pathways',
+      'octahedral quantum microprocessor with gold contact pins',
+      'robotic bionic gripper arm with multi-joint hydraulic knuckles',
+      'decentralized cloud mainframe server rack with blinking LED arrays',
+      'artificial intelligence core sphere with orbiting data satlets',
+      'holographic cyber scanner eye with iris aperture shutter',
+      'optical fiber cyber transmitter with laser beam refraction',
+      'isometric humanoid AI android bust with translucent circuitry',
+      'quantum algorithm cube unfolding into interlocking logic plates',
+      'deep learning neural network node tree with glowing synapses',
+    ],
+    // Icons: Medical & Health
+    medical_health: [
+      'clinical acoustic stethoscope with chrome chestpiece bell',
+      'pulsing anatomical cardiogram heart with glowing ECG wave',
+      'double-helix DNA genetic ladder with rotating nucleotide rungs',
+      'pharmaceutical dual-tone medicine capsule with effervescent core',
+      'hospital paramedic cross emblem with beveled 3D relief',
+      'digital ultrasound diagnostic monitor with sweeping scan wave',
+      'orthopedic articulated prosthetic knee joint with carbon fiber shank',
+      'automated surgical laser scalpel with focused optical lens',
+      'biotech syringe injector with millimeter volume gradient gauge',
+      'wellness cadence pulse oximeter with glowing LED readout',
+    ],
+    // Icons: E-Commerce
+    ecommerce_shopping: [
+      'stainless wireframe shopping trolley with locked rolling wheels',
+      'kraft paper boutique shopping bag with cotton twisted handles',
+      'sealed corrugated parcel package with barcode routing label',
+      'ribbon-wrapped holiday gift box with spring-loaded lid reveal',
+      'omnichannel cashier barcode laser gun emitting scanning beam',
+      'storefront awning boutique with swinging illuminated entrance sign',
+      'curved digital price tag badge with embossed discount percentage',
+      'unboxing parcel crate with foam cushioning and product pedestal',
+      'express delivery cargo drone with 4 spinning rotor guards',
+      'mobile retail checkout smartphone with animated card swipe',
+    ],
+    // Icons: Communication
+    social_communication: [
+      'paired speech chat dialogue bubbles with rounded tail anchors',
+      'broadcast acoustic megaphone bullhorn with concentric soundwave arcs',
+      'brass notification alert bell with oscillating pendulum clapper',
+      'telecom microwave radio antenna mast with radiating signal rings',
+      'interconnected global profile avatar network with glowing orbital rings',
+      'live stream broadcast camera with illuminated recording tally light',
+      'instant messaging paper airplane flyer leaving trailing vector stream',
+      'podcast condenser studio microphone with wire mesh windscreen',
+      'satellite parabolic dish transmitter tracking across azimuth angle',
+      'digital reaction heart badge popping with elastic celebratory pulse',
+    ],
+    // Icons: Education
+    education_learning: [
+      'academic graduation mortarboard cap with swinging golden tassel',
+      'open hardcover encyclopedia with gently turning illuminated pages',
+      'Bohr planetary atom model with 3 tilted electron orbits',
+      'binocular optical laboratory microscope with dual objective turrets',
+      'filament idea lightbulb with radiating vector intellectual sparks',
+      'parchment academic diploma scroll tied with scarlet satin ribbon',
+      'brass astrolabe armillary sphere with engraved celestial rings',
+      'drafting compass caliper measuring precise circular radii',
+      'chemistry Erlenmeyer conical flask with effervescent boiling bubbles',
+      'interactive classroom globe sphere spinning smoothly on inclined axis',
+    ],
+    // Backgrounds: Abstract Geometric
+    abstract_geometric: [
+      'endless isometric cube landscape with cascading elevation ripples',
+      'concentric geometric Bauhaus rings rotating with counter-directional phases',
+      'undulating 3D polygonal wireframe terrain extending across the entire frame',
+      'interlocking translucent glass prism facets refracting spectral highlights',
+      'floating architectural geometric monoliths with rhythmic breathing displacement',
+      'tessellated Voronoi cell mosaic pulsing with gradient luminescence',
+      'dynamic parametric wave grid stretching edge-to-edge across perspective depth',
+      'volumetric geometric chevron cascade moving in synchronized harmonic rhythm',
+    ],
+    // Backgrounds: Cyber HUD
+    cyber_scifi_hud: [
+      'full-frame cyberpunk perspective floor grid receding toward an infinite neon horizon',
+      'sci-fi telemetry military tactical radar with sweeping laser scanner dials',
+      'dense cybernetic digital matrix streams cascading down the full screen height',
+      'tactical circular targeting reticles and angular telemetry brackets across the frame',
+      'holographic mainframe server schematic with glowing coordinate axes',
+      'futuristic digital cockpit HUD overlay with dynamic compass calibration',
+      'cyberpunk neon wireframe cityscape silhouette with sweeping searchlights',
+      'hexagonal security honeycomb grid pulsing with firewall telemetry data',
+    ],
+    // Backgrounds: Liquid Waves
+    liquid_fluid_waves: [
+      'multi-layered chromatic liquid wave ribbons flowing continuously from left to right',
+      'smooth sinusoidal fluid silk displacement mesh spanning the entire viewport',
+      'viscous organic gradient oil slick waves undulating with slow rhythmic elegance',
+      'translucent liquid pastel swells with soft light refractions and gentle ripples',
+      'deep aquatic fluid currents with luminous undulating hydrothermal contours',
+      'iridescent fluid ribbon canopy weaving diagonally through volumetric space',
+      'harmonious liquid chrome waves reflecting smooth dual-tone studio lighting',
+      'flowing watercolor wash gradients with soft edge bleeding and organic pulse',
+    ],
+    // Backgrounds: Corporate Fintech
+    corporate_fintech: [
+      'minimalist architectural dot-matrix backdrop with sweeping wave elevations',
+      'subtle interconnected diagonal vector lines linking precision financial nodes',
+      'slate blue corporate boardroom presentation backdrop with gentle gradient flow',
+      'isometric fintech digital ledger lattice with pulsing micro-transactions',
+      'clean banking technology grid with ascending momentum line streams',
+      'sophisticated dark-mode fintech interface backdrop with soft ambient glows',
+      'modern enterprise corporate mesh with balanced geometric breathing rhythm',
+      'low-contrast executive keynote backdrop with elegant undulating light planes',
+    ],
+    // Backgrounds: Particle Constellation
+    particle_constellation: [
+      'deep 3D starry plexus network with glowing interconnected constellation lines',
+      'drifting cosmic stardust field with depth-of-field z-axis particle scaling',
+      'molecular particle mesh with elastic Euclidean linkage threads',
+      'ambient particulate nebula cloud with soft luminous focal points',
+      'swirling vortex of kinetic golden dust motes illuminated by rim lighting',
+      'dense cybernetic particle blizzard flowing diagonally across the frame',
+      'astronomical galaxy arm constellation with rotating stellar clusters',
+      'quantum particle cloud oscillating with Brownian motion dynamics',
+    ],
+    // Backgrounds: Luxury Gold Silk
+    luxury_gold_silk: [
+      'undulating 3D imperial gold satin cloth cascading down the full frame',
+      'flowing liquid metallic gold ribbons with gleaming specular light reflections',
+      'regal champagne gold silk drapery billowing with gentle harmonic breeze',
+      'rich obsidian black backdrop draped with sweeping 24-karat gold filigree waves',
+      'volumetric molten bronze waves undulating with deep contrast and rich specular gleam',
+      'luxurious metallic thread mesh shimmering under slow sweeping studio spotlights',
+      'opulent velvet and gold brocade waves drifting across cinematic widescreen dimensions',
+      'smooth molten bullion ribbons weaving through ambient dark atmosphere',
+    ],
+  };
 
-  // If user provided custom keywords, inject them as top priority subjects
+  const pool = domainSubjectPools[subCategory] ||
+    (cat && cat.stockKeywords.length > 0 ? cat.stockKeywords : ['futuristic visual emblem', 'precision corporate concept']);
+
+  // Custom user keywords take priority
   const cleanKeywords = (keywords || [])
     .map((k) => String(k).trim())
     .filter((k) => k.length > 0);
-  
-  const subjects = cleanKeywords.length > 0 ? [...cleanKeywords, ...basePool] : basePool;
 
-  const motionModifiers = [
-    'gentle 60 FPS harmonic floating oscillation (amplitude ±12px) with locked internal rotation',
-    'smooth continuous 360-degree orbital rotation with rigid joint linkages',
-    'synchronized mechanical breathing pulse (0.98x-1.02x) with gleaming specular highlight sheen',
-    'rhythmic kinetic wave pulsation and sweeping 45-degree specular surface sheen',
-    'fluid aerodynamic levitation with locked sub-part articulation and luminous rim sheen',
-    'isometric precision kinetics with counter-rotating gears locked on central axis',
-    'high-speed kinetic loop with smooth sinusoidal dampening and crisp perimeter contour',
-    'dynamic kinetic expansion and contractive recoil with zero joint detachment',
+  const subjects = cleanKeywords.length > 0
+    ? cleanKeywords.flatMap((kw) => [kw, `${kw} visual emblem`, `precision ${kw} model`])
+    : pool;
+
+  // Diverse sentence structures to eliminate boilerplate
+  const iconSentenceTemplates = [
+    // Template 1: Subject-centric with mechanical rigging
+    (subj: string, mot: string, col: string) =>
+      `A meticulously crafted ${subj}, anchored to a single rigid chassis origin with zero loose parts, rendered in ${col}, animated with ${mot}. Clean isolated silhouette, studio microstock grade.`,
+    
+    // Template 2: Technical Vector Blueprint
+    (subj: string, mot: string, col: string) =>
+      `Studio vector depiction of ${subj}: featuring seamless parent-child joint matrix, crisp 3px contour, and ${col}. The central form executes ${mot} with zero canvas clutter.`,
+    
+    // Template 3: Kinetic Motion Focus
+    (subj: string, mot: string, col: string) =>
+      `Kinetic microstock emblem of ${subj}: dynamic 60 FPS loop showcasing ${mot}, built with interlocking solid components in ${col}. Entirely unified anatomy with specular surface highlight sheen.`,
+    
+    // Template 4: Premium Isometric / Flat Vector
+    (subj: string, mot: string, col: string) =>
+      `High-end ${subj} vector symbol: pristine centered composition, rigid internal articulation, and ${col}. The subject performs ${mot} against a spotless backdrop.`,
+    
+    // Template 5: Executive Commercial Stock
+    (subj: string, mot: string, col: string) =>
+      `Precision commercial icon of ${subj}: constructed with balanced bevel volume, anchored pivot axes, and ${col}. Seamless 60 FPS motion featuring ${mot}.`,
   ];
 
-  const structuralRiggingRules = [
-    'all sub-components rigidly locked into central chassis matrix without detached parts',
-    'flush mounted bezels and reinforced joint hinges keeping elements unified',
-    'interlocking geometric plates welded seamlessly to the parent body origin',
-    'concentric rings centered on the root origin with smooth independent rotation',
-    'rigidly anchored articulating arms with fixed pivot points attached to main core',
+  const bgSentenceTemplates = [
+    // Template 1: Cinematic Full Frame
+    (subj: string, mot: string, col: string) =>
+      `Cinematic edge-to-edge full frame motion background featuring ${subj}, filling 100% of the canvas with atmospheric depth, rendered in ${col}, performing ${mot}. Broadcast 60 FPS loop.`,
+
+    // Template 2: Volumetric Depth
+    (subj: string, mot: string, col: string) =>
+      `Volumetric looping backdrop displaying ${subj}: continuous widescreen motion graphics utilizing ${col}, dynamically animated with ${mot}. Perfectly seamless 60 FPS animation without static dead zones.`,
+
+    // Template 3: Ambient Studio Backdrop
+    (subj: string, mot: string, col: string) =>
+      `Sophisticated ambient video background of ${subj}: expansive viewport-filling visual geometry in ${col}, animated through ${mot}. Professional microstock standard with smooth continuous flow.`,
+
+    // Template 4: Kinetic Horizon / Mesh
+    (subj: string, mot: string, col: string) =>
+      `High-production motion wallpaper showcasing ${subj}: edge-to-edge procedural displacement with multi-layered depth, glowing in ${col}, moving in ${mot}. Zero clutter, 60 FPS microstock asset.`,
   ];
 
-  const visualTreatments = [
-    `${colorMode} tones with microstock multi-stop studio gradients and crisp 3px contour`,
-    `sleek ${style} vector aesthetic with ${neonGlow ? 'luminous soft aura edge blur' : 'sharp razor-clean vector silhouette'}`,
-    `modern ${colorMode} palette with dual-tone specular reflections and polished metallic volume`,
-    `refined ${style} corporate finish with balanced isometric lighting and zero visual clutter`,
+  const motionDescriptions = [
+    'gentle harmonic floating oscillation (amplitude ±12px) paired with synchronized internal wheel and dial rotation',
+    'smooth continuous 360-degree axial rotation with sweeping 45-degree diagonal specular gleams',
+    'rhythmic mechanical breathing pulse (0.97x to 1.03x) and concentric luminescent signal radiation',
+    'continuous organic wave flow with multi-frequency sinusoidal displacement',
+    'calibrated cybernetic stepped telemetry tracking and responsive targeting reticle sweeps',
+    'elastic kinetic spring oscillations with precision damping and zero deformation',
+    'counter-rotating interlocking gear articulation anchored permanently to the main body origin',
+    'undulating volumetric depth ripples cascading seamlessly across the viewport',
+  ];
+
+  const colorTreatments = [
+    `vibrant ${colorMode} studio tones with high-contrast dual-tone edge definition`,
+    `sleek ${style} palette with ${neonGlow ? 'radiant luminescent edge sheen' : 'razor-sharp solid contour lines'}`,
+    `polished metallic ${colorMode} hues with moving specular reflection strips`,
+    `contemporary ${style} color harmonies with smooth multi-stop gradient transitions`,
+    `refined ${colorMode} styling optimized for crisp visual punch and broadcast clarity`,
   ];
 
   const results: string[] = [];
   const totalWanted = Math.max(1, count);
 
   for (let i = 0; i < totalWanted; i++) {
-    const subject = subjects[i % subjects.length];
-    const motion = motionModifiers[i % motionModifiers.length];
-    const structure = structuralRiggingRules[i % structuralRiggingRules.length];
-    const visual = visualTreatments[i % visualTreatments.length];
-    const variationTag = i >= subjects.length ? ` (Variation ${Math.floor(i / subjects.length) + 1})` : '';
+    const globalIdx = startIndex + i;
+    const subj = subjects[globalIdx % subjects.length];
+    const mot = motionDescriptions[globalIdx % motionDescriptions.length];
+    const col = colorTreatments[globalIdx % colorTreatments.length];
 
     if (type === 'icon') {
-      results.push(
-        `Professional microstock ${subject}${variationTag}: isolated central vector symbol, ${structure}, rendered in ${visual}, featuring ${motion}. Studio quality, 60 FPS loop, zero detached objects.`
-      );
+      const template = iconSentenceTemplates[globalIdx % iconSentenceTemplates.length];
+      results.push(template(subj, mot, col));
     } else {
-      results.push(
-        `Seamless looping motion background of ${subject}${variationTag}: dynamic undulating geometry with atmospheric depth, ${visual}, animated with ${motion}. Broadcast microstock grade, perfectly seamless 60 FPS loop.`
-      );
+      const template = bgSentenceTemplates[globalIdx % bgSentenceTemplates.length];
+      results.push(template(subj, mot, col));
     }
   }
 
   return results;
 }
+
 

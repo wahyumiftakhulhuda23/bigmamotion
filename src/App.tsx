@@ -543,7 +543,13 @@ export default function App() {
     setIsGeneratingAnimations(true);
     setFailedPrompts([]);
     const total = generatedPrompts.length;
+    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
     addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM) ==========`, 'info');
+    if (apiKeys.length <= 1) {
+      addLog(`[Proteksi Kuota API] Terdeteksi 1 API Key aktif. Menerapkan jeda pendinginan aman ${pacingDelay / 1000}s (~12 RPM, aman dari limit 15 RPM). Tip: Tambahkan 2-3 API Key di modal 'API Keys' untuk rotasi otomatis & kecepatan lebih tinggi.`, 'cyan');
+    } else {
+      addLog(`[Proteksi Kuota API] Terdeteksi ${apiKeys.length} API Key aktif dengan rotasi otomatis. Menerapkan jeda aman ${pacingDelay / 1000}s.`, 'cyan');
+    }
 
     let currentAnimList = [...animations];
     let caughtFailures: string[] = [];
@@ -590,9 +596,9 @@ export default function App() {
           addLog(`Berhasil merender animasi #${i + 1}.`, 'success');
         }
 
-        // Delay 3 detik antar animasi sukses untuk mencegah limit API / error 500
+        // Delay adaptif antar animasi sukses untuk mencegah limit API / error 500
         if (i < total - 1) {
-          await new Promise((res) => setTimeout(res, 3000));
+          await new Promise((res) => setTimeout(res, pacingDelay));
         }
       } catch (e: any) {
         if (e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted) {
@@ -603,7 +609,7 @@ export default function App() {
         showToast(`Kendala pada prompt #${i + 1}: ${e.message}`, 'error');
         caughtFailures.push(currentPrompt);
         setFailedPrompts((prev) => [...prev, currentPrompt]);
-        await new Promise((res) => setTimeout(res, 2000));
+        await new Promise((res) => setTimeout(res, 2500));
         continue;
       }
     }
@@ -630,6 +636,7 @@ export default function App() {
     setIsGeneratingAnimations(true);
     const promptsToRetry = [...failedPrompts];
     const total = promptsToRetry.length;
+    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
     addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL ==========`, 'warn');
     showToast(`Mencoba ulang ${total} animasi yang sebelumnya mengalami kendala...`, 'info');
 
@@ -673,14 +680,14 @@ export default function App() {
           showToast(`Berhasil memperbaiki animasi untuk prompt #${i + 1}!`, 'success');
         }
 
-        // Delay 3 detik antar percobaan sukses
+        // Delay adaptif antar percobaan sukses
         if (i < total - 1) {
-          await new Promise((res) => setTimeout(res, 3000));
+          await new Promise((res) => setTimeout(res, pacingDelay));
         }
       } catch (e: any) {
         addLog(`[Masih Kendala] Prompt #${i + 1}: ${e.message}`, 'error');
         remainingFailed.push(currentPrompt);
-        await new Promise((res) => setTimeout(res, 2000));
+        await new Promise((res) => setTimeout(res, 2500));
       }
     }
 
@@ -910,12 +917,13 @@ export default function App() {
     setIsGeneratingAnimations(true);
 
     const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
+    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
     let completedOverall = 0;
     let currentAnimList = [...animations];
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
     addLog(
-      `🚀 [BATCH NOTEPAD] Memulai generate animasi dari ${batches.length} file Notepad (${totalPromptsOverall} total prompt)...`,
+      `🚀 [BATCH NOTEPAD] Memulai generate animasi dari ${batches.length} file Notepad (${totalPromptsOverall} total prompt)... (Jeda anti-limit: ${pacingDelay / 1000}s)`,
       'cyan'
     );
     showToast(`🚀 Memulai generate animasi dari ${batches.length} file Notepad...`, 'info');
@@ -967,7 +975,7 @@ export default function App() {
         }
 
         if (completedOverall < totalPromptsOverall) {
-          await new Promise((res) => setTimeout(res, 3000));
+          await new Promise((res) => setTimeout(res, pacingDelay));
         }
       }
     }
@@ -1088,9 +1096,10 @@ export default function App() {
             addLog(`✅ [${acc.name}] Animasi #${j + 1}/${prompts.length} berhasil dibuat & disimpan ke Galeri!`, 'success');
           }
 
-          // Delay 3 detik antar animasi sukses untuk kestabilan token API dan anti limit
+          // Delay adaptif antar animasi sukses untuk kestabilan token API dan anti limit
+          const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
           if (j < prompts.length - 1) {
-            await new Promise((res) => setTimeout(res, 3000));
+            await new Promise((res) => setTimeout(res, pacingDelay));
           }
         } catch (e: any) {
           addLog(`⚠️ [${acc.name}] Lewati animasi #${j + 1}: ${e.message}. Menyimpan untuk fitur coba ulang kesalahan...`, 'warn');
@@ -1107,8 +1116,9 @@ export default function App() {
             neonGlow: acc.neonGlow ?? true,
             error: e.message || 'Gagal merender animasi',
           });
+          const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
           if (j < prompts.length - 1) {
-            await new Promise((res) => setTimeout(res, 3000));
+            await new Promise((res) => setTimeout(res, pacingDelay));
           }
           continue;
         }

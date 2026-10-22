@@ -377,13 +377,52 @@ export async function handleGeneratePromptsLogic(body: any) {
     const batchCount = Math.min(CHUNK_SIZE, needed);
 
     const isSingle = batchCount === 1;
-    const promptContent = isSingle
-      ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+    let promptContent = '';
+    if (type === 'bg') {
+      promptContent = isSingle
+        ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English.
+
+MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS:
+1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
+   - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Interconnected particle plexus constellation with drifting nodes and dynamic energy filaments across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
+   - FORBIDDEN: Isolated centered icons, symbols, floating emblems, logos, or empty border margins.
+2. 3-TIER ATMOSPHERIC DEPTH:
+   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light swells.
+3. 60 FPS SEAMLESS HARMONIC LOOP:
+   - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
+
+${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
+Visual Style: ${style}${colorModeDirective}${glowDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+
+Output format: JSON array containing exactly 1 string, e.g. ["Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport..."]`
+        : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+Generate exactly ${batchCount} UNIQUE FULL-FRAME MOTION BACKGROUND prompts. STRICT RULE: NO REPETITION. Each prompt must describe a completely different atmospheric environment, motion dynamic, and visual theme. Start EVERY prompt with a unique [ID_CODE] (e.g., [NEURAL_PLEXUS], [CYBER_HORIZON], [AURORA_WAVE], [SILK_CAUSTICS]).
+
+MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY:
+1. NO REPETITION & NO CENTERING: Each prompt MUST describe a FULL-FRAME EDGE-TO-EDGE motion graphics scene filling the entire widescreen canvas. NEVER describe isolated icons, centered logos, or static borders.
+2. DIVERSE VISUAL CONCEPTS:
+   - Prompt 1: Fluid wave ribbons and multi-stop chromatic liquid flows.
+   - Prompt 2: 3D perspective cyber grid, digital wireframe topography, or matrix elevation lines.
+   - Prompt 3: Interconnected particle constellation plexus network with luminous filaments spanning the screen.
+   - Prompt 4: Luxury satin fabric folds, liquid metallic gold waves, or ambient caustics.
+   - (Vary concepts continuously across all items).
+3. 60 FPS SEAMLESS KINETICS: Include harmonic wave oscillations, continuous panning, and atmospheric depth.
+
+${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
+Visual Style: ${style}${colorModeDirective}${glowDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+
+Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]`;
+    } else {
+      promptContent = isSingle
+        ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English.
 
 MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
 1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
+   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
    - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
 2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
    - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis.
@@ -395,13 +434,8 @@ Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
 Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto Gold Coin with beveled edge and glowing currency core..."]`
-      : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
+        : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${batchCount} UNIQUE animation prompts. STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_PULSE], [VAULT_SAFE], [TREND_GRAPH]).
-
-MANDATORY RULES FOR DIVERSITY:
-1. NO REPETITION: Each prompt MUST describe a COMPLETELY DIFFERENT visual subject. NEVER repeat starting phrases.
-2. UNIQUE SEMANTIC ID: Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_PULSE], [VAULT_SAFE], [TREND_GRAPH]).
-3. VARIETY: Vary the subject matter (e.g., instead of just chart, use: piggy bank, credit chip, digital vault, ticker tape, or flow).
 
 MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
 1. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
@@ -410,17 +444,13 @@ MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
      - Prompt 1: Focus on industrial technical aesthetics (chassis, bolts, mechanical joints).
      - Prompt 2: Focus on minimalist, fluid, data-driven flow and abstract gradients.
      - Prompt 3: Focus on complex, isometric geometric structures and depth.
-     - (And continue with highly distinct technical/artistic angles for subsequent prompts).
    - NEVER use the same adjective, phrasing, or sentence structure twice in the same batch.
    - Each prompt must describe a distinct concrete, clearly identifiable, meaningful visual object or scene from the category: ${catMeta?.enName || subCategory}.
-
 2. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
    - Each prompt must describe a unique, highly marketable object (e.g., "Bionic robotic hand with articulated fingers and neural circuit pathways", "Fluid abstract gradient sphere morphing into sharp geometric shards", "Data-driven digital dashboard with floating volumetric bar charts").
    - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
-
 3. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
    - Explicitly specify how components are attached: e.g., "locked inside wheel arches", "welded firmly to bag rim", "flush mounted to chassis".
-
 4. 60 FPS COORDINATED KINETIC DYNAMICS:
    - Vary the kinetic motion description for each prompt (e.g., use "harmonic floating oscillation", "rhythmic breathing pulse", "stepped quantum rotation", "articulated mechanical swing").
 
@@ -429,6 +459,7 @@ Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
 Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]`;
+    }
 
     try {
       const { response } = await generateContentWithFallback(
@@ -488,7 +519,8 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
           colorMode,
           motionDynamics,
           neonGlow,
-          parsedKeywords
+          parsedKeywords,
+          allPrompts.length
         );
         allPrompts = [...allPrompts, ...fallbackBatch];
       }
@@ -502,7 +534,8 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
         colorMode,
         motionDynamics,
         neonGlow,
-        parsedKeywords
+        parsedKeywords,
+        allPrompts.length
       );
       allPrompts = [...allPrompts, ...fallbackBatch];
     }
@@ -518,7 +551,8 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
       colorMode,
       motionDynamics,
       neonGlow,
-      parsedKeywords
+      parsedKeywords,
+      allPrompts.length
     );
     allPrompts = [...allPrompts, ...extra];
   }
@@ -642,38 +676,43 @@ MANDATORY GREEN SCREEN RULES:
 - JANGAN gunakan warna hijau #00ff00 pada objek agar tidak terpotong chroma key.`
     : '';
 
-  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT/LEPAS.
+  const isBackground = type === 'bg';
 
-PARAMETER TERPILIH:
-- Subjek/Prompt: "${promptTopic}"
-- Tipe Animasi: ${String(type).toUpperCase()}
-- Kategori Microstock: ${catInfo}
-- Gaya Visual: ${style}
-- Mode Warna: ${colorMode.toUpperCase()}
-- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
-- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
-${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
+  const typeSpecificRules = isBackground
+    ? `
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE CANVAS):
+1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
+   - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
+   - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
+   - DILARANG menyisakan ruang kosong, tepi mati, atau batas kanvas kosong yang tidak terisi gerakan motion graphics.
+   - Gerakan visual mengalir secara dinamis melintasi seluruh lebar dan tinggi layar (widescreen viewport).
 
-${typeInstructions}
-${motionGuide}
-${styleAndColorGuide}
-${greenScreenDirective}
+2. ARSITEKTUR 3 LAPIS KEDALAMAN MOTION BACKGROUND (3-TIER PARALLAX DEPTH):
+   a. Lapisan Dasar / Deep Atmosphere (Background Depth):
+      - Gradien atmosfer dinamis atau mesh halus yang bergeser perlahan memberikan nuansa ruang dan kedalaman (misal: shifting linear/radial gradient, ambient dark glow).
+   b. Lapisan Gerakan Utama (Dynamic Flow Graphics):
+      - Elemen utama sesuai prompt yang mengalir secara kontinu:
+        * Jika Wave / Fluid / Ribbon: 3-5 lapisan gelombang sinusoidal bezier (ctx.bezierCurveTo / ctx.quadraticCurveTo) yang bertumpuk dengan opasitas berbeda, mengalir lembut secara horizontal atau diagonal melintasi kanvas penuh.
+        * Jika Cyber Grid / Topografi: Garis perspektif 3D yang membentang ke cakrawala dengan vanishing point atau jaring kawat topografi bergerak yang membentang dari kiri ke kanan.
+        * Jika Plexus / Constellation: 35-60 titik/node bercahaya yang melayang di seluruh viewport kanvas dengan garis koneksi otomatis dinamis antara node yang berdekatan (distance < threshold, ctx.globalAlpha = 1 - d/threshold).
+        * Jika Silk / Luxury Auroral: Pita cahaya satin lembut bertingkat dengan gradien multi-stop berkilau yang meliuk elegan di seluruh layar.
+        * Jika Speed / Energy Tunnel: Garis-garis energi berkecepatan tinggi yang memancar dari titik fokus ke seluruh tepi layar.
+   c. Lapisan Ambient Glow & Specular Light:
+      - Pendaran cahaya lembut (ambient light swells) dan partikel cahaya halus yang mengambang perlahan memperkaya atmosfer sinematik.
 
-ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
+3. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
+   - Waktu t dihitung dari timestamp (t = time * 0.001).
+   - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) sehingga animasi berputar (loop) secara mulus tanpa sentakan tajam (seamless infinite loop).
+   - Pergerakan terasa elegan, modern, profesional, dan bernilai jual tinggi layaknya motion background kelas studio Adobe Stock / Shutterstock.
+
+4. TIDAK BOLEH ADA TEKS / HURUF / ANGKA:
+   - Murni motion graphics visual canvas 2D yang bersih dan profesional.`
+    : `
+ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY ICON RULES):
 1. DEKONSTRUKSI ANATOMI SUBJEK SECARA AKURAT (HIGH SEMANTIC RECOGNITION):
    - Wajib gambar bentuk yang secara instan dikenali sebagai subjek dalam prompt: "${promptTopic}".
    - Pecah subjek menjadi siluet bentuk primer yang solid, kokoh, proporsional, dan terdefinisi jelas.
    - DILARANG KERAS menggambar bentuk poligon acak, garis meliuk tak bermakna, atau lingkaran/kotak polos tanpa anatomi subjek!
-   - Contoh representasi akurat per tema:
-     * Hearing Aid / Alat Bantu Dengar: Badan casing melengkung ergonomis di belakang telinga, tabung suara transparan/fleksibel melengkung, earpiece/mold masuk telinga, dan busur gelombang suara konsentris memancar keluar dari speaker dengan pemudaran halus (alpha = 1 - progress).
-     * Prosthetic Limb / Kaki Palsu: Soket paha/betis aerodinamis, engsel lutut/pergelangan mekanis bersumbu baut presisi, dan bilah kaki carbon-fiber melengkung dinamis yang mengayun pada poros engsel.
-     * Physical Therapy / Resistance Band: Pita karet lateks elastis dengan tekstur grip ganda di kedua ujung, berosilasi meregang secara harmonis dan elastis.
-     * Walker / Tongkat Lansia: Rangka pipa aluminium berbentuk U ganda dengan 4 kaki berkaret hitam di bawah, pegangan grip busa, dan palang penguat horizontal.
-     * Pediatric / Baby: Stetoskop dengan liontin boneka teddy bear imut / botol susu berkontur dengan dot silikon bening dan indikator mililiter timbul.
-     * Medis / Cross / Biotech: Salib medis simetris tebal dengan bevel 3D dan garis denyut ECG elektrokardiogram bercahaya yang bergerak di tengahnya.
-     * Koin / Finansial / Bisnis: Koin emas bertekstur beveled rim tebal dengan logo mata uang timbul dan kilau specular shine.
-     * Kendaraan / Transportasi: Sasis aerodinamis dengan spakbor roda, roda ban terpasang mati di sasis dengan velg berputar di poros tengah.
 
 2. ATURAN HIERARKI TUNGGAL & ZERO OBJEK TERPISAH (RIGID PARENT-CHILD MATRIX RIGGING):
    - SEMUA komponen suatu objek WAJIB berada di dalam SATU MATRIX INDUK BERSAMA:
@@ -689,31 +728,39 @@ ATURAN WAJIB AKURASI BENTUK TINGGI & ZERO OBJEK TERPISAH (MANDATORY):
      // 3. LAYAR HP/LAPTOP: Seluruh interface & wallpaper WAJIB di dalam bezel bodi (ctx.clip())!
      // 4. BALING-BALING/ROTOR/SENDI: Terpasang di sumbu pusat fisik komponen (ctx.translate(jointX, jointY); ctx.rotate(ang);)!
      // DILARANG KERAS menerapkan translate independen yang menyebabkan bagian tubuh atau aksesori melayang terpisah!
-
      ctx.restore();
 
 3. GERAKAN KINETIK PROFESIONAL 60 FPS (NON-DEFORMING & PURPOSEFUL):
-   - DILARANG squash & stretch ekstrem yang merusak bentuk objek menjadi seperti jelly/gelatin lembek.
-   - Gerakan objek utama harus elegan dan menjaga integritas bentuk:
-     * Gentle Float: const floatY = Math.sin(t * 1.8) * 10;
-     * Gentle Root Sway: const rootRot = Math.sin(t * 1.4) * 0.04;
-     * Gentle Breath: const rootScale = 1 + Math.sin(t * 2.0) * 0.015;
-   - Implementasikan gerakan kinetik yang secara langsung mencerminkan kata kerja dalam prompt:
-     * Jika "rotating / berputar": putar objek atau elemen indikatornya secara mulus pada poros tengahnya: ctx.rotate(t * speed);
-     * Jika "pulse / gelombang / soundwaves / sinyal": gambar 2-3 cincin atau busur gelombang yang memancar dari lubang emitor/speaker, membesar secara proporsional dan memudar (ctx.globalAlpha = 1 - progress);
-     * Jika "articulated / mekanis / mengayun": ayunkan bagian sendi dengan osilasi sudut halus: const jointAngle = Math.sin(t * 2.5) * 0.25;
-     * Jika "stretching / lentur": ubah jarak ujung peregang secara elastis tanpa merusak ketebalan pita.
+   - DILARANG squash & stretch ekstrem yang merusak bentuk objek.
+   - Gerakan objek utama harus elegan dan menjaga integritas bentuk fisik.
 
 4. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - DILARANG memunculkan partikel mengambang, debu liar, bintik acak, atau serpihan di luar objek utama!
-   - Background canvas harus bersih, solid, dan kontras.
-   - Setiap frame baru WAJIB diawali dengan pembersihan kanvas total: ctx.clearRect(0, 0, w, h); ctx.fillStyle = ${clearFill}; ctx.fillRect(0, 0, w, h);.
-   - Skala S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'}; Objek terpusat di (cx, cy).
+   - Background canvas di sekeliling icon harus 100% bersih, solid, dan kontras.
+   - Skala S = Math.min(w, h) * 0.44; Objek terpusat di (cx, cy).
 
-5. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW - SANGAT PENTING):
-   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip, atau light flare) pada objek WAJIB menggunakan ctx.save(); ctx.beginPath(); [gambar bentuk geometri objek utama]; ctx.clip(); sebelum menggambar kilau!
-   - DILARANG KERAS menggambar kilau cahaya atau kotak/stripe kilau yang keluar melampaui batas (overflow) bentuk objek utama atau merembes ke latar belakang hijau (#00ff00).
-   - Seluruh efek pantulan cahaya harus 100% berada di dalam batasan siluet objek.
+5. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW):
+   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip) WAJIB menggunakan ctx.save(); ctx.beginPath(); [bentuk geometri]; ctx.clip(); sebelum kilau!`;
+
+  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
+
+PARAMETER TERPILIH:
+- Subjek/Prompt: "${promptTopic}"
+- Tipe Animasi: ${String(type).toUpperCase()} ${isBackground ? '(FULL-FRAME MOTION BACKGROUND)' : '(CENTRAL RIGGED ICON)'}
+- Kategori Microstock: ${catInfo}
+- Gaya Visual: ${style}
+- Mode Warna: ${colorMode.toUpperCase()}
+- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
+- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
+${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
+
+${typeInstructions}
+${motionGuide}
+${styleAndColorGuide}
+${greenScreenDirective}
+
+${typeSpecificRules}
 
 WAJIB gunakan struktur HTML boilerplate berikut:
 
@@ -744,7 +791,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     h = canvas.height = window.innerHeight;
     cx = w / 2;
     cy = h / 2;
-    S = Math.min(w, h) * ${type === 'icon' ? '0.44' : '0.65'};
+    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
   }
   window.addEventListener('resize', resize);
   resize();
