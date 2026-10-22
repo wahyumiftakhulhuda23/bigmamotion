@@ -9,6 +9,8 @@ interface RightPanelProps {
   progressText: string;
   progressPercent: number;
   latestAnimation: AnimationItem | null;
+  animations?: AnimationItem[];
+  onDeleteAnimation?: (id: string) => void;
   onOpenGalleryModal: () => void;
   onOpenFullscreen: (item: AnimationItem) => void;
   onDownloadSingle: (item: AnimationItem) => void;
@@ -26,6 +28,8 @@ export const RightPanel: React.FC<RightPanelProps> = ({
   progressText,
   progressPercent,
   latestAnimation,
+  animations = [],
+  onDeleteAnimation,
   onOpenGalleryModal,
   onOpenFullscreen,
   onDownloadSingle,
@@ -37,6 +41,14 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 }) => {
   const logConsoleRef = useRef<HTMLDivElement>(null);
   const [isLogExpanded, setIsLogExpanded] = useState(true);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const animList = animations && animations.length > 0 ? animations : latestAnimation ? [latestAnimation] : [];
+  const safeIndex = Math.min(Math.max(0, selectedIndex), Math.max(0, animList.length - 1));
+  const currentAnimation = animList[safeIndex] || latestAnimation;
+
+  const hasPrev = safeIndex > 0;
+  const hasNext = safeIndex < animList.length - 1;
 
   useEffect(() => {
     if (logConsoleRef.current) {
@@ -61,7 +73,18 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     }
   };
 
-  const isRenderingMp4 = latestAnimation && isExportingMp4Id === latestAnimation.id;
+  const isRenderingMp4 = currentAnimation && isExportingMp4Id === currentAnimation.id;
+
+  const handleDeleteCurrent = () => {
+    if (!currentAnimation) return;
+    const targetId = currentAnimation.id;
+    if (onDeleteAnimation) {
+      onDeleteAnimation(targetId);
+      if (safeIndex >= animList.length - 1) {
+        setSelectedIndex(Math.max(0, animList.length - 2));
+      }
+    }
+  };
 
   return (
     <section className="lg:col-span-7 flex flex-col gap-4">
@@ -136,12 +159,40 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         </div>
       )}
 
-      {/* Gallery Header & Bitrate Controller */}
+      {/* Gallery Header & Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-extrabold text-sm text-gray-200 flex items-center gap-2">
-          <i className="fa-solid fa-desktop text-sky-400"></i>
-          <span>Live Preview Animasi</span>
-        </h2>
+        <div className="flex items-center gap-2.5">
+          <h2 className="font-extrabold text-sm text-gray-200 flex items-center gap-2">
+            <i className="fa-solid fa-desktop text-sky-400"></i>
+            <span>Live Preview Animasi</span>
+          </h2>
+
+          {/* Inline Navigation for Live Preview */}
+          {animList.length > 1 && (
+            <div className="flex items-center gap-1 bg-gray-900 border border-gray-800 rounded-xl px-2 py-0.5 shadow-sm">
+              <button
+                onClick={() => setSelectedIndex((prev) => Math.max(0, prev - 1))}
+                disabled={!hasPrev}
+                className="p-1 text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition rounded cursor-pointer"
+                title="Sebelumnya"
+              >
+                <i className="fa-solid fa-chevron-left text-[11px]"></i>
+              </button>
+              <span className="text-[11px] font-mono font-bold text-sky-300 px-1">
+                {safeIndex + 1} / {animList.length}
+              </span>
+              <button
+                onClick={() => setSelectedIndex((prev) => Math.min(animList.length - 1, prev + 1))}
+                disabled={!hasNext}
+                className="p-1 text-gray-400 hover:text-white disabled:opacity-25 disabled:cursor-not-allowed transition rounded cursor-pointer"
+                title="Selanjutnya"
+              >
+                <i className="fa-solid fa-chevron-right text-[11px]"></i>
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center gap-2">
           {/* Target Bitrate Selector */}
           <div className="flex items-center gap-1.5 bg-gray-900/90 border border-purple-500/30 rounded-xl px-2.5 py-1 shadow-sm">
@@ -170,13 +221,13 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             className="text-xs text-sky-100 hover:text-white flex items-center gap-1.5 transition px-3 py-1.5 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 hover:from-sky-500 hover:to-indigo-500 shadow-md shadow-sky-500/20 font-bold border border-sky-400/30 cursor-pointer active:scale-95"
           >
             <i className="fa-solid fa-images"></i>
-            <span>Buka Galeri</span>
+            <span>Buka Galeri ({animList.length})</span>
           </button>
         </div>
       </div>
 
       {/* Latest Animation or Empty State */}
-      {!latestAnimation ? (
+      {!currentAnimation ? (
         <div
           id="empty-state"
           className="glass-card rounded-2xl p-10 border border-dashed border-gray-800 text-center flex flex-col items-center justify-center gap-2.5 shadow-md"
@@ -190,24 +241,53 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           </p>
         </div>
       ) : (
-        <div className="glass-card rounded-2xl overflow-hidden border border-sky-500/30 shadow-xl shadow-sky-950/20 transition hover:border-sky-500/50 flex flex-col">
+        <div className="glass-card rounded-2xl overflow-hidden border border-sky-500/30 shadow-xl shadow-sky-950/20 transition hover:border-sky-500/50 flex flex-col relative">
           <div className="aspect-16-9 w-full bg-slate-950 relative flex items-center justify-center group overflow-hidden">
             <iframe
-              srcDoc={latestAnimation.html}
-              title={latestAnimation.title}
+              srcDoc={currentAnimation.html}
+              title={currentAnimation.title}
               className="w-full h-full border-0 pointer-events-none"
               sandbox="allow-scripts"
             />
+
+            {/* Floating Navigation Arrows on Live Preview Screen */}
+            {animList.length > 1 && (
+              <>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedIndex((prev) => Math.max(0, prev - 1));
+                  }}
+                  disabled={!hasPrev}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-black/60 hover:bg-black/85 text-white border border-gray-700/80 shadow-lg flex items-center justify-center transition disabled:opacity-0 disabled:pointer-events-none cursor-pointer group/btn hover:scale-105 active:scale-95"
+                  title="Animasi Sebelumnya"
+                >
+                  <i className="fa-solid fa-chevron-left text-xs text-gray-300 group-hover/btn:text-sky-400"></i>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedIndex((prev) => Math.min(animList.length - 1, prev + 1));
+                  }}
+                  disabled={!hasNext}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full bg-black/60 hover:bg-black/85 text-white border border-gray-700/80 shadow-lg flex items-center justify-center transition disabled:opacity-0 disabled:pointer-events-none cursor-pointer group/btn hover:scale-105 active:scale-95"
+                  title="Animasi Selanjutnya"
+                >
+                  <i className="fa-solid fa-chevron-right text-xs text-gray-300 group-hover/btn:text-sky-400"></i>
+                </button>
+              </>
+            )}
+
             {/* Hover Action Overlay */}
             <div className="absolute inset-0 bg-transparent flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/65 backdrop-blur-sm gap-2 p-3 flex-wrap">
               <button
-                onClick={() => onOpenFullscreen(latestAnimation)}
+                onClick={() => onOpenFullscreen(currentAnimation)}
                 className="px-3.5 py-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition transform hover:scale-105 shadow-lg shadow-sky-500/50 cursor-pointer"
               >
                 <i className="fa-solid fa-expand"></i> Fullscreen
               </button>
               <button
-                onClick={() => onDownloadSingle(latestAnimation)}
+                onClick={() => onDownloadSingle(currentAnimation)}
                 className="px-3.5 py-2 bg-gray-800/90 hover:bg-gray-700 text-gray-200 font-bold text-xs rounded-xl flex items-center gap-1.5 transition border border-gray-700 shadow-md cursor-pointer"
                 title="Unduh Kode HTML"
               >
@@ -215,7 +295,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               </button>
               {onExportMp4Single && (
                 <button
-                  onClick={() => onExportMp4Single(latestAnimation, exportBitrate)}
+                  onClick={() => onExportMp4Single(currentAnimation, exportBitrate)}
                   disabled={!!isRenderingMp4}
                   className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-lg shadow-purple-500/30 cursor-pointer disabled:opacity-50"
                   title={`Export MP4 Video (H.264 @ ${exportBitrate} Mbps)`}
@@ -231,6 +311,15 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                   )}
                 </button>
               )}
+              {onDeleteAnimation && (
+                <button
+                  onClick={handleDeleteCurrent}
+                  className="px-3 py-2 bg-rose-950/80 hover:bg-rose-900 text-rose-300 font-bold text-xs rounded-xl flex items-center gap-1.5 transition border border-rose-800 shadow-md cursor-pointer"
+                  title="Hapus Animasi Ini"
+                >
+                  <i className="fa-solid fa-trash-can text-rose-400"></i> Hapus
+                </button>
+              )}
             </div>
           </div>
 
@@ -239,23 +328,23 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <div className="flex-1 min-w-0">
               <h3 className="font-bold text-gray-100 text-xs sm:text-sm truncate w-full flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
-                <span className="truncate">{latestAnimation.title}</span>
+                <span className="truncate">{currentAnimation.title}</span>
               </h3>
               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 <span className="text-[9px] bg-sky-950/80 text-sky-400 border border-sky-800/80 px-1.5 py-0.2 rounded uppercase font-bold">
-                  {latestAnimation.type}
+                  {currentAnimation.type}
                 </span>
                 <span className="text-[9px] bg-gray-800 text-gray-400 border border-gray-700 px-1.5 py-0.2 rounded capitalize">
-                  {latestAnimation.style}
+                  {currentAnimation.style}
                 </span>
-                {(latestAnimation.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(latestAnimation.html)) && (
+                {(currentAnimation.isGreenScreen || /#00ff00|rgb\(0,\s*255,\s*0\)/i.test(currentAnimation.html)) && (
                   <span className="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-700/60 px-1.5 py-0.2 rounded font-bold flex items-center gap-1">
                     <i className="fa-solid fa-circle text-[6px] text-emerald-400"></i> Green Screen
                   </span>
                 )}
-                {latestAnimation.account && latestAnimation.account !== 'Manual' && (
+                {currentAnimation.account && currentAnimation.account !== 'Manual' && (
                   <span className="text-[9px] bg-amber-950/60 text-amber-400 border border-amber-800/50 px-1.5 py-0.2 rounded flex items-center gap-1">
-                    <i className="fa-solid fa-robot"></i> {latestAnimation.account}
+                    <i className="fa-solid fa-robot"></i> {currentAnimation.account}
                   </span>
                 )}
                 <span className="text-[9px] bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 px-1.5 py-0.2 rounded font-bold">
@@ -264,16 +353,28 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              {/* Direct Delete Button for Easy Sorting */}
+              {onDeleteAnimation && (
+                <button
+                  onClick={handleDeleteCurrent}
+                  className="px-2.5 py-1 rounded-lg bg-rose-950/70 hover:bg-rose-900 border border-rose-800/80 text-rose-300 hover:text-white text-[11px] font-semibold transition flex items-center gap-1 cursor-pointer"
+                  title="Hapus animasi ini dari daftar"
+                >
+                  <i className="fa-solid fa-trash-can text-rose-400 text-[10px]"></i> Hapus
+                </button>
+              )}
+
               <button
-                onClick={() => onDownloadSingle(latestAnimation)}
+                onClick={() => onDownloadSingle(currentAnimation)}
                 className="px-2.5 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-[11px] font-semibold border border-gray-700 transition flex items-center gap-1 cursor-pointer"
               >
                 <i className="fa-solid fa-download text-sky-400 text-[10px]"></i> HTML
               </button>
+
               {onExportMp4Single && (
                 <button
-                  onClick={() => onExportMp4Single(latestAnimation, exportBitrate)}
+                  onClick={() => onExportMp4Single(currentAnimation, exportBitrate)}
                   disabled={!!isRenderingMp4}
                   className="px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-[11px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm shadow-purple-600/30 disabled:opacity-50"
                   title={`Export MP4 (H.264 @ ${exportBitrate} Mbps)`}
@@ -290,21 +391,22 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           </div>
         </div>
       )}
-        {hwProfile && (
-          <div className="glass-card rounded-2xl p-4 border border-gray-800 bg-gray-950/50 space-y-2 mt-4">
-            <h3 className="font-bold text-gray-200 text-xs flex items-center gap-2">
-              <i className="fa-solid fa-microchip text-sky-400"></i> Spesifikasi Perangkat & Rekomendasi
-            </h3>
-            <p className="text-[10px] text-gray-400">
-              Perangkat: {hwProfile.osInfo} | RAM: {hwProfile.ramStr} | VGA: {hwProfile.gpuInfo} | CPU: {hwProfile.cpuCores} Cores
-            </p>
-            <p className="text-[11px] text-sky-300 font-medium">
-              Saran: {hwProfile.isLowSpec
-                ? `Gunakan setelan 720p 30 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk performa maksimal pada perangkat Anda.`
-                : `Perangkat Anda mendukung setelan 1080p 60 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk kualitas terbaik.`}
-            </p>
-          </div>
-        )}
+
+      {hwProfile && (
+        <div className="glass-card rounded-2xl p-4 border border-gray-800 bg-gray-950/50 space-y-2 mt-4">
+          <h3 className="font-bold text-gray-200 text-xs flex items-center gap-2">
+            <i className="fa-solid fa-microchip text-sky-400"></i> Spesifikasi Perangkat & Rekomendasi
+          </h3>
+          <p className="text-[10px] text-gray-400">
+            Perangkat: {hwProfile.osInfo} | RAM: {hwProfile.ramStr} | VGA: {hwProfile.gpuInfo} | CPU: {hwProfile.cpuCores} Cores
+          </p>
+          <p className="text-[11px] text-sky-300 font-medium">
+            Saran: {hwProfile.isLowSpec
+              ? `Gunakan setelan 720p 30 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk performa maksimal pada perangkat Anda.`
+              : `Perangkat Anda mendukung setelan 1080p 60 FPS dan Bitrate ${hwProfile.recommendedBitrate} Mbps untuk kualitas terbaik.`}
+          </p>
+        </div>
+      )}
     </section>
   );
 };

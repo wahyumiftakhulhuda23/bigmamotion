@@ -798,45 +798,70 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE CANVAS):
 4. TIDAK BOLEH ADA TEKS / HURUF / ANGKA:
    - Murni motion graphics visual canvas 2D yang bersih dan profesional.`
     : `
-ATURAN WAJIB AKURASI BENTUK TINGGI, IDEAL, SOLID & SATU KESATUAN (PROFESSIONAL MICROSTOCK & LOTTIE STANDARD):
-1. ANATOMI REALISTIS, BERMAKNA, & PRESISI TINGGI (ZERO RANDOM / ZERO CACAT):
-   - Wajib gambar bentuk yang secara instan dikenali sebagai subjek dalam prompt: "${promptTopic}".
-   - Bodi utama (Chassis / Base Silhouette) harus SOLID, BERBOBOT FISIK NYATA, dan SIMETRIS PROPORSIONAL, BUKAN garis-garis tipis berserakan atau poligon acak!
-   - Terapkan Konstruksi 3 Lapis Kedalaman Fisik (3-Tier Realism Depth):
-     a. Lapisan Dasar / Bodi Utama: Siluet bentuk primer yang kokoh dengan bevel membulat elegan (gunakan ctx.roundRect, ctx.ellipse, ctx.arc).
-     b. Lapisan Detail Fungsional: Komponen internal yang mencerminkan fungsi objek di dunia nyata (bezel layar kaca, lensa optik bertingkat, dial meteran terkalibrasi, lubang kunci silinder, sambungan engsel baut presisi, tombol fisik bertekstur).
-     c. Lapisan Kinetik Aktif: Elemen hidup 60 FPS (misal: sapuan kilau cahaya 45° yang menyapu permukaan, gelombang sinyal konsentris memancar lembut, dial/jarum berosilasi presisi, atau indikator sensor hidup).
-   - DILARANG KERAS menggambar poligon acak, segitiga melayang tanpa arti, atau coretan abstrak yang tidak merepresentasikan subjek nyata!
+ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT & RIGID ATTACHMENT):
 
-2. SATU KESATUAN TOTAL (RIGID PARENT MATRIX - ZERO OBJEK LEPAS/TERPISAH):
-   - SEMUA komponen suatu objek WAJIB berada di dalam SATU MATRIX INDUK BERSAMA:
+1. ANATOMI IKON TUNGGAL TERKUNCI MATI (RIGID SINGLE CHASSIS - 100% ANTI OBJEK TERPISAH):
+   - SEMUA komponen suatu objek WAJIB berada di dalam SATU ROOT MATRIX BERSAMA:
      ctx.save();
      ctx.translate(cx, cy + floatY); // Floating hanya di root matrix
      ctx.rotate(rootRot);             // Kemiringan hanya di root matrix
      ctx.scale(rootScale, rootScale); // Breathing scale hanya di root matrix
      
-     // Seluruh sub-elemen DIGAMBAR DENGAN KOORDINAT RELATIF TERHADAP (0, 0):
-     // 1. RODA / BALING-BALING: Axle terpasang mati di sasis, berputar pada poros titik putarnya masing-masing!
-     // 2. GAGANG TAS / MUG / SHACKLE GEMBOK: Titik ujung tertancap kokoh menyatu di bibir bodi objek!
-     // 3. LAYAR / INTERIOR: Berada di dalam bezel bodi menggunakan pembatasan clipping (ctx.clip())!
-     // DILARANG KERAS menerapkan translasi independen yang menyebabkan bagian tubuh atau aksesori melayang terlepas dari badan!
+     // ATURAN KOORDINAT SUB-KOMPONEN TERIKAT (PHYSICAL JOINT ANCHORS):
+     // 1. RODA / BALING-BALING / GEAR:
+     //    Poros roda/gear WAJIB terpasang mati di sasis pada koordinat (-jointX, jointY) dan (+jointX, jointY)!
+     //    ctx.save();
+     //    ctx.translate(jointX, jointY); // Berpindah ke titik poros fisik
+     //    ctx.rotate(t * speed);         // HANYA velg/gigi di dalam yang berputar pada porosnya!
+     //    // Gambar velg/spokes centered di (0,0)
+     //    ctx.restore();
+     //    DILARANG memindahkan posisi roda terpisah dari sasis!
+     // 2. GAGANG TAS / MUG / SHACKLE GEMBOK:
+     //    Titik pangkal dan ujung lengkungan gagang WAJIB menempel persis dan menyatu di bibir bodi objek!
+     // 3. LAYAR GADGET / MONITOR / DASHBOARD:
+     //    Seluruh isi interface, grafik, dan data WAJIB berada di dalam bezel bodi menggunakan ctx.clip()!
+     // DILARANG KERAS menerapkan translasi independen atau variabel floating terpisah yang menyebabkan bagian tubuh atau aksesori melayang terlepas dari badan!
      ctx.restore();
 
-3. PENCAHAYAAN VEKTOR STUDIO (2-TONE SHADING & HIGH CONTRAST VOLUME):
-   - Gunakan gradien linier dinamis (ctx.createLinearGradient) dari sudut kiri-atas (highlight terang) ke kanan-bawah (shadow dalam) untuk memberikan volume 3D realistis berbobot.
-   - Garis kontur tebal, bersih, dan tegas (ctx.lineWidth = 3 hingga 5, ctx.lineCap = 'round', ctx.lineJoin = 'round').
+2. SETIAP SUB-ELEMEN FUNGSIONAL WAJIB HIDUP & AKTIF BERGERAK 60 FPS (ANTI ELEMEN MATI / DILARANG DIAM):
+   - Objek BUKAN gambar vektor diam yang mengapung! Setiap komponen internal fungsional WAJIB bergerak kinetik:
+     * Roda / Gear / Turbin: Berputar mulus tanpa henti pada poros pusatnya (ctx.rotate(t * speed)).
+     * Jarum Meteran / Dial Gauge: Berosilasi dinamis mengukur data secara kinetik (const needleAng = -0.5 + Math.sin(t * 3.0) * 0.45).
+     * Garis Sirkuit / Kabel / Pipa Energi: Aliran pulsa dinamis dengan dash offset (ctx.lineDashOffset = -t * 35).
+     * Sensor / Kamera / Scanner: Sapuan sinar laser pemindai yang bergerak bolak-balik di dalam lensa atau visor (ctx.clip()).
+     * Gelombang Suara / Sinyal / Radar: 2-3 busur konsentris yang memancar keluar dari corong/lubang emitor dan memudar proporsional (alpha = 1 - progress).
+     * Engsel / Tuas / Capit: Berayun harmonis pada poros baut pengunci (const jointAngle = Math.sin(t * 2.2) * 0.2).
 
-4. GERAKAN KINETIK PROFESIONAL 60 FPS (ELEGANT & NON-DEFORMING):
-   - DILARANG squash & stretch ekstrem yang merusak bentuk objek menjadi lembek atau cacat.
-   - Gerakan objek utama harus elegan dan menjaga integritas bentuk fisik.
+3. ATURAN MUTLAK ANTI-OVERFLOW SPECULAR GLOW & GLARE (ZERO KILAU BOCOR):
+   - SANGAT KRUSIAL: Setiap efek kilau cahaya (specular highlight, gloss reflection, lens glare, light streak sweep 45°) WAJIB 100% TERKUNCI di dalam siluet bentuk badan icon!
+   - KODE WAJIB CLIPPING KILAU:
+     ctx.save();
+     ctx.beginPath();
+     // Gambar path bentuk geometri bodi utama persis sama seperti bodi:
+     ctx.roundRect(-bodyW/2, -bodyH/2, bodyW, bodyH, 16);
+     ctx.clip(); // CLIPPING: Mencegah kilau merembes/bocor keluar batas objek!
+     
+     // Gambar sapuan kilau diagonal 45 derajat di dalam clip:
+     const gleamX = (((t * 0.6) % 2) - 0.5) * bodyW * 2.5;
+     const gleamGrad = ctx.createLinearGradient(gleamX - 40, -bodyH, gleamX + 40, bodyH);
+     gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+     gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+     gleamGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+     ctx.fillStyle = gleamGrad;
+     ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
+     ctx.restore();
+   - DILARANG KERAS kilau cahaya, glare, atau kotak kilau keluar melampaui batas objek atau merembes ke latar belakang (terutama pada green screen #00FF00)!
+
+4. KUALITAS VEKTOR STUDIO 4 LAPIS KEDALAMAN (4-TIER MASTERPIECE REALISM):
+   a. Base Chassis: Siluet primer solid dengan bevel membulat elegan bertekstur tebal (ctx.roundRect, ctx.ellipse).
+   b. Shading Multi-Stop: Gradien arah studio (highlight terang kiri-atas ke bayangan gelap kanan-bawah) memberi volume 3D berbobot.
+   c. Detail Mekanis Nyata: Garis kontur tebal bersih (ctx.lineWidth = 3-4, round cap), baut pengikat, celah panel, bezel kaca.
+   d. Lapisan Kinetik Aktif 60 FPS: Elemen fungsional bergerak sinkron tanpa henti.
 
 5. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - DILARANG memunculkan partikel mengambang, debu liar, bintik acak, atau serpihan di luar objek utama!
    - Background canvas di sekeliling icon harus 100% bersih, solid, dan kontras.
-   - Skala S = Math.min(w, h) * 0.44; Objek terpusat di (cx, cy).
-
-6. MANDATORY SPECULAR & GLOW CLIPPING RULE (ANTI-OVERFLOW GLOW):
-   - Setiap efek kilau cahaya (specular highlight, gloss shine, reflection strip, atau light flare) pada objek WAJIB menggunakan ctx.save(); ctx.beginPath(); [gambar bentuk geometri objek utama]; ctx.clip(); sebelum menggambar kilau!`;
+   - Skala S = Math.min(w, h) * 0.44; Objek terpusat di (cx, cy).`;
 
   const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
 Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
@@ -929,7 +954,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
       const directGenConfig: any = {
         temperature: 0.1,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       };
       if (currentModel.includes('2.5') || currentModel.includes('flash')) {
         directGenConfig.thinkingConfig = { thinkingBudget: 0 };

@@ -1639,6 +1639,8 @@ export default function App() {
           progressText={progressText}
           progressPercent={progressPercent}
           latestAnimation={latestAnimation}
+          animations={animations}
+          onDeleteAnimation={handleDeleteSingleAnimation}
           onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
           onOpenFullscreen={(item) => setFullscreenItem(item)}
           onDownloadSingle={handleDownloadSingle}
@@ -1678,14 +1680,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Modals */}
+      {/* Fullscreen Preview Modal with Next/Prev and Direct Delete */}
       <FullscreenModal
         isOpen={!!fullscreenItem}
         item={fullscreenItem}
-        onClose={() => {
-          setFullscreenItem(null);
-          setIsGalleryModalOpen(true);
-        }}
+        animations={animations}
+        onSelectItem={(item) => setFullscreenItem(item)}
+        onDeleteAnimation={handleDeleteSingleAnimation}
+        onClose={() => setFullscreenItem(null)}
         showToast={showToast}
         renderResolution={renderResolution}
         renderFps={renderFps}
