@@ -422,8 +422,8 @@ Generate exactly 1 professional, highly marketable, and semantically rich animat
 
 MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
 1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Precision E-Commerce Shopping Cart with curved wireframe basket, locked wheels, and glowing parcel", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
-   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
+   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Solid Volumetric Shopping Cart with metallic deep basket, locked chassis, spinning dual wheels, and dynamic payload", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
+   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, wireframe line skeletons, or vague geometry.
 2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
    - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis.
 3. 60 FPS COORDINATED KINETIC DYNAMICS:
@@ -650,16 +650,17 @@ PANDUAN GERAKAN ORGANIC FLOW & WAVES:
   }
 
   let styleAndColorGuide = '';
-  if (colorMode === 'flat' || !neonGlow) {
+  if (isGreenScreen || colorMode === 'flat' || !neonGlow) {
     styleAndColorGuide = `
-PANDUAN WARNA & STYLE: FLAT COLOR / NO GRADIENT / NO GLOW (WAJIB DIPATUHI):
-- ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; (DILARANG GLOW / BLUR).
-${colorMode === 'flat' ? '- DILARANG menggunakan createLinearGradient atau createRadialGradient. Gunakan 100% solid hex color (misal: #FF4757, #2ED573, #1E90FF, #FFA502, #FFFFFF, #2F3542, #70A1FF) bergaya Flat Art Vector modern!' : ''}
-- Bentuk garis tepi tajam, tebal terdefinisi (ctx.lineWidth = 3), dan bidang warna rata (flat solid fill).`;
+PANDUAN WARNA & STYLE: CRISP VECTOR / NO SHADOW BLUR (WAJIB DIPATUHI):
+- ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
+- DILARANG KERAS menggunakan ctx.shadowBlur atau shadowColor! (Penggunaan shadowBlur pada canvas menghasilkan kotak/persegi halo kotor yang merusak chroma key dan tampilan vektor).
+${colorMode === 'flat' ? '- DILARANG menggunakan createLinearGradient atau createRadialGradient. Gunakan 100% solid hex color (misal: #FF4757, #2ED573, #1E90FF, #FFA502, #FFFFFF, #2F3542, #70A1FF) bergaya Flat Art Vector modern!' : '- Gunakan gradien multi-stop linear (createLinearGradient) solid dan kontur stroke tebal presisi (ctx.lineWidth = 3-4, round join).'}
+- Bentuk garis tepi tajam, tebal terdefinisi, dan bidang warna solid bervolume tanpa efek blur.`;
   } else {
     styleAndColorGuide = `
 PANDUAN WARNA & NEON GLOW (AKTIF):
-- Terapkan efek luminescence bertingkat: ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12; ctx.shadowColor = primaryColor;
+- Terapkan efek luminescence HANYA pada aksen kecil (LED / laser tipis / garis sirkuit): ctx.shadowBlur = 12; ctx.shadowColor = primaryColor; (DILARANG memberikan shadowBlur pada bodi utama atau background!).
 ${colorMode === 'neon' ? '- Palet Neon Cyber: Cyan (#00f3ff), Neon Magenta (#ff007f), Electric Lime (#39ff14), Neon Gold (#ffd700).' : ''}
 ${colorMode === 'monochrome' ? '- Palet Monochrome: Putih murni (#ffffff), Slate Silver (#cbd5e1), Graphite (#475569), dengan aksen glow putih kristal.' : ''}
 ${colorMode === 'pastel' ? '- Palet Pastel: Soft Lavender (#c4b5fd), Mint (#a7f3d0), Peach (#fdba74), Baby Blue (#93c5fd).' : ''}
@@ -669,11 +670,11 @@ ${colorMode === 'gradient' ? '- Gunakan createLinearGradient / createRadialGradi
 
   const greenScreenDirective = isGreenScreen
     ? `
-MANDATORY GREEN SCREEN RULES:
-- Background HARUS hijau polos murni (#00ff00) untuk chroma key.
-- DILARANG background gelap atau gradien hijau ke hitam.
-- Objek utama HARUS menggunakan warna kontras jelas (Cyan, Gold, Ungu, Putih, Oranye, Merah, Biru).
-- JANGAN gunakan warna hijau #00ff00 pada objek agar tidak terpotong chroma key.`
+MANDATORY GREEN SCREEN CHROMA-KEY RULES:
+- Background kanvas HARUS 100% murni hijau polos (#00ff00).
+- DILARANG KERAS MENGGAMBAR KOTAK WADAH, KARTU LATAR, ROUNDED RECTANGLE CONTAINER, ATAU AURA BACKDROP APAPUN DI KANVAS! Latar hijau #00ff00 di luar objek harus 100% murni tanpa goresan transparan sekecil apapun!
+- DILARANG KERAS ctx.shadowBlur pada green screen! (Gunakan ctx.shadowBlur = 0; ctx.shadowColor = 'transparent').
+- Objek utama HARUS menggunakan warna kontras jelas (Cyan, Gold, Ungu, Putih, Oranye, Merah, Biru). JANGAN gunakan warna hijau #00ff00 pada objek.`
     : '';
 
   const isBackground = type === 'bg';
@@ -710,68 +711,73 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE CANVAS):
     : `
 ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT & RIGID ATTACHMENT):
 
-1. ANATOMI IKON TUNGGAL TERKUNCI MATI (RIGID SINGLE CHASSIS - 100% ANTI OBJEK TERPISAH):
-   - SEMUA komponen suatu objek WAJIB berada di dalam SATU ROOT MATRIX BERSAMA:
+1. MUTLAK: ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - 100% ZERO DETACHED PARTS):
+   - SEMUA komponen suatu objek (badan, keranjang, roda, sasis, gagang, muatan, aksesoris) WAJIB DIGAMBAR DI DALAM SATU BLOK ROOT MATRIX UTAMA:
      ctx.save();
-     ctx.translate(cx, cy + floatY); // Floating hanya di root matrix
-     ctx.rotate(rootRot);             // Kemiringan hanya di root matrix
-     ctx.scale(rootScale, rootScale); // Breathing scale hanya di root matrix
+     ctx.translate(cx, cy + Math.sin(t * 2.0) * 8); // Floating HANYA di root ini (amplitude halus ±8px)
+     ctx.rotate(Math.sin(t * 1.5) * 0.025);         // Kemiringan HANYA di root ini (±0.025 rad)
+     ctx.scale(1 + Math.sin(t * 2.0) * 0.015, 1 + Math.sin(t * 2.0) * 0.015); // Breathing scale
+
+     // PERATURAN KOORDINAT MUTLAK:
+     // - Semua posisi sub-bagian dihitung secara relatif terhadap titik pusat (0, 0)!
+     // - DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
+     // - DILARANG KERAS MENGGUNAKAN KOORDINAT ABSOLUT SEPERTI (0, 0) KANVAS YANG MEMBUAT OBJEK MELAYANG KE POJOK KANVAS!
+     // - DILARANG KERAS memberikan translasi atau rotasi independen pada bagian struktural bodi (misal keranjang miring tapi roda tegak, atau keranjang melayang meninggalkan sasis)! Bagian struktural 100% TERKUNCI MATI.
      
-     // ATURAN KOORDINAT SUB-KOMPONEN TERIKAT (PHYSICAL JOINT ANCHORS):
-     // 1. RODA / BALING-BALING / GEAR:
-     //    Poros roda/gear WAJIB terpasang mati di sasis pada koordinat (-jointX, jointY) dan (+jointX, jointY)!
-     //    ctx.save();
-     //    ctx.translate(jointX, jointY); // Berpindah ke titik poros fisik
-     //    ctx.rotate(t * speed);         // HANYA velg/gigi di dalam yang berputar pada porosnya!
-     //    // Gambar velg/spokes centered di (0,0)
-     //    ctx.restore();
-     //    DILARANG memindahkan posisi roda terpisah dari sasis!
-     // 2. GAGANG TAS / MUG / SHACKLE GEMBOK:
-     //    Titik pangkal dan ujung lengkungan gagang WAJIB menempel persis dan menyatu di bibir bodi objek!
-     // 3. LAYAR GADGET / MONITOR / DASHBOARD:
-     //    Seluruh isi interface, grafik, dan data WAJIB berada di dalam bezel bodi menggunakan ctx.clip()!
-     // DILARANG KERAS menerapkan translasi independen atau variabel floating terpisah yang menyebabkan bagian tubuh atau aksesori melayang terlepas dari badan!
+     // ATURAN RODA / GEAR / SUB-KOMPONEN BERPUTAR:
+     // Roda terpasang kaku pada titik poros sasis (-wheelOffsetX, wheelOffsetY) dan (+wheelOffsetX, wheelOffsetY):
+     // ctx.save();
+     // ctx.translate(wheelOffsetX, wheelOffsetY); // Pindah ke titik poros lokal pada sasis
+     // ctx.rotate(t * wheelSpeed);               // Putaran velg/spokes pada poros
+     // // Gambar velg, ban, dan jari-jari centered di (0, 0)
+     // ctx.restore();
+     // Roda TETAP terikat mati di titik poros sasis, TIDAK AKAN PERNAH TERLEPAS!
+
      ctx.restore();
 
-2. SETIAP SUB-ELEMEN FUNGSIONAL WAJIB HIDUP & AKTIF BERGERAK 60 FPS (ANTI ELEMEN MATI / DILARANG DIAM):
-   - Objek BUKAN gambar vektor diam yang mengapung! Setiap komponen internal fungsional WAJIB bergerak kinetik:
-     * Roda / Gear / Turbin: Berputar mulus tanpa henti pada poros pusatnya (ctx.rotate(t * speed)).
-     * Jarum Meteran / Dial Gauge: Berosilasi dinamis mengukur data secara kinetik (const needleAng = -0.5 + Math.sin(t * 3.0) * 0.45).
-     * Garis Sirkuit / Kabel / Pipa Energi: Aliran pulsa dinamis dengan dash offset (ctx.lineDashOffset = -t * 35).
-     * Sensor / Kamera / Scanner: Sapuan sinar laser pemindai yang bergerak bolak-balik di dalam lensa atau visor (ctx.clip()).
-     * Gelombang Suara / Sinyal / Radar: 2-3 busur konsentris yang memancar keluar dari corong/lubang emitor dan memudar proporsional (alpha = 1 - progress).
-     * Engsel / Tuas / Capit: Berayun harmonis pada poros baut pengunci (const jointAngle = Math.sin(t * 2.2) * 0.2).
-
-3. ATURAN MUTLAK ANTI-OVERFLOW SPECULAR GLOW & GLARE (ZERO KILAU BOCOR):
-   - SANGAT KRUSIAL: Setiap efek kilau cahaya (specular highlight, gloss reflection, lens glare, light streak sweep 45°) WAJIB 100% TERKUNCI di dalam siluet bentuk badan icon!
-   - KODE WAJIB CLIPPING KILAU:
+2. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
+   - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
+   - DILARANG KERAS menggambar lingkaran kilau putih raksasa / radial burst / whiteout flash yang menutupi icon atau layar!
+   - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon:
      ctx.save();
      ctx.beginPath();
-     // Gambar path bentuk geometri bodi utama persis sama seperti bodi:
+     // Gambar path bentuk bodi utama persis sama:
      ctx.roundRect(-bodyW/2, -bodyH/2, bodyW, bodyH, 16);
      ctx.clip(); // CLIPPING: Mencegah kilau merembes/bocor keluar batas objek!
      
-     // Gambar sapuan kilau diagonal 45 derajat di dalam clip:
-     const gleamX = (((t * 0.6) % 2) - 0.5) * bodyW * 2.5;
-     const gleamGrad = ctx.createLinearGradient(gleamX - 40, -bodyH, gleamX + 40, bodyH);
+     // Gambar sapuan kilau diagonal 45 derajat tipis di dalam clip:
+     const gleamX = (((t * 0.6) % 2.5) - 1.25) * bodyW * 1.5;
+     const gleamGrad = ctx.createLinearGradient(gleamX - 25, -bodyH, gleamX + 25, bodyH);
      gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-     gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+     gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
      gleamGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
      ctx.fillStyle = gleamGrad;
      ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
      ctx.restore();
-   - DILARANG KERAS kilau cahaya, glare, atau kotak kilau keluar melampaui batas objek atau merembes ke latar belakang (terutama pada green screen #00FF00)!
 
-4. KUALITAS VEKTOR STUDIO 4 LAPIS KEDALAMAN (4-TIER MASTERPIECE REALISM):
-   a. Base Chassis: Siluet primer solid dengan bevel membulat elegan bertekstur tebal (ctx.roundRect, ctx.ellipse).
-   b. Shading Multi-Stop: Gradien arah studio (highlight terang kiri-atas ke bayangan gelap kanan-bawah) memberi volume 3D berbobot.
-   c. Detail Mekanis Nyata: Garis kontur tebal bersih (ctx.lineWidth = 3-4, round cap), baut pengikat, celah panel, bezel kaca.
-   d. Lapisan Kinetik Aktif 60 FPS: Elemen fungsional bergerak sinkron tanpa henti.
+3. MUTLAK: VEKTOR VOLUMETRIK 3D BERKELAS STUDIO (DILARANG WIREFRAME / GARIS TIPIS KOSONG):
+   - DILARANG KERAS menggambar objek hanya berupa garis kawat (wireframe strokes) tanpa isi padat!
+   - Objek WAJIB memiliki konstruksi solid 2.5D / isometrik bervolume:
+     * Dinding belakang (back wall) terisi warna gradien gelap solid untuk ilusi kedalaman rongga.
+     * Muatan/isi di dalam bodi (misal parcel, boks belanja, data cube) berupa bentuk 3D solid dengan gradien cerah dan aksen pita/garis.
+     * Kisi-kisi/dinding depan berupa batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik dan ujung membulat.
+     * Sasis bawah berupa pipa padat berbobot dengan bracket dudukan roda.
+     * Roda pejal dengan ban karet tebal, velg alloy, dan jari-jari berputar.
+     * Kontur garis luar rapi dan kontras (lineWidth 3-4px, round joins).
+     * Bevel specular edge: Garis lengkung tipis di tepi atas bibir bodi memberi kesan material glossy premium.
+
+4. MUTLAK: SETIAP SUB-ELEMEN FUNGSIONAL WAJIB HIDUP & AKTIF BERGERAK 60 FPS:
+   - Objek bukan gambar mati! Semua komponen fungsional beroperasi secara kinetik:
+     * Roda / Gear / Turbin: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
+     * Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 3.5) * 3).
+     * Sinar Laser Scanner / Sensor: Garis pemindai tipis menyapu bolak-balik di atas muatan/layar (Math.sin(t * 2.5) * scanRange).
+     * Lampu Indikator / LED: Berkedip ritmis (Math.sin(t * 5.0) > 0.2).
+     * Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
+     * Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
 
 5. ISOLASI TOTAL & KEBERSIHAN KANVAS:
-   - DILARANG memunculkan partikel mengambang, debu liar, bintik acak, atau serpihan di luar objek utama!
-   - Background canvas di sekeliling icon harus 100% bersih, solid, dan kontras.
-   - Skala S = Math.min(w, h) * 0.44; Objek terpusat di (cx, cy).`;
+   - Skala S = Math.min(w, h) * 0.44; Objek terpusat sempurna di (cx, cy).
+   - DILARANG partikel liar, debu mengambang, atau serpihan di luar objek utama.`;
 
   const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
 Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.

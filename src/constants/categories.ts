@@ -281,7 +281,7 @@ export function generateProceduralPrompts(
     ],
     // Icons: E-Commerce
     ecommerce_shopping: [
-      'stainless wireframe shopping trolley with locked rolling wheels',
+      'heavy-duty solid metallic shopping cart with polished deep basket, reinforced tubular chassis, and dual smooth-rolling alloy caster wheels',
       'kraft paper boutique shopping bag with cotton twisted handles',
       'sealed corrugated parcel package with barcode routing label',
       'ribbon-wrapped holiday gift box with spring-loaded lid reveal',
