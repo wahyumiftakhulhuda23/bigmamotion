@@ -711,40 +711,31 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PAR
     : `
 ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & PHYSICAL 3D PRESENCE):
 
-1. MUTLAK: ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - 100% ZERO DETACHED PARTS):
-   - SEMUA komponen suatu objek (badan, keranjang, roda, sasis, gagang, muatan, aksesoris) WAJIB DIGAMBAR DI DALAM SATU BLOK ROOT MATRIX UTAMA:
+1. MUTLAK: SATU KESATUAN BENDA UTUH (100% MONOLITHIC RIGID BODY - ZERO DETACHED PARTS):
+   - SEMUA komponen yang menyusun satu objek icon WAJIB MENYATU FISIK (WELDED & ANCHORED) TANPA CELAH UDARA (ZERO GAP):
+     * DILARANG KERAS EXPLODED VIEW atau memecah objek menjadi potongan-potongan melayang terpisah!
+     * DILARANG KERAS ada bagian (seperti keranjang, gagang, tali, roda, sasis, tutup, lensa, layar) yang terbang/mengambang terpisah dari badan utama!
+     * DILARANG KERAS MENGGAMBAR KOTAK WADAH, KARTU LATAR, ROUNDED RECTANGLE CONTAINER, ATAU AURA BACKDROP APAPUN DI BELAKANG ICON! Kanvas harus 100% bersih tembus pandang (hijau murni pada greenscreen, gelap solid pada dark mode).
+
+2. SAMBUNGAN FISIK PRESISI UNTUK SETIAP ANATOMI IKON:
+   - TROLI / SHOPPING CART: Sasis horizontal di bawah (y = S * 0.18); Keranjang bervolume tebal menempel LANGSUNG menindih rapat di atas sasis dari y = -S * 0.22 sampai y = S * 0.18 (dasar keranjang menyentuh persis sasis tanpa celah!); Pegangan/handle berakar langsung dari bibir atas kiri keranjang; Roda terpasang menempel pada poros sasis bawah (-wheelX, axleY) dan (+wheelX, axleY).
+   - MOBIL / KENDARAAN: Kabin, kaca, bemper, dan sasis merupakan 1 kesatuan solid bervolume; Roda berada tepat di dalam lubang spakbor sasis bawah.
+   - TAS / KOPER: Tali/gagang tas berakar menancap langsung di bibir bodi atas tas.
+   - KAMERA / GADGET: Lensa silinder bervolume terpasang di tengah muka kamera; Tombol shutter di pelat atas kamera.
+   - GEMBOK: Leher besi pengait (shackle) menancap kokoh di lubang bodi gembok.
+   - DOKUMEN / SERTIFIKAT: Teks garis atau stempel pita menempel di atas lembaran kertas.
+
+3. ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - SEMUA RELATIF KE (0, 0)):
+   - Seluruh sub-elemen objek digambar di dalam SATU BLOK ROOT MATRIX:
      ctx.save();
-     ctx.translate(cx, cy + Math.sin(t * 2.2) * 8); // Floating HANYA di root ini (amplitude halus ±8px)
-     ctx.rotate(Math.sin(t * 1.5) * 0.025);         // Kemiringan HANYA di root ini (±0.025 rad)
-     ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015); // Breathing scale
-
-     // PERATURAN KOORDINAT MUTLAK:
-     // - Semua posisi sub-bagian dihitung secara relatif terhadap titik pusat (0, 0)!
-     // - DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
-     // - DILARANG KERAS MENGGUNAKAN KOORDINAT ABSOLUT SEPERTI (0, 0) KANVAS YANG MEMBUAT OBJEK MELAYANG KE POJOK KANVAS!
-     // - DILARANG KERAS memberikan translasi atau rotasi independen pada bagian struktural bodi (keranjang, sasis, pegangan 100% TERKUNCI MATI)!
-     
-     // ATURAN RODA / GEAR / SUB-KOMPONEN BERPUTAR:
-     // Roda terpasang kaku pada titik poros sasis (-wheelOffsetX, wheelOffsetY) dan (+wheelOffsetX, wheelOffsetY):
-     // ctx.save();
-     // ctx.translate(wheelOffsetX, wheelOffsetY); // Pindah ke titik poros lokal pada sasis
-     // ctx.rotate(t * wheelSpeed);               // Putaran velg/spokes pada poros
-     // // Gambar velg alloy pejal, ban karet tebal, hubcap tengah, dan jari-jari centered di (0, 0)
-     // ctx.restore();
-     // Roda TETAP terikat mati di titik poros sasis, TIDAK AKAN PERNAH TERLEPAS!
-
-     ctx.restore();
-
-2. BAYANGAN LANTAI REALISTIS & TANGIBLE 3D PRESENCE (GROUND CONTACT SHADOW):
-   - Sebelum menggambar bodi objek di root matrix, gambarkan bayangan kontak lantai (contact shadow) di bawah objek:
-     const floatY = Math.sin(t * 2.2) * 8;
-     const shadowScale = 1 - (floatY / 35);
-     ctx.save();
-     ctx.translate(cx, cy + S * 0.65);
-     ctx.beginPath();
-     ctx.ellipse(0, 0, S * 0.45 * shadowScale, S * 0.08 * shadowScale, 0, 0, Math.PI * 2);
-     ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
-     ctx.fill();
+     ctx.translate(cx, cy + floatY); // Floating hanya di root matrix ini
+     ctx.rotate(Math.sin(t * 1.5) * 0.025);
+     ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
+     // SEMUA koordinat digambar relatif terhadap titik pusat (0, 0)!
+     // DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
+     // DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM ROOT INI!
+     // DILARANG MENGGUNAKAN KOORDINAT KANVAS (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE SUDUT KIRI-ATAS KANVAS!
+     // Sub-bagian berputar (roda/gir) hanya translate ke titik poros lokal pada sasis (ctx.translate(wheelX, wheelY); ctx.rotate(t * speed); ... ctx.restore();)
      ctx.restore();
 
 3. PENCAHAYAAN STUDIO 3-STAGE & TEKSTUR MATERIAL ULTRA-REALISTIS:
@@ -852,7 +843,37 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // --- LOGIKA MENGGAMBAR ANIMASI SESUAI BRIEF ---
+${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, ZERO PARTICLES) ---
+    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW - digambar di lantai di bawah objek)
+    const floatY = Math.sin(t * 2.2) * (S * 0.035);
+    const shadowScale = Math.max(0.7, 1 - (floatY / (S * 0.15)));
+    ctx.save();
+    ctx.translate(cx, cy + S * 0.52);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, S * 0.38 * shadowScale, S * 0.06 * shadowScale, 0, 0, Math.PI * 2);
+    ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
+    ctx.fill();
+    ctx.restore();
+
+    // 2. ROOT MATRIX TUNGGAL - SATU KESATUAN BENDA UTUH (100% ZERO DETACHED PARTS):
+    // WAJIB: SELURUH BAGIAN PENYUSUN IKON DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
+    // - DILARANG MEMBUKA ctx.translate(cx, cy) LAGI KARENA PUSAT OBJEK SUDAH (0, 0)!
+    // - DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM BLOK INI!
+    // - DILARANG MENGGUNAKAN KOORDINAT KANVAS SEPERTI (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE POJOK KANVAS!
+    // - DILARANG MENGGAMBAR KOTAK WADAH / KARTU LATAR DI BELAKANG IKON!
+    ctx.save();
+    ctx.translate(cx, cy + floatY);
+    ctx.rotate(Math.sin(t * 1.5) * 0.025);
+    ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
+
+    // [GAMBARKAN SELURUH ANATOMI IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
+    // - Sasis / Bodi terpusat di (0, 0)
+    // - Keranjang / Kompartemen menempel LANGSUNG menindih sasis rapat tanpa celah
+    // - Pegangan / Handle berakar menempel pada bodi/keranjang
+    // - Roda terpasang pada as sasis bawah (-wheelX, axleY) dan (+wheelX, axleY)
+    // - Specular Gleam Highlight di-clip di dalam bodi
+
+    ctx.restore();`}
 
     requestAnimationFrame(animate);
   }
@@ -1050,7 +1071,32 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // RENDER ANIMASI OBJEK SESUAI BENTUK GAMBAR ASLI DENGAN WARNA HEX ASLI & GERAKAN KINETIK NYATA 60 FPS
+    // 1. BAYANGAN LANTAI (GROUND CONTACT SHADOW)
+    const floatY = Math.sin(t * 2.4) * (S * 0.035);
+    const shadowScale = Math.max(0.7, 1 - (floatY / (S * 0.15)));
+    ctx.save();
+    ctx.translate(cx, cy + S * 0.52);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, S * 0.38 * shadowScale, S * 0.06 * shadowScale, 0, 0, Math.PI * 2);
+    ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
+    ctx.fill();
+    ctx.restore();
+
+    // 2. SATU MATRIX INDUK UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY - 100% ANTI-DETACH):
+    // WAJIB: SELURUH ELEMEN PENYUSUN OBJEK DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
+    // - DILARANG MEMBUKA ctx.translate(cx, cy) LAGI KARENA PUSAT OBJEK SUDAH (0, 0)!
+    // - DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM BLOK INI!
+    // - DILARANG MENGGUNAKAN KOORDINAT KANVAS SEPERTI (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE SUDUT KANVAS!
+    // - DILARANG MENGGAMBAR KOTAK WADAH / KARTU LATAR DI BELAKANG OBJEK!
+    ctx.save();
+    ctx.translate(cx, cy + floatY);
+    ctx.rotate(Math.sin(t * 1.8) * 0.025);
+    ctx.scale(1 + Math.sin(t * 2.4) * 0.015, 1 + Math.sin(t * 2.4) * 0.015);
+
+    // REKONSTRUKSI ELEMEN OBJEK REFERENSI SECARA UTUH DAN MENYATU (SEMUA RELATIF KE (0, 0)):
+    // Seluruh komponen bersambung fisik tanpa celah udara (keranjang menindih sasis, roda di poros sasis bawah, gagang di bibir atas)
+
+    ctx.restore();
 
     requestAnimationFrame(animate);
   }

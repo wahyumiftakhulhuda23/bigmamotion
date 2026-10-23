@@ -402,23 +402,23 @@ export function generateProceduralPrompts(
   const iconSentenceTemplates = [
     // Template 1: Subject-centric with mechanical rigging
     (subj: string, mot: string, col: string) =>
-      `A meticulously crafted ${subj}, anchored to a single rigid chassis origin with zero loose parts, rendered in ${col}, animated with ${mot}. Clean isolated silhouette, studio microstock grade.`,
+      `A meticulously assembled monolithic ${subj}, where all components, chassis, and attached details form one unbroken unified rigid body with zero detached parts and zero background cards, rendered in ${col}, animated with ${mot}. Clean isolated silhouette, studio microstock grade.`,
     
     // Template 2: Technical Vector Blueprint
     (subj: string, mot: string, col: string) =>
-      `Studio vector depiction of ${subj}: featuring seamless parent-child joint matrix, crisp 3px contour, and ${col}. The central form executes ${mot} with zero canvas clutter.`,
+      `Studio vector depiction of ${subj}: featuring seamless welded parent-child joint matrix, firmly anchored sub-elements, crisp contour, and ${col}. The central form executes ${mot} with zero detached elements and zero canvas clutter.`,
     
     // Template 3: Kinetic Motion Focus
     (subj: string, mot: string, col: string) =>
-      `Kinetic microstock emblem of ${subj}: dynamic 60 FPS loop showcasing ${mot}, built with interlocking solid components in ${col}. Entirely unified anatomy with specular surface highlight sheen.`,
+      `Kinetic microstock emblem of ${subj}: dynamic 60 FPS loop showcasing ${mot}, built with interlocking solid components in ${col}. Entirely unified monolithic anatomy with zero floating pieces and specular surface highlight sheen.`,
     
     // Template 4: Premium Isometric / Flat Vector
     (subj: string, mot: string, col: string) =>
-      `High-end ${subj} vector symbol: pristine centered composition, rigid internal articulation, and ${col}. The subject performs ${mot} against a spotless backdrop.`,
+      `High-end ${subj} vector symbol: pristine centered composition, firmly anchored joints without air gaps, rigid internal articulation, and ${col}. The subject performs ${mot} against a spotless backdrop.`,
     
     // Template 5: Executive Commercial Stock
     (subj: string, mot: string, col: string) =>
-      `Precision commercial icon of ${subj}: constructed with balanced bevel volume, anchored pivot axes, and ${col}. Seamless 60 FPS motion featuring ${mot}.`,
+      `Precision commercial icon of ${subj}: constructed with balanced bevel volume, anchored pivot axes, welded structural components, and ${col}. Seamless 60 FPS motion featuring ${mot} as one unified body.`,
   ];
 
   const bgSentenceTemplates = [
