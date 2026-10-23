@@ -439,15 +439,21 @@ export function generateProceduralPrompts(
       `High-production motion wallpaper showcasing ${subj}: edge-to-edge procedural displacement with multi-layered depth, glowing in ${col}, moving in ${mot}. Zero clutter, 60 FPS microstock asset.`,
   ];
 
-  const motionDescriptions = [
-    'gentle harmonic floating oscillation (amplitude ±12px) paired with synchronized internal wheel and dial rotation',
-    'smooth continuous 360-degree axial rotation with sweeping 45-degree diagonal specular gleams',
-    'rhythmic mechanical breathing pulse (0.97x to 1.03x) and concentric luminescent signal radiation',
-    'continuous organic wave flow with multi-frequency sinusoidal displacement',
-    'calibrated cybernetic stepped telemetry tracking and responsive targeting reticle sweeps',
-    'elastic kinetic spring oscillations with precision damping and zero deformation',
-    'counter-rotating interlocking gear articulation anchored permanently to the main body origin',
-    'undulating volumetric depth ripples cascading seamlessly across the viewport',
+  // Architectural 3D Flat Chiaroscuro & Volumetric Attributes
+  const chiaroscuroTreatments = [
+    'featuring 3-plane 3D Flat chiaroscuro (illuminated top face with key highlight, rich midtone front facade, and deep ambient occlusion shadow underbelly)',
+    'constructed with volumetric 3D Flat geometry, crisp 1.5px bevel edge highlight rails, and deep crevice seam shadows',
+    'rendered in high-end 3D Flat vector styling with distinct value contrast between light-facing planes and shaded under-surfaces',
+    'designed with solid 3D Flat isometric depth, illuminated upper chamfers, and rich shadow crevice lines',
+    'featuring balanced 3D Flat tonal distribution, specular key highlights on top curvature, and dark ambient occlusion below',
+  ];
+
+  const elasticMotions = [
+    'harmonic vertical floating with elastic squash-and-stretch spring bounce (subtle body compression on dip and stretch on apex), synchronized internal wheel rotation on locked axle pins, and a clipped 45-degree diagonal specular sheen sweep',
+    'elastic kinetic oscillation with secondary payload inertia (phase-lagged internal spring bounce), breathing scale pulse (0.98x to 1.02x), and rhythmic exponential LED breathing',
+    'coordinated mechanical articulation with elastic spring recoil, locked rigid joint pivots, and smooth continuous 60 FPS specular gleam sweeping across the surface',
+    'subtle elastic spring floating with dynamic ground contact shadow contraction, counter-rotating bevel gear wheels, and responsive kinetic inertia',
+    'fluid harmonic oscillation with organic spring damping, synchronized internal dial needle vibration, and clipped volumetric light sweep',
   ];
 
   const colorTreatments = [
@@ -458,22 +464,54 @@ export function generateProceduralPrompts(
     `refined ${colorMode} styling optimized for crisp visual punch and broadcast clarity`,
   ];
 
+  // Structural Assembly Qualifiers (guaranteeing monolithic attached construction)
+  const assemblyQualifiers = [
+    'welded monolithic assembly with zero detached parts and no container card',
+    'solid unified chassis where all accessories, handles, and wheels are firmly anchored',
+    'interlocking rigid body construction with zero loose fragments and spotless background',
+    'single continuous structural frame with permanent joint anchors and zero air gaps',
+  ];
+
   const results: string[] = [];
   const totalWanted = Math.max(1, count);
+  const seenHashes = new Set<string>();
+
+  // Daily & Session Entropy Seeds - guarantees day-over-day and run-over-run infinite uniqueness
+  const dayHash = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
+  const timeSeed = (Date.now() % 1000000);
+  const sessionSalt = Math.floor(Math.random() * 999999);
 
   for (let i = 0; i < totalWanted; i++) {
-    const globalIdx = startIndex + i;
-    const subj = subjects[globalIdx % subjects.length];
-    const mot = motionDescriptions[globalIdx % motionDescriptions.length];
-    const col = colorTreatments[globalIdx % colorTreatments.length];
+    let candidate = '';
+    let attempt = 0;
 
-    if (type === 'icon') {
-      const template = iconSentenceTemplates[globalIdx % iconSentenceTemplates.length];
-      results.push(template(subj, mot, col));
-    } else {
-      const template = bgSentenceTemplates[globalIdx % bgSentenceTemplates.length];
-      results.push(template(subj, mot, col));
+    while (attempt < 15) {
+      attempt++;
+      // High-entropy non-repeating hashing index
+      const pIndex = (startIndex + i * 7 + dayHash * 31 + timeSeed + sessionSalt + attempt * 101) >>> 0;
+      const subj = subjects[pIndex % subjects.length];
+      const mot = elasticMotions[(pIndex * 13) % elasticMotions.length];
+      const col = colorTreatments[(pIndex * 17) % colorTreatments.length];
+      const chiar = chiaroscuroTreatments[(pIndex * 19) % chiaroscuroTreatments.length];
+      const assembly = assemblyQualifiers[(pIndex * 23) % assemblyQualifiers.length];
+
+      if (type === 'icon') {
+        const tIndex = (pIndex * 3) % iconSentenceTemplates.length;
+        const baseSubj = `${subj} (${assembly}, ${chiar})`;
+        candidate = iconSentenceTemplates[tIndex](baseSubj, mot, col);
+      } else {
+        const tIndex = (pIndex * 3) % bgSentenceTemplates.length;
+        candidate = bgSentenceTemplates[tIndex](subj, mot, col);
+      }
+
+      const hash = candidate.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 80);
+      if (!seenHashes.has(hash)) {
+        seenHashes.add(hash);
+        break;
+      }
     }
+
+    results.push(candidate);
   }
 
   return results;

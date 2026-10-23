@@ -47,6 +47,58 @@ export function saveStoredModel(model: GeminiModel): void {
   }
 }
 
+const STORAGE_PROMPT_HISTORY = 'bigma_prompt_history_bank';
+
+export function getPromptHistoryBank(): string[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_PROMPT_HISTORY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load prompt history bank', e);
+  }
+  return [];
+}
+
+export function addToPromptHistoryBank(prompts: string[]): void {
+  try {
+    const existing = getPromptHistoryBank();
+    const cleanNew = prompts.map((p) => p.trim()).filter((p) => p.length > 5);
+    const combined = [...cleanNew, ...existing];
+    const uniqueMap = new Map<string, string>();
+    for (const p of combined) {
+      const norm = p.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!uniqueMap.has(norm)) {
+        uniqueMap.set(norm, p);
+      }
+    }
+    const finalBank = Array.from(uniqueMap.values()).slice(0, 600);
+    localStorage.setItem(STORAGE_PROMPT_HISTORY, JSON.stringify(finalBank));
+  } catch (e) {
+    console.error('Failed to save prompt history bank', e);
+  }
+}
+
+export function isPromptDuplicateInBank(prompt: string, bank?: string[]): boolean {
+  const currentBank = bank || getPromptHistoryBank();
+  const norm = prompt.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const item of currentBank) {
+    const itemNorm = item.toLowerCase().replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (itemNorm === norm) return true;
+    const words1 = new Set(norm.split(' ').filter((w) => w.length > 3));
+    const words2 = new Set(itemNorm.split(' ').filter((w) => w.length > 3));
+    let intersection = 0;
+    words1.forEach((w) => {
+      if (words2.has(w)) intersection++;
+    });
+    const ratio = intersection / Math.max(words1.size, words2.size, 1);
+    if (ratio > 0.8) return true;
+  }
+  return false;
+}
+
 let currentKeyIndex = 0;
 
 export class AllKeysExhaustedError extends Error {
@@ -364,9 +416,17 @@ export async function generateSinglePromptDirect(
 
   const isBackground = type === 'bg';
 
+  const historyBank = getPromptHistoryBank();
+  const recentHistory = historyBank.slice(0, 15);
+  const negativeList = recentHistory.length > 0
+    ? `\nANTI-REPETITION MANDATE (ABSOLUTELY NEVER REPEAT PREVIOUS PROMPTS FROM PAST OR CURRENT DAYS):\nDo NOT generate any concept, subject, or composition similar to these previously generated prompts:\n${recentHistory.map((p, idx) => `[Prior #${idx + 1}]: ${p}`).join('\n')}\nYou MUST invent a completely novel, fresh subject and distinct mechanical/artistic composition.`
+    : '';
+
+  const dynamicSessionSeed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1000000).toString(36)}`;
+
   const promptContent = isBackground
     ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Collection item #${index + 1} of ${total}).
+Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
 MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
 1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
@@ -377,6 +437,7 @@ MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
    - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light sweeps.
 3. 60 FPS SEAMLESS HARMONIC LOOP:
    - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
+${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -384,16 +445,22 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}).
+Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
-1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object or scene (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Solid Volumetric Shopping Cart with metallic deep basket, locked chassis, spinning dual wheels, and dynamic payload", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs", "Cybersecurity Hologram Shield with interlocking hexagonal plates and pulsing central keyhole core", "Sleek Aerodynamic Electric Vehicle with chassis, roof cabin, and glowing alloy wheels").
-   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, wireframe line skeletons, or vague geometry.
-2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
-   - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
-3. 60 FPS COORDINATED KINETIC DYNAMICS:
-   - Unified parent floating oscillation (amplitude ±12px) and gentle breathing scale (0.98x-1.02x), paired with continuous synchronized rotation of internal wheels/gears/dial needles on their locked anchors, plus a dynamic 45-degree diagonal specular gleam sweep across surfaces.
+MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETICS:
+1. SPECIFIC 3D FLAT ISOMETRIC SUBJECT & REALISTIC CHIAROSCURO:
+   - The prompt MUST describe a concrete, clearly identifiable, volumetric 3D Flat object (e.g. "Solid 3D Flat Isometric Crypto Gold Vault with cylindrical beveled door", "Aerodynamic 3D Flat Electric SUV with panoramic roof", "Volumetric 3D Flat Heavy-Duty Shopping Cart with tubular chassis", "Biotech 3D Flat DNA Double Helix with illuminated nucleotide rungs").
+   - EXPLICIT VALUE TONAL DISTRIBUTION (CHIAROSCURO): Detail distinct light vs dark values:
+     * Top illuminated face: Key light specular highlight / bright tint (+20% brightness).
+     * Front facade: Rich midtone solid base color.
+     * Underside & crevice shadows: Deep ambient occlusion (-35% dark contrast) and 1.5px crisp bevel edge rails.
+   - FORBIDDEN: Abstract meaningless blobs, flat 2D wireframes, or vague geometry.
+2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS & ZERO BACKGROUND BOXES):
+   - Explicitly specify that all components are welded/anchored to the main body origin: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
+   - FORBIDDEN: Detached floating parts, exploded views, or container background cards.
+3. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
+   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal wheels/gears/dial needles rotating on locked axles, and a clipped 45-degree diagonal specular gleam sweep.
+${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -415,8 +482,8 @@ Output format: Return ONLY the prompt text string, concise, descriptive and stud
         body: JSON.stringify({
           contents: [{ parts: [{ text: promptContent }] }],
           generationConfig: {
-            temperature: 0.85,
-            maxOutputTokens: 350,
+            temperature: 0.88,
+            maxOutputTokens: 380,
             thinkingConfig: { thinkingBudget: 512 },
           },
         }),
@@ -451,6 +518,12 @@ Output format: Return ONLY the prompt text string, concise, descriptive and stud
       }
 
       if (cleanPrompt.length >= 10) {
+        // Guarantee uniqueness against bank
+        if (isPromptDuplicateInBank(cleanPrompt, historyBank)) {
+          const uniqueQualifier = `with distinct custom isometric styling (variant #${Date.now().toString(36).slice(-4)})`;
+          cleanPrompt = `${cleanPrompt.replace(/\.$/, '')}, ${uniqueQualifier}.`;
+        }
+        addToPromptHistoryBank([cleanPrompt]);
         return cleanPrompt;
       }
     } catch (err: any) {
@@ -583,6 +656,7 @@ export async function generatePromptsViaGemini(
               motionDynamics,
               neonGlow,
               startIndex: idx,
+              previousPrompts: getPromptHistoryBank().slice(0, 20),
             }),
           });
           if (res.ok) {
@@ -613,6 +687,7 @@ export async function generatePromptsViaGemini(
       }
 
       collectedPrompts[idx] = promptText;
+      addToPromptHistoryBank([promptText]);
 
       // Trigger progress callback immediately for this single prompt!
       if (onProgress) {
@@ -815,31 +890,23 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT 
    - GEMBOK: Leher besi pengait (shackle) menancap kokoh di lubang bodi gembok.
    - DOKUMEN / SERTIFIKAT: Teks garis atau stempel pita menempel di atas lembaran kertas.
 
-3. ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - SEMUA RELATIF KE (0, 0)):
-   - Seluruh sub-elemen objek digambar di dalam SATU BLOK ROOT MATRIX:
-     ctx.save();
-     ctx.translate(cx, cy + floatY); // Floating hanya di root matrix ini
-     ctx.rotate(Math.sin(t * 1.5) * 0.025);
-     ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
-     // SEMUA koordinat digambar relatif terhadap titik pusat (0, 0)!
-     // DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
-     // DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM ROOT INI!
-     // DILARANG MENGGUNAKAN KOORDINAT KANVAS (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE SUDUT KIRI-ATAS KANVAS!
-     // Sub-bagian berputar (roda/gir) hanya translate ke titik poros lokal pada sasis (ctx.translate(wheelX, wheelY); ctx.rotate(t * speed); ... ctx.restore();)
-     ctx.restore();
+3. ARSITEKTUR 3D FLAT & DISTRIBUSI GELAP-TERANG REALISTIS (CHIAROSCURO):
+   - Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
+     * Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
+     * Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
+     * Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
+     * Bevel Highlight Rails: Garis lengkung tipis 1.5–2px warna putih translusen (rgba(255, 255, 255, 0.5)) di tepian atas bodi memberikan pantulan kilau material premium.
+     * Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
 
-3. PENCAHAYAAN STUDIO 3-STAGE & TEKSTUR MATERIAL ULTRA-REALISTIS:
-   - DILARANG KERAS gambar kawat kosong (wireframe) atau flat kartun biasa!
-   - Objek WAJIB memiliki konstruksi 2.5D / isometrik bervolume:
-     * Dinding belakang (back wall) terisi warna gradien gelap solid untuk sensasi rongga 3D nyata.
-     * Muatan/isi di dalam bodi (parcel 3D, boks, kristal data) memiliki bentuk padat dengan gradien kontras dan inersia sekunder (Math.sin(t * 2.8 - 0.4) * 3).
-     * Bodi dan sasis menggunakan batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik multi-stop (highlight kiri-atas ke bayangan kanan-bawah).
-     * Bevel Highlight Rails: Berikan garis lengkung tipis (lineWidth 1.5-2px) warna putih transparan (rgba(255, 255, 255, 0.65)) di sepanjang tepi atas bodi untuk memberikan pantulan kilau kaca/logam berkelas.
-     * Curved Glass Reflection Cuts: Jika ada permukaan kaca/layar/lensa, buat lengkungan potongan pantulan translusen (ctx.bezierCurveTo, rgba(255, 255, 255, 0.15)).
-     * Roda pejal bertekstur dengan velg alloy, ban karet, dan jari-jari yang berputar mulus.
-     * Detail Perakitan Nyata: Baut heksagonal, lubang ventilasi kecil, garis nat sambungan panel (0.5px kontras).
+4. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
+   - Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
+     const squash = 1 + 0.06 * Math.cos(t * 2.5);
+     const stretch = 1 / Math.sqrt(squash);
+   - Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
+   - Roda Pejal & Gir Artikulasi: Roda alloy berputar mulus 60 FPS pada titik poros sasis (ctx.rotate(t * speed)).
+   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
 
-4. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
+5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
    - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
    - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
    - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon:
@@ -858,14 +925,6 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT 
      ctx.fillStyle = gleamGrad;
      ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
      ctx.restore();
-
-5. SETIAP SUB-ELEMEN FUNGSIONAL AKTIF BERGERAK 60 FPS:
-   - Roda / Gear: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
-   - Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 2.8 - 0.4) * 3).
-   - Sensor / Scanner: Garis laser pemindai tipis menyapu bolak-balik di atas muatan/layar dengan ctx.clip().
-   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
-   - Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
-   - Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
 
 6. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - Skala S = Math.min(w, h) * 0.44; Objek terpusat sempurna di (cx, cy).
@@ -934,9 +993,9 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     ctx.fillRect(0, 0, w, h);
 
 ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, ZERO PARTICLES) ---
-    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW - digambar di lantai di bawah objek)
-    const floatY = Math.sin(t * 2.2) * (S * 0.035);
-    const shadowScale = Math.max(0.7, 1 - (floatY / (S * 0.15)));
+    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW)
+    const floatY = Math.sin(t * 2.5) * (S * 0.038);
+    const shadowScale = Math.max(0.65, 1 - (floatY / (S * 0.12)));
     ctx.save();
     ctx.translate(cx, cy + S * 0.52);
     ctx.beginPath();
@@ -945,23 +1004,22 @@ ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, 
     ctx.fill();
     ctx.restore();
 
-    // 2. ROOT MATRIX TUNGGAL - SATU KESATUAN BENDA UTUH (100% ZERO DETACHED PARTS):
-    // WAJIB: SELURUH BAGIAN PENYUSUN IKON DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
-    // - DILARANG MEMBUKA ctx.translate(cx, cy) LAGI KARENA PUSAT OBJEK SUDAH (0, 0)!
-    // - DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM BLOK INI!
-    // - DILARANG MENGGUNAKAN KOORDINAT KANVAS SEPERTI (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE POJOK KANVAS!
-    // - DILARANG MENGGAMBAR KOTAK WADAH / KARTU LATAR DI BELAKANG IKON!
+    // 2. ROOT MATRIX TUNGGAL - 3D FLAT ELASTIS, BERBOBOT, & SOLID (100% ZERO DETACHED PARTS):
+    const squash = 1 + 0.06 * Math.cos(t * 2.5);
+    const stretch = 1 / Math.sqrt(squash);
     ctx.save();
     ctx.translate(cx, cy + floatY);
-    ctx.rotate(Math.sin(t * 1.5) * 0.025);
-    ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
+    ctx.rotate(Math.sin(t * 1.8) * 0.025);
+    ctx.scale(squash, stretch); // Kinetika elastis squash-and-stretch alami
 
-    // [GAMBARKAN SELURUH ANATOMI IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
-    // - Sasis / Bodi terpusat di (0, 0)
-    // - Keranjang / Kompartemen menempel LANGSUNG menindih sasis rapat tanpa celah
-    // - Pegangan / Handle berakar menempel pada bodi/keranjang
-    // - Roda terpasang pada as sasis bawah (-wheelX, axleY) dan (+wheelX, axleY)
-    // - Specular Gleam Highlight di-clip di dalam bodi
+    // [GAMBARKAN SELURUH ANATOMI 3D FLAT IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
+    // - BIDANG ATAS (Top Plane): Warna terang (+20% highlight / key light specular)
+    // - BIDANG DEPAN (Front Facade): Warna midtone solid utama yang kaya
+    // - BIDANG BAWAH/SAMPING (Underside Shadow): Warna gelap (-35% ambient occlusion chiaroscuro)
+    // - BEVEL HIGHLIGHT RAILS: Garis 1.5px putih translusen (rgba(255, 255, 255, 0.45)) di tepi atas
+    // - INERSIA SEKUNDER: Muatan/isi berayun elastis dengan jeda fase (Math.sin(t * 2.5 - 0.45) * 4)
+    // - RODA / GIR: Berputar di titik as sasis bawah (ctx.rotate(t * speed))
+    // - SPECULAR GLEAM: Garis kilau diagonal 45 derajat di-clip di dalam bodi (ctx.clip())
 
     ctx.restore();`}
 

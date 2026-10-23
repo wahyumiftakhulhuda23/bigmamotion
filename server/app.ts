@@ -20,6 +20,9 @@ export function getClient(apiKey?: string) {
   });
 }
 
+// Server-side in-memory prompt history bank across sessions
+const serverPromptHistoryBank = new Set<string>();
+
 export function getSmartThinkingConfig(targetModel: string, budget = 2048): any {
   // Empower AI reasoning with an active thinking budget for models supporting extended thinking (3.8, 2.5, 3.1-pro)
   if (targetModel.includes("2.5") || targetModel.includes("3.8") || targetModel.includes("pro") || targetModel.includes("thinking")) {
@@ -367,6 +370,14 @@ export async function handleGeneratePromptsLogic(body: any) {
     ? `Microstock Category (Adobe Stock / Shutterstock): ${catMeta.enName} (${catMeta.name})\nCategory Theme & Keywords: ${catMeta.description} - ${catMeta.stockKeywords.join(', ')}\n`
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
+  const previousPrompts: string[] = Array.isArray(body.previousPrompts) ? body.previousPrompts : [];
+  const mergedBank = Array.from(new Set([...previousPrompts, ...serverPromptHistoryBank])).slice(0, 20);
+  const negativeList = mergedBank.length > 0
+    ? `\nANTI-REPETITION MANDATE (ABSOLUTELY NEVER REPEAT PREVIOUS PROMPTS ACROSS DAYS OR SESSIONS):\nDo NOT generate any concept, subject, or composition similar to these previously generated prompts:\n${mergedBank.map((p, idx) => `[Prior #${idx + 1}]: ${p}`).join('\n')}\nYou MUST invent a completely novel, fresh subject and distinct mechanical/artistic composition.`
+    : '';
+
+  const dynamicSessionSeed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1000000).toString(36)}`;
+
   const targetCount = Math.max(1, count || 1);
   const CHUNK_SIZE = 12;
   const numChunks = Math.ceil(targetCount / CHUNK_SIZE);
@@ -382,7 +393,7 @@ export async function handleGeneratePromptsLogic(body: any) {
     if (type === 'bg') {
       promptContent = isSingle
         ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English.
+Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Seed: ${dynamicSessionSeed}).
 
 MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
 1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
@@ -393,6 +404,7 @@ MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
    - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light sweeps.
 3. 60 FPS SEAMLESS HARMONIC LOOP:
    - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
+${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -400,7 +412,7 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: JSON array containing exactly 1 string, e.g. ["Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport..."]`
         : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} UNIQUE FULL-FRAME MOTION BACKGROUND prompts. STRICT RULE: NO REPETITION. Each prompt must describe a completely different atmospheric environment, motion dynamic, and visual theme. Start EVERY prompt with a unique [ID_CODE] (e.g., [CHROMATIC_WAVES], [CYBER_HORIZON], [AURORA_RIBBONS], [SILK_CAUSTICS]).
+Generate exactly ${batchCount} UNIQUE FULL-FRAME MOTION BACKGROUND prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different atmospheric environment, motion dynamic, and visual theme. Start EVERY prompt with a unique [ID_CODE] (e.g., [CHROMATIC_WAVES], [CYBER_HORIZON], [AURORA_RIBBONS], [SILK_CAUSTICS]).
 
 MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY (STRICT ZERO PARTICLES):
 1. NO REPETITION & NO CENTERING: Each prompt MUST describe a FULL-FRAME EDGE-TO-EDGE motion graphics scene filling the entire widescreen canvas. NEVER describe isolated icons, centered logos, or static borders.
@@ -412,6 +424,7 @@ MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY (STRICT ZERO PARTICLES):
    - Prompt 4: Luxury satin fabric folds, liquid metallic gold waves, or ambient studio caustics.
    - (Vary concepts continuously across all items).
 4. 60 FPS SEAMLESS KINETICS: Include harmonic wave oscillations, continuous panning, and atmospheric depth.
+${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -421,26 +434,31 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
     } else {
       promptContent = isSingle
         ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English.
+Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR HIGH-CLASS SHAPES, ATTACHED RIGGING & ZERO DEFECTS:
-1. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - The prompt MUST describe a concrete, clearly identifiable, meaningful visual object (e.g. "Isometric Crypto Gold Coin with beveled edge and glowing currency core", "Solid Volumetric Shopping Cart with metallic deep basket, locked chassis, spinning dual wheels, and dynamic payload", "Biotech DNA Double Helix rotating smoothly with glowing nucleotide rungs").
-   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, wireframe line skeletons, or vague geometry.
-2. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
-   - Explicitly specify how all components are attached to the main body: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis.
-3. 60 FPS COORDINATED KINETIC DYNAMICS:
-   - Unified parent floating oscillation (amplitude ±12px) and gentle breathing scale (0.98x-1.02x), paired with continuous synchronized rotation of internal wheels/gears/dial needles on their locked anchors, plus a dynamic 45-degree diagonal specular gleam sweep across surfaces.
+MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETICS:
+1. SPECIFIC 3D FLAT ISOMETRIC SUBJECT & REALISTIC CHIAROSCURO:
+   - The prompt MUST describe a concrete, clearly identifiable, volumetric 3D Flat object with 3 distinct light planes:
+     * Top surface: illuminated with key light specular highlight / bright tint (+20% brightness).
+     * Front facade: rich midtone solid base color.
+     * Underside & crevice shadows: deep ambient occlusion (-35% dark contrast) and 1.5px crisp bevel edge rails.
+   - FORBIDDEN: Abstract meaningless blobs, flat 2D wireframes, or vague geometry.
+2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS & ZERO BACKGROUND BOXES):
+   - Explicitly specify that all components are welded/anchored to the main body origin: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
+   - FORBIDDEN: Detached floating parts, exploded views, or container background cards.
+3. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
+   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal wheels/gears/dial needles rotating on locked axles, and a clipped 45-degree diagonal specular gleam sweep.
+${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
-Output format: JSON array containing exactly 1 string, e.g. ["Isometric Crypto Gold Coin with beveled edge and glowing currency core..."]`
+Output format: JSON array containing exactly 1 string, e.g. ["Solid 3D Flat Isometric Crypto Gold Vault with cylindrical beveled door, cross-locking bolts, deep contrast brushed gold with dark shadow grooves, rotating center dial wheel, and floating contact shadow..."]`
         : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} UNIQUE animation prompts. STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_PULSE], [VAULT_SAFE], [TREND_GRAPH]).
+Generate exactly ${batchCount} UNIQUE animation prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_VAULT], [SMART_CART], [GROWTH_METRIC]).
 
-MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
+MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETICS:
 1. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
    - EACH prompt in this batch MUST have a COMPLETELY DIFFERENT sentence structure, vocabulary, and thematic focus.
    - You MUST vary the descriptive style for each:
@@ -449,13 +467,13 @@ MANDATORY RULES FOR EXTREME DIVERSITY, HIGH-CLASS SHAPES, & ZERO DEFECTS:
      - Prompt 3: Focus on complex, isometric geometric structures and depth.
    - NEVER use the same adjective, phrasing, or sentence structure twice in the same batch.
    - Each prompt must describe a distinct concrete, clearly identifiable, meaningful visual object or scene from the category: ${catMeta?.enName || subCategory}.
-2. RECOGNIZABLE SUBJECT & SLEEK VECTOR ART:
-   - Each prompt must describe a unique, highly marketable object (e.g., "Bionic robotic hand with articulated fingers and neural circuit pathways", "Fluid abstract gradient sphere morphing into sharp geometric shards", "Data-driven digital dashboard with floating volumetric bar charts").
-   - FORBIDDEN: Abstract meaningless blobs, deformed random polygons, loose floating scribbles, or vague geometry.
-3. DETAILED RIGGED ANATOMY (NO DETACHED PARTS):
+2. SPECIFIC 3D FLAT SUBJECT & EXPLICIT CHIAROSCURO:
+   - Each prompt must describe a volumetric 3D Flat object with distinct light vs dark planes (illuminated top face, midtone front, deep ambient shadow underside).
+3. DETAILED MONOLITHIC ANATOMY (NO DETACHED PARTS):
    - Explicitly specify how components are attached: e.g., "locked inside wheel arches", "welded firmly to bag rim", "flush mounted to chassis".
-4. 60 FPS COORDINATED KINETIC DYNAMICS:
-   - Vary the kinetic motion description for each prompt (e.g., use "harmonic floating oscillation", "rhythmic breathing pulse", "stepped quantum rotation", "articulated mechanical swing").
+4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
+   - Include harmonic vertical floating with elastic squash-and-stretch spring bounce, synchronized wheel/gear rotation on rigid anchors, and clipped specular sheen sweep.
+${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
@@ -513,6 +531,13 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
 
       if (chunkPrompts.length > 0) {
         allPrompts = [...allPrompts, ...chunkPrompts.slice(0, batchCount)];
+        for (const p of chunkPrompts) {
+          if (serverPromptHistoryBank.size > 800) {
+            const first = serverPromptHistoryBank.values().next().value;
+            if (first) serverPromptHistoryBank.delete(first);
+          }
+          serverPromptHistoryBank.add(p);
+        }
       } else {
         const fallbackBatch = generateProceduralPrompts(
           batchCount,
@@ -725,31 +750,23 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT 
    - GEMBOK: Leher besi pengait (shackle) menancap kokoh di lubang bodi gembok.
    - DOKUMEN / SERTIFIKAT: Teks garis atau stempel pita menempel di atas lembaran kertas.
 
-3. ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - SEMUA RELATIF KE (0, 0)):
-   - Seluruh sub-elemen objek digambar di dalam SATU BLOK ROOT MATRIX:
-     ctx.save();
-     ctx.translate(cx, cy + floatY); // Floating hanya di root matrix ini
-     ctx.rotate(Math.sin(t * 1.5) * 0.025);
-     ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
-     // SEMUA koordinat digambar relatif terhadap titik pusat (0, 0)!
-     // DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
-     // DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM ROOT INI!
-     // DILARANG MENGGUNAKAN KOORDINAT KANVAS (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE SUDUT KIRI-ATAS KANVAS!
-     // Sub-bagian berputar (roda/gir) hanya translate ke titik poros lokal pada sasis (ctx.translate(wheelX, wheelY); ctx.rotate(t * speed); ... ctx.restore();)
-     ctx.restore();
+3. ARSITEKTUR 3D FLAT & DISTRIBUSI GELAP-TERANG REALISTIS (CHIAROSCURO):
+   - Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
+     * Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
+     * Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
+     * Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
+     * Bevel Highlight Rails: Garis lengkung tipis 1.5–2px warna putih translusen (rgba(255, 255, 255, 0.5)) di tepian atas bodi memberikan pantulan kilau material premium.
+     * Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
 
-3. PENCAHAYAAN STUDIO 3-STAGE & TEKSTUR MATERIAL ULTRA-REALISTIS:
-   - DILARANG KERAS gambar kawat kosong (wireframe) atau flat kartun biasa!
-   - Objek WAJIB memiliki konstruksi 2.5D / isometrik bervolume:
-     * Dinding belakang (back wall) terisi warna gradien gelap solid untuk sensasi rongga 3D nyata.
-     * Muatan/isi di dalam bodi (parcel 3D, boks, kristal data) memiliki bentuk padat dengan gradien kontras dan inersia sekunder (Math.sin(t * 2.8 - 0.4) * 3).
-     * Bodi dan sasis menggunakan batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik multi-stop (highlight kiri-atas ke bayangan kanan-bawah).
-     * Bevel Highlight Rails: Berikan garis lengkung tipis (lineWidth 1.5-2px) warna putih transparan (rgba(255, 255, 255, 0.65)) di sepanjang tepi atas bodi untuk memberikan pantulan kilau kaca/logam berkelas.
-     * Curved Glass Reflection Cuts: Jika ada permukaan kaca/layar/lensa, buat lengkungan potongan pantulan translusen (ctx.bezierCurveTo, rgba(255, 255, 255, 0.15)).
-     * Roda pejal bertekstur dengan velg alloy, ban karet, dan jari-jari yang berputar mulus.
-     * Detail Perakitan Nyata: Baut heksagonal, lubang ventilasi kecil, garis nat sambungan panel (0.5px kontras).
+4. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
+   - Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
+     const squash = 1 + 0.06 * Math.cos(t * 2.5);
+     const stretch = 1 / Math.sqrt(squash);
+   - Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
+   - Roda Pejal & Gir Artikulasi: Roda alloy berputar mulus 60 FPS pada titik poros sasis (ctx.rotate(t * speed)).
+   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
 
-4. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
+5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
    - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
    - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
    - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon:
@@ -768,14 +785,6 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT 
      ctx.fillStyle = gleamGrad;
      ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
      ctx.restore();
-
-5. SETIAP SUB-ELEMEN FUNGSIONAL AKTIF BERGERAK 60 FPS:
-   - Roda / Gear: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
-   - Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 2.8 - 0.4) * 3).
-   - Sensor / Scanner: Garis laser pemindai tipis menyapu bolak-balik di atas muatan/layar dengan ctx.clip().
-   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
-   - Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
-   - Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
 
 6. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - Skala S = Math.min(w, h) * 0.44; Objek terpusat sempurna di (cx, cy).
@@ -844,9 +853,9 @@ WAJIB gunakan struktur HTML boilerplate berikut:
     ctx.fillRect(0, 0, w, h);
 
 ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, ZERO PARTICLES) ---
-    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW - digambar di lantai di bawah objek)
-    const floatY = Math.sin(t * 2.2) * (S * 0.035);
-    const shadowScale = Math.max(0.7, 1 - (floatY / (S * 0.15)));
+    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW)
+    const floatY = Math.sin(t * 2.5) * (S * 0.038);
+    const shadowScale = Math.max(0.65, 1 - (floatY / (S * 0.12)));
     ctx.save();
     ctx.translate(cx, cy + S * 0.52);
     ctx.beginPath();
@@ -855,23 +864,22 @@ ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, 
     ctx.fill();
     ctx.restore();
 
-    // 2. ROOT MATRIX TUNGGAL - SATU KESATUAN BENDA UTUH (100% ZERO DETACHED PARTS):
-    // WAJIB: SELURUH BAGIAN PENYUSUN IKON DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
-    // - DILARANG MEMBUKA ctx.translate(cx, cy) LAGI KARENA PUSAT OBJEK SUDAH (0, 0)!
-    // - DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM BLOK INI!
-    // - DILARANG MENGGUNAKAN KOORDINAT KANVAS SEPERTI (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE POJOK KANVAS!
-    // - DILARANG MENGGAMBAR KOTAK WADAH / KARTU LATAR DI BELAKANG IKON!
+    // 2. ROOT MATRIX TUNGGAL - 3D FLAT ELASTIS, BERBOBOT, & SOLID (100% ZERO DETACHED PARTS):
+    const squash = 1 + 0.06 * Math.cos(t * 2.5);
+    const stretch = 1 / Math.sqrt(squash);
     ctx.save();
     ctx.translate(cx, cy + floatY);
-    ctx.rotate(Math.sin(t * 1.5) * 0.025);
-    ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015);
+    ctx.rotate(Math.sin(t * 1.8) * 0.025);
+    ctx.scale(squash, stretch); // Kinetika elastis squash-and-stretch alami
 
-    // [GAMBARKAN SELURUH ANATOMI IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
-    // - Sasis / Bodi terpusat di (0, 0)
-    // - Keranjang / Kompartemen menempel LANGSUNG menindih sasis rapat tanpa celah
-    // - Pegangan / Handle berakar menempel pada bodi/keranjang
-    // - Roda terpasang pada as sasis bawah (-wheelX, axleY) dan (+wheelX, axleY)
-    // - Specular Gleam Highlight di-clip di dalam bodi
+    // [GAMBARKAN SELURUH ANATOMI 3D FLAT IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
+    // - BIDANG ATAS (Top Plane): Warna terang (+20% highlight / key light specular)
+    // - BIDANG DEPAN (Front Facade): Warna midtone solid utama yang kaya
+    // - BIDANG BAWAH/SAMPING (Underside Shadow): Warna gelap (-35% ambient occlusion chiaroscuro)
+    // - BEVEL HIGHLIGHT RAILS: Garis 1.5px putih translusen (rgba(255, 255, 255, 0.45)) di tepi atas
+    // - INERSIA SEKUNDER: Muatan/isi berayun elastis dengan jeda fase (Math.sin(t * 2.5 - 0.45) * 4)
+    // - RODA / GIR: Berputar di titik as sasis bawah (ctx.rotate(t * speed))
+    // - SPECULAR GLEAM: Garis kilau diagonal 45 derajat di-clip di dalam bodi (ctx.clip())
 
     ctx.restore();`}
 
