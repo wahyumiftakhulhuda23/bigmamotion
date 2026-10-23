@@ -443,9 +443,10 @@ MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETI
      * Front facade: rich midtone solid base color.
      * Underside & crevice shadows: deep ambient occlusion (-35% dark contrast) and 1.5px crisp bevel edge rails.
    - FORBIDDEN: Abstract meaningless blobs, flat 2D wireframes, or vague geometry.
-2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS & ZERO BACKGROUND BOXES):
+2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES, & ZERO BOX ABSTRACTIONS):
    - Explicitly specify that all components are welded/anchored to the main body origin: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
-   - FORBIDDEN: Detached floating parts, exploded views, or container background cards.
+   - ACCURATE MORPHOLOGY: Specify true physical geometry (e.g. graduation cap has a horizontal diamond rhombus board with skull cap and dangling tassel; atom has 3 tilted elliptical orbits with ZERO outer enclosing bubble; bell has flared acoustic bezier cup with rim lip and clapper).
+   - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, or outer translucent enclosing glass bubbles/container cards.
 3. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
    - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal wheels/gears/dial needles rotating on locked axles, and a clipped 45-degree diagonal specular gleam sweep.
 ${negativeList}
@@ -469,8 +470,9 @@ MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETI
    - Each prompt must describe a distinct concrete, clearly identifiable, meaningful visual object or scene from the category: ${catMeta?.enName || subCategory}.
 2. SPECIFIC 3D FLAT SUBJECT & EXPLICIT CHIAROSCURO:
    - Each prompt must describe a volumetric 3D Flat object with distinct light vs dark planes (illuminated top face, midtone front, deep ambient shadow underside).
-3. DETAILED MONOLITHIC ANATOMY (NO DETACHED PARTS):
+3. DETAILED MONOLITHIC ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES, ZERO BOX ABSTRACTIONS):
    - Explicitly specify how components are attached: e.g., "locked inside wheel arches", "welded firmly to bag rim", "flush mounted to chassis".
+   - ACCURATE MORPHOLOGY: e.g. graduation cap has a horizontal diamond rhombus board with skull cap and dangling tassel; atom has 3 tilted elliptical orbits with ZERO outer enclosing bubble; bell has flared acoustic bezier cup with rim lip and clapper.
 4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
    - Include harmonic vertical floating with elastic squash-and-stretch spring bounce, synchronized wheel/gear rotation on rigid anchors, and clipped specular sheen sweep.
 ${negativeList}
@@ -734,61 +736,160 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PAR
    - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) tanpa sentakan tajam (seamless infinite loop).
    - TIDAK BOLEH ADA TEKS / HURUF / ANGKA.`
     : `
-ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & PHYSICAL 3D PRESENCE):
+ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT, ZERO BUBBLE, ZERO BOX-ABSTRACTION):
 
-1. MUTLAK: SATU KESATUAN BENDA UTUH (100% MONOLITHIC RIGID BODY - ZERO DETACHED PARTS):
-   - SEMUA komponen yang menyusun satu objek icon WAJIB MENYATU FISIK (WELDED & ANCHORED) TANPA CELAH UDARA (ZERO GAP):
-     * DILARANG KERAS EXPLODED VIEW atau memecah objek menjadi potongan-potongan melayang terpisah!
-     * DILARANG KERAS ada bagian (seperti keranjang, gagang, tali, roda, sasis, tutup, lensa, layar) yang terbang/mengambang terpisah dari badan utama!
-     * DILARANG KERAS MENGGAMBAR KOTAK WADAH, KARTU LATAR, ROUNDED RECTANGLE CONTAINER, ATAU AURA BACKDROP APAPUN DI BELAKANG ICON! Kanvas harus 100% bersih tembus pandang (hijau murni pada greenscreen, gelap solid pada dark mode).
+======================================================================
+1. LARANGAN MUTLAK ANTI-CACAT (STRICT NEGATIVE PROHIBITIONS - ZERO DEFECT):
+======================================================================
+[CACAT 1: ABSTRAKSI KOTAK TEGAK - STRICT BAN ON VERTICAL BOX ABSTRACTION]:
+- DILARANG KERAS menyederhanakan objek dunia nyata (seperti Topi Toga Wisuda, Lonceng, Model Atom, Trofi, Mikroskop, Mobil, Roket, Kamera) menjadi kotak persegi panjang / rounded rectangle berdiri tegak dengan tangkai/tongkat!
+- Objek WAJIB memiliki bentuk geometris khas aslinya (diamond horizontal untuk topi toga, flared bezier untuk lonceng, 3 elips miring tertutup untuk atom, U-shackle melengkung untuk gembok, dsb.).
 
-2. SAMBUNGAN FISIK PRESISI UNTUK SETIAP ANATOMI IKON:
-   - TROLI / SHOPPING CART: Sasis horizontal di bawah (y = S * 0.18); Keranjang bervolume tebal menempel LANGSUNG menindih rapat di atas sasis dari y = -S * 0.22 sampai y = S * 0.18 (dasar keranjang menyentuh persis sasis tanpa celah!); Pegangan/handle berakar langsung dari bibir atas kiri keranjang; Roda terpasang menempel pada poros sasis bawah (-wheelX, axleY) dan (+wheelX, axleY).
-   - MOBIL / KENDARAAN: Kabin, kaca, bemper, dan sasis merupakan 1 kesatuan solid bervolume; Roda berada tepat di dalam lubang spakbor sasis bawah.
-   - TAS / KOPER: Tali/gagang tas berakar menancap langsung di bibir bodi atas tas.
-   - KAMERA / GADGET: Lensa silinder bervolume terpasang di tengah muka kamera; Tombol shutter di pelat atas kamera.
-   - GEMBOK: Leher besi pengait (shackle) menancap kokoh di lubang bodi gembok.
-   - DOKUMEN / SERTIFIKAT: Teks garis atau stempel pita menempel di atas lembaran kertas.
+[CACAT 2: BOLA KACA WADAH / ENCLOSING CONTAINER BUBBLE - STRICT ZERO BUBBLE]:
+- DILARANG KERAS membungkus icon (seperti model atom Bohr, molekul, bola dunia, gadget, gear, logo) di dalam gelembung bulat transparan besar, orb kaca berkabut (milky sphere), atau kapsul melingkar (ctx.arc(0, 0, S, ...) dengan alpha fill)!
+- Objek harus berdiri sendiri secara telanjang, murni, dan presisi di atas canvas tanpa kubah/gelembung pembungkus yang merusak chroma key dan kejernihan icon!
 
-3. ARSITEKTUR 3D FLAT & DISTRIBUSI GELAP-TERANG REALISTIS (CHIAROSCURO):
-   - Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
-     * Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
-     * Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
-     * Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
-     * Bevel Highlight Rails: Garis lengkung tipis 1.5–2px warna putih translusen (rgba(255, 255, 255, 0.5)) di tepian atas bodi memberikan pantulan kilau material premium.
-     * Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
+[CACAT 3: KARTU WADAH / BACKDROP CONTAINER - STRICT ZERO BACKDROP PLATE]:
+- DILARANG KERAS menggambar rounded rectangle transparan, pelat kartu latar, atau kotak container di belakang icon. Kanvas di sekitar icon harus 100% tembus pandang (hijau murni #00ff00 pada greenscreen, gelap solid pada dark mode).
 
-4. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
-   - Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
-     const squash = 1 + 0.06 * Math.cos(t * 2.5);
-     const stretch = 1 / Math.sqrt(squash);
-   - Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
-   - Roda Pejal & Gir Artikulasi: Roda alloy berputar mulus 60 FPS pada titik poros sasis (ctx.rotate(t * speed)).
-   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
+[CACAT 4: LINTASAN CACAT & BAGIAN TERPISAH - ZERO DETACHED PARTS & NO BROKEN ARCS]:
+- Semua lintasan orbit harus elips tertutup kontinu sempurna (ctx.ellipse(...)), dan seluruh komponen penyusun (tassel ke topi toga, roda ke sasis troli, bibir lonceng, dsb.) harus MENYATU FISIK KOKOH tanpa celah udara mengambang!
 
-5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
-   - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
-   - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
-   - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon:
+======================================================================
+2. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP KANVAS 2D PRESISI TINGGI):
+======================================================================
+Gunakan resep geometris matematis berikut sesuai subjek yang diminta dalam prompt:
+
+[A. TOPI TOGA WISUDA (ACADEMIC GRADUATION MORTARBOARD CAP)]:
+1. Papan Atas Belah Ketupat Horizontal Isometrik 3D (Diamond Rhombus Top Board):
+   Papan atas BUKAN KOTAK TEGAK, melainkan belah ketupat horizontal 3D lebar:
+   const boardW = S * 0.44; const boardH = S * 0.15; const boardY = -S * 0.12;
+   // Tebal bibir bawah 3D (Beveled Rim Underbelly):
+   ctx.beginPath();
+   ctx.moveTo(-boardW, boardY);
+   ctx.lineTo(0, boardY + boardH);
+   ctx.lineTo(boardW, boardY);
+   ctx.lineTo(boardW, boardY + 8);
+   ctx.lineTo(0, boardY + boardH + 8);
+   ctx.lineTo(-boardW, boardY + 8);
+   ctx.closePath();
+   ctx.fillStyle = '#0f172a'; ctx.fill(); // Bayangan rim gelap tebal
+   // Papan atas berlian (Rhombus Face):
+   ctx.beginPath();
+   ctx.moveTo(0, boardY - boardH); // apex atas
+   ctx.lineTo(boardW, boardY);     // sudut kanan
+   ctx.lineTo(0, boardY + boardH); // sudut bawah
+   ctx.lineTo(-boardW, boardY);    // sudut kiri
+   ctx.closePath();
+   ctx.fillStyle = capGrad; ctx.fill();
+2. Kubah Bodi Topi (Skull Cap Dome):
+   Menempel langsung di bawah papan tengah tanpa celah:
+   ctx.beginPath();
+   ctx.moveTo(-boardW * 0.45, boardY + 6);
+   ctx.quadraticCurveTo(-boardW * 0.42, boardY + S * 0.28, 0, boardY + S * 0.28);
+   ctx.quadraticCurveTo(boardW * 0.42, boardY + S * 0.28, boardW * 0.45, boardY + 6);
+   ctx.closePath();
+   ctx.fillStyle = '#1e293b'; ctx.fill();
+3. Kancing Tengah & Tassel Sutra Menjuntai (Center Button & Dangling Silk Tassel):
+   // Kancing tengah:
+   ctx.beginPath(); ctx.ellipse(0, boardY, 6, 3, 0, 0, Math.PI * 2); ctx.fillStyle = '#ffd700'; ctx.fill();
+   // Tali meliuk anggun dari kancing melintasi sudut kanan lalu menjuntai ke bawah:
+   const swingTassel = Math.sin(t * 2.8) * (S * 0.04);
+   ctx.beginPath();
+   ctx.moveTo(0, boardY);
+   ctx.quadraticCurveTo(boardW * 0.6, boardY - 3, boardW + 2, boardY + 8);
+   ctx.quadraticCurveTo(boardW + 6 + swingTassel * 0.5, boardY + S * 0.16, boardW + 4 + swingTassel, boardY + S * 0.28);
+   ctx.lineWidth = 3.5; ctx.strokeStyle = '#ffd700'; ctx.stroke();
+   // Bandul rumbai rumbai emas bervolume:
+   ctx.beginPath();
+   ctx.roundRect(boardW + 4 + swingTassel - 5, boardY + S * 0.28, 10, 16, 3);
+   ctx.fillStyle = '#f59e0b'; ctx.fill();
+
+[B. MODEL ATOM BOHR / QUANTUM ATOM (STRICT ZERO ENCLOSING BUBBLES)]:
+1. TANPA BOLA WADAH: DILARANG keras menggambar lingkaran/bola kaca transparan pembungkus!
+2. Inti Atom Bervolume 3D (Glowing Nucleus):
+   Bola pejal di pusat (0, 0) dengan gradien radial 3D (highlight di kiri atas):
+   const nucGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, S * 0.13);
+   nucGrad.addColorStop(0, '#ffffff'); nucGrad.addColorStop(0.3, '#38bdf8'); nucGrad.addColorStop(1, '#0284c7');
+   ctx.beginPath(); ctx.arc(0, 0, S * 0.11, 0, Math.PI * 2); ctx.fillStyle = nucGrad; ctx.fill();
+3. Tiga Orbit Elips Tertutup 3D Kontinu (3 Tilted 3D Closed Ellipses):
+   Tiga cincin orbit diputar pada sudut 0, Math.PI/3 (60°), dan -Math.PI/3 (-60°):
+   const rx = S * 0.44; const ry = S * 0.14;
+   [0, Math.PI / 3, -Math.PI / 3].forEach((ang, idx) => {
      ctx.save();
+     ctx.rotate(ang);
      ctx.beginPath();
-     // Gambar path bentuk bodi utama persis sama:
-     ctx.roundRect(-bodyW/2, -bodyH/2, bodyW, bodyH, 16);
-     ctx.clip(); // CLIPPING: Mencegah kilau merembes/bocor keluar batas objek!
-     
-     // Gambar sapuan kilau diagonal 45 derajat tipis di dalam clip:
-     const gleamX = (((t * 0.6) % 2.5) - 1.25) * bodyW * 1.5;
-     const gleamGrad = ctx.createLinearGradient(gleamX - 25, -bodyH, gleamX + 25, bodyH);
-     gleamGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
-     gleamGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.4)');
-     gleamGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
-     ctx.fillStyle = gleamGrad;
-     ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
+     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); // ELIPS KONTINU PENUH TERTUTUP (BUKAN BUSUR PUTUS!)
+     ctx.lineWidth = 3.5;
+     ctx.strokeStyle = idx === 0 ? 'rgba(56, 189, 248, 0.8)' : idx === 1 ? 'rgba(168, 85, 247, 0.8)' : 'rgba(236, 72, 153, 0.8)';
+     ctx.stroke();
+     // Elektron padat 3D mengorbit 60 FPS:
+     const eSpeed = t * 2.2 + idx * (Math.PI * 2 / 3);
+     const ex = Math.cos(eSpeed) * rx;
+     const ey = Math.sin(eSpeed) * ry;
+     const depthScale = 1 + Math.sin(eSpeed) * 0.35; // Membesar saat di depan
+     ctx.beginPath();
+     ctx.arc(ex, ey, 6.5 * depthScale, 0, Math.PI * 2);
+     ctx.fillStyle = '#ffffff'; ctx.fill();
      ctx.restore();
+   });
 
-6. ISOLASI TOTAL & KEBERSIHAN KANVAS:
-   - Skala S = Math.min(w, h) * 0.44; Objek terpusat sempurna di (cx, cy).
-   - DILARANG partikel liar, debu mengambang, atau serpihan di luar objek utama.`;
+[C. LONCENG NOTIFIKASI / BRASS ALERT BELL]:
+1. TANPA KOTAK / TANPA LOLLIPOP: Lonceng memiliki bentuk cawan akustik flared yang melengkung indah!
+2. Cincin Gantungan Atas (Hanger Loop):
+   ctx.beginPath(); ctx.arc(0, -S * 0.36, 12, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#d97706'; ctx.stroke();
+3. Badan Cawan Akustik Flared (Acoustic Bell Cup):
+   const lipW = S * 0.32; const lipY = S * 0.22; const waistY = -S * 0.24;
+   ctx.beginPath();
+   ctx.moveTo(-lipW, lipY);
+   ctx.bezierCurveTo(-lipW * 0.85, 0, -S * 0.14, waistY, 0, waistY);
+   ctx.bezierCurveTo(S * 0.14, waistY, lipW * 0.85, 0, lipW, lipY);
+   ctx.bezierCurveTo(lipW * 0.5, lipY + 12, -lipW * 0.5, lipY + 12, -lipW, lipY);
+   ctx.closePath();
+   ctx.fillStyle = bellGrad; ctx.fill();
+4. Bibir Flens Bawah 3D (Beveled Rim Lip Ellipse):
+   ctx.beginPath(); ctx.ellipse(0, lipY, lipW, 10, 0, 0, Math.PI * 2); ctx.fillStyle = '#b45309'; ctx.fill();
+5. Bandul Pemukul Berayun (Internal Clapper Pendulum):
+   const clapperSwing = Math.sin(t * 3.8) * (S * 0.08);
+   ctx.beginPath(); ctx.arc(clapperSwing, lipY + 10, 11, 0, Math.PI * 2); ctx.fillStyle = '#78350f'; ctx.fill();
+
+[D. TROFI JUARA (CHAMPIONSHIP TROPHY CUP)]:
+Cawan piala meliuk cembung flared, 2 pegangan kuping telinga simetris melengkung kokoh di kiri-kanan, pilar batang berundak, dan bantalan marmer kubus 3D di bawahnya.
+
+[E. SHOPPING CART / TROLI BELANJA]:
+Sasis tubular horizontal di bawah (y = S * 0.18); Keranjang bervolume tebal menempel LANGSUNG menindih rapat di atas sasis dari y = -S * 0.22 sampai y = S * 0.18 (dasar keranjang menyentuh persis sasis tanpa celah!); Pegangan/handle berakar langsung dari bibir atas kiri keranjang; Roda terpasang menempel pada poros sasis bawah (-wheelX, axleY) dan (+wheelX, axleY).
+
+[F. BUKU TERBUKA (OPEN ENCYCLOPEDIA / BOOK)]:
+Punggung buku tebal di tengah (0, S * 0.15). Dua sayap lembaran kertas kiri dan kanan melengkung anggun menggunakan kurva sinusoidal bergelombang halus dengan halaman tipis yang membalik secara periodik.
+
+[G. GEMBOK KEAMANAN (SECURITY PADLOCK)]:
+Badan balok chamfered 3D di bawah (y = 0 hingga y = S * 0.28). Leher besi pengait (U-shackle) berbentuk busur tebal setengah lingkaran yang kedua ujung kakinya MENANCAP LANGSUNG KE DALAM DUA LUBANG di pelat atas bodi gembok.
+
+======================================================================
+3. ARSITEKTUR 3D FLAT & DISTRIBUSI GELAP-TERANG REALISTIS (CHIAROSCURO):
+======================================================================
+Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
+- Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
+- Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
+- Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
+- Bevel Highlight Rails: Garis lengkung tipis 1.5–2px warna putih translusen (rgba(255, 255, 255, 0.5)) di tepian atas bodi memberikan pantulan kilau material premium.
+- Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
+
+======================================================================
+4. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
+======================================================================
+- Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
+  const squash = 1 + 0.06 * Math.cos(t * 2.5);
+  const stretch = 1 / Math.sqrt(squash);
+- Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
+- Roda Pejal & Gir Artikulasi: Roda alloy berputar mulus 60 FPS pada titik poros sasis (ctx.rotate(t * speed)).
+
+======================================================================
+5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX:
+======================================================================
+- DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
+- DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
+- Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.`;
 
   const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
 Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
@@ -873,6 +974,10 @@ ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, 
     ctx.scale(squash, stretch); // Kinetika elastis squash-and-stretch alami
 
     // [GAMBARKAN SELURUH ANATOMI 3D FLAT IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
+    // - PATUHI BENTUK GEOMETRIS ASLI SESUAI SUBJEK (Gunakan resep Bagian 2 di atas: Topi Toga = Diamond Rhombus; Atom Bohr = 3 Tilted Closed Ellipses TANPA outer glass bubble; Lonceng = Flared Bezier Bell Lip)
+    // - DILARANG KERAS MENGABSTRAKSI MENJADI KOTAK TEGAK (STRICT ZERO VERTICAL RECTANGLES)!
+    // - DILARANG KERAS BOLA KACA PEMBUNGKUS / ENCLOSING CONTAINER BUBBLES!
+    // - DILARANG KERAS KARTU CONTAINER / BACKDROP PLATES!
     // - BIDANG ATAS (Top Plane): Warna terang (+20% highlight / key light specular)
     // - BIDANG DEPAN (Front Facade): Warna midtone solid utama yang kaya
     // - BIDANG BAWAH/SAMPING (Underside Shadow): Warna gelap (-35% ambient occlusion chiaroscuro)

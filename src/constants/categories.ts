@@ -296,7 +296,7 @@ export function generateProceduralPrompts(
     social_communication: [
       'paired speech chat dialogue bubbles with rounded tail anchors',
       'broadcast acoustic megaphone bullhorn with concentric soundwave arcs',
-      'brass notification alert bell with oscillating pendulum clapper',
+      'brass notification alert bell with flared acoustic cup, beveled bottom rim lip, and oscillating pendulum clapper',
       'telecom microwave radio antenna mast with radiating signal rings',
       'interconnected global profile avatar network with glowing orbital rings',
       'live stream broadcast camera with illuminated recording tally light',
@@ -307,9 +307,9 @@ export function generateProceduralPrompts(
     ],
     // Icons: Education
     education_learning: [
-      'academic graduation mortarboard cap with swinging golden tassel',
+      'academic graduation mortarboard cap with horizontal diamond rhombus board, beveled rim edge, skull cap dome, and swinging golden silk tassel',
       'open hardcover encyclopedia with gently turning illuminated pages',
-      'Bohr planetary atom model with 3 tilted electron orbits',
+      'Bohr planetary atom model with 3 tilted closed elliptical orbits revolving around a glowing 3D spherical nucleus with zero enclosing bubble',
       'binocular optical laboratory microscope with dual objective turrets',
       'filament idea lightbulb with radiating vector intellectual sparks',
       'parchment academic diploma scroll tied with scarlet satin ribbon',
