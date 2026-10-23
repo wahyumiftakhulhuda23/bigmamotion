@@ -20,10 +20,10 @@ export function getClient(apiKey?: string) {
   });
 }
 
-export function getFastThinkingConfig(targetModel: string): any {
-  // Only apply thinkingBudget if model is 3.1-pro or explicitly supports thinking to prevent 400 Bad Request
-  if (targetModel.includes("pro") || targetModel.includes("thinking")) {
-    return { thinkingBudget: 0 };
+export function getSmartThinkingConfig(targetModel: string, budget = 2048): any {
+  // Empower AI reasoning with an active thinking budget for models supporting extended thinking (3.8, 2.5, 3.1-pro)
+  if (targetModel.includes("2.5") || targetModel.includes("3.8") || targetModel.includes("pro") || targetModel.includes("thinking")) {
+    return { thinkingBudget: budget };
   }
   return undefined;
 }
@@ -31,6 +31,7 @@ export function getFastThinkingConfig(targetModel: string): any {
 export function sanitizeModel(model?: string): string {
   if (!model) return "gemini-2.5-flash";
   const m = model.trim().toLowerCase();
+  if (m.includes("3.8") || m === "gemini-3.8-flash") return "gemini-3.8-flash";
   if (m.includes("2.5") || m === "gemini-2.5-flash") return "gemini-2.5-flash";
   if (m.includes("3.1-flash-lite") || m.includes("flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
   if (m.includes("3.1-pro") || m.includes("pro")) return "gemini-3.1-pro-preview";
@@ -59,7 +60,7 @@ export async function generateContentWithFallback(
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 2
 ): Promise<{ response: any; usedModel: string }> {
-  const fallbackOrder = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
+  const fallbackOrder = ["gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview"];
   const candidateModels = [
     primaryModel,
     ...fallbackOrder.filter((m) => m !== primaryModel),
@@ -480,7 +481,7 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
               },
             },
           };
-          const thinkingConfig = getFastThinkingConfig(currentModel);
+          const thinkingConfig = getSmartThinkingConfig(currentModel, 512);
           if (thinkingConfig) {
             config.thinkingConfig = thinkingConfig;
           }
@@ -684,33 +685,31 @@ MANDATORY GREEN SCREEN CHROMA-KEY RULES:
 
   const typeSpecificRules = isBackground
     ? `
-ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE & ZERO PARTICLES):
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PARTICLES, & DIVERSE STYLES):
 1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
    - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
    - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
    - DILARANG menyisakan ruang kosong, tepi mati, atau batas kanvas kosong yang tidak terisi gerakan motion graphics.
 
 2. STRICT BAN ON PARTICLES / ZERO DUST MOTES (MUTLAK DIPATUHI):
-   - DILARANG KERAS memunculkan bintik partikel, debu melayang, bintang titik-titik liar, atau serpihan noise pada background!
-   - Seluruh grafis harus berupa bentuk kontinu elegan: pita gelombang kurva sinusoidal bezier, jaring kisi kawat perspektif 3D, lipatan kain satin mewah, atau garis kontur elevasi topografi.
+   - DILARANG KERAS memunculkan bintik partikel, debu melayang, bintang titik-titik liar, partikel emitter, atau serpihan noise pada background!
+   - Seluruh visual harus berupa grafis kontinu studio profesional yang megah dan berkelas tinggi.
 
-3. ARSITEKTUR 3 LAPIS KEDALAMAN MOTION BACKGROUND (3-TIER PARALLAX DEPTH):
-   a. Lapisan Dasar / Deep Atmosphere:
-      - Gradien atmosfer dinamis atau ambient studio lighting sweep yang bergeser perlahan memberikan nuansa ruang dan kedalaman sinematik.
-   b. Lapisan Gerakan Utama (Dynamic Continuous Flow):
-      - Jika Wave / Fluid / Ribbon: 4-6 lapisan gelombang sinusoidal bezier bertumpuk dengan opasitas bervariasi (0.15 - 0.45) dan garis crest highlight pada puncak gelombang yang mengalir lembut secara horizontal atau diagonal.
-      - Jika Cyber Grid / Topografi: Garis perspektif 3D membentang ke horizon dengan gelombang elevasi undulating pada baris-baris kisi.
-      - Jika Lattice / Mesh Geometris: Kisi-kisi struktural poligon 3D yang saling terhubung dengan garis vektor tegas, tanpa bintik partikel liar.
-      - Jika Silk / Luxury Caustics: Lipatan kain sutra satin berkilau emas/perak dengan bayangan volumetrik lembut dan specular sweep elegan.
-   c. Lapisan Pencahayaan Volumetrik:
-      - Sapuan cahaya atmosferik (ambient caustics sweep) yang melintasi kanvas secara periodik.
+3. MINIMALISIR KEMIRIPAN GAYA & DIFERENSIASI TOTAL (ARSITEKTUR VISUAL WAJIB BERBEDA SESUAI BRIEF):
+   Animasi WAJIB mengadopsi salah satu dari 6 arsitektur visual berikut yang paling relevan dengan subjek prompt (JANGAN semua dibuat gelombang biasa):
+   - Arsitektur 1 (Fluid Chromatic Splines): 4-6 pita cairan sinusoidal bergradien kaya yang saling meliuk dengan frekuensi harmonis berbeda dan mode translusen bertumpuk.
+   - Arsitektur 2 (3D Perspective Horizon Grid): Grid perspektif kawat digital membentang ke horizon dengan vanishing point di (cx, cy * 0.45) dan gelombang elevasi undulating pada baris-baris kisi.
+   - Arsitektur 3 (Luxury Silk & Satin Folds): Lipatan kain sutra satin tebal berkilau emas/sampanye/obsidian dengan bayangan volumetrik dramatis (chiaroscuro) dan kilau caustics yang meliuk mewah.
+   - Arsitektur 4 (Topographic Elevation Contours): Garis-garis kontur elevasi topografi bergelombang yang mengalir dinamis melintasi kanvas seperti peta survei geologi modern bergradien.
+   - Arsitektur 5 (Architectural Origami & Faceted Planes): Bidang-bidang poligon isometrik 3D translusen yang bergeser dan berlipat elegan secara pseudo-3D.
+   - Arsitektur 6 (Volumetric Light Shafts & Prism Caustics): Sorotan berkas cahaya atmosferik diagonal (god rays) yang menyapu lembut di atas gradien gelap studio.
 
 4. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
    - Waktu t dihitung dari timestamp (t = time * 0.001).
    - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) tanpa sentakan tajam (seamless infinite loop).
    - TIDAK BOLEH ADA TEKS / HURUF / ANGKA.`
     : `
-ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT & REALISTIC 3D DEPTH):
+ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & PHYSICAL 3D PRESENCE):
 
 1. MUTLAK: ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - 100% ZERO DETACHED PARTS):
    - SEMUA komponen suatu objek (badan, keranjang, roda, sasis, gagang, muatan, aksesoris) WAJIB DIGAMBAR DI DALAM SATU BLOK ROOT MATRIX UTAMA:
@@ -730,7 +729,7 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT
      // ctx.save();
      // ctx.translate(wheelOffsetX, wheelOffsetY); // Pindah ke titik poros lokal pada sasis
      // ctx.rotate(t * wheelSpeed);               // Putaran velg/spokes pada poros
-     // // Gambar velg, ban karet tebal, hubcap tengah, dan jari-jari centered di (0, 0)
+     // // Gambar velg alloy pejal, ban karet tebal, hubcap tengah, dan jari-jari centered di (0, 0)
      // ctx.restore();
      // Roda TETAP terikat mati di titik poros sasis, TIDAK AKAN PERNAH TERLEPAS!
 
@@ -739,7 +738,7 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT
 2. BAYANGAN LANTAI REALISTIS & TANGIBLE 3D PRESENCE (GROUND CONTACT SHADOW):
    - Sebelum menggambar bodi objek di root matrix, gambarkan bayangan kontak lantai (contact shadow) di bawah objek:
      const floatY = Math.sin(t * 2.2) * 8;
-     const shadowScale = 1 - (floatY / 40);
+     const shadowScale = 1 - (floatY / 35);
      ctx.save();
      ctx.translate(cx, cy + S * 0.65);
      ctx.beginPath();
@@ -748,14 +747,16 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT
      ctx.fill();
      ctx.restore();
 
-3. PENCAHAYAAN STUDIO 3-STAGE & REALISTIS MATERIAL (VOLUME 3D KELAS ATAS):
+3. PENCAHAYAAN STUDIO 3-STAGE & TEKSTUR MATERIAL ULTRA-REALISTIS:
    - DILARANG KERAS gambar kawat kosong (wireframe) atau flat kartun biasa!
    - Objek WAJIB memiliki konstruksi 2.5D / isometrik bervolume:
      * Dinding belakang (back wall) terisi warna gradien gelap solid untuk sensasi rongga 3D nyata.
-     * Muatan/isi di dalam bodi (parcel 3D, boks, kristal data) memiliki bentuk padat dengan gradien kontras dan inersia sekunder (Math.sin(t * 3.0 - 0.4) * 3).
+     * Muatan/isi di dalam bodi (parcel 3D, boks, kristal data) memiliki bentuk padat dengan gradien kontras dan inersia sekunder (Math.sin(t * 2.8 - 0.4) * 3).
      * Bodi dan sasis menggunakan batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik multi-stop (highlight kiri-atas ke bayangan kanan-bawah).
-     * Bevel Edge Highlight: Berikan garis lengkung tipis (lineWidth 1.5-2px) warna putih transparan di sepanjang tepi atas bodi untuk memberikan pantulan kilau kaca/logam berkelas.
+     * Bevel Highlight Rails: Berikan garis lengkung tipis (lineWidth 1.5-2px) warna putih transparan (rgba(255, 255, 255, 0.65)) di sepanjang tepi atas bodi untuk memberikan pantulan kilau kaca/logam berkelas.
+     * Curved Glass Reflection Cuts: Jika ada permukaan kaca/layar/lensa, buat lengkungan potongan pantulan translusen (ctx.bezierCurveTo, rgba(255, 255, 255, 0.15)).
      * Roda pejal bertekstur dengan velg alloy, ban karet, dan jari-jari yang berputar mulus.
+     * Detail Perakitan Nyata: Baut heksagonal, lubang ventilasi kecil, garis nat sambungan panel (0.5px kontras).
 
 4. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
    - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
@@ -779,9 +780,9 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT
 
 5. SETIAP SUB-ELEMEN FUNGSIONAL AKTIF BERGERAK 60 FPS:
    - Roda / Gear: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
-   - Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 3.0 - 0.4) * 3).
+   - Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 2.8 - 0.4) * 3).
    - Sensor / Scanner: Garis laser pemindai tipis menyapu bolak-balik di atas muatan/layar dengan ctx.clip().
-   - Lampu Indikator / LED: Berkedip ritmis (Math.sin(t * 5.0) > 0.2).
+   - Lampu Indikator / LED: Berkedip ritmis dengan pernapasan eksponensial (Math.pow(Math.sin(t * 3.5), 2)).
    - Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
    - Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
 
@@ -868,10 +869,10 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.1,
+        temperature: 0.35,
         maxOutputTokens: 8192,
       };
-      const animThinking = getFastThinkingConfig(currentModel);
+      const animThinking = getSmartThinkingConfig(currentModel, 2048);
       if (animThinking) {
         animConfig.thinkingConfig = animThinking;
       }
@@ -1068,8 +1069,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
           temperature: 0.1,
           maxOutputTokens: 3800,
         };
-        const fastThinking = getFastThinkingConfig(currentModel);
-        if (fastThinking) config.thinkingConfig = fastThinking;
+        const smartThinking = getSmartThinkingConfig(currentModel, 2048);
+        if (smartThinking) config.thinkingConfig = smartThinking;
         return {
           contents: [
             {
@@ -1182,8 +1183,8 @@ CRITICAL RULES:
           temperature: 0.3,
           maxOutputTokens: 600,
         };
-        const fastThinking = getFastThinkingConfig(currentModel);
-        if (fastThinking) config.thinkingConfig = fastThinking;
+        const smartThinking = getSmartThinkingConfig(currentModel, 512);
+        if (smartThinking) config.thinkingConfig = smartThinking;
         return {
           contents: [
             {
