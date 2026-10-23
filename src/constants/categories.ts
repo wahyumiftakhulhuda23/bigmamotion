@@ -144,12 +144,12 @@ export const BACKGROUND_CATEGORIES: MicrostockCategoryItem[] = [
   },
   {
     id: 'particle_constellation',
-    name: 'Plexus & Jaringan Partikel',
-    enName: 'Particle Plexus & Network',
-    description: 'Jaringan simpul plexus bercahaya, konstelasi partikel terhubung garis, debu kosmik 3D',
+    name: 'Lattice Geometris & Garis Koneksi',
+    enName: 'Geometric Lattice & Network Lines',
+    description: 'Jaringan simpul geometris presisi, garis topografi poligon 3D, kisi konektivitas terstruktur rapi tanpa partikel liar',
     icon: 'fa-circle-nodes',
     animationType: 'bg',
-    stockKeywords: ['interconnected glowing plexus nodes', 'drifting particle constellation', 'molecular network linking lines', '3D cosmic particle depth field', 'ambient stardust network'],
+    stockKeywords: ['interconnected geometric lattice mesh', 'volumetric structural wiregrid nodes', 'continuous topological polygon ribbons', '3D digital connectivity matrix', 'minimalist architectural node wireframe'],
   },
   {
     id: 'aura_gradient_blur',
@@ -362,16 +362,16 @@ export function generateProceduralPrompts(
       'modern enterprise corporate mesh with balanced geometric breathing rhythm',
       'low-contrast executive keynote backdrop with elegant undulating light planes',
     ],
-    // Backgrounds: Particle Constellation
+    // Backgrounds: Geometric Lattice & Network Lines (Zero Stray Particles)
     particle_constellation: [
-      'deep 3D starry plexus network with glowing interconnected constellation lines',
-      'drifting cosmic stardust field with depth-of-field z-axis particle scaling',
-      'molecular particle mesh with elastic Euclidean linkage threads',
-      'ambient particulate nebula cloud with soft luminous focal points',
-      'swirling vortex of kinetic golden dust motes illuminated by rim lighting',
-      'dense cybernetic particle blizzard flowing diagonally across the frame',
-      'astronomical galaxy arm constellation with rotating stellar clusters',
-      'quantum particle cloud oscillating with Brownian motion dynamics',
+      'deep 3D structural lattice network with clean interconnected vector linkage lines',
+      'architectural isometric polygon mesh with smooth undulating geometric crests',
+      'molecular crystal lattice frame with precise Euclidean linkage threads',
+      'volumetric topological wireframe ribbons floating with harmonic breathing depth',
+      'sophisticated digital connectivity matrix spanning edge-to-edge widescreen viewport',
+      'clean kinetic cybernetic polygon facet field with gradient depth shading',
+      'multi-layered geometric tessellation grid with subtle node vertex pulses',
+      'dynamic parametric line lattice shifting smoothly with mathematical wave harmony',
     ],
     // Backgrounds: Luxury Gold Silk
     luxury_gold_silk: [

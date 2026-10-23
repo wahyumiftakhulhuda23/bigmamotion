@@ -366,12 +366,13 @@ export async function generateSinglePromptDirect(
     ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Collection item #${index + 1} of ${total}).
 
-MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS:
+MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
 1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
-   - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Interconnected particle plexus constellation with drifting nodes and dynamic energy filaments across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
+   - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Architectural structural geometric lattice mesh with dynamic linkage lines across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
    - FORBIDDEN: Isolated centered icons, symbols, floating emblems, logos, or empty border margins.
+   - STRICT BAN ON PARTICLES: NEVER describe floating particles, dust motes, stardust, or loose dots. Visuals must be pure continuous wave ribbons, geometric topographic contours, or undulating silk caustics.
 2. 3-TIER ATMOSPHERIC DEPTH:
-   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light swells.
+   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light sweeps.
 3. 60 FPS SEAMLESS HARMONIC LOOP:
    - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
 
@@ -680,22 +681,26 @@ async function generateAnimationDirect(
   let typeInstructions = '';
   if (type === 'icon') {
     typeInstructions = `
-ATURAN UTAMA ICON MOTION (SANGAT KRUSIAL - ANTI-BUG BENTUK & ZERO PARTICLE):
-1. ISOLASI TOTAL ICON (TIDAK BOLEH ADA OBJEK/PARTIKEL ASING):
-   - Tampilkan 1 simbol/vektor sentral berpresisi tinggi yang merepresentasikan subjek secara akurat di tengah canvas.
-   - DILARANG KERAS memunculkan partikel melayang, debu berterbangan, bintik-bintik random, percikan/sparks liar, cincin orbit aneh, serpihan, pecahan, atau objek lain di luar bentuk icon utama!
-   - Background kanvas di sekeliling icon HARUS 100% bersih, kosong, dan polos tanpa visual clutter atau noise apapun.
-2. BENTUK GEOMETRIS IDEAL & PRESISI:
-   - Bentuk geometris icon harus proporsional, solid, simetris/terstruktur rapi, tidak cacat, dan merepresentasikan subjek dengan presisi tinggi (rasio ketebalan garis rapi, penempatan fitur akurat, proporsi seimbang di cx, cy).
-   - DILARANG TEKS/HURUF. Gunakan path vektor canvas yang bersih (ctx.beginPath(), ctx.roundRect(), ctx.arc(), ctx.lineTo()).
-3. GERAKAN LINEAR SELARAS PROMPT:
-   - Seluruh pergerakan animasi HARUS linear dan mengikuti deskripsi gerakan yang tertera di dalam prompt.
-   - Gerakan kinetik HARUS diterapkan langsung pada badan icon dan anatomi internalnya (misal: rotasi halus elemen internal, breathing pulse 0.96x-1.04x, artikulasi roda gigi/lensa/tuas, osilasi floating lembut tanpa partikel luar).`;
+ATURAN MASTER IKON MOTION 3D ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & REALISTIC DEPTH):
+1. ANATOMI VOLUMETRIK 3D REALISTIS (BUKAN SKETSA/KARTUN BIASA):
+   - Ikon WAJIB tampak berbobot fisik nyata, berdimensi 2.5D / isometric, memiliki ketebalan material yang solid dan mewah (seperti plastik glossy Apple, logam alloy terpoles, kaca kristal, atau bodi ter-bevel presisi).
+   - DILARANG KERAS bentuk 2D datar, sketsa garis kawat (wireframe), atau potongan geometris mentah tanpa volume!
+   - BAYANGAN LANTAI (GROUND CONTACT SHADOW): Buat elips bayangan kontak di bawah objek yang bernapas secara harmonis selaras dengan osilasi vertikal (floatY).
+   - PENCAHAYAAN STUDIO 3-TITIK: Key light specular di sudut kiri-atas, bodi gradien kaya 3-4 stop warna, dan ambient occlusion / bayangan lipatan di celah antar komponen.
+2. ISOLASI TOTAL & KEBERSIHAN KANVAS:
+   - Tampilkan 1 simbol sentral berpresisi tinggi di tengah canvas (cx, cy).
+   - DILARANG KERAS memunculkan partikel melayang, debu, bintik-bintik random, serpihan liar, atau aura blur di luar objek utama! Kanvas di sekeliling ikon HARUS 100% bersih.
+3. KINETIKA & INERSIA SEKUNDER REALISTIS 60 FPS:
+   - Gerakan tidak boleh kaku atau monoton: Gabungkan floating harmonis root (±8px) dengan gerakan inersia sekunder (muatan internal berosilasi dengan jeda fase, jarum pengukur bergetar responsif, velg roda berputar mulus, lampu indikator berkedip ritmis).`;
   } else if (type === 'bg') {
     typeInstructions = `
-ATURAN UTAMA BACKGROUND MOTION:
-- Animasi latar belakang bergerak penuh di seluruh canvas (waves, flowing grid, orbital field, matrix HUD, atau synthwave horizon).
-- DILARANG TEKS/HURUF. Bergerak dengan ritme harmonis linear tanpa jeda sejalan dengan kategori dan deskripsi prompt.`;
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION (STRICT ZERO PARTICLES & CINEMATIC REALISM):
+1. DILARANG KERAS MENGGAMBAR PARTIKEL, DEBU MELAYANG, ATAU BINTIK-BINTIK ACAK:
+   - Visual latar belakang WAJIB 100% BERSIH DARI PARTIKEL/DEBU/NOISE! DILARANG partikel mengambang, bintik stardust, atau serpihan titik-titik liar.
+   - Latar belakang WAJIB berupa karya motion graphics kelas atas: 3-5 lapisan pita gelombang cairan sinusoidal (fluid wave ribbons), lipatan kain sutra mewah (luxury silk caustics), grid perspektif cakrawala 3D bergelombang, atau jaring poligon topografi berkontur yang membentang luas.
+2. CAKUPAN PENUH 100% WIDESCREEN & KEDALAMAN VOLUMETRIK:
+   - Mengisi seluruh canvas secara penuh dari sudut (0, 0) hingga (w, h). Tidak boleh ada ruang mati atau ikon terisolasi di tengah.
+   - Bergerak dengan ritme harmonis linear 60 FPS yang memukau dan bernilai jual tinggi layaknya motion background studio Adobe Stock / Envato Elements.`;
   }
 
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
@@ -705,38 +710,35 @@ ATURAN UTAMA BACKGROUND MOTION:
   let motionGuide = '';
   if (motionDynamics === 'bounce') {
     motionGuide = `
-PANDUAN GERAKAN BOUNCE & SPRING:
-- Gunakan rumus elastis membal: const bounce = Math.abs(Math.sin(t * 3.5)); const squash = 1 + 0.3 * (1 - bounce);
-- Terapkan squash & stretch saat objek mendarat atau memantul sehingga terasa elastis dan berbobot nyata!`;
+PANDUAN GERAKAN BOUNCE & SPRING (REALISTIS BERBOBOT):
+- Gunakan rumus elastis membal (spring physics): const bounce = Math.abs(Math.sin(t * 3.2)); const squash = 1 + 0.18 * (1 - bounce); const stretch = 1 / squash;
+- Terapkan squash & stretch saat objek mendarat atau memantul. Objek terasa elastis dan berbobot nyata!`;
   } else if (motionDynamics === 'orbital') {
     motionGuide = `
-PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE:
-- Simulasikan rotasi 3D multi-cincin atau partikel mengorbit dengan kedalaman z (pseudo-3D):
+PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE (REALISTIS KINETIK):
+- Simulasikan rotasi 3D multi-cincin dengan kedalaman sumbu z (pseudo-3D):
   const angle = t * 1.5 + i * (Math.PI * 2 / N);
-  const x = cx + Math.cos(angle) * radiusX;
-  const y = cy + Math.sin(angle) * radiusY * Math.cos(tiltAngle);
+  const x = Math.cos(angle) * radiusX;
+  const y = Math.sin(angle) * radiusY * Math.cos(tiltAngle);
   const z = Math.sin(angle) * Math.sin(tiltAngle);
-  ctx.scale(1 + z * 0.3, 1 + z * 0.3); ctx.globalAlpha = 0.5 + 0.5 * (z + 1) / 2;`;
+  ctx.scale(1 + z * 0.25, 1 + z * 0.25); ctx.globalAlpha = 0.6 + 0.4 * (z + 1) / 2;`;
   } else if (motionDynamics === 'morph') {
     motionGuide = `
-PANDUAN GERAKAN KINETIC MORPHING:
-- Bentuk geometris bertransformasi secara dinamis antar bentuk:
-  Gunakan looping vertex: const r = baseR * (1 + 0.3 * Math.sin(angle * spikes + t * 3));
-  Hubungkan titik dengan ctx.lineTo atau bezierCurveTo.`;
+PANDUAN GERAKAN KINETIC MORPHING (ORGANIK HALUS):
+- Bentuk geometris bertransformasi dinamis antar fase menggunakan kurva lengkung kontinu (bezierCurveTo) dengan osilasi harmonik harmonis.`;
   } else if (motionDynamics === 'cyber') {
     motionGuide = `
 PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
-- Gerakan berpola kuantisasi tajam / stepped: const stepT = Math.floor(t * 8) / 8;
-- Elemen HUD: busur derajat berputar, dial bidik, laser scanner bolak-balik melintasi canvas, kurung sudut siku [ ], dan garis garis target.`;
+- Gerakan berpola kuantisasi tajam terkalibrasi: busur derajat berputar presisi, dial bidik melingkar, laser scanner bolak-balik melintasi area target (ctx.clip()), dan sudut siku telemetri [ ].`;
   } else if (motionDynamics === 'mechanical') {
     motionGuide = `
-PANDUAN GERAKAN MECHANICAL & ARTICULATED:
-- Komponen mekanik berputar dan berosilasi presisi seiring waktu t dengan artikulasi multi-part yang mulus dan bertenaga.`;
+PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA MESIN NYATA):
+- Roda gigi interlocking berputar sinkron berlawanan arah, poros engsel berayun dengan redaman fisika, dan tuas bergerak dengan artikulasi bertenaga.`;
   } else {
     motionGuide = `
 PANDUAN GERAKAN ORGANIC FLOW & WAVES:
-- Gunakan gelombang harmonik berulang: const wave = Math.sin(t * 2 + i * 0.5) * Math.cos(t * 1.2 + i * 0.3);
-- Objek mengalir dan berfluktuasi lembut dengan kemiringan dinamis.`;
+- Gunakan gelombang sinusoidal multi-frekuensi: const wave = Math.sin(t * 2.0 + i * 0.6) * 0.7 + Math.cos(t * 1.1 + i * 0.3) * 0.3;
+- Objek dan pita mengalir lembut dengan kemiringan dinamis elegan.`;
   }
 
   let styleAndColorGuide = '';
@@ -755,7 +757,7 @@ ${colorMode === 'neon' ? '- Palet Neon Cyber: Cyan (#00f3ff), Neon Magenta (#ff0
 ${colorMode === 'monochrome' ? '- Palet Monochrome: Putih murni (#ffffff), Slate Silver (#cbd5e1), Graphite (#475569), dengan aksen glow putih kristal.' : ''}
 ${colorMode === 'pastel' ? '- Palet Pastel: Soft Lavender (#c4b5fd), Mint (#a7f3d0), Peach (#fdba74), Baby Blue (#93c5fd).' : ''}
 ${colorMode === 'luxury' ? '- Palet Luxury: Imperial Gold (#d4af37), Warm Amber (#f59e0b), Champagne (#fef08a), Bronze (#cd7f32).' : ''}
-${colorMode === 'gradient' ? '- Gunakan createLinearGradient / createRadialGradient dinamis yang bergerak seiring waktu t.' : ''}`;
+${colorMode === 'gradient' ? '- Gunakan createLinearGradient dinamis multi-stop yang kaya dan elegan.' : ''}`;
   }
 
   const greenScreenDirective = isGreenScreen
@@ -771,63 +773,82 @@ MANDATORY GREEN SCREEN CHROMA-KEY RULES:
 
   const typeSpecificRules = isBackground
     ? `
-ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE CANVAS):
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE & ZERO PARTICLES):
 1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
    - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
    - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
    - DILARANG menyisakan ruang kosong, tepi mati, atau batas kanvas kosong yang tidak terisi gerakan motion graphics.
-   - Gerakan visual mengalir secara dinamis melintasi seluruh lebar dan tinggi layar (widescreen viewport).
 
-2. ARSITEKTUR 3 LAPIS KEDALAMAN MOTION BACKGROUND (3-TIER PARALLAX DEPTH):
-   a. Lapisan Dasar / Deep Atmosphere (Background Depth):
-      - Gradien atmosfer dinamis atau mesh halus yang bergeser perlahan memberikan nuansa ruang dan kedalaman (misal: shifting linear/radial gradient, ambient dark glow).
-   b. Lapisan Gerakan Utama (Dynamic Flow Graphics):
-      - Elemen utama sesuai prompt yang mengalir secara kontinu:
-        * Jika Wave / Fluid / Ribbon: 3-5 lapisan gelombang sinusoidal bezier (ctx.bezierCurveTo / ctx.quadraticCurveTo) yang bertumpuk dengan opasitas berbeda, mengalir lembut secara horizontal atau diagonal melintasi kanvas penuh.
-        * Jika Cyber Grid / Topografi: Garis perspektif 3D yang membentang ke cakrawala dengan vanishing point atau jaring kawat topografi bergerak yang membentang dari kiri ke kanan.
-        * Jika Plexus / Constellation: 35-60 titik/node bercahaya yang melayang di seluruh viewport kanvas dengan garis koneksi otomatis dinamis antara node yang berdekatan (distance < threshold, ctx.globalAlpha = 1 - d/threshold).
-        * Jika Silk / Luxury Auroral: Pita cahaya satin lembut bertingkat dengan gradien multi-stop berkilau yang meliuk elegan di seluruh layar.
-        * Jika Speed / Energy Tunnel: Garis-garis energi berkecepatan tinggi yang memancar dari titik fokus ke seluruh tepi layar.
-   c. Lapisan Ambient Glow & Specular Light:
-      - Pendaran cahaya lembut (ambient light swells) dan partikel cahaya halus yang mengambang perlahan memperkaya atmosfer sinematik.
+2. STRICT BAN ON PARTICLES / ZERO DUST MOTES (MUTLAK DIPATUHI):
+   - DILARANG KERAS memunculkan bintik partikel, debu melayang, bintang titik-titik liar, atau serpihan noise pada background!
+   - Seluruh grafis harus berupa bentuk kontinu elegan: pita gelombang kurva sinusoidal bezier, jaring kisi kawat perspektif 3D, lipatan kain satin mewah, atau garis kontur elevasi topografi.
 
-3. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
+3. ARSITEKTUR 3 LAPIS KEDALAMAN MOTION BACKGROUND (3-TIER PARALLAX DEPTH):
+   a. Lapisan Dasar / Deep Atmosphere:
+      - Gradien atmosfer dinamis atau ambient studio lighting sweep yang bergeser perlahan memberikan nuansa ruang dan kedalaman sinematik.
+   b. Lapisan Gerakan Utama (Dynamic Continuous Flow):
+      - Jika Wave / Fluid / Ribbon: 4-6 lapisan gelombang sinusoidal bezier bertumpuk dengan opasitas bervariasi (0.15 - 0.45) dan garis crest highlight pada puncak gelombang yang mengalir lembut secara horizontal atau diagonal.
+      - Jika Cyber Grid / Topografi: Garis perspektif 3D membentang ke horizon dengan gelombang elevasi undulating pada baris-baris kisi.
+      - Jika Lattice / Mesh Geometris: Kisi-kisi struktural poligon 3D yang saling terhubung dengan garis vektor tegas, tanpa bintik partikel liar.
+      - Jika Silk / Luxury Caustics: Lipatan kain sutra satin berkilau emas/perak dengan bayangan volumetrik lembut dan specular sweep elegan.
+   c. Lapisan Pencahayaan Volumetrik:
+      - Sapuan cahaya atmosferik (ambient caustics sweep) yang melintasi kanvas secara periodik.
+
+4. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
    - Waktu t dihitung dari timestamp (t = time * 0.001).
-   - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) sehingga animasi berputar (loop) secara mulus tanpa sentakan tajam (seamless infinite loop).
-   - Pergerakan terasa elegan, modern, profesional, dan bernilai jual tinggi layaknya motion background kelas studio Adobe Stock / Shutterstock.
-
-4. TIDAK BOLEH ADA TEKS / HURUF / ANGKA:
-   - Murni motion graphics visual canvas 2D yang bersih dan profesional.`
+   - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) tanpa sentakan tajam (seamless infinite loop).
+   - TIDAK BOLEH ADA TEKS / HURUF / ANGKA.`
     : `
-ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT & RIGID ATTACHMENT):
+ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT & REALISTIC 3D DEPTH):
 
 1. MUTLAK: ARSITEKTUR KOORDINAT TUNGGAL (SINGLE ROOT MATRIX - 100% ZERO DETACHED PARTS):
    - SEMUA komponen suatu objek (badan, keranjang, roda, sasis, gagang, muatan, aksesoris) WAJIB DIGAMBAR DI DALAM SATU BLOK ROOT MATRIX UTAMA:
      ctx.save();
-     ctx.translate(cx, cy + Math.sin(t * 2.0) * 8); // Floating HANYA di root ini (amplitude halus ±8px)
+     ctx.translate(cx, cy + Math.sin(t * 2.2) * 8); // Floating HANYA di root ini (amplitude halus ±8px)
      ctx.rotate(Math.sin(t * 1.5) * 0.025);         // Kemiringan HANYA di root ini (±0.025 rad)
-     ctx.scale(1 + Math.sin(t * 2.0) * 0.015, 1 + Math.sin(t * 2.0) * 0.015); // Breathing scale
+     ctx.scale(1 + Math.sin(t * 2.2) * 0.015, 1 + Math.sin(t * 2.2) * 0.015); // Breathing scale
 
      // PERATURAN KOORDINAT MUTLAK:
      // - Semua posisi sub-bagian dihitung secara relatif terhadap titik pusat (0, 0)!
      // - DILARANG KERAS MEMBUKA ctx.translate(cx, cy) KEDUA!
      // - DILARANG KERAS MENGGUNAKAN KOORDINAT ABSOLUT SEPERTI (0, 0) KANVAS YANG MEMBUAT OBJEK MELAYANG KE POJOK KANVAS!
-     // - DILARANG KERAS memberikan translasi atau rotasi independen pada bagian struktural bodi (misal keranjang miring tapi roda tegak, atau keranjang melayang meninggalkan sasis)! Bagian struktural 100% TERKUNCI MATI.
+     // - DILARANG KERAS memberikan translasi atau rotasi independen pada bagian struktural bodi (keranjang, sasis, pegangan 100% TERKUNCI MATI)!
      
      // ATURAN RODA / GEAR / SUB-KOMPONEN BERPUTAR:
      // Roda terpasang kaku pada titik poros sasis (-wheelOffsetX, wheelOffsetY) dan (+wheelOffsetX, wheelOffsetY):
      // ctx.save();
      // ctx.translate(wheelOffsetX, wheelOffsetY); // Pindah ke titik poros lokal pada sasis
      // ctx.rotate(t * wheelSpeed);               // Putaran velg/spokes pada poros
-     // // Gambar velg, ban, dan jari-jari centered di (0, 0)
+     // // Gambar velg, ban karet tebal, hubcap tengah, dan jari-jari centered di (0, 0)
      // ctx.restore();
      // Roda TETAP terikat mati di titik poros sasis, TIDAK AKAN PERNAH TERLEPAS!
 
      ctx.restore();
 
-2. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
+2. BAYANGAN LANTAI REALISTIS & TANGIBLE 3D PRESENCE (GROUND CONTACT SHADOW):
+   - Sebelum menggambar bodi objek di root matrix, gambarkan bayangan kontak lantai (contact shadow) di bawah objek:
+     const floatY = Math.sin(t * 2.2) * 8;
+     const shadowScale = 1 - (floatY / 40);
+     ctx.save();
+     ctx.translate(cx, cy + S * 0.65);
+     ctx.beginPath();
+     ctx.ellipse(0, 0, S * 0.45 * shadowScale, S * 0.08 * shadowScale, 0, 0, Math.PI * 2);
+     ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
+     ctx.fill();
+     ctx.restore();
+
+3. PENCAHAYAAN STUDIO 3-STAGE & REALISTIS MATERIAL (VOLUME 3D KELAS ATAS):
+   - DILARANG KERAS gambar kawat kosong (wireframe) atau flat kartun biasa!
+   - Objek WAJIB memiliki konstruksi 2.5D / isometrik bervolume:
+     * Dinding belakang (back wall) terisi warna gradien gelap solid untuk sensasi rongga 3D nyata.
+     * Muatan/isi di dalam bodi (parcel 3D, boks, kristal data) memiliki bentuk padat dengan gradien kontras dan inersia sekunder (Math.sin(t * 3.0 - 0.4) * 3).
+     * Bodi dan sasis menggunakan batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik multi-stop (highlight kiri-atas ke bayangan kanan-bawah).
+     * Bevel Edge Highlight: Berikan garis lengkung tipis (lineWidth 1.5-2px) warna putih transparan di sepanjang tepi atas bodi untuk memberikan pantulan kilau kaca/logam berkelas.
+     * Roda pejal bertekstur dengan velg alloy, ban karet, dan jari-jari yang berputar mulus.
+
+4. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX (BEBAS KOTAK AURA / BEBAS CAHAYA BLINDING):
    - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
-   - DILARANG KERAS menggambar lingkaran kilau putih raksasa / radial burst / whiteout flash yang menutupi icon atau layar!
+   - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
    - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon:
      ctx.save();
      ctx.beginPath();
@@ -845,27 +866,15 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-PROFESIONAL & PRESISI TINGGI (ZERO DEFECT
      ctx.fillRect(-bodyW, -bodyH, bodyW * 2, bodyH * 2);
      ctx.restore();
 
-3. MUTLAK: VEKTOR VOLUMETRIK 3D BERKELAS STUDIO (DILARANG WIREFRAME / GARIS TIPIS KOSONG):
-   - DILARANG KERAS menggambar objek hanya berupa garis kawat (wireframe strokes) tanpa isi padat!
-   - Objek WAJIB memiliki konstruksi solid 2.5D / isometrik bervolume:
-     * Dinding belakang (back wall) terisi warna gradien gelap solid untuk ilusi kedalaman rongga.
-     * Muatan/isi di dalam bodi (misal parcel, boks belanja, data cube) berupa bentuk 3D solid dengan gradien cerah dan aksen pita/garis.
-     * Kisi-kisi/dinding depan berupa batangan tubular tebal (lineWidth 4-6px) dengan gradien metalik dan ujung membulat.
-     * Sasis bawah berupa pipa padat berbobot dengan bracket dudukan roda.
-     * Roda pejal dengan ban karet tebal, velg alloy, dan jari-jari berputar.
-     * Kontur garis luar rapi dan kontras (lineWidth 3-4px, round joins).
-     * Bevel specular edge: Garis lengkung tipis di tepi atas bibir bodi memberi kesan material glossy premium.
+5. SETIAP SUB-ELEMEN FUNGSIONAL AKTIF BERGERAK 60 FPS:
+   - Roda / Gear: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
+   - Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 3.0 - 0.4) * 3).
+   - Sensor / Scanner: Garis laser pemindai tipis menyapu bolak-balik di atas muatan/layar dengan ctx.clip().
+   - Lampu Indikator / LED: Berkedip ritmis (Math.sin(t * 5.0) > 0.2).
+   - Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
+   - Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
 
-4. MUTLAK: SETIAP SUB-ELEMEN FUNGSIONAL WAJIB HIDUP & AKTIF BERGERAK 60 FPS:
-   - Objek bukan gambar mati! Semua komponen fungsional beroperasi secara kinetik:
-     * Roda / Gear / Turbin: Berputar mulus 60 FPS pada porosnya (ctx.rotate(t * speed)).
-     * Muatan / Konten Internal: Membal lembut secara kinetik di dalam wadah (Math.sin(t * 3.5) * 3).
-     * Sinar Laser Scanner / Sensor: Garis pemindai tipis menyapu bolak-balik di atas muatan/layar (Math.sin(t * 2.5) * scanRange).
-     * Lampu Indikator / LED: Berkedip ritmis (Math.sin(t * 5.0) > 0.2).
-     * Pulsa Energi: Aliran pulsa dinamis pada sasis/kabel (ctx.lineDashOffset = -t * 30).
-     * Specular Gleam: Sapuan kilau diagonal ter-clip melintasi bodi setiap interval looping.
-
-5. ISOLASI TOTAL & KEBERSIHAN KANVAS:
+6. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - Skala S = Math.min(w, h) * 0.44; Objek terpusat sempurna di (cx, cy).
    - DILARANG partikel liar, debu mengambang, atau serpihan di luar objek utama.`;
 
