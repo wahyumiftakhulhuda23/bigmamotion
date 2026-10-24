@@ -1025,6 +1025,17 @@ WAJIB gunakan struktur HTML boilerplate berikut:
   window.addEventListener('resize', resize);
   resize();
 
+  // --- UNIVERSAL SAFE FALLBACK GRADIENTS & CONSTANTS (PREVENTS ReferenceError) ---
+  const darkTone = '#0f172a';
+  const lightTone = '#38bdf8';
+  const primaryColor = '#3b82f6';
+  const secondaryColor = '#8b5cf6';
+  const accentColor = '#f59e0b';
+  const capGrad = ctx.createLinearGradient(-100, -100, 100, 100);
+  capGrad.addColorStop(0, '#1e293b'); capGrad.addColorStop(1, '#0f172a');
+  const bellGrad = ctx.createLinearGradient(-100, -100, 100, 100);
+  bellGrad.addColorStop(0, '#fbbf24'); bellGrad.addColorStop(1, '#d97706');
+
   // --- INISIALISASI ELEMEN ---
 
   function animate(time) {
