@@ -972,9 +972,10 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
 - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.
 
 ======================================================================
-6. LARANGAN MUTLAK GERIGI / SPROCKET TANPA ESENSI (STRICT ZERO RANDOM GEARS):
+6. LARANGAN MUTLAK GERIGI / SPROCKET / COGWHEELS (STRICT ZERO RANDOM GEARS):
 ======================================================================
-- DILARANG KERAS menyematkan roda gerigi, gigi sprocket, atau roda gigi bergerigi (cogwheels/gears) pada objek yang tidak memiliki komponen mekanis internal (seperti kartu kredit, koin, brankas non-mekanis, amplop, folder dokumen, lencana, laci, badge). Gerigi HANYA boleh digambar jika subjeknya adalah mesin jam atau kotak roda gigi (gearbox)!
+- DILARANG KERAS MENGGAMBAR RODA GERIGI, GIGI SPROCKET, ATAU COGWHEELS BERPUTAR PADA DOMPET, GRAFIK, KARTU, BRANKAS NON-MEKANIS, ATAU DOKUMEN!
+- Gerigi/sprocket HARUS 100% DIHAPUS dari semua objek non-mesin. Objek harus berupa ikon 3D isometrik bersih ala microstock profesional (seperti dompet kripto, kartu fintech mengkilap, grafik batang solid) tanpa ada roda gerigi ngawur di sisi-sisinya!
 
 ======================================================================
 7. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
