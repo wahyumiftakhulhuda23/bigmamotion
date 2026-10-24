@@ -889,7 +889,18 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
 ======================================================================
 - DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
 - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
-- Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.`;
+- Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.
+
+======================================================================
+6. LARANGAN MUTLAK GERIGI / SPROCKET TANPA ESENSI (STRICT ZERO RANDOM GEARS):
+======================================================================
+- DILARANG KERAS menyematkan roda gerigi, gigi sprocket, atau roda gigi bergerigi (cogwheels/gears) pada objek yang tidak memiliki komponen mekanis internal (seperti kartu kredit, koin, brankas non-mekanis, amplop, folder dokumen, lencana, laci, badge). Gerigi HANYA boleh digambar jika subjeknya adalah mesin jam atau kotak roda gigi (gearbox)!
+
+======================================================================
+7. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
+======================================================================
+- Setiap objek icon WAJIB memiliki konstruksi 3D isometrik yang memperlihatkan presisi penuh dari segala sisi (permukaan atas/top yang diterangi key light, fasad depan/front yang kaya warna midtone, sisi kiri/kanan lateral yang terbayang, sisi bawah/bottom dengan ambient occlusion, dan struktur belakang yang menyatu kokoh).
+- DILARANG Keras objek pipih 2D, bentuk tanpa sisi, atau bagian mengambang/terlepas.`;
 
   const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
 Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
