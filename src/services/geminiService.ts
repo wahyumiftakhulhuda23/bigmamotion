@@ -588,7 +588,7 @@ export async function generatePromptsDirect(
 
 export type PromptProgressCallback = (prompt: string, index: number, total: number) => void;
 
-// Generate Prompts Satu per Satu Secara Cepat dengan Rotasi Key & Jaminan Anti-Gagal 100%
+// Generate Prompts Secara Ketat 1 per 1 (Sequential 1-by-1 dengan Jaminan Unik 100% & Tanpa Duplikasi)
 export async function generatePromptsViaGemini(
   apiKeys: string[],
   model: GeminiModel,
@@ -605,116 +605,45 @@ export async function generatePromptsViaGemini(
 ): Promise<string[]> {
   const targetCount = Math.max(1, count || 1);
   const collectedPrompts: string[] = new Array(targetCount);
+  const sessionGeneratedSoFar: string[] = [];
 
-  // Concurrency: 1 for single key to prevent 429 quota exhaustion, max 2 for multiple keys
-  const concurrency = Math.min(2, Math.max(1, apiKeys && apiKeys.length > 1 ? 2 : 1));
-  let currentIndex = 0;
+  for (let i = 0; i < targetCount; i++) {
+    const apiKey = getRotatedKey(apiKeys);
+    let promptText = '';
 
-  async function worker(): Promise<void> {
-    while (currentIndex < targetCount) {
-      const idx = currentIndex++;
-      const apiKey = getRotatedKey(apiKeys);
-      let promptText = '';
-
-      // 1. Direct call to Google API (fastest 1-by-1 ~250-400ms)
-      if (apiKey) {
-        try {
-          promptText = await generateSinglePromptDirect(
-            apiKey,
-            model,
-            type,
-            subCategory,
-            style,
-            idx,
-            targetCount,
-            keywords,
-            isGreenScreen,
-            colorMode,
-            motionDynamics,
-            neonGlow
-          );
-        } catch (directErr) {
-          console.warn(`[generatePromptsViaGemini] Direct call for prompt #${idx + 1} failed:`, directErr);
-        }
-      }
-
-      // 2. Server proxy fallback if direct call was empty
-      if (!promptText || promptText.length < 10) {
-        try {
-          const res = await fetch('/api/gemini/generate-prompts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              apiKey,
-              model: model || 'gemini-2.5-flash',
-              type,
-              subCategory,
-              style,
-              count: 1, // Single prompt per call for max speed & zero truncation!
-              keywords,
-              isGreenScreen,
-              colorMode,
-              motionDynamics,
-              neonGlow,
-              startIndex: idx,
-              previousPrompts: getPromptHistoryBank().slice(0, 20),
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (Array.isArray(data.prompts) && data.prompts[0]) {
-              promptText = data.prompts[0];
-            }
-          }
-        } catch (serverErr) {
-          console.warn(`[generatePromptsViaGemini] Server call for prompt #${idx + 1} failed:`, serverErr);
-        }
-      }
-
-      // 3. Guaranteed High-Quality Procedural Synthesizer with distinct offset index
-      if (!promptText || promptText.length < 10) {
-        const fallbacks = generateProceduralPrompts(
-          1,
+    // 1. Generate 1 by 1 securely using server proxy with strict anti-duplicate exclusion of all previous prompts in this session & history bank
+    try {
+      const res = await fetch('/api/gemini/generate-prompts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          model: model || 'gemini-2.5-flash',
           type,
           subCategory,
           style,
+          count: 1, // STRICTLY 1 BY 1
+          keywords,
+          isGreenScreen,
           colorMode,
           motionDynamics,
           neonGlow,
-          keywords,
-          idx
-        );
-        promptText = fallbacks[0];
-      }
-
-      collectedPrompts[idx] = promptText;
-      addToPromptHistoryBank([promptText]);
-
-      // Trigger progress callback immediately for this single prompt!
-      if (onProgress) {
-        try {
-          onProgress(promptText, idx, targetCount);
-        } catch (cbErr) {
-          console.error('[generatePromptsViaGemini] onProgress error:', cbErr);
+          startIndex: i,
+          previousPrompts: [...sessionGeneratedSoFar, ...getPromptHistoryBank()].slice(0, 40),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.prompts) && data.prompts[0]) {
+          promptText = String(data.prompts[0]).trim();
         }
       }
-
-      // Pacing pause for network breathability and API quota safety
-      await new Promise((r) => setTimeout(r, 250));
+    } catch (err) {
+      console.warn(`[generatePromptsViaGemini] 1-by-1 call for item #${i + 1} failed:`, err);
     }
-  }
 
-  const workers: Promise<void>[] = [];
-  const activeWorkers = Math.min(concurrency, targetCount);
-  for (let w = 0; w < activeWorkers; w++) {
-    workers.push(worker());
-  }
-
-  await Promise.all(workers);
-
-  // Guarantee all slots are populated with unique procedural prompts
-  for (let i = 0; i < targetCount; i++) {
-    if (!collectedPrompts[i] || collectedPrompts[i].length < 10) {
+    // 2. Fallback to 1-by-1 procedural generator with strict unique index offset if needed
+    if (!promptText || promptText.length < 10 || sessionGeneratedSoFar.includes(promptText)) {
       const fallback = generateProceduralPrompts(
         1,
         type,
@@ -724,12 +653,24 @@ export async function generatePromptsViaGemini(
         motionDynamics,
         neonGlow,
         keywords,
-        i
+        i * 17 + (Date.now() % 9999)
       )[0];
-      collectedPrompts[i] = fallback;
-      if (onProgress) {
-        onProgress(fallback, i, targetCount);
-      }
+      promptText = fallback;
+    }
+
+    collectedPrompts[i] = promptText;
+    sessionGeneratedSoFar.push(promptText);
+    addToPromptHistoryBank([promptText]);
+
+    if (onProgress) {
+      try {
+        onProgress(promptText, i, targetCount);
+      } catch {}
+    }
+
+    // Gentle pacing delay between 1-by-1 calls to protect API keys against rate limits
+    if (i < targetCount - 1) {
+      await new Promise((r) => setTimeout(r, 350));
     }
   }
 
