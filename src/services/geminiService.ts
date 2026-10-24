@@ -448,26 +448,25 @@ Output format: Return ONLY the prompt text string, concise, descriptive and stud
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETICS:
-1. SPECIFIC 3D FLAT ISOMETRIC SUBJECT & REALISTIC CHIAROSCURO:
-   - The prompt MUST describe a concrete, clearly identifiable, volumetric 3D Flat object (e.g. "Solid 3D Flat Isometric Crypto Gold Vault with cylindrical beveled door", "Aerodynamic 3D Flat Electric SUV with panoramic roof", "Volumetric 3D Flat Heavy-Duty Shopping Cart with tubular chassis", "Biotech 3D Flat DNA Double Helix with illuminated nucleotide rungs").
-   - EXPLICIT VALUE TONAL DISTRIBUTION (CHIAROSCURO): Detail distinct light vs dark values:
-     * Top illuminated face: Key light specular highlight / bright tint (+20% brightness).
-     * Front facade: Rich midtone solid base color.
-     * Underside & crevice shadows: Deep ambient occlusion (-35% dark contrast) and 1.5px crisp bevel edge rails.
-   - FORBIDDEN: Abstract meaningless blobs, flat 2D wireframes, or vague geometry.
-2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES, & ZERO BOX ABSTRACTIONS):
-   - Explicitly specify that all components are welded/anchored to the main body origin: e.g. handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
-   - ACCURATE MORPHOLOGY: Specify true physical geometry (e.g. graduation cap has a horizontal diamond rhombus board with skull cap and dangling tassel; atom has 3 tilted elliptical orbits with ZERO outer enclosing bubble; bell has flared acoustic bezier cup with rim lip and clapper).
+MANDATORY RULES FOR 3D ISOMETRIC CREST & HIGH-RELIEF EMBLEM (FLAGSHIP REFERENCE STYLE):
+1. 3D ISOMETRIC VOLUMETRIC CREST PLATFORM & MULTI-LAYER DEPTH:
+   - The prompt MUST describe a solid 3D Isometric Crest / Shield Medallion (or monolithic 3D volumetric subject adopting this architecture):
+     * Base: Elongated hexagonal / pointed-shield badge with thick lateral 3D extrusion walls in deep ambient shadow (-40% contrast), beveled outer steel frame with corner spherical metallic rivet studs.
+     * Midground: Recessed dark obsidian plateau with glowing cyber circuit linkage nodes (#00f0ff / #0284c7).
+     * Foreground Relief: Central 3D symbol/subject in gleaming high-relief (e.g. lustrous imperial gold, polished alloy, or rich vibrant material) with crisp 1.5px bevel highlight rails.
+     * Ground Shadow: Translucent elliptical contact shadow breathing underneath the bottom pointed apex.
+   - FORBIDDEN: Flat 2D wireframes, flimsy line art, or abstract meaningless polygons.
+2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES):
+   - All components are welded and anchored to the unified chassis.
    - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, or outer translucent enclosing glass bubbles/container cards.
 3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
-   - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents). Focus on sleek modern 3D flat styling with chamfered bevels, digital keypads, sliding card chips, and organic indicators.
+   - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents).
 4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
    - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal micro-articulation with secondary inertia, and a clipped 45-degree diagonal specular gleam sweep.
 ${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
-Visual Style: ${style}${colorModeDirective}${glowDirective}
+Visual Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`;
@@ -844,7 +843,62 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT,
 - Semua lintasan orbit harus elips tertutup kontinu sempurna (ctx.ellipse(...)), dan seluruh komponen penyusun (tassel ke topi toga, roda ke sasis troli, bibir lonceng, dsb.) harus MENYATU FISIK KOKOH tanpa celah udara mengambang!
 
 ======================================================================
-2. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP KANVAS 2D PRESISI TINGGI):
+2. MASTER 3D ISOMETRIC CREST & EMBLEM BLUEPRINT (FLAGSHIP REFERENCE SPECIFICATION):
+======================================================================
+IKON MOTION HARUS MENERAPKAN TIPE STYLE 3D ISOMETRIC VOLUMETRIC CREST / HIGH-RELIEF EMBLEM SEPERTI REFERENSI:
+Arsitektur 3D ini terdiri dari 5 Layer Volumetrik yang menyatu kokoh:
+
+[LAYER 1: DINDING EKSTRUSI 3D LATERAL KANAN (Thick 3D Lateral Extrusion Wall)]:
+- Memiliki ketebalan ekstrusi isometrik nyata di sisi kanan bodi dengan warna bayangan ambient gelap pekat (#0a101d s/d #162032):
+  const crestW = S * 0.44; const crestTopY = -S * 0.46; const crestMidY = -S * 0.08; const crestBotY = S * 0.50; const ext3D = S * 0.08;
+  ctx.beginPath();
+  ctx.moveTo(0, crestTopY);
+  ctx.lineTo(ext3D, crestTopY + 4);
+  ctx.lineTo(crestW + ext3D, crestMidY);
+  ctx.lineTo(ext3D, crestBotY + 8);
+  ctx.lineTo(0, crestBotY);
+  ctx.lineTo(crestW, crestMidY);
+  ctx.closePath();
+  ctx.fillStyle = '#0a101d';
+  ctx.fill();
+
+[LAYER 2: FASAD BINGKAI RIM TER-BEVEL (Beveled Steel Rim Face)]:
+- Fasad perisai heksagonal meruncing ke bawah dengan gradien baja gelap dan garis stroke kontur:
+  ctx.beginPath();
+  ctx.moveTo(0, crestTopY); ctx.lineTo(crestW, crestMidY); ctx.lineTo(0, crestBotY); ctx.lineTo(-crestW, crestMidY); ctx.closePath();
+  const rimGrad = ctx.createLinearGradient(-crestW, crestTopY, crestW, crestBotY);
+  rimGrad.addColorStop(0, '#2d3d56'); rimGrad.addColorStop(0.5, '#1e293b'); rimGrad.addColorStop(1, '#0f172a');
+  ctx.fillStyle = rimGrad; ctx.fill();
+  ctx.lineWidth = 2.5; ctx.strokeStyle = '#475569'; ctx.stroke();
+  // Highlight Rail Tepi Kiri-Atas (Crisp Specular Bevel Rail):
+  ctx.beginPath(); ctx.moveTo(0, crestTopY); ctx.lineTo(-crestW, crestMidY); ctx.lineTo(0, crestBotY);
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)'; ctx.stroke();
+
+[LAYER 3: PELAT OBSIDIAN BAGIAN DALAM YANG CEKUNG (Recessed Inner Plateau)]:
+- Pelat dalam lebih gelap dengan batas nat garis presisi:
+  const inW = crestW * 0.82; const inTopY = crestTopY + S * 0.08; const inMidY = crestMidY + S * 0.01; const inBotY = crestBotY - S * 0.08;
+  ctx.beginPath(); ctx.moveTo(0, inTopY); ctx.lineTo(inW, inMidY); ctx.lineTo(0, inBotY); ctx.lineTo(-inW, inMidY); ctx.closePath();
+  const plateGrad = ctx.createLinearGradient(0, inTopY, 0, inBotY);
+  plateGrad.addColorStop(0, '#0f172a'); plateGrad.addColorStop(1, '#020617');
+  ctx.fillStyle = plateGrad; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#1e293b'; ctx.stroke();
+
+[LAYER 4: BAUT SUDUT LOGAM (Metallic Corner Rivet Studs with Specular Glints)]:
+- Baut-baut bulat logam dengan titik kilau spekular putih di sudut-sudut perisai:
+  const rivets = [ { x: 0, y: crestTopY + 12 }, { x: crestW - 14, y: crestMidY }, { x: 0, y: crestBotY - 18 }, { x: -crestW + 14, y: crestMidY }, { x: crestW * 0.5, y: (crestTopY + crestMidY) / 2 }, { x: -crestW * 0.5, y: (crestTopY + crestMidY) / 2 } ];
+  rivets.forEach(r => {
+    ctx.beginPath(); ctx.arc(r.x, r.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#64748b'; ctx.fill();
+    ctx.beginPath(); ctx.arc(r.x - 1, r.y - 1, 1.5, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+  });
+
+[LAYER 5: JEJAK SIRKUIT TECH & SIMPUL CYBER (Cyber Linkage Nodes with Soft Luminescence)]:
+- Garis sirkuit biru cyan (#0284c7) dengan simpul bola menyala (#0ea5e9, #e0f2fe) di kiri-kanan simbol sentral.
+
+[LAYER 6: SIMBOL TIMBUL 3D DI TENGAH (Central High-Relief 3D Emblem)]:
+- Subjek utama (Kunci Emas, Brankas, Kamera, Roket, Troli, Trofi, Otak AI, Stetoskop, dll.) digambar TIMBUL TEBAL di atas pelat tengah dengan gradien kaya (misal: emas berkilau #fffbeb -> #fbbf24 -> #d97706 -> #78350f), bevel rail 1.5px putih keemasan, dan bayangan kontak ke pelat.
+
+======================================================================
+3. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP SUBJEK KHUSUS):
 ======================================================================
 Gunakan resep geometris matematis berikut sesuai subjek yang diminta dalam prompt:
 

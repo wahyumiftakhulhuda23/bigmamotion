@@ -34,6 +34,7 @@ export type NicheCategory =
   | string;
 
 export type VisualStyle = 
+  | '3d_crest'
   | 'minimalist' 
   | 'flat_vector'
   | 'cyberpunk' 

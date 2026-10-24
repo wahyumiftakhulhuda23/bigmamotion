@@ -170,7 +170,7 @@ export default function App() {
 
   const [currentType, setCurrentType] = useState<AnimationType>('icon');
   const [nicheCategory, setNicheCategory] = useState<NicheCategory>('business_finance');
-  const [visualStyle, setVisualStyle] = useState<VisualStyle>('minimalist');
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('3d_crest');
   const [colorMode, setColorMode] = useState<ColorMode>('gradient');
   const [motionDynamics, setMotionDynamics] = useState<MotionDynamics>('flow');
   const [neonGlow, setNeonGlow] = useState<boolean>(true);

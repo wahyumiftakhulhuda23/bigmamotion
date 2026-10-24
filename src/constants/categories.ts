@@ -398,54 +398,54 @@ export function generateProceduralPrompts(
     ? cleanKeywords.flatMap((kw) => [kw, `${kw} visual emblem`, `precision ${kw} model`])
     : pool;
 
-  // Diverse sentence structures to eliminate boilerplate
+  // Diverse sentence structures adhering to the 3D Isometric Crest & High-Relief Emblem Flagship Style
   const iconSentenceTemplates = [
-    // Template 1: Subject-centric with mechanical rigging
+    // Template 1: 3D Isometric Crest Platform with High-Relief Emblem
     (subj: string, mot: string, col: string) =>
-      `A meticulously assembled monolithic ${subj}, where all components, chassis, and attached details form one unbroken unified rigid body with zero detached parts and zero background cards, rendered in ${col}, animated with ${mot}. Clean isolated silhouette, studio microstock grade.`,
+      `Flagship 3D Isometric Crest Emblem of ${subj}: constructed on an elongated hexagonal beveled shield base with thick lateral extrusion walls in deep ambient shadow, corner metallic rivet studs, recessed obsidian plateau, cyber circuit inlays, and a raised volumetric central relief in ${col}, animated with ${mot}. Spotless background with ground contact shadow.`,
     
-    // Template 2: Technical Vector Blueprint
+    // Template 2: Volumetric Beveled 3D Medallion
     (subj: string, mot: string, col: string) =>
-      `Studio vector depiction of ${subj}: featuring seamless welded parent-child joint matrix, firmly anchored sub-elements, crisp contour, and ${col}. The central form executes ${mot} with zero detached elements and zero canvas clutter.`,
+      `Prestigious 3D Isometric Medallion depicting ${subj}: featuring extruded faceted side-walls, beveled steel outer rim with specular highlight rails, corner bolt rivets, and gleaming high-relief 3D central subject in ${col}. Smoothly animated with ${mot} and elliptical ground shadow.`,
     
-    // Template 3: Kinetic Motion Focus
+    // Template 3: Cybernetic Tech Crest
     (subj: string, mot: string, col: string) =>
-      `Kinetic microstock emblem of ${subj}: dynamic 60 FPS loop showcasing ${mot}, built with interlocking solid components in ${col}. Entirely unified monolithic anatomy with zero floating pieces and specular surface highlight sheen.`,
+      `Cyber-tech 3D Isometric Shield Badge representing ${subj}: multi-layered depth architecture with thick right-side extrusion shadows, corner spherical rivet glints, glowing cyan node linkage traces, and gleaming metallic core in ${col}. Seamless 60 FPS motion featuring ${mot}.`,
     
-    // Template 4: Premium Isometric / Flat Vector
+    // Template 4: Premium Microstock 3D Relief Emblem
     (subj: string, mot: string, col: string) =>
-      `High-end ${subj} vector symbol: pristine centered composition, firmly anchored joints without air gaps, rigid internal articulation, and ${col}. The subject performs ${mot} against a spotless backdrop.`,
+      `Studio 3D Isometric Vector Crest of ${subj}: solid monolithic pointed-shield geometry, chamfered rim bevels, dark obsidian recessed plate, and vibrant raised 3D subject in ${col}. The composition executes ${mot} with zero detached parts and pristine ground shadow.`,
     
-    // Template 5: Executive Commercial Stock
+    // Template 5: Executive 3D Volumetric Insignia
     (subj: string, mot: string, col: string) =>
-      `Precision commercial icon of ${subj}: constructed with balanced bevel volume, anchored pivot axes, welded structural components, and ${col}. Seamless 60 FPS motion featuring ${mot} as one unified body.`,
+      `Volumetric 3D Isometric Insignia of ${subj}: engineered with beveled lateral facets, corner rivet fasteners, high-contrast chiaroscuro lighting, and brilliant central 3D relief in ${col}. Balanced 60 FPS kinetic loop with ${mot} and bottom contact shadow.`,
   ];
 
   const bgSentenceTemplates = [
     // Template 1: Cinematic Full Frame
     (subj: string, mot: string, col: string) =>
-      `Cinematic edge-to-edge full frame motion background featuring ${subj}, filling 100% of the canvas with atmospheric depth, rendered in ${col}, performing ${mot}. Broadcast 60 FPS loop.`,
+      `Cinematic edge-to-edge full frame motion background featuring ${subj}, filling 100% of the canvas with atmospheric depth, rendered in ${col}, performing ${mot}. Broadcast 60 FPS loop with zero white flares.`,
 
     // Template 2: Volumetric Depth
     (subj: string, mot: string, col: string) =>
-      `Volumetric looping backdrop displaying ${subj}: continuous widescreen motion graphics utilizing ${col}, dynamically animated with ${mot}. Perfectly seamless 60 FPS animation without static dead zones.`,
+      `Volumetric looping backdrop displaying ${subj}: continuous widescreen motion graphics utilizing ${col}, dynamically animated with ${mot}. Perfectly seamless 60 FPS animation without static dead zones or white flares.`,
 
     // Template 3: Ambient Studio Backdrop
     (subj: string, mot: string, col: string) =>
-      `Sophisticated ambient video background of ${subj}: expansive viewport-filling visual geometry in ${col}, animated through ${mot}. Professional microstock standard with smooth continuous flow.`,
+      `Sophisticated ambient video background of ${subj}: expansive viewport-filling visual geometry in ${col}, animated through ${mot}. Professional microstock standard with smooth continuous flow and dark contrast.`,
 
     // Template 4: Kinetic Horizon / Mesh
     (subj: string, mot: string, col: string) =>
-      `High-production motion wallpaper showcasing ${subj}: edge-to-edge procedural displacement with multi-layered depth, glowing in ${col}, moving in ${mot}. Zero clutter, 60 FPS microstock asset.`,
+      `High-production motion wallpaper showcasing ${subj}: edge-to-edge procedural displacement with multi-layered depth, glowing in ${col}, moving in ${mot}. Zero clutter, zero white flares, 60 FPS microstock asset.`,
   ];
 
-  // Architectural 3D Flat Chiaroscuro & Volumetric Attributes
+  // Architectural 3D Isometric Crest Chiaroscuro & Volumetric Attributes
   const chiaroscuroTreatments = [
-    'featuring 3-plane 3D Flat chiaroscuro (illuminated top face with key highlight, rich midtone front facade, and deep ambient occlusion shadow underbelly)',
-    'constructed with volumetric 3D Flat geometry, crisp 1.5px bevel edge highlight rails, and deep crevice seam shadows',
-    'rendered in high-end 3D Flat vector styling with distinct value contrast between light-facing planes and shaded under-surfaces',
-    'designed with solid 3D Flat isometric depth, illuminated upper chamfers, and rich shadow crevice lines',
-    'featuring balanced 3D Flat tonal distribution, specular key highlights on top curvature, and dark ambient occlusion below',
+    'featuring 3D isometric faceted chiaroscuro (thick dark lateral extrusion shadow on the right facet, illuminated top-left beveled rim, corner spherical rivet highlights, and gleaming high-relief central symbol)',
+    'constructed with volumetric 3D crest geometry, crisp 1.5px bevel edge highlight rails, recessed obsidian plateau, and deep crevice seam shadows',
+    'rendered in high-end 3D Isometric Shield styling with distinct value contrast between key-lighted chamfers and shaded under-surfaces',
+    'designed with solid 3D isometric depth, extruded side walls, corner bolt studs, and rich shadow crevice lines',
+    'featuring balanced 3D multi-layered tonal distribution, specular key highlights on top curvature, and dark ambient occlusion below',
   ];
 
   const elasticMotions = [
