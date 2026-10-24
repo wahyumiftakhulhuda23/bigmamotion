@@ -398,27 +398,27 @@ export function generateProceduralPrompts(
     ? cleanKeywords.flatMap((kw) => [kw, `${kw} visual emblem`, `precision ${kw} model`])
     : pool;
 
-  // Diverse sentence structures adhering to the 3D Isometric Crest & High-Relief Emblem Flagship Style
+  // Diverse sentence structures for Standalone 3D Volumetric Objects (Zero Rhombus, Zero Crest, Zero Background Plates)
   const iconSentenceTemplates = [
-    // Template 1: 3D Isometric Crest Platform with High-Relief Emblem
+    // Template 1: Chunky 3D Volumetric Object
     (subj: string, mot: string, col: string) =>
-      `Flagship 3D Isometric Crest Emblem of ${subj}: constructed on an elongated hexagonal beveled shield base with thick lateral extrusion walls in deep ambient shadow, corner metallic rivet studs, recessed obsidian plateau, cyber circuit inlays, and a raised volumetric central relief in ${col}, animated with ${mot}. Spotless background with ground contact shadow.`,
+      `Ultra-realistic 3D volumetric model of ${subj}: rendered as a standalone chunky solid 3D object with thick isometric lateral extrusion walls in deep ambient shadow, curved bevel chamfers with crisp 1.5px specular highlight rails, and rich multi-stop chiaroscuro gradients in ${col}. Smoothly floating with ${mot} and a soft breathing ground contact shadow directly beneath on spotless green screen (pure standalone icon, zero background plates, zero rhombus).`,
     
-    // Template 2: Volumetric Beveled 3D Medallion
+    // Template 2: Precision Industrial 3D Solid
     (subj: string, mot: string, col: string) =>
-      `Prestigious 3D Isometric Medallion depicting ${subj}: featuring extruded faceted side-walls, beveled steel outer rim with specular highlight rails, corner bolt rivets, and gleaming high-relief 3D central subject in ${col}. Smoothly animated with ${mot} and elliptical ground shadow.`,
+      `Studio-grade 3D isometric ${subj}: modeled as a standalone volumetric physical artifact with realistic depth extrusion, chamfered corner fillets, polished metallic surface luster in ${col}, and high-contrast ambient occlusion. Articulated with ${mot} and dynamic elliptical floor shadow (pure isolated object with zero shield, zero badge, zero outer frame).`,
     
-    // Template 3: Cybernetic Tech Crest
+    // Template 3: High-Fidelity 3D Sculpt
     (subj: string, mot: string, col: string) =>
-      `Cyber-tech 3D Isometric Shield Badge representing ${subj}: multi-layered depth architecture with thick right-side extrusion shadows, corner spherical rivet glints, glowing cyan node linkage traces, and gleaming metallic core in ${col}. Seamless 60 FPS motion featuring ${mot}.`,
+      `Premium 3D sculptural vector icon of ${subj}: fully dimensional solid body with cylindrical/curved volumetric bevels, specular top-edge rim reflections, and deep tonal shading in ${col}. Performing ${mot} with a responsive breathing contact shadow directly on the green screen surface (completely uncontained, pure standalone silhouette).`,
     
-    // Template 4: Premium Microstock 3D Relief Emblem
+    // Template 4: Realistic Dimensional Masterpiece
     (subj: string, mot: string, col: string) =>
-      `Studio 3D Isometric Vector Crest of ${subj}: solid monolithic pointed-shield geometry, chamfered rim bevels, dark obsidian recessed plate, and vibrant raised 3D subject in ${col}. The composition executes ${mot} with zero detached parts and pristine ground shadow.`,
+      `Ultra-detailed 3D isometric representation of ${subj}: thick volumetric profile with cast ambient shadows, beveled perimeter facets, and vibrant tactile luster in ${col}. Animated through ${mot} and subtle floor shadow scaling, standing totally isolated with zero diamond plates, zero background frames, and zero outer cards.`,
     
-    // Template 5: Executive 3D Volumetric Insignia
+    // Template 5: Tactile 3D Physical Prop
     (subj: string, mot: string, col: string) =>
-      `Volumetric 3D Isometric Insignia of ${subj}: engineered with beveled lateral facets, corner rivet fasteners, high-contrast chiaroscuro lighting, and brilliant central 3D relief in ${col}. Balanced 60 FPS kinetic loop with ${mot} and bottom contact shadow.`,
+      `High-end dimensional 3D asset portraying ${subj}: tangible volumetric construction with realistic lateral side-wall depth, polished chamfer highlights, and rich chiaroscuro in ${col}. Seamless 60 FPS motion featuring ${mot} and grounding contact shadow (standalone pure icon object).`,
   ];
 
   const bgSentenceTemplates = [
@@ -439,12 +439,12 @@ export function generateProceduralPrompts(
       `High-production motion wallpaper showcasing ${subj}: edge-to-edge procedural displacement with multi-layered depth, glowing in ${col}, moving in ${mot}. Zero clutter, zero white flares, 60 FPS microstock asset.`,
   ];
 
-  // Architectural 3D Isometric Crest Chiaroscuro & Volumetric Attributes
+  // Architectural 3D Standalone Chiaroscuro & Volumetric Attributes (Applied to the Object Itself)
   const chiaroscuroTreatments = [
-    'featuring 3D isometric faceted chiaroscuro (thick dark lateral extrusion shadow on the right facet, illuminated top-left beveled rim, corner spherical rivet highlights, and gleaming high-relief central symbol)',
-    'constructed with volumetric 3D crest geometry, crisp 1.5px bevel edge highlight rails, recessed obsidian plateau, and deep crevice seam shadows',
-    'rendered in high-end 3D Isometric Shield styling with distinct value contrast between key-lighted chamfers and shaded under-surfaces',
-    'designed with solid 3D isometric depth, extruded side walls, corner bolt studs, and rich shadow crevice lines',
+    'featuring 3D volumetric chiaroscuro (thick dark lateral extrusion shadow on the right/bottom facets of the object, illuminated top-left beveled edges, and specular highlight rails directly on the icon body)',
+    'constructed with tangible 3D volumetric depth, crisp 1.5px bevel edge highlight rails, rich core shadows, and deep crevice seam ambient occlusion',
+    'rendered in high-end 3D isometric styling with distinct value contrast between key-lighted chamfers and shaded under-surfaces of the standalone object',
+    'designed with solid 3D depth, extruded side walls, rounded fillets, and rich shadow crevice lines on the icon itself',
     'featuring balanced 3D multi-layered tonal distribution, specular key highlights on top curvature, and dark ambient occlusion below',
   ];
 

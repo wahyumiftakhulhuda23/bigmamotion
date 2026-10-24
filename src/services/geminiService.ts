@@ -448,17 +448,20 @@ Output format: Return ONLY the prompt text string, concise, descriptive and stud
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR 3D ISOMETRIC CREST & HIGH-RELIEF EMBLEM (FLAGSHIP REFERENCE STYLE):
-1. 3D ISOMETRIC VOLUMETRIC CREST PLATFORM & MULTI-LAYER DEPTH:
-   - The prompt MUST describe a solid 3D Isometric Crest / Shield Medallion (or monolithic 3D volumetric subject adopting this architecture):
-     * Base: Elongated hexagonal / pointed-shield badge with thick lateral 3D extrusion walls in deep ambient shadow (-40% contrast), beveled outer steel frame with corner spherical metallic rivet studs.
-     * Midground: Recessed dark obsidian plateau with glowing cyber circuit linkage nodes (#00f0ff / #0284c7).
-     * Foreground Relief: Central 3D symbol/subject in gleaming high-relief (e.g. lustrous imperial gold, polished alloy, or rich vibrant material) with crisp 1.5px bevel highlight rails.
-     * Ground Shadow: Translucent elliptical contact shadow breathing underneath the bottom pointed apex.
-   - FORBIDDEN: Flat 2D wireframes, flimsy line art, or abstract meaningless polygons.
+MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO SHIELD, ZERO BACKGROUND PLATES):
+1. STANDALONE VOLUMETRIC 3D ICON OBJECT (THE OBJECT ITSELF IS 3D):
+   - The prompt MUST describe the subject/icon itself (e.g. 3D Camera, 3D Notification Bell, 3D Studio Microphone, 3D Padlock, 3D Trophy, 3D Crypto Vault, 3D Shopping Cart) as a physical, chunky, standalone 3D isometric artifact.
+   - STRICT ZERO CONTAINER / ZERO RHOMBUS / ZERO SHIELD RULE:
+     * NEVER place the icon on a diamond (belah ketupat), hexagon, shield plate, medallion base, or background card!
+     * The icon must stand 100% naked and standalone on the canvas/green screen.
+   - PHYSICAL 3D ATTRIBUTES ON THE ICON ITSELF:
+     * Thick 3D isometric extrusion walls on side/bottom showing tangible mass with deep ambient shadow (-40% contrast).
+     * Smooth beveled chamfers and curved fillets with crisp 1.5px specular highlight rails catching key studio lighting.
+     * Rich multi-stop chiaroscuro gradients across front facets (e.g. lustrous imperial gold, chrome titanium, matte obsidian, or vivid saturated materials).
+     * Soft breathing elliptical ground contact shadow cast directly below the object on the canvas/green screen.
 2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES):
-   - All components are welded and anchored to the unified chassis.
-   - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, or outer translucent enclosing glass bubbles/container cards.
+   - All internal components (lens barrel on camera, clapper inside bell, mesh grille on microphone, dial on vault) are physically welded into the unified 3D chassis.
+   - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, outer glass bubbles, or outer background cards.
 3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
    - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents).
 4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
@@ -842,65 +845,56 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT,
 [CACAT 4: LINTASAN CACAT & BAGIAN TERPISAH - ZERO DETACHED PARTS & NO BROKEN ARCS]:
 - Semua lintasan orbit harus elips tertutup kontinu sempurna (ctx.ellipse(...)), dan seluruh komponen penyusun (tassel ke topi toga, roda ke sasis troli, bibir lonceng, dsb.) harus MENYATU FISIK KOKOH tanpa celah udara mengambang!
 
-======================================================================
-2. MASTER 3D ISOMETRIC CREST & EMBLEM BLUEPRINT (FLAGSHIP REFERENCE SPECIFICATION):
-======================================================================
-IKON MOTION HARUS MENERAPKAN TIPE STYLE 3D ISOMETRIC VOLUMETRIC CREST / HIGH-RELIEF EMBLEM SEPERTI REFERENSI:
-Arsitektur 3D ini terdiri dari 5 Layer Volumetrik yang menyatu kokoh:
+[CACAT 5: DILARANG MEMBUAT BANGUN BELAH KETUPAT / PERISAI / PELAT ALAS (STRICT ZERO RHOMBUS / ZERO SHIELD CONTAINER)]:
+- DILARANG KERAS menggambar bangun belah ketupat (rhombus), diamond, perisai (shield/crest), medali plat, emblem badge, atau bingkai kartu di belakang icon!
+- OBJEK ICON HARUS BERDIRI SENDIRI SECARA MURNI (100% STANDALONE 3D OBJECT) langsung di atas canvas/green screen!
+- BUKAN pelatnya yang dibuat 3D, melainkan OBJEK ICON ITU SENDIRI yang dibuat 3D bervolume (jika Kamera, maka bodi kamera 3D tebal; jika Lonceng, maka bodi lonceng 3D tebal; jika Mikrofon, maka kapsul & stand mikrofon 3D tebal)!
 
-[LAYER 1: DINDING EKSTRUSI 3D LATERAL KANAN (Thick 3D Lateral Extrusion Wall)]:
-- Memiliki ketebalan ekstrusi isometrik nyata di sisi kanan bodi dengan warna bayangan ambient gelap pekat (#0a101d s/d #162032):
-  const crestW = S * 0.44; const crestTopY = -S * 0.46; const crestMidY = -S * 0.08; const crestBotY = S * 0.50; const ext3D = S * 0.08;
+======================================================================
+2. MASTER STANDALONE 3D VOLUMETRIC ICON BLUEPRINT (CHUNKY 3D SOLID OBJECT):
+======================================================================
+IKON MOTION HARUS MENERAPKAN TEKNIK 3D VOLUMETRIK PADA OBJEK ICON ITU SENDIRI (MURNI OBJEK 3D TUNGGAL, TANPA BELAH KETUPAT, TANPA PERISAI, TANPA CONTAINER):
+Visual 3D ultra-realistis dibangun langsung pada anatomi fisik objek icon melalui 6 layer terpadu:
+
+[LAYER 1: BAYANGAN KONTAK LANTAI (Breathing Ground Contact Shadow)]:
+- Elips bayangan kontak lantai langsung di bawah objek icon di canvas/green screen:
+  const groundY = S * 0.44;
+  const shadowScale = 1 - Math.sin(t * 2) * 0.12;
   ctx.beginPath();
-  ctx.moveTo(0, crestTopY);
-  ctx.lineTo(ext3D, crestTopY + 4);
-  ctx.lineTo(crestW + ext3D, crestMidY);
-  ctx.lineTo(ext3D, crestBotY + 8);
-  ctx.lineTo(0, crestBotY);
-  ctx.lineTo(crestW, crestMidY);
-  ctx.closePath();
-  ctx.fillStyle = '#0a101d';
+  ctx.ellipse(0, groundY, S * 0.38 * shadowScale, S * 0.08 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0, 30, 0, 0.4)'; // Bayangan lembut pada green screen (atau rgba(0, 0, 0, 0.35) pada dark mode)
   ctx.fill();
 
-[LAYER 2: FASAD BINGKAI RIM TER-BEVEL (Beveled Steel Rim Face)]:
-- Fasad perisai heksagonal meruncing ke bawah dengan gradien baja gelap dan garis stroke kontur:
-  ctx.beginPath();
-  ctx.moveTo(0, crestTopY); ctx.lineTo(crestW, crestMidY); ctx.lineTo(0, crestBotY); ctx.lineTo(-crestW, crestMidY); ctx.closePath();
-  const rimGrad = ctx.createLinearGradient(-crestW, crestTopY, crestW, crestBotY);
-  rimGrad.addColorStop(0, '#2d3d56'); rimGrad.addColorStop(0.5, '#1e293b'); rimGrad.addColorStop(1, '#0f172a');
-  ctx.fillStyle = rimGrad; ctx.fill();
-  ctx.lineWidth = 2.5; ctx.strokeStyle = '#475569'; ctx.stroke();
-  // Highlight Rail Tepi Kiri-Atas (Crisp Specular Bevel Rail):
-  ctx.beginPath(); ctx.moveTo(0, crestTopY); ctx.lineTo(-crestW, crestMidY); ctx.lineTo(0, crestBotY);
-  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)'; ctx.stroke();
+[LAYER 2: KINETIKA MELAYANG & ELEVASI 3D (Floating Bobbing & 3D Pitch/Roll)]:
+- Objek icon melayang anggun naik-turun dan sedikit miring isometrik:
+  const floatY = Math.sin(t * 2) * (S * 0.05);
+  const tiltAngle = Math.cos(t * 1.5) * 0.035; // kemiringan mikro sudut 3D
+  ctx.save();
+  ctx.translate(0, floatY);
+  ctx.rotate(tiltAngle);
 
-[LAYER 3: PELAT OBSIDIAN BAGIAN DALAM YANG CEKUNG (Recessed Inner Plateau)]:
-- Pelat dalam lebih gelap dengan batas nat garis presisi:
-  const inW = crestW * 0.82; const inTopY = crestTopY + S * 0.08; const inMidY = crestMidY + S * 0.01; const inBotY = crestBotY - S * 0.08;
-  ctx.beginPath(); ctx.moveTo(0, inTopY); ctx.lineTo(inW, inMidY); ctx.lineTo(0, inBotY); ctx.lineTo(-inW, inMidY); ctx.closePath();
-  const plateGrad = ctx.createLinearGradient(0, inTopY, 0, inBotY);
-  plateGrad.addColorStop(0, '#0f172a'); plateGrad.addColorStop(1, '#020617');
-  ctx.fillStyle = plateGrad; ctx.fill();
-  ctx.lineWidth = 1.5; ctx.strokeStyle = '#1e293b'; ctx.stroke();
+[LAYER 3: DINDING KETEBALAN EKSTRUSI 3D LATERAL & BAWAH (Chunky 3D Extrusion Side-Walls)]:
+- Objek icon (bodi kamera, kubah lonceng, bodi gembok, rangka trofi, dsb.) memiliki dinding samping kanan dan bawah yang diekstrusi tebal (extX = S * 0.08, extY = S * 0.06):
+  // Poligon ekstrusi samping kanan-bawah dengan warna bayangan ambient gelap pekat:
+  // (Gunakan warna bayangan 40-50% lebih gelap dari warna permukaan depan, misal #0f172a, #162032, atau #78350f untuk emas).
+  // Sambungkan vertex depan objek ke vertex offset (x + extX, y + extY).
+  ctx.fillStyle = darkExtrusionColor;
+  ctx.fill();
 
-[LAYER 4: BAUT SUDUT LOGAM (Metallic Corner Rivet Studs with Specular Glints)]:
-- Baut-baut bulat logam dengan titik kilau spekular putih di sudut-sudut perisai:
-  const rivets = [ { x: 0, y: crestTopY + 12 }, { x: crestW - 14, y: crestMidY }, { x: 0, y: crestBotY - 18 }, { x: -crestW + 14, y: crestMidY }, { x: crestW * 0.5, y: (crestTopY + crestMidY) / 2 }, { x: -crestW * 0.5, y: (crestTopY + crestMidY) / 2 } ];
-  rivets.forEach(r => {
-    ctx.beginPath(); ctx.arc(r.x, r.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#64748b'; ctx.fill();
-    ctx.beginPath(); ctx.arc(r.x - 1, r.y - 1, 1.5, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
-  });
+[LAYER 4: FASAD DEPAN OBJEK DENGAN GRADIEN MULTI-STOP KAYA (Vibrant Multi-Stop Face)]:
+- Fasad depan objek digambar presisi sesuai bentuk aslinya dengan gradien multi-stop (misal emas: #fffbeb -> #fde047 -> #eab308 -> #ca8a04 -> #78350f; titanium: #475569 -> #334155 -> #1e293b; cobalt: #38bdf8 -> #0284c7 -> #0369a1).
 
-[LAYER 5: JEJAK SIRKUIT TECH & SIMPUL CYBER (Cyber Linkage Nodes with Soft Luminescence)]:
-- Garis sirkuit biru cyan (#0284c7) dengan simpul bola menyala (#0ea5e9, #e0f2fe) di kiri-kanan simbol sentral.
+[LAYER 5: CRISP SPECULAR BEVEL HIGHLIGHT RAILS (Garis Kilau Spekular Tepi 3D)]:
+- Tepi atas dan kiri objek yang menghadap sumber cahaya studio diberi stroke 1.5–2px putih cerah bergradien (rgba(255, 255, 255, 0.65) memudar ke 0.15) untuk memberikan efek chamfer berkilau mewah.
 
-[LAYER 6: SIMBOL TIMBUL 3D DI TENGAH (Central High-Relief 3D Emblem)]:
-- Subjek utama (Kunci Emas, Brankas, Kamera, Roket, Troli, Trofi, Otak AI, Stetoskop, dll.) digambar TIMBUL TEBAL di atas pelat tengah dengan gradien kaya (misal: emas berkilau #fffbeb -> #fbbf24 -> #d97706 -> #78350f), bevel rail 1.5px putih keemasan, dan bayangan kontak ke pelat.
+[LAYER 6: DETAIL MEKANIKAL/FISIK INTERNAL TERPADU]:
+- Komponen internal objek (lensa kamera berlapis kaca konsentris, lidah clapper lonceng, tombol shutter silinder, kisi mesh mic) dipasang menyatu kokoh dengan bayangan oklusi sendiri.
+ctx.restore();
 
 ======================================================================
-3. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP SUBJEK KHUSUS):
+3. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP SUBJEK STANDALONE):
 ======================================================================
-Gunakan resep geometris matematis berikut sesuai subjek yang diminta dalam prompt:
+Gunakan resep geometris matematis berikut sesuai subjek yang diminta dalam prompt (SEMUANYA STANDALONE TANPA BELAH KETUPAT/SHIELD):
 
 [A. TOPI TOGA WISUDA (ACADEMIC GRADUATION MORTARBOARD CAP)]:
 1. Papan Atas Belah Ketupat Horizontal Isometrik 3D (Diamond Rhombus Top Board):
@@ -1007,10 +1001,28 @@ Punggung buku tebal di tengah (0, S * 0.15). Dua sayap lembaran kertas kiri dan 
 [G. GEMBOK KEAMANAN (SECURITY PADLOCK)]:
 Badan balok chamfered 3D di bawah (y = 0 hingga y = S * 0.28). Leher besi pengait (U-shackle) berbentuk busur tebal setengah lingkaran yang kedua ujung kakinya MENANCAP LANGSUNG KE DALAM DUA LUBANG di pelat atas bodi gembok.
 
+[H. KAMERA PROFESIONAL 3D (STANDALONE 3D CAMERA - ZERO CONTAINER)]:
+1. Bodi Utama Balok 3D Chamfered (Chunky 3D Camera Body):
+   Bodi kamera tebal mandiri (w = S * 0.52, h = S * 0.34) dengan dinding ekstrusi lateral gelap di kanan-bawah:
+   ctx.beginPath(); ctx.roundRect(-w * 0.5, -h * 0.35, w, h, 14); ctx.fillStyle = cameraBodyGrad; ctx.fill();
+2. Lensa Silinder Bertingkat 3D (Stepped Concentric Cylindrical Lens):
+   Cincin laras lensa timbul ke depan di tengah bodi:
+   const lensR = S * 0.17;
+   ctx.beginPath(); ctx.arc(0, 0, lensR, 0, Math.PI * 2); ctx.fillStyle = '#1e293b'; ctx.fill();
+   ctx.beginPath(); ctx.arc(0, 0, lensR * 0.72, 0, Math.PI * 2); ctx.fillStyle = lensGlassGrad; ctx.fill();
+3. Pentaprisma Atas & Tombol Shutter (Top Pentaprism & Spring Shutter Button):
+   Tonjolan pentaprisma trapesium di atas bodi tengah, tombol shutter silinder di kiri-atas yang menekan halus secara periodik, dan lampu LED indikator merah merekah lembut.
+
+[I. MIKROFON STUDIO 3D (STANDALONE 3D STUDIO MICROPHONE - ZERO CONTAINER)]:
+1. Kapsul Silinder Kisi Mesh 3D (Cylindrical Wire Mesh Capsule):
+   Kapsul silinder atas (w = S * 0.22, h = S * 0.30) dengan kubah busur di atas, tekstur kisi kawat melengkung halus, dan cincin shock-mount beveled di bawahnya.
+2. Tiang Stand & Plat Kaki Berat (Heavy Metallic Stand Base):
+   Tiang logam vertikal menghubungkan kapsul ke piringan alas kaki bulat berbobot di dasar kanvas, menghasilkan bayangan kontak lantai elips yang solid.
+
 ======================================================================
-3. ARSITEKTUR 3D FLAT & DISTRIBUSI GELAP-TERANG REALISTIS (CHIAROSCURO):
+4. ARSITEKTUR 3D VOLUMETRIK & CHIAROSCURO REALISTIS:
 ======================================================================
-Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
+Bentuk objek WAJIB mengadopsi gaya 3D volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
 - Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
 - Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
 - Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
@@ -1018,7 +1030,7 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
 - Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
 
 ======================================================================
-4. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
+5. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
 ======================================================================
 - Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
   const squash = 1 + 0.06 * Math.cos(t * 2.5);
@@ -1027,21 +1039,21 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
 - Artikulasi Struktural Presisi: Engsel, silinder geser, atau indikator status beroperasi dengan pergerakan terkalibrasi tanpa sentakan.
 
 ======================================================================
-5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX:
+6. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX:
 ======================================================================
-- DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
+- DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, bangun belah ketupat, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
 - DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
 - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.
 
 ======================================================================
-6. LARANGAN TOTAL RODA GERIGI PADA SELURUH ANIMASI IKON (STRICT ZERO GEARS / ZERO COGWHEELS):
+7. LARANGAN TOTAL RODA GERIGI PADA SELURUH ANIMASI IKON (STRICT ZERO GEARS / ZERO COGWHEELS):
 ======================================================================
 - DILARANG KERAS MENGGAMBAR RODA GERIGI, GIR BERPUTAR, ATAU SPROCKET PADA ANIMASI IKON!
 - Gerigi/gir seringkali muncul tanpa esensi dan merusak nilai estetika ikon. Hilangkan roda gerigi 100% dari seluruh ikon (dompet, brankas, kartu kredit, grafik pertumbuhan, smartphone, buku, roket, dll.).
 - Gantilah dengan detail 3D isometrik yang bermakna dan berkelas modern: pelat bodi beveled chamfered, tombol keypad digital, kunci baut kokoh, engsel elegan, chip sirkuit terukir, atau indikator status LED lembut.
 
 ======================================================================
-7. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
+8. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
 ======================================================================
 - Setiap objek icon WAJIB memiliki konstruksi 3D isometrik yang memperlihatkan presisi penuh dari segala sisi (permukaan atas/top yang diterangi key light, fasad depan/front yang kaya warna midtone, sisi kiri/kanan lateral yang terbayang, sisi bawah/bottom dengan ambient occlusion, dan struktur belakang yang menyatu kokoh).
 - DILARANG Keras objek pipih 2D, bentuk tanpa sisi, atau bagian mengambang/terlepas.`;

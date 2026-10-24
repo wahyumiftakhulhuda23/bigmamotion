@@ -248,7 +248,7 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               onChange={(e) => onSelectStyle(e.target.value as VisualStyle)}
               className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
             >
-              <option value="3d_crest">💎 3D Isometric Crest & Emblem (Gaya Referensi)</option>
+              <option value="3d_crest">💎 3D Ultra-Realistis Volumetrik (Murni Objek 3D Standalone)</option>
               <option value="isometric">Isometric 3D Projection</option>
               <option value="minimalist">Minimalist Vector (Clean)</option>
               <option value="flat_vector">Flat Vector Art (Modern Flat)</option>
