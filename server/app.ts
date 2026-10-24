@@ -395,13 +395,14 @@ export async function handleGeneratePromptsLogic(body: any) {
         ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES):
+MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES & ZERO WHITE FLARES):
 1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
    - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Architectural structural geometric lattice mesh with dynamic linkage lines across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
    - FORBIDDEN: Isolated centered icons, symbols, floating emblems, logos, or empty border margins.
    - STRICT BAN ON PARTICLES: NEVER describe floating particles, dust motes, stardust, or loose dots. Visuals must be pure continuous wave ribbons, geometric topographic contours, or undulating silk caustics.
+   - STRICT BAN ON WHITE FLARES & WHITEOUTS: NEVER describe blinding white light flares, central white radial bursts, or harsh whiteouts. All lighting must be subtle, chromatic, and elegant with deep background contrast.
 2. 3-TIER ATMOSPHERIC DEPTH:
-   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient light sweeps.
+   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient chromatic sweeps.
 3. 60 FPS SEAMLESS HARMONIC LOOP:
    - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
 ${negativeList}
@@ -414,16 +415,17 @@ Output format: JSON array containing exactly 1 string, e.g. ["Fluid multi-layere
         : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${batchCount} UNIQUE FULL-FRAME MOTION BACKGROUND prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different atmospheric environment, motion dynamic, and visual theme. Start EVERY prompt with a unique [ID_CODE] (e.g., [CHROMATIC_WAVES], [CYBER_HORIZON], [AURORA_RIBBONS], [SILK_CAUSTICS]).
 
-MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY (STRICT ZERO PARTICLES):
+MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY (STRICT ZERO PARTICLES & ZERO WHITE FLARES):
 1. NO REPETITION & NO CENTERING: Each prompt MUST describe a FULL-FRAME EDGE-TO-EDGE motion graphics scene filling the entire widescreen canvas. NEVER describe isolated icons, centered logos, or static borders.
 2. STRICT BAN ON PARTICLES: DO NOT describe floating particles, dust motes, or loose speckled dots. All graphics must be clean continuous spline ribbons, 3D perspective grids, topographic contour waves, or luxury liquid caustics.
-3. DIVERSE VISUAL CONCEPTS:
+3. STRICT BAN ON WHITE LIGHT FLARES: NEVER describe white flares, white light bursts, or blinding center blooms. Use rich, moody chromatic palette harmonies.
+4. DIVERSE VISUAL CONCEPTS:
    - Prompt 1: Multi-layered chromatic fluid wave ribbons and smooth liquid gradient displacement.
    - Prompt 2: 3D perspective cyber grid, digital wireframe topography, or matrix elevation lines.
    - Prompt 3: Interconnected structural geometric lattice mesh with clean vector linkage lines.
    - Prompt 4: Luxury satin fabric folds, liquid metallic gold waves, or ambient studio caustics.
    - (Vary concepts continuously across all items).
-4. 60 FPS SEAMLESS KINETICS: Include harmonic wave oscillations, continuous panning, and atmospheric depth.
+5. 60 FPS SEAMLESS KINETICS: Include harmonic wave oscillations, continuous panning, and atmospheric depth.
 ${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
@@ -444,18 +446,20 @@ MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETI
      * Underside & crevice shadows: deep ambient occlusion (-35% dark contrast) and 1.5px crisp bevel edge rails.
    - FORBIDDEN: Abstract meaningless blobs, flat 2D wireframes, or vague geometry.
 2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES, & ZERO BOX ABSTRACTIONS):
-   - Explicitly specify that all components are welded/anchored to the main body origin: e.g. wheels locked inside chassis wheel arches, handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
+   - Explicitly specify that all components are welded/anchored to the main body origin: e.g. handles welded firmly to bag/mug rim, camera lens mounted flush to chassis, sensors connected at ports.
    - ACCURATE MORPHOLOGY: Specify true physical geometry (e.g. graduation cap has a horizontal diamond rhombus board with skull cap and dangling tassel; atom has 3 tilted elliptical orbits with ZERO outer enclosing bubble; bell has flared acoustic bezier cup with rim lip and clapper).
    - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, or outer translucent enclosing glass bubbles/container cards.
-3. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
-   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal wheels/gears/dial needles rotating on locked axles, and a clipped 45-degree diagonal specular gleam sweep.
+3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
+   - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents). Focus on sleek modern 3D flat styling with chamfered bevels, digital keypads, sliding card chips, and organic indicators.
+4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
+   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal micro-articulation with secondary inertia, and a clipped 45-degree diagonal specular gleam sweep.
 ${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
-Output format: JSON array containing exactly 1 string, e.g. ["Solid 3D Flat Isometric Crypto Gold Vault with cylindrical beveled door, cross-locking bolts, deep contrast brushed gold with dark shadow grooves, rotating center dial wheel, and floating contact shadow..."]`
+Output format: JSON array containing exactly 1 string, e.g. ["Solid 3D Flat Isometric Crypto Gold Vault with cylindrical beveled door, biometric keypad, heavy reinforced locking bolts, deep contrast brushed gold with dark shadow grooves, and floating contact shadow..."]`
         : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly ${batchCount} UNIQUE animation prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [DATA_VAULT], [SMART_CART], [GROWTH_METRIC]).
 
@@ -463,7 +467,7 @@ MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETI
 1. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
    - EACH prompt in this batch MUST have a COMPLETELY DIFFERENT sentence structure, vocabulary, and thematic focus.
    - You MUST vary the descriptive style for each:
-     - Prompt 1: Focus on industrial technical aesthetics (chassis, bolts, mechanical joints).
+     - Prompt 1: Focus on industrial technical aesthetics (chassis, bolts, precision joints).
      - Prompt 2: Focus on minimalist, fluid, data-driven flow and abstract gradients.
      - Prompt 3: Focus on complex, isometric geometric structures and depth.
    - NEVER use the same adjective, phrasing, or sentence structure twice in the same batch.
@@ -471,10 +475,12 @@ MANDATORY RULES FOR 3D FLAT ART, CHIAROSCURO LIGHT/DARK, & ELASTIC SPRING KINETI
 2. SPECIFIC 3D FLAT SUBJECT & EXPLICIT CHIAROSCURO:
    - Each prompt must describe a volumetric 3D Flat object with distinct light vs dark planes (illuminated top face, midtone front, deep ambient shadow underside).
 3. DETAILED MONOLITHIC ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES, ZERO BOX ABSTRACTIONS):
-   - Explicitly specify how components are attached: e.g., "locked inside wheel arches", "welded firmly to bag rim", "flush mounted to chassis".
+   - Explicitly specify how components are attached: e.g., "welded firmly to bag rim", "flush mounted to chassis".
    - ACCURATE MORPHOLOGY: e.g. graduation cap has a horizontal diamond rhombus board with skull cap and dangling tassel; atom has 3 tilted elliptical orbits with ZERO outer enclosing bubble; bell has flared acoustic bezier cup with rim lip and clapper.
-4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
-   - Include harmonic vertical floating with elastic squash-and-stretch spring bounce, synchronized wheel/gear rotation on rigid anchors, and clipped specular sheen sweep.
+4. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
+   - NEVER describe rotating gear wheels or cogs on icons.
+5. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
+   - Include harmonic vertical floating with elastic squash-and-stretch spring bounce, synchronized internal articulation on rigid anchors, and clipped specular sheen sweep.
 ${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
@@ -712,7 +718,7 @@ MANDATORY GREEN SCREEN CHROMA-KEY RULES:
 
   const typeSpecificRules = isBackground
     ? `
-ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PARTICLES, & DIVERSE STYLES):
+ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PARTICLES, ZERO WHITE FLARES & DIVERSE STYLES):
 1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
    - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
    - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
@@ -722,16 +728,21 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PAR
    - DILARANG KERAS memunculkan bintik partikel, debu melayang, bintang titik-titik liar, partikel emitter, atau serpihan noise pada background!
    - Seluruh visual harus berupa grafis kontinu studio profesional yang megah dan berkelas tinggi.
 
-3. MINIMALISIR KEMIRIPAN GAYA & DIFERENSIASI TOTAL (ARSITEKTUR VISUAL WAJIB BERBEDA SESUAI BRIEF):
+3. STRICT BAN ON WHITE LIGHT FLARES & WHITEOUT RADIAL BURSTS (MUTLAK DIPATUHI):
+   - DILARANG KERAS MENGGAMBAR FLARE CAHAYA PUTIH (WHITE FLARE), LINGKARAN RADIAL BURST PUTIH DI TENGAH, SOROTAN LAMPU PUTIH MENYILAU KANVAS, ATAU SAPUAN KABUT PUTIH (WHITEOUT GLARE)!
+   - DILARANG menggunakan gradien putih murni (#FFFFFF atau rgba(255, 255, 255, >0.15)) sebagai pusat sorotan layar atau sumber cahaya besar!
+   - Semua pencahayaan dan gradien atmosferik WAJIB menggunakan warna kromatik bertingkat elegan (misal: deep cyan, royal violet, emerald, rich amber, midnight sapphire, champagne gold, atau obsidian slate) dengan opacity lembut (alpha 0.05 - 0.25) dan transisi halus berkelas tinggi.
+
+4. MINIMALISIR KEMIRIPAN GAYA & DIFERENSIASI TOTAL (ARSITEKTUR VISUAL WAJIB BERBEDA SESUAI BRIEF):
    Animasi WAJIB mengadopsi salah satu dari 6 arsitektur visual berikut yang paling relevan dengan subjek prompt (JANGAN semua dibuat gelombang biasa):
    - Arsitektur 1 (Fluid Chromatic Splines): 4-6 pita cairan sinusoidal bergradien kaya yang saling meliuk dengan frekuensi harmonis berbeda dan mode translusen bertumpuk.
    - Arsitektur 2 (3D Perspective Horizon Grid): Grid perspektif kawat digital membentang ke horizon dengan vanishing point di (cx, cy * 0.45) dan gelombang elevasi undulating pada baris-baris kisi.
    - Arsitektur 3 (Luxury Silk & Satin Folds): Lipatan kain sutra satin tebal berkilau emas/sampanye/obsidian dengan bayangan volumetrik dramatis (chiaroscuro) dan kilau caustics yang meliuk mewah.
    - Arsitektur 4 (Topographic Elevation Contours): Garis-garis kontur elevasi topografi bergelombang yang mengalir dinamis melintasi kanvas seperti peta survei geologi modern bergradien.
    - Arsitektur 5 (Architectural Origami & Faceted Planes): Bidang-bidang poligon isometrik 3D translusen yang bergeser dan berlipat elegan secara pseudo-3D.
-   - Arsitektur 6 (Volumetric Light Shafts & Prism Caustics): Sorotan berkas cahaya atmosferik diagonal (god rays) yang menyapu lembut di atas gradien gelap studio.
+   - Arsitektur 6 (Chromatic Prismatic Caustics): Aliran pita cahaya prisma kromatik halus bersudut lembut (cyan, ungu, dan emas berpadu dengan blending screen translusen rendah) tanpa flare putih silau.
 
-4. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
+5. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
    - Waktu t dihitung dari timestamp (t = time * 0.001).
    - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) tanpa sentakan tajam (seamless infinite loop).
    - TIDAK BOLEH ADA TEKS / HURUF / ANGKA.`
@@ -882,7 +893,7 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
   const squash = 1 + 0.06 * Math.cos(t * 2.5);
   const stretch = 1 / Math.sqrt(squash);
 - Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
-- Roda Pejal & Gir Artikulasi: Roda alloy berputar mulus 60 FPS pada titik poros sasis (ctx.rotate(t * speed)).
+- Artikulasi Struktural Presisi: Engsel, silinder geser, atau indikator status beroperasi dengan pergerakan terkalibrasi tanpa sentakan.
 
 ======================================================================
 5. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX:
@@ -892,10 +903,11 @@ Bentuk objek WAJIB mengadopsi gaya 3D Flat volumetrik profesional berkelas tingg
 - Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.
 
 ======================================================================
-6. LARANGAN MUTLAK GERIGI / SPROCKET / COGWHEELS (STRICT ZERO RANDOM GEARS):
+6. LARANGAN TOTAL RODA GERIGI PADA SELURUH ANIMASI IKON (STRICT ZERO GEARS / ZERO COGWHEELS):
 ======================================================================
-- DILARANG KERAS MENGGAMBAR RODA GERIGI, GIGI SPROCKET, ATAU COGWHEELS BERPUTAR PADA DOMPET, GRAFIK, KARTU, BRANKAS NON-MEKANIS, ATAU DOKUMEN!
-- Gerigi/sprocket HARUS 100% DIHAPUS dari semua objek non-mesin. Objek harus berupa ikon 3D isometrik bersih ala microstock profesional (seperti dompet kripto, kartu fintech mengkilap, grafik batang solid) tanpa ada roda gerigi ngawur di sisi-sisinya!
+- DILARANG KERAS MENGGAMBAR RODA GERIGI, GIR BERPUTAR, ATAU SPROCKET PADA ANIMASI IKON!
+- Gerigi/gir seringkali muncul tanpa esensi dan merusak nilai estetika ikon. Hilangkan roda gerigi 100% dari seluruh ikon (dompet, brankas, kartu kredit, grafik pertumbuhan, smartphone, buku, roket, dll.).
+- Gantilah dengan detail 3D isometrik yang bermakna dan berkelas modern: pelat bodi beveled chamfered, tombol keypad digital, kunci baut kokoh, engsel elegan, chip sirkuit terukir, atau indikator status LED lembut.
 
 ======================================================================
 7. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
@@ -1006,7 +1018,7 @@ ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, 
     // - BIDANG BAWAH/SAMPING (Underside Shadow): Warna gelap (-35% ambient occlusion chiaroscuro)
     // - BEVEL HIGHLIGHT RAILS: Garis 1.5px putih translusen (rgba(255, 255, 255, 0.45)) di tepi atas
     // - INERSIA SEKUNDER: Muatan/isi berayun elastis dengan jeda fase (Math.sin(t * 2.5 - 0.45) * 4)
-    // - RODA / GIR: Berputar di titik as sasis bawah (ctx.rotate(t * speed))
+    // - DILARANG KERAS RODA GERIGI / GIR: Fokus pada bentuk 3D isometrik asli yang solid dan elegan
     // - SPECULAR GLEAM: Garis kilau diagonal 45 derajat di-clip di dalam bodi (ctx.clip())
 
     ctx.restore();`}
@@ -1105,51 +1117,42 @@ export async function handleImageToMotionLogic(body: any) {
     const ai = getClient(apiKey);
     const targetModel = sanitizeModel(model);
 
-    const masterMultimodalPrompt = `Anda adalah Master Canvas 2D Motion Graphics & Senior Computer Vision Engineer (Adobe After Effects / Lottie 60 FPS Microstock Specialist).
+    const masterMultimodalPrompt = `Anda adalah Master Canvas 2D Motion Graphics, Lead Computer Vision Engineer, dan Senior 3D Animator (Adobe After Effects / Lottie 60 FPS Microstock Specialist).
 
-TUGAS UTAMA:
-Analisis GAMBAR REFERENSI yang diunggah secara visual pixel-by-pixel, lalu REKONSTRUKSI MENJADI KODE HTML5 CANVAS 2D yang SANGAT MIRIP dengan gambar aslinya (bentuk anatomi objek, letak elemen, kode warna HEX asli) dan BERIKAN GERAKAN KINETIK 60 FPS YANG JELAS, AKTIF, DAN BERTENAGA!
-
-=============================================================================
-ATURAN KETAT (ANTI-FALLBACK, ANTI-LEPAS & KESESUAIAN TINGGI):
-=============================================================================
-1. SATU MATRIX INDUK UNTUK SATU OBJEK (UNIFIED PARENT MATRIX - WAJIB ANTI-DETACH):
-   - Seluruh bagian suatu objek (misal: badan tas + gagang tali; bodi mobil + roda; bodi smartphone + layar + kamera; cangkir + pegangan; kamera + lensa + shutter) WAJIB digambar di dalam SATU BLOK TRANSFORMASI INDUK yang sama:
-     ctx.save();
-     ctx.translate(posX, posY); // posX = cx, posY = cy + floating/bounce
-     ctx.rotate(rot);
-     ctx.scale(scaleX, scaleY);
-     // SEMUA SUB-KOMPONEN DIGAMBAR DENGAN KOORDINAT RELATIF TERHADAP (0, 0)!
-     // DILARANG MEMBERIKAN TRANSLASI POSISI X/Y TERPISAH PADA GAGANG ATAU RODA YANG MEMBUATNYA LEPAS DARI BADAN!
-     ctx.restore();
-2. ANATOMI LOGIS & SAMBUNGAN FISIK KOKOH (PHYSICAL ATTACHMENT):
-   - TAS & KOPER: Gagang/tali tas WAJIB menempel menyatu kokoh di bibir atas badan tas pada (-strapOffset, topBagY) dan (+strapOffset, topBagY). DILARANG gagang melayang terpisah dari tas!
-   - KENDARAAN & MOBIL: Bodi mobil aerodinamis dengan spakbor (wheel arches). Roda mobil WAJIB tertanam presisi di dalam lubang spakbor sasis bawah di (-wheelDist, axleY) dan (+wheelDist, axleY). Roda bergerak 100% mengikuti bodi sasis; hanya velg di dalam ban yang berputar di poros masing-masing. DILARANG roda terpental, melayang liar, atau berada di luar bodi!
-   - SMARTPHONE & GADGET: Bodi ponsel WAJIB berbentuk persegi panjang dengan sudut membulat sempurna (rasio standar 9:19.5, ctx.roundRect(-w/2, -h/2, w, h, 20)), bezel tipis simetris, dynamic island terpusat di atas, home bar di bawah, dan layar kaca menyala di dalam bezel. DILARANG bentuk tidak beraturan atau poligon asimetris cacat!
-   - DILARANG partikel berhamburan/debu liar di luar icon. Background kanvas harus 100% bersih.
-3. DILARANG KERAS menghasilkan bentuk kotak roda gerigi berputar jika gambar aslinya bukan roda gigi! Gambarlah bentuk visual subjek aslinya (misal: Mikrofon, Kamera, Roket, Tas Belanja, Robot, Gedung, Mobil, Karakter, dll.).
-4. DILARANG bentuk acak/tidak beraturan atau garis melayang tanpa arti. Setiap elemen Canvas harus terhubung rapi membentuk objek referensi yang proporsional dan solid.
-5. DILARANG gerakan minim / samar / hanya glow tipis statis. Animasi WAJIB memiliki gerakan 60 FPS yang nyata dan bertenaga (osilasi floating Y, breathing scale pulse, specular gleam sweep, artikulasi sub-bagian).
+TUGAS UTAMA (ULTRA-DETAIL PROFESSIONAL IMAGE-TO-MOTION):
+Analisis GAMBAR REFERENSI yang diunggah secara visual mendalam (pixel-level structural & chromatic analysis), lalu REKONSTRUKSI MENJADI KODE ANIMASI HTML5 CANVAS 2D yang SANGAT PRESISI, MIRIP DENGAN GAMBAR ASLI (bentuk anatomi, proporsi, rasio bevel, kode warna HEX asli), dan BERIKAN GERAKAN KINETIK 60 FPS KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL)!
 
 =============================================================================
-1. REPRODUKSI BENTUK & KODE WARNA HEX 1:1 DARI GAMBAR:
+1. ANALISIS ANATOMI & KEMIRIPAN TINGGI (HIGH FIDELITY VISUAL RECONSTRUCTION):
 =============================================================================
-- Identifikasi subjek utama secara akurat.
-- Ekstrak PALET WARNA HEX ASLI (#RRGGBB) dari gambar untuk setiap bagian objek (warna badan utama, bayangan kontur, highlight, aksen pendaran glow, dan garis stroke).
-- Gambar setiap komponen secara proporsional dan presisi menggunakan fungsi Canvas 2D: \`ctx.roundRect\`, \`ctx.arc\`, \`ctx.ellipse\`, \`ctx.bezierCurveTo\`, \`ctx.lineTo\`, dan \`ctx.fill()\` / \`ctx.stroke()\`.
-- Skala objek S = Math.min(w, h) * 0.44. Objek harus terpusat di (cx, cy) dengan ukuran proporsional (mengisi 75-85% kanvas).
+- DEKONSTRUKSI ELEMEN GAMBAR ASLI:
+  * Identifikasi subjek utama (apakah mikrofon studio, mobil, tas, trofi, kamera, roket, sepatu, gadget, robot, bangunan, kartu, dll.).
+  * Teliti rasio proporsi lebar vs tinggi (aspect ratio) dan bentuk geometris spesifiknya (beveled rectangle, kurva bezier khusus, sudut chamfer, dll.).
+  * EKSTRAK KODE WARNA HEX ASLI (#RRGGBB) langsung dari gambar: warna bodi utama, warna aksen sekunder, warna bayangan chiaroscuro (ambient occlusion), warna highlight kilau, dan warna garis kontur.
+  * REKONSTRUKSI SETIAP DETAIL SUB-KOMPONEN: Gambar ulang seluruh bagian yang tampak di gambar referensi (tombol, layar, display digital, lensa, indikator LED, kabel, tali, pegangan, sasis) menggunakan fungsi Canvas 2D presisi (\`ctx.roundRect\`, \`ctx.bezierCurveTo\`, \`ctx.ellipse\`, \`ctx.arc\`, \`ctx.fill()\`, \`ctx.stroke()\`).
+- DILARANG KERAS menyederhanakan menjadi bulatan/kotak biasa atau abstrak mentah! Bentuk harus sangat mirip dan dapat dikenali seketika sebagai kembaran animasi dari gambar referensi.
+- DILARANG KERAS memunculkan roda gerigi jika gambar aslinya bukan roda gigi!
+- DILARANG KERAS membungkus objek dalam gelembung bulat transparan (enclosing glass bubble) atau kotak kartu wadah latar belakang!
 
 =============================================================================
-2. GERAKAN KINETIK 60 FPS YANG DINAMIS & TEGAS (ACTIVE MOTION):
+2. PERGERAKAN KINETIK KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL 60 FPS):
 =============================================================================
-- Gerak Utama Objek:
-  * Floating/Osilasi: \`posY = cy + Math.sin(t * 2.8) * (S * 0.14); rot = Math.sin(t * 2.0) * 0.10;\`
-  * Dynamic Breathing Pulse: \`scaleX = 1 + Math.sin(t * 3.2) * 0.05; scaleY = 1 - Math.sin(t * 3.2) * 0.04;\`
-  * Artikulasi Sub-Komponen: Gerakkan bagian yang logis dari subjek (misal: lensa memancarkan sinar pulsa, baling-baling/rotor berputar, indikator lampu berkedip, sayap bergetar, dial radar berputar).
-  * Efek Kilau Spekular: Sapuan garis kilau cahaya miring terang yang melintasi permukaan objek (\`const shineX = ((t * 1.5) % 3 - 1.5) * S * 2;\`).
-- Efek Pendaran Luminescence (Neon Glow):
-  * Gunakan \`ctx.shadowBlur = 28 + Math.sin(t * 4.0) * 12;\` dengan warna glow menyala terang (\`ctx.shadowColor = primaryGlowHex;\`).
-  * Isolasi glow dengan \`ctx.save()\` & \`ctx.restore()\` dan reset \`ctx.shadowBlur = 0\` setelah menggambar objek.
+Jangan buat animasi kaku atau monoton! Terapkan sistem pergerakan multi-layer yang hidup dan berbobot:
+1. GERAKAN UTAMA (Root Floating & Inertia):
+   - Osilasi vertikal harmonis yang bernapas: \`const floatY = Math.sin(t * 2.4) * (S * 0.04);\`
+   - Kemiringan gimbal halus: \`const rot = Math.sin(t * 1.8) * 0.025;\`
+   - Elastisitas squash-and-stretch alami: \`const squash = 1 + 0.03 * Math.cos(t * 2.4); const stretch = 1 / Math.sqrt(squash);\`
+2. ARTIKULASI SUB-KOMPONEN SESUAI FUNGSI OBJEK (Secondary Kinetic Articulation):
+   - Bagian-bagian internal/aksesoris bergerak dengan inersia fisika tertunda (phase lag: \`Math.sin(t * 2.4 - 0.4)\`):
+     * Jika ada layar / display -> sapuan garis scanning laser ter-clip halus di area layar.
+     * Jika ada indikator LED / tombol -> denyut pendaran luminescence lembut (\`ctx.shadowBlur = 8 + Math.sin(t * 3.5) * 4\`).
+     * Jika ada lensa kamera / sensor -> denyut fokus halus atau aperture breathing.
+     * Jika ada pegangan / antena / tali -> getaran elastis responsif.
+     * Jika ada pelat / penutup -> artikulasi mikro pernapasan.
+3. SPECULAR GLEAM SWEEP BERKELAS:
+   - Sapuan kilau cahaya spekular miring 45 derajat yang menyapu melintasi permukaan objek (\`const gleamX = ((t * 0.8) % 3 - 1.5) * S * 2.5;\`) dan WAJIB di-clip di dalam siluet bentuk badan objek.
+4. BAYANGAN KONTAK LANTAI (Ground Contact Shadow):
+   - Bayangan elips di bawah objek yang membesar dan mengabur saat objek melayang naik, dan mengecil tajam saat objek turun.
 
 =============================================================================
 STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
@@ -1166,10 +1169,10 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
 <script type="application/json" id="shape-analysis">
 {
   "objectName": "Nama objek spesifik dari gambar referensi",
-  "shapeDescription": "Rekonstruksi bentuk dan warna asli referensi dengan Canvas 2D 60 FPS",
-  "detectedElements": ["Elemen Utama", "Aksen Warna Asli", "Efek Kinetik"],
-  "professionalMotionPlan": "Animasi kinetik 60 FPS dinamis dengan artikulasi layer",
-  "similaritySynthesis": "Rekonstruksi presisi kode warna dan proporsi gambar",
+  "shapeDescription": "Deskripsi anatomi detail dan warna HEX asli yang dianalisis dari referensi",
+  "detectedElements": ["Komponen Bodi Utama", "Detail Sub-Struktur", "Palet HEX Asli", "Aksen Kinetik"],
+  "professionalMotionPlan": "Rencana pergerakan ultra modifikasi 60 FPS untuk setiap layer komponen",
+  "similaritySynthesis": "Rekonstruksi presisi kode warna dan proporsi gambar 1:1",
   "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
 }
 </script>
@@ -1201,15 +1204,22 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
   window.addEventListener('resize', resize);
   resize();
 
+  // Safe fallback palette variables
+  const darkTone = '#0f172a';
+  const lightTone = '#38bdf8';
+  const primaryColor = '#3b82f6';
+  const secondaryColor = '#8b5cf6';
+  const accentColor = '#f59e0b';
+
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-    // 1. BAYANGAN LANTAI (GROUND CONTACT SHADOW)
-    const floatY = Math.sin(t * 2.4) * (S * 0.035);
-    const shadowScale = Math.max(0.7, 1 - (floatY / (S * 0.15)));
+    // 1. BAYANGAN LANTAI VOLUMETRIK (GROUND CONTACT SHADOW)
+    const floatY = Math.sin(t * 2.4) * (S * 0.038);
+    const shadowScale = Math.max(0.68, 1 - (floatY / (S * 0.14)));
     ctx.save();
     ctx.translate(cx, cy + S * 0.52);
     ctx.beginPath();
@@ -1218,19 +1228,20 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
     ctx.fill();
     ctx.restore();
 
-    // 2. SATU MATRIX INDUK UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY - 100% ANTI-DETACH):
+    // 2. ROOT MATRIX TUNGGAL UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY):
     // WAJIB: SELURUH ELEMEN PENYUSUN OBJEK DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
-    // - DILARANG MEMBUKA ctx.translate(cx, cy) LAGI KARENA PUSAT OBJEK SUDAH (0, 0)!
-    // - DILARANG MENGGUNAKAN KOORDINAT cx ATAU cy DI DALAM BLOK INI!
-    // - DILARANG MENGGUNAKAN KOORDINAT KANVAS SEPERTI (0, 0) KARENA MEMBUAT ELEMEN TERLEMPAR KE SUDUT KANVAS!
-    // - DILARANG MENGGAMBAR KOTAK WADAH / KARTU LATAR DI BELAKANG OBJEK!
+    const squash = 1 + 0.03 * Math.cos(t * 2.4);
+    const stretch = 1 / Math.sqrt(squash);
     ctx.save();
     ctx.translate(cx, cy + floatY);
     ctx.rotate(Math.sin(t * 1.8) * 0.025);
-    ctx.scale(1 + Math.sin(t * 2.4) * 0.015, 1 + Math.sin(t * 2.4) * 0.015);
+    ctx.scale(squash, stretch);
 
-    // REKONSTRUKSI ELEMEN OBJEK REFERENSI SECARA UTUH DAN MENYATU (SEMUA RELATIF KE (0, 0)):
-    // Seluruh komponen bersambung fisik tanpa celah udara (keranjang menindih sasis, roda di poros sasis bawah, gagang di bibir atas)
+    // [GAMBARKAN REKONSTRUKSI ULTRA DETAIL SESUAI GAMBAR REFERENSI DI SINI]:
+    // - Gunakan kode warna HEX asli dari gambar referensi
+    // - Gambar setiap komponen secara proporsional dan presisi (bodi, aksen, bevel, layar, lensa, tombol)
+    // - Gerakkan sub-komponen dengan artikulasi inersia fase-tertunda
+    // - Clip specular sheen miring di siluet bodi
 
     ctx.restore();
 
@@ -1248,8 +1259,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       targetModel,
       (currentModel) => {
         const config: any = {
-          temperature: 0.1,
-          maxOutputTokens: 3800,
+          temperature: 0.12,
+          maxOutputTokens: 8192,
         };
         const smartThinking = getSmartThinkingConfig(currentModel, 2048);
         if (smartThinking) config.thinkingConfig = smartThinking;

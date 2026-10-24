@@ -241,7 +241,7 @@ export function generateProceduralPrompts(
     // Icons: Finance
     business_finance: [
       'cryptocurrency gold bullion coin with beveled rim',
-      'biometric vault safe with rotating gear-lock mechanism',
+      'biometric vault safe with electronic dial keypad and reinforced locking bolts',
       'digital fintech smartcard with glowing EMV chip',
       'ascending volumetric candlestick trading chart',
       'leather luxury executive wallet with emerging currency notes',
@@ -449,10 +449,10 @@ export function generateProceduralPrompts(
   ];
 
   const elasticMotions = [
-    'harmonic vertical floating with elastic squash-and-stretch spring bounce (subtle body compression on dip and stretch on apex), synchronized internal wheel rotation on locked axle pins, and a clipped 45-degree diagonal specular sheen sweep',
+    'harmonic vertical floating with elastic squash-and-stretch spring bounce (subtle body compression on dip and stretch on apex), synchronized internal articulation with secondary spring inertia, and a clipped 45-degree diagonal specular sheen sweep',
     'elastic kinetic oscillation with secondary payload inertia (phase-lagged internal spring bounce), breathing scale pulse (0.98x to 1.02x), and rhythmic exponential LED breathing',
-    'coordinated mechanical articulation with elastic spring recoil, locked rigid joint pivots, and smooth continuous 60 FPS specular gleam sweeping across the surface',
-    'subtle elastic spring floating with dynamic ground contact shadow contraction, counter-rotating bevel gear wheels, and responsive kinetic inertia',
+    'coordinated isometric articulation with elastic spring recoil, locked rigid joint pivots, and smooth continuous 60 FPS specular gleam sweeping across the surface',
+    'subtle elastic spring floating with dynamic ground contact shadow contraction, precision component motion, and responsive kinetic inertia',
     'fluid harmonic oscillation with organic spring damping, synchronized internal dial needle vibration, and clipped volumetric light sweep',
   ];
 
