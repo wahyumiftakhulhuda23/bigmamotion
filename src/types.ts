@@ -117,7 +117,7 @@ export interface ApiKeyTestResult {
   lineIndex?: number;
 }
 
-export type GeminiModel = 'gemini-2.5-flash' | 'gemini-3.1-flash-lite' | 'gemini-3.1-pro-preview';
+export type GeminiModel = 'gemini-3.5-flash-lite' | 'gemini-3.1-flash-lite' | 'gemini-2.5-flash' | 'gemini-3.1-pro-preview' | 'gemini-2.5-flash-lite';
 
 export interface ShapeAnalysis {
   objectName: string;

@@ -45,10 +45,17 @@ export const Header: React.FC<HeaderProps> = ({
           color: 'text-purple-300 bg-purple-500/20 border-purple-500/50 shadow-purple-500/20 hover:bg-purple-500/30',
           dotColor: 'bg-purple-400',
         };
+      case 'gemini-3.5-flash-lite':
+        return {
+          label: '3.5 Lite',
+          fullName: 'Gemini 3.5 Flash Lite (Next-Gen Ultra Cepat & Pintar)',
+          color: 'text-amber-300 bg-amber-500/20 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/30',
+          dotColor: 'bg-amber-400',
+        };
       case 'gemini-3.1-flash-lite':
         return {
           label: '3.1 Lite',
-          fullName: 'Gemini 3.1 Flash Lite (Ringan & Cepat)',
+          fullName: 'Gemini 3.1 Flash Lite (Hemat Kuota)',
           color: 'text-amber-300 bg-amber-500/20 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/30',
           dotColor: 'bg-amber-400',
         };

@@ -29,14 +29,15 @@ export function getStoredModel(): GeminiModel {
   try {
     const saved = localStorage.getItem(STORAGE_SELECTED_MODEL);
     if (saved) {
+      if (saved === 'gemini-3.5-flash-lite' || saved.includes('3.5')) return 'gemini-3.5-flash-lite';
+      if (saved.includes('3.1-flash-lite') || saved === 'gemini-3.1-flash-lite') return 'gemini-3.1-flash-lite';
       if (saved.includes('2.5') || saved === 'gemini-2.5-flash') return 'gemini-2.5-flash';
-      if (saved.includes('flash-lite')) return 'gemini-3.1-flash-lite';
       if (saved.includes('pro')) return 'gemini-3.1-pro-preview';
     }
   } catch (e) {
     console.error('Failed to load model', e);
   }
-  return 'gemini-2.5-flash';
+  return 'gemini-3.5-flash-lite';
 }
 
 export function saveStoredModel(model: GeminiModel): void {
@@ -120,14 +121,16 @@ export function getRotatedKey(apiKeys: string[]): string | undefined {
 }
 
 export function sanitizeModel(model?: string): string {
-  if (!model) return 'gemini-2.5-flash';
+  if (!model) return 'gemini-3.5-flash-lite';
   const m = model.trim().toLowerCase();
+  if (m.includes('3.5')) return 'gemini-3.5-flash-lite';
   if (m.includes('3.8') || m === 'gemini-3.8-flash') return 'gemini-3.8-flash';
+  if (m.includes('3.1-flash-lite') || m.includes('flash-lite') || m.includes('lite')) return 'gemini-3.1-flash-lite';
+  if (m.includes('2.5-flash-lite')) return 'gemini-2.5-flash-lite';
   if (m.includes('2.5') || m === 'gemini-2.5-flash') return 'gemini-2.5-flash';
-  if (m.includes('3.1-flash-lite') || m.includes('lite')) return 'gemini-3.1-flash-lite';
   if (m.includes('3.1-pro') || m.includes('pro')) return 'gemini-3.1-pro-preview';
   if (m === 'gemini-flash-latest') return 'gemini-flash-latest';
-  return 'gemini-2.5-flash';
+  return 'gemini-3.5-flash-lite';
 }
 
 function extractHTML(text: string): string {
@@ -367,7 +370,8 @@ export async function generateSinglePromptDirect(
   const primaryModel = sanitizeModel(model);
   const candidateModels = [
     primaryModel,
-    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+    ...(primaryModel === 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite-preview', 'gemini-3.1-flash-lite'] : []),
+    ...['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview'].filter(
       (m) => m !== primaryModel
     ),
   ];
@@ -448,19 +452,20 @@ Output format: Return ONLY the prompt text string, concise, descriptive and stud
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
 Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO SHIELD, ZERO BACKGROUND PLATES):
+MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO BACKGROUND PLATES, ZERO BROKEN POLYGONS):
 1. STANDALONE VOLUMETRIC 3D ICON OBJECT (THE OBJECT ITSELF IS 3D):
-   - The prompt MUST describe the subject/icon itself (e.g. 3D Camera, 3D Notification Bell, 3D Studio Microphone, 3D Padlock, 3D Trophy, 3D Crypto Vault, 3D Shopping Cart) as a physical, chunky, standalone 3D isometric artifact.
+   - The prompt MUST describe the subject/icon itself (e.g. 3D Camera, 3D Notification Bell, 3D Studio Microphone, 3D Padlock, 3D Trophy, 3D Crypto Vault, 3D Shopping Cart) as a physical, sculpted, standalone 3D volumetric artifact.
    - STRICT ZERO CONTAINER / ZERO RHOMBUS / ZERO SHIELD RULE:
-     * NEVER place the icon on a diamond (belah ketupat), hexagon, shield plate, medallion base, or background card!
+     * NEVER place the icon on a diamond (belah ketupat), rhombus plate, hexagon, shield plate, pedestal base, or background card!
      * The icon must stand 100% naked and standalone on the canvas/green screen.
-   - PHYSICAL 3D ATTRIBUTES ON THE ICON ITSELF:
-     * Thick 3D isometric extrusion walls on side/bottom showing tangible mass with deep ambient shadow (-40% contrast).
-     * Smooth beveled chamfers and curved fillets with crisp 1.5px specular highlight rails catching key studio lighting.
-     * Rich multi-stop chiaroscuro gradients across front facets (e.g. lustrous imperial gold, chrome titanium, matte obsidian, or vivid saturated materials).
+   - ULTRA-REALISTIC CHIAROSCURO & VOLUMETRIC LIGHTING:
+     * Pristine native curved silhouette with smooth chamfered fillets.
+     * Crisp 1.5px specular highlight bevel rails along top-left edges catching key studio lighting.
+     * Rich multi-stop directional chiaroscuro gradients across body facets (e.g. lustrous imperial gold, chrome titanium, matte obsidian, or vivid saturated materials).
+     * Deep ambient occlusion crease shadows beneath joints and under-rims.
      * Soft breathing elliptical ground contact shadow cast directly below the object on the canvas/green screen.
 2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES):
-   - All internal components (lens barrel on camera, clapper inside bell, mesh grille on microphone, dial on vault) are physically welded into the unified 3D chassis.
+   - All internal components (lens barrel on camera, clapper inside bell, mesh grille on microphone, dial on vault) are physically welded into the unified chassis.
    - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, outer glass bubbles, or outer background cards.
 3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
    - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents).
@@ -846,100 +851,66 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT,
 - Semua lintasan orbit harus elips tertutup kontinu sempurna (ctx.ellipse(...)), dan seluruh komponen penyusun (tassel ke topi toga, roda ke sasis troli, bibir lonceng, dsb.) harus MENYATU FISIK KOKOH tanpa celah udara mengambang!
 
 [CACAT 5: DILARANG MEMBUAT BANGUN BELAH KETUPAT / PERISAI / PELAT ALAS (STRICT ZERO RHOMBUS / ZERO SHIELD CONTAINER)]:
-- DILARANG KERAS menggambar bangun belah ketupat (rhombus), diamond, perisai (shield/crest), medali plat, emblem badge, atau bingkai kartu di belakang icon!
-- OBJEK ICON HARUS BERDIRI SENDIRI SECARA MURNI (100% STANDALONE 3D OBJECT) langsung di atas canvas/green screen!
-- BUKAN pelatnya yang dibuat 3D, melainkan OBJEK ICON ITU SENDIRI yang dibuat 3D bervolume (jika Kamera, maka bodi kamera 3D tebal; jika Lonceng, maka bodi lonceng 3D tebal; jika Mikrofon, maka kapsul & stand mikrofon 3D tebal)!
+- DILARANG KERAS MENGGAMBAR BANGUN BELAH KETUPAT (RHOMBUS), DIAMOND, KOTAK ALAS DENGAN BAUT, PERISAI (SHIELD/CREST), ATAU BINGKAI KARTU DI BELAKANG IKON!
+- OBJEK IKON HARUS BERDIRI SENDIRI SECARA MURNI (100% STANDALONE 3D SCULPTED OBJECT) langsung di atas canvas / green screen murni!
+- BUKAN pelatnya yang digambar, melainkan OBJEK IKON ITU SENDIRI (jika Kamera, maka bodi kamera bervolume; jika Lonceng, maka cawan lonceng berlekuk; jika Mikrofon, maka kapsul & stand mikrofon)!
+
+[CACAT 6: DILARANG EKSTRUSI 6 SISI MANUAL YANG CACAT (ZERO BROKEN 3D POLYGON MESH)]:
+- DILARANG mencoba menghitung poligon isometrik 6 sisi (depan-belakang-kanan-kiri-atas-bawah) secara manual dengan offset vertex silang yang menghasilkan garis patah, poligon menindih tak beraturan, atau bentuk terdistorsi!
+- Bentuk siluet objek WAJIB menggunakan kurva native 2D Canvas yang mulus dan presisi (roundRect, bezierCurveTo, quadraticCurveTo, arc, ellipse) sehingga BEBAS CACAT STRUKTUR 100%.
 
 ======================================================================
-2. MASTER STANDALONE 3D VOLUMETRIC ICON BLUEPRINT (CHUNKY 3D SOLID OBJECT):
+2. MASTER ULTRA-REALISTIC CHIAROSCURO & VOLUMETRIC BLUEPRINT (ZERO DEFECT & BUG-FREE 2D CANVAS):
 ======================================================================
-IKON MOTION HARUS MENERAPKAN TEKNIK 3D VOLUMETRIK PADA OBJEK ICON ITU SENDIRI (MURNI OBJEK 3D TUNGGAL, TANPA BELAH KETUPAT, TANPA PERISAI, TANPA CONTAINER):
-Visual 3D ultra-realistis dibangun langsung pada anatomi fisik objek icon melalui 6 layer terpadu:
+Kesan 3D bervolume ultra-realistis dibangun melalui sistem pencahayaan studio (Chiaroscuro) yang kokoh dan bebas bug:
 
 [LAYER 1: BAYANGAN KONTAK LANTAI (Breathing Ground Contact Shadow)]:
-- Elips bayangan kontak lantai langsung di bawah objek icon di canvas/green screen:
+- Elips bayangan kontak lantai halus langsung di bawah objek icon di canvas/green screen:
   const groundY = S * 0.44;
   const shadowScale = 1 - Math.sin(t * 2) * 0.12;
   ctx.beginPath();
   ctx.ellipse(0, groundY, S * 0.38 * shadowScale, S * 0.08 * shadowScale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0, 30, 0, 0.4)'; // Bayangan lembut pada green screen (atau rgba(0, 0, 0, 0.35) pada dark mode)
+  ctx.fillStyle = isGreenScreen ? 'rgba(0, 30, 0, 0.4)' : 'rgba(0, 0, 0, 0.35)';
   ctx.fill();
 
 [LAYER 2: KINETIKA MELAYANG & ELEVASI 3D (Floating Bobbing & 3D Pitch/Roll)]:
 - Objek icon melayang anggun naik-turun dan sedikit miring isometrik:
   const floatY = Math.sin(t * 2) * (S * 0.05);
-  const tiltAngle = Math.cos(t * 1.5) * 0.035; // kemiringan mikro sudut 3D
+  const tiltAngle = Math.cos(t * 1.5) * 0.03;
   ctx.save();
   ctx.translate(0, floatY);
   ctx.rotate(tiltAngle);
 
-[LAYER 3: DINDING KETEBALAN EKSTRUSI 3D LATERAL & BAWAH (Chunky 3D Extrusion Side-Walls)]:
-- Objek icon (bodi kamera, kubah lonceng, bodi gembok, rangka trofi, dsb.) memiliki dinding samping kanan dan bawah yang diekstrusi tebal (extX = S * 0.08, extY = S * 0.06):
-  // Poligon ekstrusi samping kanan-bawah dengan warna bayangan ambient gelap pekat:
-  // (Gunakan warna bayangan 40-50% lebih gelap dari warna permukaan depan, misal #0f172a, #162032, atau #78350f untuk emas).
-  // Sambungkan vertex depan objek ke vertex offset (x + extX, y + extY).
-  ctx.fillStyle = darkExtrusionColor;
-  ctx.fill();
+[LAYER 3: CHIAROSCURO VOLUMETRIC BODY GRADIENT (Pencahayaan Studio 45°)]:
+- Permukaan badan utama diisi gradien multi-stop directional 45° dari kiri-atas (-w*0.5, -h*0.5) ke kanan-bawah (w*0.5, h*0.5):
+  - Stop 0.0: Key-light highlight (warna bodi + 35% tint putih cerah)
+  - Stop 0.25: Warna primer solid cemerlang
+  - Stop 0.70: Nada midtone dalam
+  - Stop 1.0: Bayangan ambien gelap pekat (-45% luminance, misal navy/dark slate/deep bronze)
 
-[LAYER 4: FASAD DEPAN OBJEK DENGAN GRADIEN MULTI-STOP KAYA (Vibrant Multi-Stop Face)]:
-- Fasad depan objek digambar presisi sesuai bentuk aslinya dengan gradien multi-stop (misal emas: #fffbeb -> #fde047 -> #eab308 -> #ca8a04 -> #78350f; titanium: #475569 -> #334155 -> #1e293b; cobalt: #38bdf8 -> #0284c7 -> #0369a1).
+[LAYER 4: CRISP SPECULAR BEVEL HIGHLIGHT RAILS (Chamfer Tepi 3D 1.5–2px)]:
+- Tepi atas dan kiri bodi yang menghadap sumber cahaya diberi stroke tipis 1.5–2px warna putih transparan (rgba(255, 255, 255, 0.65) memudar ke 0.15) untuk memberikan efek chamfer tepi 3D yang sangat tajam dan berkilau mewah.
 
-[LAYER 5: CRISP SPECULAR BEVEL HIGHLIGHT RAILS (Garis Kilau Spekular Tepi 3D)]:
-- Tepi atas dan kiri objek yang menghadap sumber cahaya studio diberi stroke 1.5–2px putih cerah bergradien (rgba(255, 255, 255, 0.65) memudar ke 0.15) untuk memberikan efek chamfer berkilau mewah.
+[LAYER 5: AMBIENT OCCLUSION CREASES & UNDER-RIM SHADOW]:
+- Garis sambungan nat dan batas bawah bodi diberi stroke bayangan tipis 1.5px (rgba(0, 0, 0, 0.4)) untuk memberikan ilusi kedalaman fisik nyata tanpa perlu poligon ekstrusi terpisah.
 
-[LAYER 6: DETAIL MEKANIKAL/FISIK INTERNAL TERPADU]:
-- Komponen internal objek (lensa kamera berlapis kaca konsentris, lidah clapper lonceng, tombol shutter silinder, kisi mesh mic) dipasang menyatu kokoh dengan bayangan oklusi sendiri.
+[LAYER 6: RADIAL SPECULAR SHADING PADA ELEMEN BULAT / SILINDER]:
+- Pada komponen bulat (lensa kamera, tombol, bola clapper, kubah mic), gunakan ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.05, 0, 0, r) untuk memberikan efek cembung 3D instan yang bebas cacat!
 ctx.restore();
 
 ======================================================================
 3. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP SUBJEK STANDALONE):
 ======================================================================
-Gunakan resep geometris matematis berikut sesuai subjek yang diminta dalam prompt (SEMUANYA STANDALONE TANPA BELAH KETUPAT/SHIELD):
+Gunakan resep subjek berikut bila prompt meminta objek spesifik ini (SEMUANYA STANDALONE TANPA BELAH KETUPAT/SHIELD):
 
-[A. TOPI TOGA WISUDA (ACADEMIC GRADUATION MORTARBOARD CAP)]:
-1. Papan Atas Belah Ketupat Horizontal Isometrik 3D (Diamond Rhombus Top Board):
-   Papan atas BUKAN KOTAK TEGAK, melainkan belah ketupat horizontal 3D lebar:
-   const boardW = S * 0.44; const boardH = S * 0.15; const boardY = -S * 0.12;
-   // Tebal bibir bawah 3D (Beveled Rim Underbelly):
-   ctx.beginPath();
-   ctx.moveTo(-boardW, boardY);
-   ctx.lineTo(0, boardY + boardH);
-   ctx.lineTo(boardW, boardY);
-   ctx.lineTo(boardW, boardY + 8);
-   ctx.lineTo(0, boardY + boardH + 8);
-   ctx.lineTo(-boardW, boardY + 8);
-   ctx.closePath();
-   ctx.fillStyle = '#0f172a'; ctx.fill(); // Bayangan rim gelap tebal
-   // Papan atas berlian (Rhombus Face):
-   ctx.beginPath();
-   ctx.moveTo(0, boardY - boardH); // apex atas
-   ctx.lineTo(boardW, boardY);     // sudut kanan
-   ctx.lineTo(0, boardY + boardH); // sudut bawah
-   ctx.lineTo(-boardW, boardY);    // sudut kiri
-   ctx.closePath();
-   ctx.fillStyle = capGrad; ctx.fill();
+[A. TOPI TOGA WISUDA (ACADEMIC GRADUATION CAP - ZERO RHOMBUS PLATFORM)]:
+1. Papan Persegi Isometrik Atas (Isometric Top Mortarboard):
+   Papan atas berbentuk jajaran genjang horizontal isometrik (boardW = S * 0.44, boardH = S * 0.14, boardY = -S * 0.12).
+   Gunakan gradien gelap berkilau (capGrad), bevel stroke 1.5px di tepi atas, dan bibir rim gelap tebal di bagian bawah. DILARANG menggambar pelat diamond terpisah di belakang topi!
 2. Kubah Bodi Topi (Skull Cap Dome):
-   Menempel langsung di bawah papan tengah tanpa celah:
-   ctx.beginPath();
-   ctx.moveTo(-boardW * 0.45, boardY + 6);
-   ctx.quadraticCurveTo(-boardW * 0.42, boardY + S * 0.28, 0, boardY + S * 0.28);
-   ctx.quadraticCurveTo(boardW * 0.42, boardY + S * 0.28, boardW * 0.45, boardY + 6);
-   ctx.closePath();
-   ctx.fillStyle = '#1e293b'; ctx.fill();
-3. Kancing Tengah & Tassel Sutra Menjuntai (Center Button & Dangling Silk Tassel):
-   // Kancing tengah:
-   ctx.beginPath(); ctx.ellipse(0, boardY, 6, 3, 0, 0, Math.PI * 2); ctx.fillStyle = '#ffd700'; ctx.fill();
-   // Tali meliuk anggun dari kancing melintasi sudut kanan lalu menjuntai ke bawah:
-   const swingTassel = Math.sin(t * 2.8) * (S * 0.04);
-   ctx.beginPath();
-   ctx.moveTo(0, boardY);
-   ctx.quadraticCurveTo(boardW * 0.6, boardY - 3, boardW + 2, boardY + 8);
-   ctx.quadraticCurveTo(boardW + 6 + swingTassel * 0.5, boardY + S * 0.16, boardW + 4 + swingTassel, boardY + S * 0.28);
-   ctx.lineWidth = 3.5; ctx.strokeStyle = '#ffd700'; ctx.stroke();
-   // Bandul rumbai rumbai emas bervolume:
-   ctx.beginPath();
-   ctx.roundRect(boardW + 4 + swingTassel - 5, boardY + S * 0.28, 10, 16, 3);
-   ctx.fillStyle = '#f59e0b'; ctx.fill();
+   Menempel langsung di bawah papan tengah tanpa celah dengan kurva quadraticCurveTo mulus.
+3. Kancing Tengah & Tassel Sutra Menjuntai (Center Button & Silk Tassel):
+   Kancing emas bulat di tengah, tali kuning meliuk ke kanan lalu menjuntai ke bawah dengan ayunan pendulum lembut 60 FPS (swingTassel).
 
 [B. MODEL ATOM BOHR / QUANTUM ATOM (STRICT ZERO ENCLOSING BUBBLES)]:
 1. TANPA BOLA WADAH: DILARANG keras menggambar lingkaran/bola kaca transparan pembungkus!
@@ -1178,7 +1149,8 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
   const primaryModel = sanitizeModel(model);
   const candidateModels = [
     primaryModel,
-    ...['gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+    ...(primaryModel === 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite-preview', 'gemini-3.1-flash-lite'] : []),
+    ...['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview'].filter(
       (m) => m !== primaryModel
     ),
   ];
@@ -1408,7 +1380,8 @@ async function generateImageToMotionDirect(
   const primaryModel = sanitizeModel(model);
   const candidateModels = [
     primaryModel,
-    ...['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-3.1-pro-preview'].filter(
+    ...(primaryModel === 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite-preview', 'gemini-3.1-flash-lite'] : []),
+    ...['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview'].filter(
       (m) => m !== primaryModel
     ),
   ];

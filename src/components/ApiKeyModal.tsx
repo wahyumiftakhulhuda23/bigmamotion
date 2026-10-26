@@ -245,9 +245,10 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
+                  <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Next-Gen Ultra Cepat • Super Pintar & Hemat Kuota)</option>
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Super Ringan & Efisiensi Token Tinggi)</option>
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Cepat ~1.2s • Hemat Kuota • Direkomendasikan)</option>
                   <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi, Detail Kompleks & Rigging Presisi)</option>
-                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Super Ringan & Efisiensi Token Tinggi)</option>
                 </select>
                 <p className="text-[11px] text-sky-400/90 mt-1.5 flex items-center gap-1">
                   <i className="fa-solid fa-circle-check"></i> Seluruh model kini dilengkapi Hierarchical Rigid Rigging (bentuk proporsional, bebas salah gerak, dan objek tidak terpisah).

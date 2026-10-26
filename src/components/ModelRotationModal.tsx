@@ -20,6 +20,8 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
 }) => {
   const getModelName = (m: GeminiModel) => {
     switch (m) {
+      case 'gemini-3.5-flash-lite':
+        return 'Gemini 3.5 Flash Lite';
       case 'gemini-3.1-pro-preview':
         return 'Gemini 3.1 Pro Preview';
       case 'gemini-3.1-flash-lite':
@@ -32,9 +34,10 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   };
 
   const getRecommendedModel = (curr: GeminiModel): GeminiModel => {
-    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.1-flash-lite';
+    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.5-flash-lite';
+    if (curr === 'gemini-3.5-flash-lite') return 'gemini-3.1-flash-lite';
     if (curr === 'gemini-3.1-flash-lite') return 'gemini-2.5-flash';
-    return 'gemini-3.1-flash-lite';
+    return 'gemini-3.5-flash-lite';
   };
 
   const [selectedTarget, setSelectedTarget] = useState<GeminiModel>(() => getRecommendedModel(currentModel));
@@ -78,6 +81,40 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
             Pilih Model AI Tujuan Rotasi:
           </label>
 
+          {/* Option: Gemini 3.5 Flash Lite */}
+          <div
+            onClick={() => setSelectedTarget('gemini-3.5-flash-lite')}
+            className={`p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+              selectedTarget === 'gemini-3.5-flash-lite'
+                ? 'bg-amber-500/15 border-amber-400/80 shadow-md shadow-amber-500/15 text-white'
+                : 'bg-slate-950/40 border-gray-800 text-gray-400 hover:border-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  selectedTarget === 'gemini-3.5-flash-lite'
+                    ? 'border-amber-400 bg-amber-400 text-slate-950'
+                    : 'border-gray-600'
+                }`}
+              >
+                {selectedTarget === 'gemini-3.5-flash-lite' && <i className="fa-solid fa-check text-[10px]"></i>}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-100">Gemini 3.5 Flash Lite</span>
+                  <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black uppercase">
+                    Next-Gen Pintar
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Ultra cepat, penalaran lebih cerdas, kuota RPM luas, dan efisiensi token maksimal.
+                </p>
+              </div>
+            </div>
+            <i className="fa-solid fa-bolt text-amber-400 text-sm"></i>
+          </div>
+
           {/* Option: Gemini 3.1 Flash Lite */}
           <div
             onClick={() => setSelectedTarget('gemini-3.1-flash-lite')}
@@ -101,11 +138,11 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.1 Flash Lite</span>
                   <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black uppercase">
-                    Rekomendasi
+                    Paling Hemat Kuota
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Ringan, super cepat, kuota RPM sangat tinggi, estetika visual identik 3.1 Pro.
+                  Super ringan, kuota RPM sangat tinggi, efisiensi maksimal agar API Key awet tahan lama.
                 </p>
               </div>
             </div>
