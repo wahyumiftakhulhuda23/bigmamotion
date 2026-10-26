@@ -115,6 +115,18 @@ export interface ApiKeyTestResult {
   latencyMs?: number;
   status?: 'pending' | 'testing' | 'valid' | 'invalid';
   lineIndex?: number;
+  testedModel?: string;
+  isQuotaLimit?: boolean;
+}
+
+export interface ModelHealthDiagnostic {
+  id: string;
+  name: string;
+  badge: string;
+  status: 'active' | 'quota_exhausted' | 'not_available' | 'permission_denied' | 'network_issue' | 'invalid_key';
+  valid: boolean;
+  latencyMs?: number;
+  message: string;
 }
 
 export type GeminiModel = 'gemini-3.5-flash-lite' | 'gemini-3.1-flash-lite' | 'gemini-2.5-flash' | 'gemini-3.1-pro-preview' | 'gemini-2.5-flash-lite';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { GeminiModel, ApiKeyTestResult } from '../types';
-import { testSingleApiKey } from '../services/geminiService';
+import { GeminiModel, ApiKeyTestResult, ModelHealthDiagnostic } from '../types';
+import { testSingleApiKey, testKeyAcrossModels } from '../services/geminiService';
 import { detectDeviceHardware, HardwareProfile } from '../services/hardwareService';
 
 interface ApiKeyModalProps {
@@ -46,6 +46,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [testingRowIndex, setTestingRowIndex] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<ApiKeyTestResult[]>([]);
+
+  // Model Diagnostics State
+  const [isTestingModels, setIsTestingModels] = useState(false);
+  const [modelDiagnostics, setModelDiagnostics] = useState<ModelHealthDiagnostic[] | null>(null);
+  const [showModelDiag, setShowModelDiag] = useState(false);
 
   // Hardware Profile Info
   const [hwProfile, setHwProfile] = useState<HardwareProfile | null>(null);
@@ -109,6 +114,29 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setIsTesting(false);
   };
 
+  const handleTestAllModels = async () => {
+    const activeKey = currentLines[0];
+    if (!activeKey) {
+      showToast('Masukkan minimal satu API Key terlebih dahulu untuk menguji model', 'warn');
+      return;
+    }
+    setIsTestingModels(true);
+    setShowModelDiag(true);
+    try {
+      const diag = await testKeyAcrossModels(activeKey);
+      setModelDiagnostics(diag.models || []);
+      if (diag.isKeyValid) {
+        showToast(`Uji Model Selesai: ${diag.activeCount} dari ${diag.total} model siap digunakan!`, 'success');
+      } else {
+        showToast('API Key tidak valid atau salah', 'error');
+      }
+    } catch (err: any) {
+      showToast('Gagal menguji model: ' + err.message, 'error');
+    } finally {
+      setIsTestingModels(false);
+    }
+  };
+
   const handleTestSingleRow = async (index: number) => {
     if (index < 0 || index >= currentLines.length) return;
     const rawKey = currentLines[index];
@@ -123,7 +151,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     });
 
     try {
-      const result = await testSingleApiKey(rawKey, index);
+      const result = await testSingleApiKey(rawKey, index, modelValue);
       setTestResults((prev) => {
         const copy = [...prev];
         copy[index] = result;
@@ -131,7 +159,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
       });
 
       if (result.valid) {
-        showToast(`Baris #${index + 1}: Valid & Aktif (${result.latencyMs}ms)`, 'success');
+        if (result.isQuotaLimit) {
+          showToast(`Baris #${index + 1}: Key Valid (Kuota model ini sedang limit, ganti model)`, 'warn');
+        } else {
+          showToast(`Baris #${index + 1}: Valid & Aktif (${result.latencyMs}ms)`, 'success');
+        }
       } else {
         showToast(`Baris #${index + 1}: ${result.error || 'Tidak Valid'}`, 'error');
       }
@@ -233,13 +265,26 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                 </p>
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-bold text-gray-300">Pilih Model AI Gemini:</label>
-                  <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <i className="fa-solid fa-bolt"></i> Ultra Fast & Anti-Boros Aktif
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={handleTestAllModels}
+                      disabled={isTestingModels || currentLines.length === 0}
+                      className="text-[10px] text-amber-300 font-bold bg-amber-500/15 border border-amber-500/40 hover:bg-amber-500/25 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                      title="Uji kompatibilitas dan batas kuota API Key pada seluruh model Gemini"
+                    >
+                      <i className={`fa-solid fa-microchip ${isTestingModels ? 'fa-spin text-amber-400' : ''}`}></i>
+                      <span>{isTestingModels ? 'Menguji Semua Model...' : 'Cek Status Semua Model'}</span>
+                    </button>
+                    <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded-full hidden sm:flex items-center gap-1">
+                      <i className="fa-solid fa-bolt"></i> Anti-Boros Aktif
+                    </span>
+                  </div>
                 </div>
+
                 <select
                   value={modelValue}
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
@@ -250,9 +295,116 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Cepat ~1.2s • Hemat Kuota • Direkomendasikan)</option>
                   <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi, Detail Kompleks & Rigging Presisi)</option>
                 </select>
-                <p className="text-[11px] text-sky-400/90 mt-1.5 flex items-center gap-1">
+
+                <p className="text-[11px] text-sky-400/90 flex items-center gap-1">
                   <i className="fa-solid fa-circle-check"></i> Seluruh model kini dilengkapi Hierarchical Rigid Rigging (bentuk proporsional, bebas salah gerak, dan objek tidak terpisah).
                 </p>
+
+                {/* Model Compatibility Diagnostic Card */}
+                {showModelDiag && (
+                  <div className="bg-slate-950/90 border border-amber-500/40 rounded-xl p-3 space-y-2 mt-2 shadow-lg">
+                    <div className="flex items-center justify-between pb-1.5 border-b border-gray-800">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
+                        <i className="fa-solid fa-stethoscope"></i>
+                        <span>Diagnostik Kompatibilitas Model untuk API Key Aktif</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowModelDiag(false)}
+                        className="text-gray-400 hover:text-white text-xs cursor-pointer"
+                      >
+                        <i className="fa-solid fa-xmark"></i>
+                      </button>
+                    </div>
+
+                    {isTestingModels ? (
+                      <div className="flex items-center justify-center py-4 gap-2 text-xs text-amber-300">
+                        <i className="fa-solid fa-spinner fa-spin text-sm"></i>
+                        <span>Menguji responsivitas & kuota pada setiap model...</span>
+                      </div>
+                    ) : modelDiagnostics && modelDiagnostics.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {modelDiagnostics.map((m) => {
+                          const isSelected = modelValue === m.id;
+                          const isActive = m.status === 'active';
+                          const isQuota = m.status === 'quota_exhausted';
+
+                          return (
+                            <div
+                              key={m.id}
+                              className={`flex items-center justify-between p-2 rounded-lg border text-xs transition ${
+                                isSelected
+                                  ? 'bg-sky-950/50 border-sky-500/60 text-white'
+                                  : 'bg-slate-900/60 border-gray-800/80 text-gray-300 hover:border-gray-700'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                                    isActive
+                                      ? 'bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                                      : isQuota
+                                      ? 'bg-amber-400'
+                                      : 'bg-rose-400'
+                                  }`}
+                                ></span>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-gray-100">{m.name}</span>
+                                    <span className="text-[10px] text-gray-400 font-mono">({m.id})</span>
+                                    {isSelected && (
+                                      <span className="text-[9px] bg-sky-500/30 text-sky-300 border border-sky-500/50 px-1.5 py-0.2 rounded font-extrabold uppercase">
+                                        Terpilih
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p
+                                    className={`text-[10px] mt-0.5 ${
+                                      isActive
+                                        ? 'text-emerald-400'
+                                        : isQuota
+                                        ? 'text-amber-400'
+                                        : 'text-rose-400'
+                                    }`}
+                                  >
+                                    {m.message} {m.latencyMs ? `(${m.latencyMs}ms)` : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {!isSelected && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setModelValue(m.id as GeminiModel);
+                                    showToast(`Model dialihkan ke ${m.name}`, 'info');
+                                  }}
+                                  className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-sky-300 rounded text-[10px] font-bold transition cursor-pointer"
+                                >
+                                  Pilih Model
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 py-1">Belum ada data uji. Klik tombol di atas untuk memulai uji model.</p>
+                    )}
+
+                    {/* Explanatory Note */}
+                    <div className="bg-slate-900/90 rounded-lg p-2.5 border border-gray-800 text-[11px] text-gray-300 space-y-1">
+                      <p className="font-bold text-amber-300 flex items-center gap-1">
+                        <i className="fa-solid fa-circle-info"></i> Mengapa API Key valid terkadang muncul tidak valid atau limit?
+                      </p>
+                      <ul className="list-disc pl-4 space-y-0.5 text-gray-400 text-[10.5px]">
+                        <li><strong className="text-gray-200">Kuota Limit (429) per Model:</strong> Google memberlakukan kuota limit terpisah untuk setiap model. Bila satu model sedang limit (429), API Key Anda <strong className="text-emerald-300">tetap valid</strong> dan bisa langsung digunakan di model lainnya (seperti 3.5 Flash Lite atau 3.1 Flash Lite).</li>
+                        <li><strong className="text-gray-200">Timeout Jaringan:</strong> Verifikasi kini dilengkapi timeout 12 detik dengan multi-probe sehingga koneksi lambat tidak memicu status keliru.</li>
+                        <li><strong className="text-gray-200">Error 400 Bukan Berarti Key Salah:</strong> Error parameter permintaan lama tidak lagi dianggap sebagai "Key Tidak Valid".</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {currentLines.length > 0 && (
@@ -278,8 +430,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                             #{idx + 1}: {line.length > 10 ? `${line.substring(0, 8)}...${line.substring(line.length - 4)}` : line}
                           </span>
                           <div className="flex items-center gap-2">
-                            {res?.valid && <span className="text-emerald-400 font-bold text-[10px]">✔ Valid ({res.latencyMs}ms)</span>}
-                            {res?.status === 'invalid' && <span className="text-red-400 font-bold text-[10px]">✘ Gagal</span>}
+                            {res?.valid && !res?.isQuotaLimit && <span className="text-emerald-400 font-bold text-[10px]">✔ Valid ({res.latencyMs}ms)</span>}
+                            {res?.valid && res?.isQuotaLimit && <span className="text-amber-400 font-bold text-[10px]" title={res.error}>⚠ Valid (Limit Kuota)</span>}
+                            {res?.status === 'invalid' && <span className="text-red-400 font-bold text-[10px]" title={res.error}>✘ {res.error ? (res.error.length > 24 ? res.error.substring(0, 24) + '...' : res.error) : 'Gagal'}</span>}
                             <button
                               onClick={() => handleTestSingleRow(idx)}
                               disabled={isTestingThis}

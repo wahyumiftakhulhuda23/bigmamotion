@@ -194,8 +194,8 @@ export function parseSafeBody(req: Request | any): any {
   return {};
 }
 
-// Logic for testing a single API key
-export async function handleTestSingleKeyLogic(rawKey: string) {
+// Logic for testing a single API key with target model support and resilient diagnostics
+export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: string) {
   const key = (rawKey || "").trim();
   const maskedKey =
     key.length > 10
@@ -223,6 +223,8 @@ export async function handleTestSingleKeyLogic(rawKey: string) {
     };
   }
 
+  const testModel = sanitizeModel(requestedModel || "gemini-3.5-flash-lite");
+
   try {
     const ai = new GoogleGenAI({
       apiKey: key,
@@ -230,26 +232,58 @@ export async function handleTestSingleKeyLogic(rawKey: string) {
     });
 
     let timerId: any = null;
+    // Generous 12s timeout to accommodate transient network latency
     const timeoutPromise = new Promise((_, reject) => {
-      timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 4.5s)")), 4500);
+      timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 12s)")), 12000);
     });
 
     const verifyPromise = (async () => {
+      // 1. First probe: countTokens on the requested model
       try {
         return await ai.models.countTokens({
-          model: "gemini-2.5-flash",
+          model: testModel,
           contents: "ping",
         });
       } catch (err: any) {
-        // Fallback lightweight probe
-        return await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: "ping",
-          config: {
-            maxOutputTokens: 1,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
-        });
+        const msg = String(err?.message || "").toLowerCase();
+        // If error indicates unauthorized/bad API key, bubble up immediately
+        if (
+          msg.includes("api_key_invalid") ||
+          msg.includes("api key not valid") ||
+          msg.includes("key is not valid")
+        ) {
+          throw err;
+        }
+
+        // 2. Second probe: lightweight 1-token generateContent (without thinkingConfig)
+        try {
+          return await ai.models.generateContent({
+            model: testModel,
+            contents: "hi",
+            config: {
+              maxOutputTokens: 1,
+            },
+          });
+        } catch (genErr: any) {
+          const genMsg = String(genErr?.message || "").toLowerCase();
+          if (
+            genMsg.includes("api_key_invalid") ||
+            genMsg.includes("api key not valid") ||
+            genMsg.includes("key is not valid")
+          ) {
+            throw genErr;
+          }
+
+          // 3. Third probe: fallback to alternate stable model (gemini-3.5-flash-lite or gemini-2.5-flash)
+          const alternateModel =
+            testModel === "gemini-2.5-flash"
+              ? "gemini-3.5-flash-lite"
+              : "gemini-2.5-flash";
+          return await ai.models.countTokens({
+            model: alternateModel,
+            contents: "ping",
+          });
+        }
       }
     })();
 
@@ -259,47 +293,209 @@ export async function handleTestSingleKeyLogic(rawKey: string) {
         key,
         maskedKey,
         valid: true,
+        testedModel: testModel,
         latencyMs: Date.now() - start,
       };
     } finally {
       if (timerId) clearTimeout(timerId);
     }
   } catch (e: any) {
-    let msg = cleanErrorMessage(e) || "Gagal verifikasi";
-    const lower = msg.toLowerCase();
-    if (
+    let rawMsg = cleanErrorMessage(e) || "Gagal verifikasi";
+    const lower = rawMsg.toLowerCase();
+
+    // Check specifically for true API key invalidation (401 / bad key)
+    const isKeyInvalid =
       lower.includes("api_key_invalid") ||
       lower.includes("api key not valid") ||
       lower.includes("key is not valid") ||
       lower.includes("invalid api key") ||
-      lower.includes("400")
-    ) {
-      msg = "API Key tidak valid / salah";
-    } else if (
+      (lower.includes("400") && lower.includes("key"));
+
+    // Check for rate limit / quota
+    const isQuota =
       lower.includes("resource_exhausted") ||
       lower.includes("429") ||
       lower.includes("quota") ||
-      lower.includes("billing")
-    ) {
-      msg = "Rate limit / kuota habis";
-    } else if (lower.includes("permission_denied") || lower.includes("403")) {
-      msg = "Izin ditolak untuk API Key ini";
-    } else if (lower.includes("timeout")) {
-      msg = "Timeout verifikasi API";
+      lower.includes("billing");
+
+    // Check for permissions
+    const isPermission = lower.includes("permission_denied") || lower.includes("403");
+    const isTimeout = lower.includes("timeout");
+
+    let errorLabel = rawMsg;
+    let isValidKey = false;
+    let isQuotaLimit = false;
+
+    if (isKeyInvalid) {
+      errorLabel = "API Key tidak valid atau salah";
+    } else if (isQuota) {
+      // NOTE: Key IS valid, but quota has hit temporary rate limit
+      isValidKey = true;
+      isQuotaLimit = true;
+      errorLabel = "Key Valid • Kuota limit pada model ini (Gunakan model lain)";
+    } else if (isPermission) {
+      errorLabel = "Key Valid • Izin API Gemini belum diaktifkan di Google Cloud Console";
+    } else if (isTimeout) {
+      errorLabel = "Timeout verifikasi (> 12s, koneksi lambat)";
+    } else {
+      errorLabel = rawMsg.length > 70 ? rawMsg.substring(0, 70) + "..." : rawMsg;
     }
 
     return {
       key,
       maskedKey,
-      valid: false,
-      error: msg,
+      valid: isValidKey,
+      isQuotaLimit,
+      error: errorLabel,
       latencyMs: Date.now() - start,
     };
   }
 }
 
+// Logic for testing all models compatibility with an API key
+export async function handleTestModelsLogic(rawKey: string) {
+  const key = (rawKey || "").trim();
+  if (!key) {
+    return {
+      success: false,
+      error: "API Key tidak boleh kosong",
+      models: [],
+    };
+  }
+
+  const modelsToTest = [
+    { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite", badge: "Next-Gen Pintar & Hemat" },
+    { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", badge: "Super Ringan (RPM Tinggi)" },
+    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", badge: "Stabil & Teruji" },
+    { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", badge: "Masterpiece Rigging" },
+  ];
+
+  const ai = new GoogleGenAI({
+    apiKey: key,
+    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+  });
+
+  const modelResults = await Promise.all(
+    modelsToTest.map(async (m) => {
+      const start = Date.now();
+      try {
+        let timerId: any = null;
+        const toPromise = new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error("Timeout (> 8s)")), 8000);
+        });
+
+        const testRun = (async () => {
+          try {
+            return await ai.models.countTokens({
+              model: m.id,
+              contents: "ping",
+            });
+          } catch {
+            return await ai.models.generateContent({
+              model: m.id,
+              contents: "ok",
+              config: { maxOutputTokens: 1 },
+            });
+          }
+        })();
+
+        try {
+          await Promise.race([testRun, toPromise]);
+          return {
+            id: m.id,
+            name: m.name,
+            badge: m.badge,
+            status: "active" as const,
+            valid: true,
+            latencyMs: Date.now() - start,
+            message: "Siap Digunakan • Respon Cepat",
+          };
+        } finally {
+          if (timerId) clearTimeout(timerId);
+        }
+      } catch (err: any) {
+        const raw = cleanErrorMessage(err);
+        const lower = raw.toLowerCase();
+
+        if (
+          lower.includes("api_key_invalid") ||
+          lower.includes("api key not valid") ||
+          lower.includes("key is not valid")
+        ) {
+          return {
+            id: m.id,
+            name: m.name,
+            badge: m.badge,
+            status: "invalid_key" as const,
+            valid: false,
+            latencyMs: Date.now() - start,
+            message: "API Key Salah / Tidak Ditemukan",
+          };
+        }
+
+        if (lower.includes("resource_exhausted") || lower.includes("429") || lower.includes("quota")) {
+          return {
+            id: m.id,
+            name: m.name,
+            badge: m.badge,
+            status: "quota_exhausted" as const,
+            valid: true, // Key is valid
+            latencyMs: Date.now() - start,
+            message: "Key Valid • Kuota Limit (Gunakan Model Lain)",
+          };
+        }
+
+        if (lower.includes("not found") || lower.includes("404") || lower.includes("unrecognized")) {
+          return {
+            id: m.id,
+            name: m.name,
+            badge: m.badge,
+            status: "not_available" as const,
+            valid: true, // Key is valid
+            latencyMs: Date.now() - start,
+            message: "Model Belum Tersedia di Region Akun Ini",
+          };
+        }
+
+        if (lower.includes("permission") || lower.includes("403")) {
+          return {
+            id: m.id,
+            name: m.name,
+            badge: m.badge,
+            status: "permission_denied" as const,
+            valid: true,
+            latencyMs: Date.now() - start,
+            message: "Akses Belum Diaktifkan di GCP Console",
+          };
+        }
+
+        return {
+          id: m.id,
+          name: m.name,
+          badge: m.badge,
+          status: "network_issue" as const,
+          valid: true,
+          latencyMs: Date.now() - start,
+          message: lower.includes("timeout") ? "Respon Lambat (> 8s)" : raw.substring(0, 50),
+        };
+      }
+    })
+  );
+
+  const activeCount = modelResults.filter((r) => r.status === "active").length;
+  const isKeyValid = !modelResults.some((r) => r.status === "invalid_key");
+
+  return {
+    success: true,
+    isKeyValid,
+    activeCount,
+    total: modelResults.length,
+    models: modelResults,
+  };
+}
+
 // Logic for testing a list of API keys
-export async function handleTestKeysLogic(keysInput: any) {
+export async function handleTestKeysLogic(keysInput: any, requestedModel?: string) {
   let keys: string[] = [];
   if (Array.isArray(keysInput)) {
     keys = keysInput;
@@ -312,7 +508,7 @@ export async function handleTestKeysLogic(keysInput: any) {
   }
 
   const results = await Promise.all(
-    keys.map((rawKey: string) => handleTestSingleKeyLogic(rawKey))
+    keys.map((rawKey: string) => handleTestSingleKeyLogic(rawKey, requestedModel))
   );
 
   const validCount = results.filter((r) => r.valid).length;
@@ -683,8 +879,8 @@ PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
 - Gerakan berpola kuantisasi tajam terkalibrasi: busur derajat berputar presisi, dial bidik melingkar, laser scanner bolak-balik melintasi area target (ctx.clip()), dan sudut siku telemetri [ ].`;
   } else if (motionDynamics === 'mechanical') {
     motionGuide = `
-PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA MESIN NYATA):
-- Roda gigi interlocking berputar sinkron berlawanan arah, poros engsel berayun dengan redaman fisika, dan tuas bergerak dengan artikulasi bertenaga.`;
+PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA 3D PRESISI TANPA RODA GERIGI):
+- DILARANG KERAS MENGGAMBAR RODA GERIGI / GIR BERPUTAR! Gunakan poros engsel beveled berayun dengan redaman fisika alami (damped harmonic oscillation), silinder hidrolik presisi, dan pelat sasis 3D yang berartikulasi bertenaga.`;
   } else {
     motionGuide = `
 PANDUAN GERAKAN ORGANIC FLOW & WAVES:
@@ -1536,12 +1732,13 @@ export function createApiRouter(): Router {
   router.get("/health", healthHandler);
   router.get("/api/health", healthHandler);
 
-  // Test Single API Key (Super Fast Lightweight Probe)
+  // Test Single API Key (Supports target model)
   const testSingleKeyHandler = async (req: Request, res: Response) => {
     try {
       const body = parseSafeBody(req);
       const key = body.key || req.body?.key || "";
-      const result = await handleTestSingleKeyLogic(key);
+      const model = body.model || req.body?.model;
+      const result = await handleTestSingleKeyLogic(key, model);
       res.json(result);
     } catch (err: any) {
       console.error("[TestSingleKey] Error:", err);
@@ -1562,7 +1759,8 @@ export function createApiRouter(): Router {
     try {
       const body = parseSafeBody(req);
       const keys = body.keys || req.body?.keys || [];
-      const result = await handleTestKeysLogic(keys);
+      const model = body.model || req.body?.model;
+      const result = await handleTestKeysLogic(keys, model);
       res.json(result);
     } catch (err: any) {
       console.error("[TestKeys] Error:", err);
@@ -1576,6 +1774,28 @@ export function createApiRouter(): Router {
   };
   router.post("/gemini/test-keys", testKeysHandler);
   router.post("/api/gemini/test-keys", testKeysHandler);
+
+  // Test Models Compatibility for a single API Key (Full Health Diagnostic)
+  const testModelsHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const key = body.key || req.body?.key || "";
+      const result = await handleTestModelsLogic(key);
+      res.json(result);
+    } catch (err: any) {
+      console.error("[TestModels] Error:", err);
+      res.status(200).json({
+        success: false,
+        isKeyValid: false,
+        activeCount: 0,
+        total: 0,
+        error: cleanErrorMessage(err) || "Gagal memeriksa kompatibilitas model",
+        models: [],
+      });
+    }
+  };
+  router.post("/gemini/test-models", testModelsHandler);
+  router.post("/api/gemini/test-models", testModelsHandler);
 
   // Generate Microstock Prompts
   const generatePromptsHandler = async (req: Request, res: Response) => {
