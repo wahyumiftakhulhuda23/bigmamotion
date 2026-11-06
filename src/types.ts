@@ -94,6 +94,8 @@ export interface AutoPilotAccount {
   neonGlow?: boolean;
   colorMode?: ColorMode;
   motionDynamics?: MotionDynamics;
+  promptSource?: 'ai' | 'custom'; // 'ai' = AI Auto Generator, 'custom' = Upload TXT / Paste Manual
+  customPrompts?: string[]; // Custom list of prompts (1 prompt per baris)
 }
 
 export interface VideoConverterFile {

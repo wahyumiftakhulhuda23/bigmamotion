@@ -807,35 +807,46 @@ ATURAN MASTER FULL-FRAME BACKGROUND MOTION (STRICT ZERO PARTICLES & CINEMATIC RE
   let motionGuide = '';
   if (motionDynamics === 'bounce') {
     motionGuide = `
-PANDUAN GERAKAN BOUNCE & SPRING (REALISTIS BERBOBOT):
-- Gunakan rumus elastis membal (spring physics): const bounce = Math.abs(Math.sin(t * 3.2)); const squash = 1 + 0.18 * (1 - bounce); const stretch = 1 / squash;
-- Terapkan squash & stretch saat objek mendarat atau memantul. Objek terasa elastis dan berbobot nyata!`;
+PANDUAN GERAKAN BOUNCE & SPRING (ULTRA-REALISTIS ELASTIS 60 FPS):
+- Gunakan rumus fisika elastis (spring dynamics) dengan redaman inersia: 
+  const bounceCycle = Math.sin(t * 3.0);
+  const bounce = Math.abs(bounceCycle);
+  const squash = 1 + 0.16 * (1 - bounce);
+  const stretch = 1 / Math.sqrt(squash);
+  const secondaryInertia = Math.sin(t * 3.0 - 0.45) * (S * 0.04);
+- Seluruh komponen internal berayun elastis mengikuti inersia bodi utama tanpa pernah terlepas dari rangka!`;
   } else if (motionDynamics === 'orbital') {
     motionGuide = `
-PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE (REALISTIS KINETIK):
+PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE (KINETIK PRESISI 60 FPS):
 - Simulasikan rotasi 3D multi-cincin dengan kedalaman sumbu z (pseudo-3D):
   const angle = t * 1.5 + i * (Math.PI * 2 / N);
   const x = Math.cos(angle) * radiusX;
   const y = Math.sin(angle) * radiusY * Math.cos(tiltAngle);
   const z = Math.sin(angle) * Math.sin(tiltAngle);
-  ctx.scale(1 + z * 0.25, 1 + z * 0.25); ctx.globalAlpha = 0.6 + 0.4 * (z + 1) / 2;`;
+  const depthScale = 0.85 + 0.35 * (z + 1) * 0.5;
+  ctx.scale(depthScale, depthScale); 
+  ctx.globalAlpha = 0.55 + 0.45 * (z + 1) * 0.5;
+- Orbit berupa lingkaran elips kontinu tertutup sempurna (ctx.ellipse) tanpa busur patah!`;
   } else if (motionDynamics === 'morph') {
     motionGuide = `
-PANDUAN GERAKAN KINETIC MORPHING (ORGANIK HALUS):
-- Bentuk geometris bertransformasi dinamis antar fase menggunakan kurva lengkung kontinu (bezierCurveTo) dengan osilasi harmonik harmonis.`;
+PANDUAN GERAKAN KINETIC MORPHING (ORGANIK HALUS BERBOBOT 3D):
+- Bentuk geometris bertransformasi dinamis antar fase menggunakan kurva lengkung kontinu (bezierCurveTo) dengan osilasi harmonik multi-frekuensi tanpa sudut cacat atau poligon melayang.`;
   } else if (motionDynamics === 'cyber') {
     motionGuide = `
-PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY:
-- Gerakan berpola kuantisasi tajam terkalibrasi: busur derajat berputar presisi, dial bidik melingkar, laser scanner bolak-balik melintasi area target (ctx.clip()), dan sudut siku telemetri [ ].`;
+PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY (PRESISI MILITER MODERN):
+- Gerakan berpola kuantisasi tajam terkalibrasi: busur derajat berputar presisi, dial bidik melingkar, laser scanner bolak-balik melintasi area target yang ter-clip rapi (ctx.clip()), dan indikator status pulsa ritmis.`;
   } else if (motionDynamics === 'mechanical') {
     motionGuide = `
-PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA MESIN NYATA):
-- Roda gigi interlocking berputar sinkron berlawanan arah, poros engsel berayun dengan redaman fisika, dan tuas bergerak dengan artikulasi bertenaga.`;
+PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA 3D PRESISI TANPA RODA GERIGI):
+- DILARANG KERAS MENGGAMBAR RODA GERIGI / GIR BERPUTAR! Gunakan poros engsel beveled berayun dengan redaman fisika alami (damped harmonic oscillation: Math.sin(t * 2.2) * Math.exp(-0.05 * t)), silinder hidrolik mikro bergeser halus, dan pelat sasis 3D yang berartikulasi bertenaga.`;
   } else {
     motionGuide = `
-PANDUAN GERAKAN ORGANIC FLOW & WAVES:
-- Gunakan gelombang sinusoidal multi-frekuensi: const wave = Math.sin(t * 2.0 + i * 0.6) * 0.7 + Math.cos(t * 1.1 + i * 0.3) * 0.3;
-- Objek dan pita mengalir lembut dengan kemiringan dinamis elegan.`;
+PANDUAN GERAKAN ORGANIC FLOW & 3D FLOATING KINETICS (ELEGAN & BERKELAS):
+- Gabungkan 3 lapis pergerakan kinetik harmonis:
+  1. Root vertical floating: const floatY = Math.sin(t * 2.4) * (S * 0.045);
+  2. Gimbal tilt harmonic: const tilt = Math.cos(t * 1.8) * 0.035;
+  3. Specular sheen cycle: Sapuan kilau diagonal 45 derajat ter-clip (ctx.clip()) setiap periode 2.5s.
+- Objek bergerak elastis, tenang, megah, dan 100% monolithic bersatu padu.`;
   }
 
   let styleAndColorGuide = '';

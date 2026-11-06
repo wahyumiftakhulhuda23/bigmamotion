@@ -207,17 +207,47 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Jml Prompt</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="200"
-                      value={acc.promptCount}
-                      onChange={(e) =>
-                        onUpdateAccount(index, { promptCount: Math.max(1, parseInt(e.target.value) || 1) })
-                      }
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none font-bold"
-                    />
+                    <label className="text-[10px] font-bold text-cyan-400 uppercase flex items-center gap-1">
+                      <i className="fa-solid fa-person-running text-[9px]"></i>
+                      <span>Dinamika Gerak</span>
+                    </label>
+                    <select
+                      value={acc.motionDynamics || 'flow'}
+                      onChange={(e) => onUpdateAccount(index, { motionDynamics: e.target.value as MotionDynamics })}
+                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
+                    >
+                      <option value="flow">Flow & 3D Floating (Halus & Elegan)</option>
+                      <option value="bounce">Bounce & Spring Elastic (Membal Berbobot)</option>
+                      <option value="orbital">3D Orbital & Gyroscope (Rotasi Z-Depth)</option>
+                      <option value="morph">Kinetic Morphing (Transisi Organik)</option>
+                      <option value="cyber">Cyber Step & HUD Telemetry</option>
+                      <option value="mechanical">Mechanical Articulated (Presisi Tanpa Gir)</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-amber-300 uppercase flex items-center gap-1">
+                      <i className="fa-solid fa-list-ol text-[9px]"></i>
+                      <span>Target Jumlah Animasi</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        disabled={acc.promptSource === 'custom' && (acc.customPrompts?.length ?? 0) > 0}
+                        value={acc.promptSource === 'custom' && (acc.customPrompts?.length ?? 0) > 0 ? acc.customPrompts?.length : (acc.promptCount ?? 2)}
+                        onChange={(e) =>
+                          onUpdateAccount(index, { promptCount: Math.max(1, parseInt(e.target.value) || 1) })
+                        }
+                        className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none font-bold disabled:opacity-75 disabled:bg-gray-900"
+                      />
+                      {acc.promptSource === 'custom' && (acc.customPrompts?.length ?? 0) > 0 && (
+                        <span className="absolute right-2 top-2 text-[10px] text-amber-400 font-bold">
+                          Otomatis (List TXT)
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1">
@@ -249,14 +279,123 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                       </label>
                     </div>
                   </div>
+                </div>
 
-                  {/* Linear Motion Indicator */}
-                  <div className="p-2 rounded-lg bg-sky-950/40 border border-sky-800/40 flex items-center gap-2 text-[10px] text-sky-200 mt-2 sm:mt-0">
-                    <i className="fa-solid fa-chart-line text-sky-400 text-xs"></i>
-                    <span className="leading-tight">
-                      <strong className="text-sky-300">Gerakan Linear:</strong> Otomatis selaras dalam prompt & canvas 60 FPS
+                {/* Row 3: Sumber Prompt (AI Generator Otomatis VS Upload TXT / Paste Manual) */}
+                <div className="pt-2 border-t border-gray-800/60 space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 bg-gray-950 p-1 rounded-lg border border-gray-800">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateAccount(index, { promptSource: 'ai' })}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          (acc.promptSource || 'ai') === 'ai'
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <i className="fa-solid fa-wand-magic-sparkles text-[10px]"></i>
+                        <span>AI Auto Generator</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => onUpdateAccount(index, { promptSource: 'custom' })}
+                        className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                          acc.promptSource === 'custom'
+                            ? 'bg-amber-600 text-white shadow-sm'
+                            : 'text-gray-400 hover:text-gray-200'
+                        }`}
+                      >
+                        <i className="fa-solid fa-file-arrow-up text-[10px]"></i>
+                        <span>Unggah TXT / Paste Manual</span>
+                        {(acc.customPrompts?.length ?? 0) > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-full bg-amber-950 text-amber-200 text-[10px] border border-amber-500/40">
+                            {acc.customPrompts?.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
+                    <span className="text-[10px] text-gray-400">
+                      {(acc.promptSource || 'ai') === 'ai'
+                        ? 'AI Gemini akan menghasilkan prompt unik berbobot 3D sesuai kategori'
+                        : '1 baris = 1 animasi. Anda bisa upload file .txt atau paste manual di bawah'}
                     </span>
                   </div>
+
+                  {/* Panel Khusus: Unggah TXT / Paste Manual */}
+                  {acc.promptSource === 'custom' && (
+                    <div className="bg-slate-950/80 border border-amber-500/40 rounded-xl p-3 space-y-2.5 animate-fade-in shadow-inner">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <label className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer">
+                            <i className="fa-solid fa-upload"></i>
+                            <span>Unggah File .TXT</span>
+                            <input
+                              type="file"
+                              accept=".txt,text/plain"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const text = (event.target?.result as string) || '';
+                                  const lines = text
+                                    .split(/\r?\n/)
+                                    .map((l) => l.trim())
+                                    .filter((l) => l.length > 0);
+                                  onUpdateAccount(index, {
+                                    customPrompts: lines,
+                                    promptCount: Math.max(1, lines.length),
+                                  });
+                                };
+                                reader.readAsText(file);
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+
+                          {(acc.customPrompts?.length ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => onUpdateAccount(index, { customPrompts: [], promptCount: 2 })}
+                              className="px-2.5 py-1.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 rounded-lg text-xs font-semibold transition cursor-pointer"
+                            >
+                              <i className="fa-solid fa-trash-can mr-1"></i> Kosongkan
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-amber-300 font-bold">
+                          Terdeteksi: <span className="underline font-black">{acc.customPrompts?.length || 0}</span> prompt siap dieksekusi
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <textarea
+                          rows={4}
+                          value={(acc.customPrompts || []).join('\n')}
+                          onChange={(e) => {
+                            const lines = e.target.value
+                              .split(/\r?\n/)
+                              .map((l) => l.trim())
+                              .filter((l) => l.length > 0);
+                            onUpdateAccount(index, {
+                              customPrompts: lines,
+                              promptCount: Math.max(1, lines.length),
+                            });
+                          }}
+                          placeholder={`Paste kumpulan prompt Anda di sini (1 baris = 1 animasi):\nContoh:\n3D Golden Vault with volumetric bevel highlights on clean background\nSculpted Studio Microphone in isometric 3D with smooth elastic bounce\nFloating Isometric Camera with clean specular reflections`}
+                          className="w-full bg-slate-900 border border-gray-700 focus:border-amber-500 rounded-lg p-2.5 text-xs text-gray-200 font-mono focus:outline-none placeholder:text-gray-600 resize-y"
+                        />
+                        <p className="text-[10px] text-gray-400">
+                          Tips: Setiap baris otomatis menjadi 1 animasi mandiri dalam antrian akun ini.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )))}

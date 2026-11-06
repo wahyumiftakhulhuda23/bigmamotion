@@ -1020,47 +1020,56 @@ export default function App() {
 
     for (let i = 0; i < accountsToRun.length; i++) {
       const acc = accountsToRun[i];
-      addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${acc.promptCount} prompt...`, 'info');
-
       let prompts: string[] = [];
-      try {
-        prompts = await generatePromptsViaGemini(
-          apiKeys,
-          selectedModel,
-          acc.type,
-          acc.subCategory,
-          acc.style,
-          acc.promptCount,
-          undefined,
-          acc.isGreenScreen ?? false,
-          acc.colorMode ?? 'gradient',
-          acc.motionDynamics ?? 'flow',
-          acc.neonGlow ?? true,
-          (singlePrompt, index, total) => {
-            if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
-              addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
+
+      // Check whether account uses Custom Prompts (Uploaded TXT or Manual Paste)
+      const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
+
+      if (hasCustomPrompts) {
+        prompts = acc.customPrompts!;
+        addLog(`📂 [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Menggunakan ${prompts.length} prompt dari file TXT / input manual...`, 'cyan');
+      } else {
+        addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${acc.promptCount} prompt...`, 'info');
+
+        try {
+          prompts = await generatePromptsViaGemini(
+            apiKeys,
+            selectedModel,
+            acc.type,
+            acc.subCategory,
+            acc.style,
+            acc.promptCount,
+            undefined,
+            acc.isGreenScreen ?? false,
+            acc.colorMode ?? 'gradient',
+            acc.motionDynamics ?? 'flow',
+            acc.neonGlow ?? true,
+            (singlePrompt, index, total) => {
+              if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
+                addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
+              }
             }
-          }
-        );
-        addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt satu per satu. Memulai render animasi...`, 'success');
-        addLog(`⏳ [${acc.name}] Menyiapkan antrian render berurutan satu per satu (jeda 2.5s pendinginan kuota API)...`, 'info');
-        await new Promise((res) => setTimeout(res, 2500));
-      } catch (e: any) {
-        addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
-        newFailedItems.push({
-          id: 'fail_p_' + Date.now() + '_' + i,
-          accountName: acc.name,
-          prompt: `(Generate Prompts: ${acc.type} - ${acc.subCategory})`,
-          type: acc.type,
-          subCategory: acc.subCategory,
-          style: acc.style,
-          isGreenScreen: acc.isGreenScreen ?? false,
-          colorMode: acc.colorMode ?? 'gradient',
-          motionDynamics: acc.motionDynamics ?? 'flow',
-          neonGlow: acc.neonGlow ?? true,
-          error: e.message || 'Gagal menghasilkan prompt',
-        });
-        continue;
+          );
+          addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt satu per satu. Memulai render animasi...`, 'success');
+          addLog(`⏳ [${acc.name}] Menyiapkan antrian render berurutan satu per satu (jeda 2.5s pendinginan kuota API)...`, 'info');
+          await new Promise((res) => setTimeout(res, 2500));
+        } catch (e: any) {
+          addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
+          newFailedItems.push({
+            id: 'fail_p_' + Date.now() + '_' + i,
+            accountName: acc.name,
+            prompt: `(Generate Prompts: ${acc.type} - ${acc.subCategory})`,
+            type: acc.type,
+            subCategory: acc.subCategory,
+            style: acc.style,
+            isGreenScreen: acc.isGreenScreen ?? false,
+            colorMode: acc.colorMode ?? 'gradient',
+            motionDynamics: acc.motionDynamics ?? 'flow',
+            neonGlow: acc.neonGlow ?? true,
+            error: e.message || 'Gagal menghasilkan prompt',
+          });
+          continue;
+        }
       }
 
       for (let j = 0; j < prompts.length; j++) {
