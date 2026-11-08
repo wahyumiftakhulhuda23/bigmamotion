@@ -398,27 +398,27 @@ export function generateProceduralPrompts(
     ? cleanKeywords.flatMap((kw) => [kw, `${kw} visual emblem`, `precision ${kw} model`])
     : pool;
 
-  // Diverse sentence structures for Standalone 3D Volumetric Objects (Zero Rhombus, Zero Crest, Zero Background Plates)
+  // Diverse sentence structures for Standalone 3D Volumetric Objects (Zero Rhombus, Zero Crest, Zero Ground Shadows)
   const iconSentenceTemplates = [
     // Template 1: Chunky 3D Volumetric Object
     (subj: string, mot: string, col: string) =>
-      `Ultra-realistic 3D volumetric model of ${subj}: rendered as a standalone chunky solid 3D object with thick isometric lateral extrusion walls in deep ambient shadow, curved bevel chamfers with crisp 1.5px specular highlight rails, and rich multi-stop chiaroscuro gradients in ${col}. Smoothly floating with ${mot} and a soft breathing ground contact shadow directly beneath on spotless green screen (pure standalone icon, zero background plates, zero rhombus).`,
+      `Ultra-realistic 3D volumetric model of ${subj}: rendered as a standalone chunky solid 3D object with thick isometric lateral extrusion walls in deep ambient shadow, curved bevel chamfers with crisp 1.5px specular highlight rails, and rich multi-stop chiaroscuro gradients in ${col}. Smoothly floating with ${mot} on a spotless clean surface (pure standalone icon, zero floor shadows, zero background plates, zero rhombus).`,
     
     // Template 2: Precision Industrial 3D Solid
     (subj: string, mot: string, col: string) =>
-      `Studio-grade 3D isometric ${subj}: modeled as a standalone volumetric physical artifact with realistic depth extrusion, chamfered corner fillets, polished metallic surface luster in ${col}, and high-contrast ambient occlusion. Articulated with ${mot} and dynamic elliptical floor shadow (pure isolated object with zero shield, zero badge, zero outer frame).`,
+      `Studio-grade 3D isometric ${subj}: modeled as a standalone volumetric physical artifact with realistic depth extrusion, chamfered corner fillets, polished metallic surface luster in ${col}, and high-contrast ambient occlusion. Articulated with ${mot} (pure isolated floating object with zero floor shadow, zero shield, zero badge, zero outer frame).`,
     
     // Template 3: High-Fidelity 3D Sculpt
     (subj: string, mot: string, col: string) =>
-      `Premium 3D sculptural vector icon of ${subj}: fully dimensional solid body with cylindrical/curved volumetric bevels, specular top-edge rim reflections, and deep tonal shading in ${col}. Performing ${mot} with a responsive breathing contact shadow directly on the green screen surface (completely uncontained, pure standalone silhouette).`,
+      `Premium 3D sculptural vector icon of ${subj}: fully dimensional solid body with cylindrical/curved volumetric bevels, specular top-edge rim reflections, and deep tonal shading in ${col}. Performing ${mot} (completely uncontained, pure standalone silhouette with zero floor shadow).`,
     
     // Template 4: Realistic Dimensional Masterpiece
     (subj: string, mot: string, col: string) =>
-      `Ultra-detailed 3D isometric representation of ${subj}: thick volumetric profile with cast ambient shadows, beveled perimeter facets, and vibrant tactile luster in ${col}. Animated through ${mot} and subtle floor shadow scaling, standing totally isolated with zero diamond plates, zero background frames, and zero outer cards.`,
+      `Ultra-detailed 3D isometric representation of ${subj}: thick volumetric profile with cast ambient shading, beveled perimeter facets, and vibrant tactile luster in ${col}. Animated through ${mot}, standing totally isolated with zero ground shadows, zero diamond plates, zero background frames, and zero outer cards.`,
     
     // Template 5: Tactile 3D Physical Prop
     (subj: string, mot: string, col: string) =>
-      `High-end dimensional 3D asset portraying ${subj}: tangible volumetric construction with realistic lateral side-wall depth, polished chamfer highlights, and rich chiaroscuro in ${col}. Seamless 60 FPS motion featuring ${mot} and grounding contact shadow (standalone pure icon object).`,
+      `High-end dimensional 3D asset portraying ${subj}: tangible volumetric construction with realistic lateral side-wall depth, polished chamfer highlights, and rich chiaroscuro in ${col}. Seamless 60 FPS motion featuring ${mot} (standalone pure floating icon object, zero ground contact shadow).`,
   ];
 
   const bgSentenceTemplates = [
@@ -452,7 +452,7 @@ export function generateProceduralPrompts(
     'harmonic vertical floating with elastic squash-and-stretch spring bounce (subtle body compression on dip and stretch on apex), synchronized internal articulation with secondary spring inertia, and a clipped 45-degree diagonal specular sheen sweep',
     'elastic kinetic oscillation with secondary payload inertia (phase-lagged internal spring bounce), breathing scale pulse (0.98x to 1.02x), and rhythmic exponential LED breathing',
     'coordinated isometric articulation with elastic spring recoil, locked rigid joint pivots, and smooth continuous 60 FPS specular gleam sweeping across the surface',
-    'subtle elastic spring floating with dynamic ground contact shadow contraction, precision component motion, and responsive kinetic inertia',
+    'subtle elastic spring floating with spotless zero floor shadow, precision component motion, and responsive kinetic inertia',
     'fluid harmonic oscillation with organic spring damping, synchronized internal dial needle vibration, and clipped volumetric light sweep',
   ];
 

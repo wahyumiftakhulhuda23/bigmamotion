@@ -23,7 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   apiKeyCount,
   hasServerKey = true,
   animationCount,
-  selectedModel = 'gemini-3.1-pro-preview',
+  selectedModel = 'gemini-3.8-flash',
   isTrialActive = false,
   trialRemainingText = '',
   activeTab = 'prompt',
@@ -36,8 +36,22 @@ export const Header: React.FC<HeaderProps> = ({
   failedCount = 0,
   onOpenFailedModal,
 }) => {
-  const getModelBadge = (model: GeminiModel | string = 'gemini-3.1-pro-preview') => {
+  const getModelBadge = (model: GeminiModel | string = 'gemini-3.8-flash') => {
     switch (model) {
+      case 'gemini-3.8-flash':
+        return {
+          label: '3.8 Flash',
+          fullName: 'Gemini 3.8 Flash (Next-Gen Flagship)',
+          color: 'text-cyan-300 bg-cyan-500/20 border-cyan-500/50 shadow-cyan-500/20 hover:bg-cyan-500/30',
+          dotColor: 'bg-cyan-400',
+        };
+      case 'gemini-3.6-flash':
+        return {
+          label: '3.6 Flash',
+          fullName: 'Gemini 3.6 Flash (Pintar & Elegan)',
+          color: 'text-sky-300 bg-sky-500/20 border-sky-500/50 shadow-sky-500/20 hover:bg-sky-500/30',
+          dotColor: 'bg-sky-400',
+        };
       case 'gemini-3.1-pro-preview':
         return {
           label: '3.1 Pro',

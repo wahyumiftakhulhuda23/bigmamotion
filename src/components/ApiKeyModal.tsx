@@ -42,7 +42,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   // API Key State
   const [textValue, setTextValue] = useState('');
-  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-2.5-flash');
+  const [modelValue, setModelValue] = useState<GeminiModel>(selectedModel || 'gemini-3.8-flash');
   const [isTesting, setIsTesting] = useState(false);
   const [testingRowIndex, setTestingRowIndex] = useState<number | null>(null);
   const [testResults, setTestResults] = useState<ApiKeyTestResult[]>([]);
@@ -58,8 +58,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setTextValue(apiKeys.join('\n'));
-      const safeModel = (selectedModel as string) === 'gemini-3.7-flash' ? 'gemini-2.5-flash' : selectedModel;
-      setModelValue(safeModel || 'gemini-2.5-flash');
+      const safeModel = (selectedModel as string) === 'gemini-3.7-flash' ? 'gemini-3.8-flash' : selectedModel;
+      setModelValue(safeModel || 'gemini-3.8-flash');
       setIsTesting(false);
       setTestingRowIndex(null);
       setHwProfile(detectDeviceHardware());
@@ -290,6 +290,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
+                  <option value="gemini-3.8-flash">Gemini 3.8 Flash (Next-Gen Flagship • Animasi Super Pintar & Detail Kompleks)</option>
+                  <option value="gemini-3.6-flash">Gemini 3.6 Flash (Pintar, Elegan & Animasi Modern Kompleks)</option>
                   <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Next-Gen Ultra Cepat • Super Pintar & Hemat Kuota)</option>
                   <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Super Ringan & Efisiensi Token Tinggi)</option>
                   <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Cepat ~1.2s • Hemat Kuota • Direkomendasikan)</option>

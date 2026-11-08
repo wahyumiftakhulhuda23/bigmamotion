@@ -20,6 +20,10 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
 }) => {
   const getModelName = (m: GeminiModel) => {
     switch (m) {
+      case 'gemini-3.8-flash':
+        return 'Gemini 3.8 Flash';
+      case 'gemini-3.6-flash':
+        return 'Gemini 3.6 Flash';
       case 'gemini-3.5-flash-lite':
         return 'Gemini 3.5 Flash Lite';
       case 'gemini-3.1-pro-preview':
@@ -34,10 +38,12 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   };
 
   const getRecommendedModel = (curr: GeminiModel): GeminiModel => {
-    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.5-flash-lite';
-    if (curr === 'gemini-3.5-flash-lite') return 'gemini-3.1-flash-lite';
-    if (curr === 'gemini-3.1-flash-lite') return 'gemini-2.5-flash';
-    return 'gemini-3.5-flash-lite';
+    if (curr === 'gemini-3.8-flash') return 'gemini-3.6-flash';
+    if (curr === 'gemini-3.6-flash') return 'gemini-3.5-flash-lite';
+    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.8-flash';
+    if (curr === 'gemini-3.5-flash-lite') return 'gemini-3.8-flash';
+    if (curr === 'gemini-3.1-flash-lite') return 'gemini-3.8-flash';
+    return 'gemini-3.8-flash';
   };
 
   const [selectedTarget, setSelectedTarget] = useState<GeminiModel>(() => getRecommendedModel(currentModel));
@@ -80,6 +86,74 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
             Pilih Model AI Tujuan Rotasi:
           </label>
+
+          {/* Option: Gemini 3.8 Flash */}
+          <div
+            onClick={() => setSelectedTarget('gemini-3.8-flash')}
+            className={`p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+              selectedTarget === 'gemini-3.8-flash'
+                ? 'bg-cyan-500/15 border-cyan-400/80 shadow-md shadow-cyan-500/15 text-white'
+                : 'bg-slate-950/40 border-gray-800 text-gray-400 hover:border-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  selectedTarget === 'gemini-3.8-flash'
+                    ? 'border-cyan-400 bg-cyan-400 text-slate-950'
+                    : 'border-gray-600'
+                }`}
+              >
+                {selectedTarget === 'gemini-3.8-flash' && <i className="fa-solid fa-check text-[10px]"></i>}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-100">Gemini 3.8 Flash</span>
+                  <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-black uppercase">
+                    Flagship Ultra Pintar
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Model flagship terbaru dengan daya analisa ultra cerdas & pergerakan animasi paling kompleks.
+                </p>
+              </div>
+            </div>
+            <i className="fa-solid fa-wand-magic-sparkles text-cyan-400 text-sm"></i>
+          </div>
+
+          {/* Option: Gemini 3.6 Flash */}
+          <div
+            onClick={() => setSelectedTarget('gemini-3.6-flash')}
+            className={`p-3.5 rounded-xl border cursor-pointer transition flex items-center justify-between ${
+              selectedTarget === 'gemini-3.6-flash'
+                ? 'bg-sky-500/15 border-sky-400/80 shadow-md shadow-sky-500/15 text-white'
+                : 'bg-slate-950/40 border-gray-800 text-gray-400 hover:border-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  selectedTarget === 'gemini-3.6-flash'
+                    ? 'border-sky-400 bg-sky-400 text-slate-950'
+                    : 'border-gray-600'
+                }`}
+              >
+                {selectedTarget === 'gemini-3.6-flash' && <i className="fa-solid fa-check text-[10px]"></i>}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-gray-100">Gemini 3.6 Flash</span>
+                  <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[9px] font-black uppercase">
+                    Pintar & Elegan
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Model modern dengan daya analisa tinggi & hasil animasi presisi kompleks.
+                </p>
+              </div>
+            </div>
+            <i className="fa-solid fa-bolt text-sky-400 text-sm"></i>
+          </div>
 
           {/* Option: Gemini 3.5 Flash Lite */}
           <div

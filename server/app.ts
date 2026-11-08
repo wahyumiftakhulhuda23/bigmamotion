@@ -24,24 +24,25 @@ export function getClient(apiKey?: string) {
 const serverPromptHistoryBank = new Set<string>();
 
 export function getSmartThinkingConfig(targetModel: string, budget = 2048): any {
-  // Empower AI reasoning with an active thinking budget for models supporting extended thinking (3.8, 2.5, 3.1-pro)
-  if (targetModel.includes("2.5") || targetModel.includes("3.8") || targetModel.includes("pro") || targetModel.includes("thinking")) {
+  // Empower AI reasoning with an active thinking budget for models supporting extended thinking (3.8, 3.6, 2.5, 3.1-pro)
+  if (targetModel.includes("2.5") || targetModel.includes("3.8") || targetModel.includes("3.6") || targetModel.includes("pro") || targetModel.includes("thinking")) {
     return { thinkingBudget: budget };
   }
   return undefined;
 }
 
 export function sanitizeModel(model?: string): string {
-  if (!model) return "gemini-3.5-flash-lite";
+  if (!model) return "gemini-3.8-flash";
   const m = model.trim().toLowerCase();
-  if (m.includes("3.5")) return "gemini-3.5-flash-lite";
   if (m.includes("3.8") || m === "gemini-3.8-flash") return "gemini-3.8-flash";
+  if (m.includes("3.6") || m === "gemini-3.6-flash") return "gemini-3.6-flash";
+  if (m.includes("3.5")) return "gemini-3.5-flash-lite";
   if (m.includes("3.1-flash-lite") || m.includes("flash-lite") || m.includes("lite")) return "gemini-3.1-flash-lite";
   if (m.includes("2.5-flash-lite")) return "gemini-2.5-flash-lite";
   if (m.includes("2.5") || m === "gemini-2.5-flash") return "gemini-2.5-flash";
   if (m.includes("3.1-pro") || m.includes("pro")) return "gemini-3.1-pro-preview";
   if (m === "gemini-flash-latest") return "gemini-flash-latest";
-  return "gemini-3.5-flash-lite";
+  return "gemini-3.8-flash";
 }
 
 export function cleanErrorMessage(err: any): string {
@@ -65,7 +66,7 @@ export async function generateContentWithFallback(
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 2
 ): Promise<{ response: any; usedModel: string }> {
-  const fallbackOrder = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-3.8-flash", "gemini-flash-latest", "gemini-3.1-pro-preview"];
+  const fallbackOrder = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview"];
   const candidateModels = [
     primaryModel,
     ...(primaryModel === "gemini-3.5-flash-lite" ? ["gemini-3.5-flash-lite-preview", "gemini-3.1-flash-lite"] : []),
@@ -364,6 +365,8 @@ export async function handleTestModelsLogic(rawKey: string) {
   }
 
   const modelsToTest = [
+    { id: "gemini-3.8-flash", name: "Gemini 3.8 Flash", badge: "Next-Gen Flagship (Animasi Super Pintar)" },
+    { id: "gemini-3.6-flash", name: "Gemini 3.6 Flash", badge: "Pintar, Elegan & Detail Kompleks" },
     { id: "gemini-3.5-flash-lite", name: "Gemini 3.5 Flash Lite", badge: "Next-Gen Pintar & Hemat" },
     { id: "gemini-3.1-flash-lite", name: "Gemini 3.1 Flash Lite", badge: "Super Ringan (RPM Tinggi)" },
     { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", badge: "Stabil & Teruji" },
@@ -993,22 +996,19 @@ ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT,
 ======================================================================
 Kesan 3D bervolume ultra-realistis dibangun melalui sistem pencahayaan studio (Chiaroscuro) yang kokoh dan bebas bug:
 
-[LAYER 1: BAYANGAN KONTAK LANTAI (Breathing Ground Contact Shadow)]:
-- Elips bayangan kontak lantai halus langsung di bawah objek icon di canvas/green screen:
-  const groundY = S * 0.44;
-  const shadowScale = 1 - Math.sin(t * 2) * 0.12;
-  ctx.beginPath();
-  ctx.ellipse(0, groundY, S * 0.38 * shadowScale, S * 0.08 * shadowScale, 0, 0, Math.PI * 2);
-  ctx.fillStyle = isGreenScreen ? 'rgba(0, 30, 0, 0.4)' : 'rgba(0, 0, 0, 0.35)';
-  ctx.fill();
+[CACAT 7: DILARANG MENGGAMBAR BAYANGAN DI BAWAH IKON - STRICT ZERO GROUND SHADOW]:
+- DILARANG KERAS MENGGAMBAR BAYANGAN DI BAWAH IKON (SERTA DILARANG ELIPS BAYANGAN HITAM/HIJAU PADA LANTAI/GREEN SCREEN)!
+- OBJEK IKON WAJIB MELAYANG CLEAN 100% DI ATAS CANVAS / GREEN SCREEN MURNI TANPA ADANYA SHADOW FLUID/ELLIPSE DI LANTAI.
 
-[LAYER 2: KINETIKA MELAYANG & ELEVASI 3D (Floating Bobbing & 3D Pitch/Roll)]:
-- Objek icon melayang anggun naik-turun dan sedikit miring isometrik:
-  const floatY = Math.sin(t * 2) * (S * 0.05);
-  const tiltAngle = Math.cos(t * 1.5) * 0.03;
-  ctx.save();
-  ctx.translate(0, floatY);
-  ctx.rotate(tiltAngle);
+[LAYER 2: KINETIKA BERVARIANSI TINGGI DENGAN TEMA SUBJEK (Dynamic Theme-Matched Kinetics)]:
+- DILARANG SEMUA IKON BERGERAK SAMA! Variasikan kinetika pergerakan sesuai dengan kategori / fungsi ikon:
+  1. Teknologi / AI / Cyber: HUD Laser Scan Sweep di permukaan bodi (yScan = -h*0.4 + (t*120 % (h*0.8))), Glowing Orbital Rings melingkari pusat (0, 0) dengan rotasi continuous 60 FPS, serta LED Status pulse.
+  2. Bisnis / Finansial / Koin: Rotasi Spin Y-Axis 3D berkala (Math.cos(t * 2)), efek kilauan Specular Sheen Diagonal (-w*0.5 + (t*150 % (w*1.5))), serta dynamic counter needle wobble.
+  3. Kesehatan / Medis: Rhythmic Heartbeat Double Pulse scaling (scaleFactor = 1 + (Math.sin(t*5) > 0.4 ? 0.08 : 0)), ayunan ECG waveform, atau DNA helix twist.
+  4. Ecommerce / Shopping: Elastic Spring Bounce berbobot saat dip/apex, tutup kotak hadiah / lid opening micro-motion, atau trolley wheel spin.
+  5. Komunikasi / Social: Ayunan Lonceng Clapper Pendulum (rotate angle = Math.sin(t * 3) * 0.15 rad), serta Sound Wave Ripple expansion (radii meluas dari pusat).
+  6. Pendidikan / Kreatif: Topi Toga Tassel swinging inertia (tasselAngle = Math.cos(t * 2.2) * 0.2 rad), Lensa Kamera Shutter Aperture open/close pulse, atau Atom Bohr orbital path.
+- Semua gerakan HARUS berada di bawah Root Matrix Matrix Single (translate(cx, cy + floatY)), 100% Solid Monolithic tanpa detached parts!
 
 [LAYER 3: CHIAROSCURO VOLUMETRIC BODY GRADIENT (Pencahayaan Studio 45°)]:
 - Permukaan badan utama diisi gradien multi-stop directional 45° dari kiri-atas (-w*0.5, -h*0.5) ke kanan-bawah (w*0.5, h*0.5):
@@ -1234,14 +1234,7 @@ WAJIB gunakan struktur HTML boilerplate berikut:
 ${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, ZERO PARTICLES) ---
     // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW)
     const floatY = Math.sin(t * 2.5) * (S * 0.038);
-    const shadowScale = Math.max(0.65, 1 - (floatY / (S * 0.12)));
-    ctx.save();
-    ctx.translate(cx, cy + S * 0.52);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, S * 0.38 * shadowScale, S * 0.06 * shadowScale, 0, 0, Math.PI * 2);
-    ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
-    ctx.fill();
-    ctx.restore();
+
 
     // 2. ROOT MATRIX TUNGGAL - 3D FLAT ELASTIS, BERBOBOT, & SOLID (100% ZERO DETACHED PARTS):
     const squash = 1 + 0.06 * Math.cos(t * 2.5);
@@ -1462,14 +1455,7 @@ STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
 
     // 1. BAYANGAN LANTAI VOLUMETRIK (GROUND CONTACT SHADOW)
     const floatY = Math.sin(t * 2.4) * (S * 0.038);
-    const shadowScale = Math.max(0.68, 1 - (floatY / (S * 0.14)));
-    ctx.save();
-    ctx.translate(cx, cy + S * 0.52);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, S * 0.38 * shadowScale, S * 0.06 * shadowScale, 0, 0, Math.PI * 2);
-    ${isGreenScreen ? "ctx.fillStyle = 'rgba(0, 40, 0, 0.35)';" : "ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';"}
-    ctx.fill();
-    ctx.restore();
+
 
     // 2. ROOT MATRIX TUNGGAL UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY):
     // WAJIB: SELURUH ELEMEN PENYUSUN OBJEK DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
