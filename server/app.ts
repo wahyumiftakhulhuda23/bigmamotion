@@ -124,23 +124,17 @@ export async function generateContentWithFallback(
           msg.includes("billing");
 
         const isTransient =
-          msg.includes("500") ||
-          msg.includes("503") ||
           msg.includes("504") ||
           msg.includes("502") ||
           msg.includes("timeout") ||
           msg.includes("network") ||
           msg.includes("high demand") ||
-          msg.includes("unavailable") ||
-          msg.includes("overloaded") ||
-          msg.includes("internal");
+          msg.includes("unavailable");
 
-        if (isNotFound || isQuota) {
+        if (isNotFound || isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
+          // Jika model mengalami error 500/overload di datacenter Google, langsung beralih ke model fallback berikutnya tanpa menunda
           break;
-        } else if (isTransient && attempt < allowedAttempts + 1) {
-          await new Promise((res) => setTimeout(res, 800 * attempt));
-          continue;
-        } else if (attempt < allowedAttempts) {
+        } else if (isTransient && attempt < allowedAttempts) {
           await new Promise((res) => setTimeout(res, 500 * attempt));
           continue;
         } else {
@@ -834,8 +828,7 @@ export async function handleGenerateAnimationLogic(body: any) {
 ATURAN MASTER IKON MOTION 3D ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & REALISTIC DEPTH):
 1. ANATOMI VOLUMETRIK 3D REALISTIS (BUKAN SKETSA/KARTUN BIASA):
    - Ikon WAJIB tampak berbobot fisik nyata, berdimensi 2.5D / isometric, memiliki ketebalan material yang solid dan mewah (seperti plastik glossy Apple, logam alloy terpoles, kaca kristal, atau bodi ter-bevel presisi).
-   - DILARANG KERAS bentuk 2D datar, sketsa garis kawat (wireframe), atau potongan geometris mentah tanpa volume!
-   - BAYANGAN LANTAI (GROUND CONTACT SHADOW): Buat elips bayangan kontak di bawah objek yang bernapas secara harmonis selaras dengan osilasi vertikal (floatY).
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI (ZERO GROUND SHADOW): Objek ikon melayang 100% murni dan bersih tanpa elips bayangan di lantai/green screen.
    - PENCAHAYAAN STUDIO 3-TITIK: Key light specular di sudut kiri-atas, bodi gradien kaya 3-4 stop warna, dan ambient occlusion / bayangan lipatan di celah antar komponen.
 2. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - Tampilkan 1 simbol sentral berpresisi tinggi di tengah canvas (cx, cy).
@@ -1277,9 +1270,9 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown apap
         temperature: 0.35,
         maxOutputTokens: 8192,
       };
-      const animThinking = getSmartThinkingConfig(currentModel, 2048);
-      if (animThinking) {
-        animConfig.thinkingConfig = animThinking;
+      if (currentModel.includes("pro") || currentModel.includes("thinking")) {
+        const animThinking = getSmartThinkingConfig(currentModel, 1024);
+        if (animThinking) animConfig.thinkingConfig = animThinking;
       }
       return { contents: systemPrompt, config: animConfig };
     }

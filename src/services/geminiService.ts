@@ -786,8 +786,7 @@ async function generateAnimationDirect(
 ATURAN MASTER IKON MOTION 3D ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & REALISTIC DEPTH):
 1. ANATOMI VOLUMETRIK 3D REALISTIS (BUKAN SKETSA/KARTUN BIASA):
    - Ikon WAJIB tampak berbobot fisik nyata, berdimensi 2.5D / isometric, memiliki ketebalan material yang solid dan mewah (seperti plastik glossy Apple, logam alloy terpoles, kaca kristal, atau bodi ter-bevel presisi).
-   - DILARANG KERAS bentuk 2D datar, sketsa garis kawat (wireframe), atau potongan geometris mentah tanpa volume!
-   - BAYANGAN LANTAI (GROUND CONTACT SHADOW): Buat elips bayangan kontak di bawah objek yang bernapas secara harmonis selaras dengan osilasi vertikal (floatY).
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI (ZERO GROUND SHADOW): Objek ikon melayang 100% murni dan bersih tanpa elips bayangan di lantai/green screen.
    - PENCAHAYAAN STUDIO 3-TITIK: Key light specular di sudut kiri-atas, bodi gradien kaya 3-4 stop warna, dan ambient occlusion / bayangan lipatan di celah antar komponen.
 2. ISOLASI TOTAL & KEBERSIHAN KANVAS:
    - Tampilkan 1 simbol sentral berpresisi tinggi di tengah canvas (cx, cy).
@@ -1241,9 +1240,6 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
         temperature: 0.35,
         maxOutputTokens: 8192,
       };
-      if (currentModel.includes('2.5') || currentModel.includes('3.8') || currentModel.includes('flash') || currentModel.includes('pro')) {
-        directGenConfig.thinkingConfig = { thinkingBudget: 2048 };
-      }
 
       let res = await fetch(url, {
         method: 'POST',
@@ -1253,19 +1249,6 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
           generationConfig: directGenConfig,
         }),
       });
-
-      if (!res.ok && directGenConfig.thinkingConfig) {
-        // Fallback without thinkingConfig if model rejects thinkingBudget 0
-        delete directGenConfig.thinkingConfig;
-        res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: systemPrompt }] }],
-            generationConfig: directGenConfig,
-          }),
-        });
-      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -1333,12 +1316,20 @@ export async function generateSingleAnimationCode(
       // Rotasi API key setiap percobaan untuk bypass rate limit per-key
       const apiKey = getRotatedKey(apiKeys);
 
+      // Model rotasi otomatis jika attempt > 1 untuk mengatasi temporary 500 / overload pada model tertentu
+      let attemptModel: GeminiModel = model || 'gemini-3.8-flash';
+      if (attempt === 2) {
+        attemptModel = (model === 'gemini-3.5-flash-lite' ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash-lite');
+      } else if (attempt >= 3) {
+        attemptModel = 'gemini-2.5-flash';
+      }
+
       // If user provided an API key, try direct client call first for 0-latency
       if (apiKey) {
         try {
           return await generateAnimationDirect(
             apiKey,
-            model,
+            attemptModel,
             promptTopic,
             type,
             subCategory,
@@ -1360,7 +1351,7 @@ export async function generateSingleAnimationCode(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          model: model || 'gemini-2.5-flash',
+          model: attemptModel,
           promptTopic,
           type,
           subCategory,
