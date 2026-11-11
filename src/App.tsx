@@ -609,7 +609,17 @@ export default function App() {
         showToast(`Kendala pada prompt #${i + 1}: ${e.message}`, 'error');
         caughtFailures.push(currentPrompt);
         setFailedPrompts((prev) => [...prev, currentPrompt]);
-        await new Promise((res) => setTimeout(res, 2500));
+
+        // Cek apakah error terkait kuota, rate-limit 429, atau koneksi 500
+        const errMsg = String(e?.message || '').toLowerCase();
+        const isQuotaOrServerIssue = errMsg.includes('500') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted') || errMsg.includes('overload');
+        
+        if (isQuotaOrServerIssue && i < total - 1) {
+          addLog(`[Pendinginan Kuota] Mengaktifkan jeda 10s agar batas kuota Google pulih sebelum prompt #${i + 2}...`, 'warn');
+          await new Promise((res) => setTimeout(res, 10000));
+        } else {
+          await new Promise((res) => setTimeout(res, 3000));
+        }
         continue;
       }
     }
@@ -650,22 +660,49 @@ export default function App() {
       setProgressPercent(Math.round(((i + 1) / total) * 100));
 
       try {
-        const anim = await generateSingleAnimationCode(
-          apiKeys,
-          selectedModel,
-          currentPrompt,
-          currentType,
-          nicheCategory,
-          visualStyle,
-          i + 1,
-          total,
-          undefined,
-          3,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow
-        );
+        // Coba generate dengan model terpilih, jika gagal coba dengan fallback model hemat
+        let anim = null;
+        try {
+          anim = await generateSingleAnimationCode(
+            apiKeys,
+            selectedModel,
+            currentPrompt,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            i + 1,
+            total,
+            undefined,
+            3,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+        } catch (firstErr) {
+          // Jika model utama limit/500, coba otomatis dengan model hemat kuota gemini-3.5-flash-lite
+          if (selectedModel !== 'gemini-3.5-flash-lite') {
+            addLog(`[Auto-Recovery] Mencoba ulang prompt #${i + 1} dengan model hemat (Gemini 3.5 Flash Lite)...`, 'info');
+            anim = await generateSingleAnimationCode(
+              apiKeys,
+              'gemini-3.5-flash-lite',
+              currentPrompt,
+              currentType,
+              nicheCategory,
+              visualStyle,
+              i + 1,
+              total,
+              undefined,
+              2,
+              isGreenScreen,
+              colorMode,
+              motionDynamics,
+              neonGlow
+            );
+          } else {
+            throw firstErr;
+          }
+        }
 
         if (anim) {
           const newAnimItem: AnimationItem = {
@@ -687,7 +724,7 @@ export default function App() {
       } catch (e: any) {
         addLog(`[Masih Kendala] Prompt #${i + 1}: ${e.message}`, 'error');
         remainingFailed.push(currentPrompt);
-        await new Promise((res) => setTimeout(res, 2500));
+        await new Promise((res) => setTimeout(res, 3500));
       }
     }
 
@@ -709,22 +746,47 @@ export default function App() {
     showToast(`Mencoba ulang render animasi #${index + 1}...`, 'info');
 
     try {
-      const anim = await generateSingleAnimationCode(
-        apiKeys,
-        selectedModel,
-        promptText,
-        currentType,
-        nicheCategory,
-        visualStyle,
-        1,
-        1,
-        undefined,
-        3,
-        isGreenScreen,
-        colorMode,
-        motionDynamics,
-        neonGlow
-      );
+      let anim = null;
+      try {
+        anim = await generateSingleAnimationCode(
+          apiKeys,
+          selectedModel,
+          promptText,
+          currentType,
+          nicheCategory,
+          visualStyle,
+          1,
+          1,
+          undefined,
+          3,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
+        );
+      } catch (firstErr) {
+        if (selectedModel !== 'gemini-3.5-flash-lite') {
+          addLog(`[Auto-Recovery] Mencoba ulang prompt #${index + 1} dengan Gemini 3.5 Flash Lite...`, 'info');
+          anim = await generateSingleAnimationCode(
+            apiKeys,
+            'gemini-3.5-flash-lite',
+            promptText,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            1,
+            1,
+            undefined,
+            2,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+        } else {
+          throw firstErr;
+        }
+      }
 
       if (anim) {
         const newAnimItem: AnimationItem = {
@@ -1125,9 +1187,18 @@ export default function App() {
             neonGlow: acc.neonGlow ?? true,
             error: e.message || 'Gagal merender animasi',
           });
-          const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
-          if (j < prompts.length - 1) {
-            await new Promise((res) => setTimeout(res, pacingDelay));
+
+          const errMsg = String(e?.message || '').toLowerCase();
+          const isQuotaOrServerIssue = errMsg.includes('500') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted') || errMsg.includes('overload');
+
+          if (isQuotaOrServerIssue && j < prompts.length - 1) {
+            addLog(`[AutoPilot Cooldown] Mengaktifkan jeda pemulihan 10s agar batas kuota Google pulih sebelum animasi berikutnya...`, 'warn');
+            await new Promise((res) => setTimeout(res, 10000));
+          } else {
+            const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+            if (j < prompts.length - 1) {
+              await new Promise((res) => setTimeout(res, pacingDelay));
+            }
           }
           continue;
         }
@@ -1169,22 +1240,47 @@ export default function App() {
       addLog(`⚡ [Coba Ulang Auto Pilot #${i + 1}/${total} - ${item.accountName}] Memproses "${item.prompt.substring(0, 30)}..."`, 'info');
 
       try {
-        const anim = await generateSingleAnimationCode(
-          apiKeys,
-          selectedModel,
-          item.prompt,
-          item.type,
-          item.subCategory,
-          item.style,
-          i + 1,
-          total,
-          undefined,
-          3,
-          item.isGreenScreen ?? false,
-          item.colorMode ?? 'gradient',
-          item.motionDynamics ?? 'flow',
-          item.neonGlow ?? true
-        );
+        let anim = null;
+        try {
+          anim = await generateSingleAnimationCode(
+            apiKeys,
+            selectedModel,
+            item.prompt,
+            item.type,
+            item.subCategory,
+            item.style,
+            i + 1,
+            total,
+            undefined,
+            3,
+            item.isGreenScreen ?? false,
+            item.colorMode ?? 'gradient',
+            item.motionDynamics ?? 'flow',
+            item.neonGlow ?? true
+          );
+        } catch (firstErr) {
+          if (selectedModel !== 'gemini-3.5-flash-lite') {
+            addLog(`[Auto-Recovery] Mencoba ulang [${item.accountName}] dengan Gemini 3.5 Flash Lite...`, 'info');
+            anim = await generateSingleAnimationCode(
+              apiKeys,
+              'gemini-3.5-flash-lite',
+              item.prompt,
+              item.type,
+              item.subCategory,
+              item.style,
+              i + 1,
+              total,
+              undefined,
+              2,
+              item.isGreenScreen ?? false,
+              item.colorMode ?? 'gradient',
+              item.motionDynamics ?? 'flow',
+              item.neonGlow ?? true
+            );
+          } else {
+            throw firstErr;
+          }
+        }
 
         if (anim) {
           const newAnimItem: AnimationItem = {

@@ -126,7 +126,8 @@ export function sanitizeModel(model?: string): string {
   if (!model) return 'gemini-3.8-flash';
   const m = model.trim().toLowerCase();
   if (m.includes('3.8') || m === 'gemini-3.8-flash') return 'gemini-3.8-flash';
-  if (m.includes('3.6') || m === 'gemini-3.6-flash') return 'gemini-3.6-flash';
+  // Transparent mapping: Google v1beta uses gemini-3.8-flash or gemini-3.5-flash-lite for next-gen flash
+  if (m.includes('3.6') || m === 'gemini-3.6-flash') return 'gemini-3.8-flash';
   if (m.includes('3.5')) return 'gemini-3.5-flash-lite';
   if (m.includes('3.1-flash-lite') || m.includes('flash-lite') || m.includes('lite')) return 'gemini-3.1-flash-lite';
   if (m.includes('2.5-flash-lite')) return 'gemini-2.5-flash-lite';
@@ -136,7 +137,7 @@ export function sanitizeModel(model?: string): string {
   return 'gemini-3.8-flash';
 }
 
-function extractHTML(text: string): string {
+function extractHTML(text: string, isGreenScreen: boolean = false): string {
   let cleanHTML = text;
   const tick3 = String.fromCharCode(96, 96, 96);
   const regex = new RegExp(tick3 + '(?:html)?\\s*([\\s\\S]*?)' + tick3, 'i');
@@ -157,7 +158,40 @@ function extractHTML(text: string): string {
   cleanHTML = cleanHTML
     .replace(new RegExp('^' + tick3 + 'html\\s*', 'i'), '')
     .replace(new RegExp('^' + tick3 + '\\s*'), '')
-    .replace(new RegExp(tick3 + '\\s*$'), '');
+    .replace(new RegExp(tick3 + '\\s*$'), '')
+    .trim();
+
+  const lower = cleanHTML.toLowerCase();
+  const bg = isGreenScreen ? '#00ff00' : '#080c14';
+
+  // Auto-heal: If HTML is missing <!DOCTYPE html> or <html>/<body> wrap, but has <canvas> or <script>
+  if (!lower.includes('<!doctype') || !lower.includes('</html>')) {
+    if (lower.includes('<script') || lower.includes('requestanimationframe') || lower.includes('<canvas')) {
+      let bodyContent = cleanHTML;
+      if (!bodyContent.toLowerCase().includes('</script>')) {
+        bodyContent += '\n  }\n  animate(0);\n</' + 'script>';
+      }
+      if (!bodyContent.toLowerCase().includes('<canvas')) {
+        bodyContent = `<canvas id="canvas"></canvas>\n` + bodyContent;
+      }
+      cleanHTML = `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canvas Animation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: ${bg}; display: flex; align-items: center; justify-content: center; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  ${bodyContent}
+</body>
+</html>`;
+    }
+  }
 
   return cleanHTML.trim();
 }
@@ -780,371 +814,60 @@ async function generateAnimationDirect(
   const catMeta = findCategoryById(subCategory, type);
   const catInfo = catMeta ? `${catMeta.enName} (${catMeta.name}) - ${catMeta.description}` : subCategory;
 
-  let typeInstructions = '';
-  if (type === 'icon') {
-    typeInstructions = `
-ATURAN MASTER IKON MOTION 3D ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT & REALISTIC DEPTH):
-1. ANATOMI VOLUMETRIK 3D REALISTIS (BUKAN SKETSA/KARTUN BIASA):
-   - Ikon WAJIB tampak berbobot fisik nyata, berdimensi 2.5D / isometric, memiliki ketebalan material yang solid dan mewah (seperti plastik glossy Apple, logam alloy terpoles, kaca kristal, atau bodi ter-bevel presisi).
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI (ZERO GROUND SHADOW): Objek ikon melayang 100% murni dan bersih tanpa elips bayangan di lantai/green screen.
-   - PENCAHAYAAN STUDIO 3-TITIK: Key light specular di sudut kiri-atas, bodi gradien kaya 3-4 stop warna, dan ambient occlusion / bayangan lipatan di celah antar komponen.
-2. ISOLASI TOTAL & KEBERSIHAN KANVAS:
-   - Tampilkan 1 simbol sentral berpresisi tinggi di tengah canvas (cx, cy).
-   - DILARANG KERAS memunculkan partikel melayang, debu, bintik-bintik random, serpihan liar, atau aura blur di luar objek utama! Kanvas di sekeliling ikon HARUS 100% bersih.
-3. KINETIKA & INERSIA SEKUNDER REALISTIS 60 FPS:
-   - Gerakan tidak boleh kaku atau monoton: Gabungkan floating harmonis root (±8px) dengan gerakan inersia sekunder (muatan internal berosilasi dengan jeda fase, jarum pengukur bergetar responsif, velg roda berputar mulus, lampu indikator berkedip ritmis).`;
-  } else if (type === 'bg') {
-    typeInstructions = `
-ATURAN MASTER FULL-FRAME BACKGROUND MOTION (STRICT ZERO PARTICLES & CINEMATIC REALISM):
-1. DILARANG KERAS MENGGAMBAR PARTIKEL, DEBU MELAYANG, ATAU BINTIK-BINTIK ACAK:
-   - Visual latar belakang WAJIB 100% BERSIH DARI PARTIKEL/DEBU/NOISE! DILARANG partikel mengambang, bintik stardust, atau serpihan titik-titik liar.
-   - Latar belakang WAJIB berupa karya motion graphics kelas atas: 3-5 lapisan pita gelombang cairan sinusoidal (fluid wave ribbons), lipatan kain sutra mewah (luxury silk caustics), grid perspektif cakrawala 3D bergelombang, atau jaring poligon topografi berkontur yang membentang luas.
-2. CAKUPAN PENUH 100% WIDESCREEN & KEDALAMAN VOLUMETRIK:
-   - Mengisi seluruh canvas secara penuh dari sudut (0, 0) hingga (w, h). Tidak boleh ada ruang mati atau ikon terisolasi di tengah.
-   - Bergerak dengan ritme harmonis linear 60 FPS yang memukau dan bernilai jual tinggi layaknya motion background studio Adobe Stock / Envato Elements.`;
-  }
-
+  const isBackground = type === 'bg';
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  // Always use 100% solid background clear & fill to eliminate any motion trails, ghosting, or smudges
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
-  let motionGuide = '';
-  if (motionDynamics === 'bounce') {
-    motionGuide = `
-PANDUAN GERAKAN BOUNCE & SPRING (ULTRA-REALISTIS ELASTIS 60 FPS):
-- Gunakan rumus fisika elastis (spring dynamics) dengan redaman inersia: 
-  const bounceCycle = Math.sin(t * 3.0);
-  const bounce = Math.abs(bounceCycle);
-  const squash = 1 + 0.16 * (1 - bounce);
-  const stretch = 1 / Math.sqrt(squash);
-  const secondaryInertia = Math.sin(t * 3.0 - 0.45) * (S * 0.04);
-- Seluruh komponen internal berayun elastis mengikuti inersia bodi utama tanpa pernah terlepas dari rangka!`;
-  } else if (motionDynamics === 'orbital') {
-    motionGuide = `
-PANDUAN GERAKAN 3D ORBITAL & GYROSCOPE (KINETIK PRESISI 60 FPS):
-- Simulasikan rotasi 3D multi-cincin dengan kedalaman sumbu z (pseudo-3D):
-  const angle = t * 1.5 + i * (Math.PI * 2 / N);
-  const x = Math.cos(angle) * radiusX;
-  const y = Math.sin(angle) * radiusY * Math.cos(tiltAngle);
-  const z = Math.sin(angle) * Math.sin(tiltAngle);
-  const depthScale = 0.85 + 0.35 * (z + 1) * 0.5;
-  ctx.scale(depthScale, depthScale); 
-  ctx.globalAlpha = 0.55 + 0.45 * (z + 1) * 0.5;
-- Orbit berupa lingkaran elips kontinu tertutup sempurna (ctx.ellipse) tanpa busur patah!`;
-  } else if (motionDynamics === 'morph') {
-    motionGuide = `
-PANDUAN GERAKAN KINETIC MORPHING (ORGANIK HALUS BERBOBOT 3D):
-- Bentuk geometris bertransformasi dinamis antar fase menggunakan kurva lengkung kontinu (bezierCurveTo) dengan osilasi harmonik multi-frekuensi tanpa sudut cacat atau poligon melayang.`;
-  } else if (motionDynamics === 'cyber') {
-    motionGuide = `
-PANDUAN GERAKAN CYBER STEP & HUD TELEMETRY (PRESISI MILITER MODERN):
-- Gerakan berpola kuantisasi tajam terkalibrasi: busur derajat berputar presisi, dial bidik melingkar, laser scanner bolak-balik melintasi area target yang ter-clip rapi (ctx.clip()), dan indikator status pulsa ritmis.`;
-  } else if (motionDynamics === 'mechanical') {
-    motionGuide = `
-PANDUAN GERAKAN MECHANICAL & ARTICULATED (FISIKA 3D PRESISI TANPA RODA GERIGI):
-- DILARANG KERAS MENGGAMBAR RODA GERIGI / GIR BERPUTAR! Gunakan poros engsel beveled berayun dengan redaman fisika alami (damped harmonic oscillation: Math.sin(t * 2.2) * Math.exp(-0.05 * t)), silinder hidrolik mikro bergeser halus, dan pelat sasis 3D yang berartikulasi bertenaga.`;
-  } else {
-    motionGuide = `
-PANDUAN GERAKAN ORGANIC FLOW & 3D FLOATING KINETICS (ELEGAN & BERKELAS):
-- Gabungkan 3 lapis pergerakan kinetik harmonis:
-  1. Root vertical floating: const floatY = Math.sin(t * 2.4) * (S * 0.045);
-  2. Gimbal tilt harmonic: const tilt = Math.cos(t * 1.8) * 0.035;
-  3. Specular sheen cycle: Sapuan kilau diagonal 45 derajat ter-clip (ctx.clip()) setiap periode 2.5s.
-- Objek bergerak elastis, tenang, megah, dan 100% monolithic bersatu padu.`;
-  }
+  const motionDirectives = {
+    bounce: "Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
+    orbital: "Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).",
+    morph: "Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.",
+    cyber: "Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.",
+    mechanical: "Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.",
+    flow: "Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px)."
+  }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
 
-  let styleAndColorGuide = '';
-  if (isGreenScreen || colorMode === 'flat' || !neonGlow) {
-    styleAndColorGuide = `
-PANDUAN WARNA & STYLE: CRISP VECTOR / NO SHADOW BLUR (WAJIB DIPATUHI):
-- ctx.shadowBlur = 0; ctx.shadowColor = 'transparent';
-- DILARANG KERAS menggunakan ctx.shadowBlur atau shadowColor! (Penggunaan shadowBlur pada canvas menghasilkan kotak/persegi halo kotor yang merusak chroma key dan tampilan vektor).
-${colorMode === 'flat' ? '- DILARANG menggunakan createLinearGradient atau createRadialGradient. Gunakan 100% solid hex color (misal: #FF4757, #2ED573, #1E90FF, #FFA502, #FFFFFF, #2F3542, #70A1FF) bergaya Flat Art Vector modern!' : '- Gunakan gradien multi-stop linear (createLinearGradient) solid dan kontur stroke tebal presisi (ctx.lineWidth = 3-4, round join).'}
-- Bentuk garis tepi tajam, tebal terdefinisi, dan bidang warna solid bervolume tanpa efek blur.`;
-  } else {
-    styleAndColorGuide = `
-PANDUAN WARNA & NEON GLOW (AKTIF):
-- Terapkan efek luminescence HANYA pada aksen kecil (LED / laser tipis / garis sirkuit): ctx.shadowBlur = 12; ctx.shadowColor = primaryColor; (DILARANG memberikan shadowBlur pada bodi utama atau background!).
-${colorMode === 'neon' ? '- Palet Neon Cyber: Cyan (#00f3ff), Neon Magenta (#ff007f), Electric Lime (#39ff14), Neon Gold (#ffd700).' : ''}
-${colorMode === 'monochrome' ? '- Palet Monochrome: Putih murni (#ffffff), Slate Silver (#cbd5e1), Graphite (#475569), dengan aksen glow putih kristal.' : ''}
-${colorMode === 'pastel' ? '- Palet Pastel: Soft Lavender (#c4b5fd), Mint (#a7f3d0), Peach (#fdba74), Baby Blue (#93c5fd).' : ''}
-${colorMode === 'luxury' ? '- Palet Luxury: Imperial Gold (#d4af37), Warm Amber (#f59e0b), Champagne (#fef08a), Bronze (#cd7f32).' : ''}
-${colorMode === 'gradient' ? '- Gunakan createLinearGradient dinamis multi-stop yang kaya dan elegan.' : ''}`;
-  }
+  const colorStyleDirective = isGreenScreen
+    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! Dilarang ctx.shadowBlur atau shadowColor transparan yang merusak chroma key. Gunakan warna bodi solid kontras tinggi (Cyan, Gold, Ungu, Oranye, dsb.)."
+    : (neonGlow
+        ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
+        : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
 
-  const greenScreenDirective = isGreenScreen
-    ? `
-MANDATORY GREEN SCREEN CHROMA-KEY RULES:
-- Background kanvas HARUS 100% murni hijau polos (#00ff00).
-- DILARANG KERAS MENGGAMBAR KOTAK WADAH, KARTU LATAR, ROUNDED RECTANGLE CONTAINER, ATAU AURA BACKDROP APAPUN DI KANVAS! Latar hijau #00ff00 di luar objek harus 100% murni tanpa goresan transparan sekecil apapun!
-- DILARANG KERAS ctx.shadowBlur pada green screen! (Gunakan ctx.shadowBlur = 0; ctx.shadowColor = 'transparent').
-- Objek utama HARUS menggunakan warna kontras jelas (Cyan, Gold, Ungu, Putih, Oranye, Merah, Biru). JANGAN gunakan warna hijau #00ff00 pada objek.`
-    : '';
+  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
 
-  const isBackground = type === 'bg';
+PARAMETER PROMPT:
+- Subjek/Topik: "${promptTopic}"
+- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
+- Gaya Visual: ${style} | Mode Warna: ${colorMode}
+- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+${colorStyleDirective}
 
-  const typeSpecificRules = isBackground
-    ? `
-ATURAN MASTER FULL-FRAME BACKGROUND MOTION GRAPHICS (100% EDGE-TO-EDGE, ZERO PARTICLES, ZERO WHITE FLARES & DIVERSE STYLES):
-1. CAKUPAN PENUH 100% SELURUH KANVAS (EDGE-TO-EDGE WIDESCREEN):
-   - Animasi latar belakang WAJIB mengisi SELURUH layar secara penuh dari sudut (0, 0) hingga (w, h).
-   - DILARANG KERAS menggambar icon/simbol terisolasi di tengah layar!
-   - DILARANG menyisakan ruang kosong, tepi mati, atau batas kanvas kosong yang tidak terisi gerakan motion graphics.
+ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
+1. STRICT ZERO GROUND SHADOW (MUTLAK):
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK!
+   - Objek ikon melayang 100% bersih dan murni langsung di atas kanvas / green screen.
+2. 3D MONOLITHIC RIGGING (ZERO DETACHED PARTS):
+   - Seluruh anatomi objek harus menyatu kokoh di bawah 1 koordinat pusat (cx, cy + floatY). Dilarang bagian terlepas, mengambang liar, atau terputus!
+3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
+   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
+   - Berikan Bevel Highlight line 1.5px putih translusen di tepi atas untuk kilau material mewah.
+4. STRICT ZERO RODA GERIGI (NO COGWHEELS):
+   - Dilarang menggambar roda gerigi / gir berputar pada ikon.
+5. STRICT ZERO PARTICLES & ZERO WHITE FLARES:
+   - Dilarang partikel debu melayang, bintik acak, atau flare putih silau yang merusak visual.
+${isBackground ? '6. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
 
-2. STRICT BAN ON PARTICLES / ZERO DUST MOTES (MUTLAK DIPATUHI):
-   - DILARANG KERAS memunculkan bintik partikel, debu melayang, bintang titik-titik liar, partikel emitter, atau serpihan noise pada background!
-   - Seluruh visual harus berupa grafis kontinu studio profesional yang megah dan berkelas tinggi.
-
-3. STRICT BAN ON WHITE LIGHT FLARES & WHITEOUT RADIAL BURSTS (MUTLAK DIPATUHI):
-   - DILARANG KERAS MENGGAMBAR FLARE CAHAYA PUTIH (WHITE FLARE), LINGKARAN RADIAL BURST PUTIH DI TENGAH, SOROTAN LAMPU PUTIH MENYILAU KANVAS, ATAU SAPUAN KABUT PUTIH (WHITEOUT GLARE)!
-   - DILARANG menggunakan gradien putih murni (#FFFFFF atau rgba(255, 255, 255, >0.15)) sebagai pusat sorotan layar atau sumber cahaya besar!
-   - Semua pencahayaan dan gradien atmosferik WAJIB menggunakan warna kromatik bertingkat elegan (misal: deep cyan, royal violet, emerald, rich amber, midnight sapphire, champagne gold, atau obsidian slate) dengan opacity lembut (alpha 0.05 - 0.25) dan transisi halus berkelas tinggi.
-
-4. MINIMALISIR KEMIRIPAN GAYA & DIFERENSIASI TOTAL (ARSITEKTUR VISUAL WAJIB BERBEDA SESUAI BRIEF):
-   Animasi WAJIB mengadopsi salah satu dari 6 arsitektur visual berikut yang paling relevan dengan subjek prompt (JANGAN semua dibuat gelombang biasa):
-   - Arsitektur 1 (Fluid Chromatic Splines): 4-6 pita cairan sinusoidal bergradien kaya yang saling meliuk dengan frekuensi harmonis berbeda dan mode translusen bertumpuk.
-   - Arsitektur 2 (3D Perspective Horizon Grid): Grid perspektif kawat digital membentang ke horizon dengan vanishing point di (cx, cy * 0.45) dan gelombang elevasi undulating pada baris-baris kisi.
-   - Arsitektur 3 (Luxury Silk & Satin Folds): Lipatan kain sutra satin tebal berkilau emas/sampanye/obsidian dengan bayangan volumetrik dramatis (chiaroscuro) dan kilau caustics yang meliuk mewah.
-   - Arsitektur 4 (Topographic Elevation Contours): Garis-garis kontur elevasi topografi bergelombang yang mengalir dinamis melintasi kanvas seperti peta survei geologi modern bergradien.
-   - Arsitektur 5 (Architectural Origami & Faceted Planes): Bidang-bidang poligon isometrik 3D translusen yang bergeser dan berlipat elegan secara pseudo-3D.
-   - Arsitektur 6 (Chromatic Prismatic Caustics): Aliran pita cahaya prisma kromatik halus bersudut lembut (cyan, ungu, dan emas berpadu dengan blending screen translusen rendah) tanpa flare putih silau.
-
-5. 60 FPS SEAMLESS LOOPING & SMOOTH KINETICS:
-   - Waktu t dihitung dari timestamp (t = time * 0.001).
-   - Seluruh rumus gerakan periodik menggunakan fungsi trigonometri harmonis (Math.sin, Math.cos) tanpa sentakan tajam (seamless infinite loop).
-   - TIDAK BOLEH ADA TEKS / HURUF / ANGKA.`
-    : `
-ATURAN MASTER IKON MOTION 60 FPS ULTRA-REALISTIS & BERKELAS TINGGI (ZERO DEFECT, ZERO BUBBLE, ZERO BOX-ABSTRACTION):
-
-======================================================================
-1. LARANGAN MUTLAK ANTI-CACAT (STRICT NEGATIVE PROHIBITIONS - ZERO DEFECT):
-======================================================================
-[CACAT 1: ABSTRAKSI KOTAK TEGAK - STRICT BAN ON VERTICAL BOX ABSTRACTION]:
-- DILARANG KERAS menyederhanakan objek dunia nyata (seperti Topi Toga Wisuda, Lonceng, Model Atom, Trofi, Mikroskop, Mobil, Roket, Kamera) menjadi kotak persegi panjang / rounded rectangle berdiri tegak dengan tangkai/tongkat!
-- Objek WAJIB memiliki bentuk geometris khas aslinya (diamond horizontal untuk topi toga, flared bezier untuk lonceng, 3 elips miring tertutup untuk atom, U-shackle melengkung untuk gembok, dsb.).
-
-[CACAT 2: BOLA KACA WADAH / ENCLOSING CONTAINER BUBBLE - STRICT ZERO BUBBLE]:
-- DILARANG KERAS membungkus icon (seperti model atom Bohr, molekul, bola dunia, gadget, gear, logo) di dalam gelembung bulat transparan besar, orb kaca berkabut (milky sphere), atau kapsul melingkar (ctx.arc(0, 0, S, ...) dengan alpha fill)!
-- Objek harus berdiri sendiri secara telanjang, murni, dan presisi di atas canvas tanpa kubah/gelembung pembungkus yang merusak chroma key dan kejernihan icon!
-
-[CACAT 3: KARTU WADAH / BACKDROP CONTAINER - STRICT ZERO BACKDROP PLATE]:
-- DILARANG KERAS menggambar rounded rectangle transparan, pelat kartu latar, atau kotak container di belakang icon. Kanvas di sekitar icon harus 100% tembus pandang (hijau murni #00ff00 pada greenscreen, gelap solid pada dark mode).
-
-[CACAT 4: LINTASAN CACAT & BAGIAN TERPISAH - ZERO DETACHED PARTS & NO BROKEN ARCS]:
-- Semua lintasan orbit harus elips tertutup kontinu sempurna (ctx.ellipse(...)), dan seluruh komponen penyusun (tassel ke topi toga, roda ke sasis troli, bibir lonceng, dsb.) harus MENYATU FISIK KOKOH tanpa celah udara mengambang!
-
-[CACAT 5: DILARANG MEMBUAT BANGUN BELAH KETUPAT / PERISAI / PELAT ALAS (STRICT ZERO RHOMBUS / ZERO SHIELD CONTAINER)]:
-- DILARANG KERAS MENGGAMBAR BANGUN BELAH KETUPAT (RHOMBUS), DIAMOND, KOTAK ALAS DENGAN BAUT, PERISAI (SHIELD/CREST), ATAU BINGKAI KARTU DI BELAKANG IKON!
-- OBJEK IKON HARUS BERDIRI SENDIRI SECARA MURNI (100% STANDALONE 3D SCULPTED OBJECT) langsung di atas canvas / green screen murni!
-- BUKAN pelatnya yang digambar, melainkan OBJEK IKON ITU SENDIRI (jika Kamera, maka bodi kamera bervolume; jika Lonceng, maka cawan lonceng berlekuk; jika Mikrofon, maka kapsul & stand mikrofon)!
-
-[CACAT 6: DILARANG EKSTRUSI 6 SISI MANUAL YANG CACAT (ZERO BROKEN 3D POLYGON MESH)]:
-- DILARANG mencoba menghitung poligon isometrik 6 sisi (depan-belakang-kanan-kiri-atas-bawah) secara manual dengan offset vertex silang yang menghasilkan garis patah, poligon menindih tak beraturan, atau bentuk terdistorsi!
-- Bentuk siluet objek WAJIB menggunakan kurva native 2D Canvas yang mulus dan presisi (roundRect, bezierCurveTo, quadraticCurveTo, arc, ellipse) sehingga BEBAS CACAT STRUKTUR 100%.
-
-======================================================================
-2. MASTER ULTRA-REALISTIC CHIAROSCURO & VOLUMETRIC BLUEPRINT (ZERO DEFECT & BUG-FREE 2D CANVAS):
-======================================================================
-Kesan 3D bervolume ultra-realistis dibangun melalui sistem pencahayaan studio (Chiaroscuro) yang kokoh dan bebas bug:
-
-[CACAT 7: DILARANG MENGGAMBAR BAYANGAN DI BAWAH IKON - STRICT ZERO GROUND SHADOW]:
-- DILARANG KERAS MENGGAMBAR BAYANGAN DI BAWAH IKON (SERTA DILARANG ELIPS BAYANGAN HITAM/HIJAU PADA LANTAI/GREEN SCREEN)!
-- OBJEK IKON WAJIB MELAYANG CLEAN 100% DI ATAS CANVAS / GREEN SCREEN MURNI TANPA ADANYA SHADOW FLUID/ELLIPSE DI LANTAI.
-
-[LAYER 2: KINETIKA BERVARIANSI TINGGI DENGAN TEMA SUBJEK (Dynamic Theme-Matched Kinetics)]:
-- DILARANG SEMUA IKON BERGERAK SAMA! Variasikan kinetika pergerakan sesuai dengan kategori / fungsi ikon:
-  1. Teknologi / AI / Cyber: HUD Laser Scan Sweep di permukaan bodi (yScan = -h*0.4 + (t*120 % (h*0.8))), Glowing Orbital Rings melingkari pusat (0, 0) dengan rotasi continuous 60 FPS, serta LED Status pulse.
-  2. Bisnis / Finansial / Koin: Rotasi Spin Y-Axis 3D berkala (Math.cos(t * 2)), efek kilauan Specular Sheen Diagonal (-w*0.5 + (t*150 % (w*1.5))), serta dynamic counter needle wobble.
-  3. Kesehatan / Medis: Rhythmic Heartbeat Double Pulse scaling (scaleFactor = 1 + (Math.sin(t*5) > 0.4 ? 0.08 : 0)), ayunan ECG waveform, atau DNA helix twist.
-  4. Ecommerce / Shopping: Elastic Spring Bounce berbobot saat dip/apex, tutup kotak hadiah / lid opening micro-motion, atau trolley wheel spin.
-  5. Komunikasi / Social: Ayunan Lonceng Clapper Pendulum (rotate angle = Math.sin(t * 3) * 0.15 rad), serta Sound Wave Ripple expansion (radii meluas dari pusat).
-  6. Pendidikan / Kreatif: Topi Toga Tassel swinging inertia (tasselAngle = Math.cos(t * 2.2) * 0.2 rad), Lensa Kamera Shutter Aperture open/close pulse, atau Atom Bohr orbital path.
-- Semua gerakan HARUS berada di bawah Root Matrix Matrix Single (translate(cx, cy + floatY)), 100% Solid Monolithic tanpa detached parts!
-
-[LAYER 3: CHIAROSCURO VOLUMETRIC BODY GRADIENT (Pencahayaan Studio 45°)]:
-- Permukaan badan utama diisi gradien multi-stop directional 45° dari kiri-atas (-w*0.5, -h*0.5) ke kanan-bawah (w*0.5, h*0.5):
-  - Stop 0.0: Key-light highlight (warna bodi + 35% tint putih cerah)
-  - Stop 0.25: Warna primer solid cemerlang
-  - Stop 0.70: Nada midtone dalam
-  - Stop 1.0: Bayangan ambien gelap pekat (-45% luminance, misal navy/dark slate/deep bronze)
-
-[LAYER 4: CRISP SPECULAR BEVEL HIGHLIGHT RAILS (Chamfer Tepi 3D 1.5–2px)]:
-- Tepi atas dan kiri bodi yang menghadap sumber cahaya diberi stroke tipis 1.5–2px warna putih transparan (rgba(255, 255, 255, 0.65) memudar ke 0.15) untuk memberikan efek chamfer tepi 3D yang sangat tajam dan berkilau mewah.
-
-[LAYER 5: AMBIENT OCCLUSION CREASES & UNDER-RIM SHADOW]:
-- Garis sambungan nat dan batas bawah bodi diberi stroke bayangan tipis 1.5px (rgba(0, 0, 0, 0.4)) untuk memberikan ilusi kedalaman fisik nyata tanpa perlu poligon ekstrusi terpisah.
-
-[LAYER 6: RADIAL SPECULAR SHADING PADA ELEMEN BULAT / SILINDER]:
-- Pada komponen bulat (lensa kamera, tombol, bola clapper, kubah mic), gunakan ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.05, 0, 0, r) untuk memberikan efek cembung 3D instan yang bebas cacat!
-ctx.restore();
-
-======================================================================
-3. SEMANTIC GEOMETRIC BLUEPRINT COMPENDIUM (RESEP SUBJEK STANDALONE):
-======================================================================
-Gunakan resep subjek berikut bila prompt meminta objek spesifik ini (SEMUANYA STANDALONE TANPA BELAH KETUPAT/SHIELD):
-
-[A. TOPI TOGA WISUDA (ACADEMIC GRADUATION CAP - ZERO RHOMBUS PLATFORM)]:
-1. Papan Persegi Isometrik Atas (Isometric Top Mortarboard):
-   Papan atas berbentuk jajaran genjang horizontal isometrik (boardW = S * 0.44, boardH = S * 0.14, boardY = -S * 0.12).
-   Gunakan gradien gelap berkilau (capGrad), bevel stroke 1.5px di tepi atas, dan bibir rim gelap tebal di bagian bawah. DILARANG menggambar pelat diamond terpisah di belakang topi!
-2. Kubah Bodi Topi (Skull Cap Dome):
-   Menempel langsung di bawah papan tengah tanpa celah dengan kurva quadraticCurveTo mulus.
-3. Kancing Tengah & Tassel Sutra Menjuntai (Center Button & Silk Tassel):
-   Kancing emas bulat di tengah, tali kuning meliuk ke kanan lalu menjuntai ke bawah dengan ayunan pendulum lembut 60 FPS (swingTassel).
-
-[B. MODEL ATOM BOHR / QUANTUM ATOM (STRICT ZERO ENCLOSING BUBBLES)]:
-1. TANPA BOLA WADAH: DILARANG keras menggambar lingkaran/bola kaca transparan pembungkus!
-2. Inti Atom Bervolume 3D (Glowing Nucleus):
-   Bola pejal di pusat (0, 0) dengan gradien radial 3D (highlight di kiri atas):
-   const nucGrad = ctx.createRadialGradient(-4, -4, 2, 0, 0, S * 0.13);
-   nucGrad.addColorStop(0, '#ffffff'); nucGrad.addColorStop(0.3, '#38bdf8'); nucGrad.addColorStop(1, '#0284c7');
-   ctx.beginPath(); ctx.arc(0, 0, S * 0.11, 0, Math.PI * 2); ctx.fillStyle = nucGrad; ctx.fill();
-3. Tiga Orbit Elips Tertutup 3D Kontinu (3 Tilted 3D Closed Ellipses):
-   Tiga cincin orbit diputar pada sudut 0, Math.PI/3 (60°), dan -Math.PI/3 (-60°):
-   const rx = S * 0.44; const ry = S * 0.14;
-   [0, Math.PI / 3, -Math.PI / 3].forEach((ang, idx) => {
-     ctx.save();
-     ctx.rotate(ang);
-     ctx.beginPath();
-     ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); // ELIPS KONTINU PENUH TERTUTUP (BUKAN BUSUR PUTUS!)
-     ctx.lineWidth = 3.5;
-     ctx.strokeStyle = idx === 0 ? 'rgba(56, 189, 248, 0.8)' : idx === 1 ? 'rgba(168, 85, 247, 0.8)' : 'rgba(236, 72, 153, 0.8)';
-     ctx.stroke();
-     // Elektron padat 3D mengorbit 60 FPS:
-     const eSpeed = t * 2.2 + idx * (Math.PI * 2 / 3);
-     const ex = Math.cos(eSpeed) * rx;
-     const ey = Math.sin(eSpeed) * ry;
-     const depthScale = 1 + Math.sin(eSpeed) * 0.35; // Membesar saat di depan
-     ctx.beginPath();
-     ctx.arc(ex, ey, 6.5 * depthScale, 0, Math.PI * 2);
-     ctx.fillStyle = '#ffffff'; ctx.fill();
-     ctx.restore();
-   });
-
-[C. LONCENG NOTIFIKASI / BRASS ALERT BELL]:
-1. TANPA KOTAK / TANPA LOLLIPOP: Lonceng memiliki bentuk cawan akustik flared yang melengkung indah!
-2. Cincin Gantungan Atas (Hanger Loop):
-   ctx.beginPath(); ctx.arc(0, -S * 0.36, 12, 0, Math.PI * 2); ctx.lineWidth = 4; ctx.strokeStyle = '#d97706'; ctx.stroke();
-3. Badan Cawan Akustik Flared (Acoustic Bell Cup):
-   const lipW = S * 0.32; const lipY = S * 0.22; const waistY = -S * 0.24;
-   ctx.beginPath();
-   ctx.moveTo(-lipW, lipY);
-   ctx.bezierCurveTo(-lipW * 0.85, 0, -S * 0.14, waistY, 0, waistY);
-   ctx.bezierCurveTo(S * 0.14, waistY, lipW * 0.85, 0, lipW, lipY);
-   ctx.bezierCurveTo(lipW * 0.5, lipY + 12, -lipW * 0.5, lipY + 12, -lipW, lipY);
-   ctx.closePath();
-   ctx.fillStyle = bellGrad; ctx.fill();
-4. Bibir Flens Bawah 3D (Beveled Rim Lip Ellipse):
-   ctx.beginPath(); ctx.ellipse(0, lipY, lipW, 10, 0, 0, Math.PI * 2); ctx.fillStyle = '#b45309'; ctx.fill();
-5. Bandul Pemukul Berayun (Internal Clapper Pendulum):
-   const clapperSwing = Math.sin(t * 3.8) * (S * 0.08);
-   ctx.beginPath(); ctx.arc(clapperSwing, lipY + 10, 11, 0, Math.PI * 2); ctx.fillStyle = '#78350f'; ctx.fill();
-
-[D. TROFI JUARA (CHAMPIONSHIP TROPHY CUP)]:
-Cawan piala meliuk cembung flared, 2 pegangan kuping telinga simetris melengkung kokoh di kiri-kanan, pilar batang berundak, dan bantalan marmer kubus 3D di bawahnya.
-
-[E. SHOPPING CART / TROLI BELANJA]:
-Sasis tubular horizontal di bawah (y = S * 0.18); Keranjang bervolume tebal menempel LANGSUNG menindih rapat di atas sasis dari y = -S * 0.22 sampai y = S * 0.18 (dasar keranjang menyentuh persis sasis tanpa celah!); Pegangan/handle berakar langsung dari bibir atas kiri keranjang; Roda terpasang menempel pada poros sasis bawah (-wheelX, axleY) dan (+wheelX, axleY).
-
-[F. BUKU TERBUKA (OPEN ENCYCLOPEDIA / BOOK)]:
-Punggung buku tebal di tengah (0, S * 0.15). Dua sayap lembaran kertas kiri dan kanan melengkung anggun menggunakan kurva sinusoidal bergelombang halus dengan halaman tipis yang membalik secara periodik.
-
-[G. GEMBOK KEAMANAN (SECURITY PADLOCK)]:
-Badan balok chamfered 3D di bawah (y = 0 hingga y = S * 0.28). Leher besi pengait (U-shackle) berbentuk busur tebal setengah lingkaran yang kedua ujung kakinya MENANCAP LANGSUNG KE DALAM DUA LUBANG di pelat atas bodi gembok.
-
-[H. KAMERA PROFESIONAL 3D (STANDALONE 3D CAMERA - ZERO CONTAINER)]:
-1. Bodi Utama Balok 3D Chamfered (Chunky 3D Camera Body):
-   Bodi kamera tebal mandiri (w = S * 0.52, h = S * 0.34) dengan dinding ekstrusi lateral gelap di kanan-bawah:
-   ctx.beginPath(); ctx.roundRect(-w * 0.5, -h * 0.35, w, h, 14); ctx.fillStyle = cameraBodyGrad; ctx.fill();
-2. Lensa Silinder Bertingkat 3D (Stepped Concentric Cylindrical Lens):
-   Cincin laras lensa timbul ke depan di tengah bodi:
-   const lensR = S * 0.17;
-   ctx.beginPath(); ctx.arc(0, 0, lensR, 0, Math.PI * 2); ctx.fillStyle = '#1e293b'; ctx.fill();
-   ctx.beginPath(); ctx.arc(0, 0, lensR * 0.72, 0, Math.PI * 2); ctx.fillStyle = lensGlassGrad; ctx.fill();
-3. Pentaprisma Atas & Tombol Shutter (Top Pentaprism & Spring Shutter Button):
-   Tonjolan pentaprisma trapesium di atas bodi tengah, tombol shutter silinder di kiri-atas yang menekan halus secara periodik, dan lampu LED indikator merah merekah lembut.
-
-[I. MIKROFON STUDIO 3D (STANDALONE 3D STUDIO MICROPHONE - ZERO CONTAINER)]:
-1. Kapsul Silinder Kisi Mesh 3D (Cylindrical Wire Mesh Capsule):
-   Kapsul silinder atas (w = S * 0.22, h = S * 0.30) dengan kubah busur di atas, tekstur kisi kawat melengkung halus, dan cincin shock-mount beveled di bawahnya.
-2. Tiang Stand & Plat Kaki Berat (Heavy Metallic Stand Base):
-   Tiang logam vertikal menghubungkan kapsul ke piringan alas kaki bulat berbobot di dasar kanvas, menghasilkan bayangan kontak lantai elips yang solid.
-
-======================================================================
-4. ARSITEKTUR 3D VOLUMETRIK & CHIAROSCURO REALISTIS:
-======================================================================
-Bentuk objek WAJIB mengadopsi gaya 3D volumetrik profesional berkelas tinggi (seperti microstock 3D vector):
-- Bidang Atas (Top Plane): Menghadap key light studio, diwarnai dengan gradien terang atau hex cerah (+20% tint).
-- Bidang Muka (Front Facade): Warna midtone solid utama yang kaya, padat, dan berbobot.
-- Bidang Bawah / Samping (Underside / Shadow Plane): Bayangan ambien dalam (Ambient Occlusion Shadow), diwarnai dengan nada gelap berbobot (-35% hingga -45% dark shade) untuk menciptakan ilusi 3D volumetrik seketika!
-- Bevel Highlight Rails: Garis lengkung tipis 1.5–2px warna putih translusen (rgba(255, 255, 255, 0.5)) di tepian atas bodi memberikan pantulan kilau material premium.
-- Crevice Seam Shadows: Garis celah bayangan gelap 1–2px (rgba(0, 0, 0, 0.35)) di sambungan nat antar komponen.
-
-======================================================================
-5. KINETIKA ELASTIS 60 FPS (SQUASH-AND-STRETCH & INERSIA SEKUNDER):
-======================================================================
-- Osilasi vertikal elastis: Objek sedikit membal pipih (squash) saat melayang ke bawah dan meregang (stretch) saat melayang naik menggunakan rasio spring:
-  const squash = 1 + 0.06 * Math.cos(t * 2.5);
-  const stretch = 1 / Math.sqrt(squash);
-- Inersia Sekunder (Secondary Spring Damping): Muatan internal atau elemen aksesoris berayun dengan fase redaman alami (Math.sin(t * 2.5 - 0.45) * 4px), membuat animasi terasa elastis, berbobot, dan hidup!
-- Artikulasi Struktural Presisi: Engsel, silinder geser, atau indikator status beroperasi dengan pergerakan terkalibrasi tanpa sentakan.
-
-======================================================================
-6. MUTLAK: ZERO-GLARE OVERFLOW & ZERO BACKGROUND BOX:
-======================================================================
-- DILARANG KERAS menggambar kotak wadah, kartu latar, rounded rectangle background, bangun belah ketupat, atau aura plate di belakang icon! Kanvas di sekeliling icon harus 100% bersih tanpa coretan transparan apapun.
-- DILARANG KERAS membuat lingkaran kilau putih raksasa / radial burst / whiteout flash!
-- Efek kilau (specular gleam / light sweep) WAJIB 100% DI-CLIP di dalam siluet bentuk badan icon.
-
-======================================================================
-7. LARANGAN TOTAL RODA GERIGI PADA SELURUH ANIMASI IKON (STRICT ZERO GEARS / ZERO COGWHEELS):
-======================================================================
-- DILARANG KERAS MENGGAMBAR RODA GERIGI, GIR BERPUTAR, ATAU SPROCKET PADA ANIMASI IKON!
-- Gerigi/gir seringkali muncul tanpa esensi dan merusak nilai estetika ikon. Hilangkan roda gerigi 100% dari seluruh ikon (dompet, brankas, kartu kredit, grafik pertumbuhan, smartphone, buku, roket, dll.).
-- Gantilah dengan detail 3D isometrik yang bermakna dan berkelas modern: pelat bodi beveled chamfered, tombol keypad digital, kunci baut kokoh, engsel elegan, chip sirkuit terukir, atau indikator status LED lembut.
-
-======================================================================
-8. PRESISI 3D VOLUMETRIK 6 SISI (FRONT, BACK, LEFT, RIGHT, TOP, BOTTOM):
-======================================================================
-- Setiap objek icon WAJIB memiliki konstruksi 3D isometrik yang memperlihatkan presisi penuh dari segala sisi (permukaan atas/top yang diterangi key light, fasad depan/front yang kaya warna midtone, sisi kiri/kanan lateral yang terbayang, sisi bawah/bottom dengan ambient occlusion, dan struktur belakang yang menyatu kokoh).
-- DILARANG Keras objek pipih 2D, bentuk tanpa sisi, atau bagian mengambang/terlepas.`;
-
-  const systemPrompt = `Anda adalah Lead HTML5 Motion Designer & Master Computer Vision Artist (Microstock & Lottie Specialist).
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BERMAKNA SEMANTIK TINGGI, BENTUK AKURAT SESUAI PROMPT, dan 100% BEBAS CACAT.
-
-PARAMETER TERPILIH:
-- Subjek/Prompt: "${promptTopic}"
-- Tipe Animasi: ${String(type).toUpperCase()} ${isBackground ? '(FULL-FRAME MOTION BACKGROUND)' : '(CENTRAL RIGGED ICON)'}
-- Kategori Microstock: ${catInfo}
-- Gaya Visual: ${style}
-- Mode Warna: ${colorMode.toUpperCase()}
-- Status Neon Glow: ${neonGlow ? 'AKTIF (Luminescent Glow)' : 'NONAKTIF (Flat / Crisp Edges Tanpa Blur)'}
-- Gerakan: KINETIC 60 FPS LINEAR (Selaras & terintegrasi dengan deskripsi Prompt)
-${isGreenScreen ? '- Mode: Pure Green Screen #00FF00 (Chroma Key)' : ''}
-
-${typeInstructions}
-${motionGuide}
-${styleAndColorGuide}
-${greenScreenDirective}
-
-${typeSpecificRules}
-
-WAJIB gunakan struktur HTML boilerplate berikut:
-
+WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
 <meta charset="UTF-8">
 <style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: ${bgColor}; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; width: 100%; height: 100%; }
 </style>
-<script>
-  window.onerror = function(msg, url, line) {
-      document.body.innerHTML += '<div id="err">Render Warning: ' + msg + '</div>';
-  };
-</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -1152,7 +875,6 @@ WAJIB gunakan struktur HTML boilerplate berikut:
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
   let w, h, cx, cy, S;
-  
   function resize() {
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
@@ -1163,69 +885,31 @@ WAJIB gunakan struktur HTML boilerplate berikut:
   window.addEventListener('resize', resize);
   resize();
 
-  // --- UNIVERSAL SAFE FALLBACK GRADIENTS & CONSTANTS (PREVENTS ReferenceError) ---
-  const darkTone = '#0f172a';
-  const lightTone = '#38bdf8';
-  const primaryColor = '#3b82f6';
-  const secondaryColor = '#8b5cf6';
-  const accentColor = '#f59e0b';
-  const capGrad = ctx.createLinearGradient(-100, -100, 100, 100);
-  capGrad.addColorStop(0, '#1e293b'); capGrad.addColorStop(1, '#0f172a');
-  const bellGrad = ctx.createLinearGradient(-100, -100, 100, 100);
-  bellGrad.addColorStop(0, '#fbbf24'); bellGrad.addColorStop(1, '#d97706');
-
-  // --- INISIALISASI ELEMEN ---
-
   function animate(time) {
     const t = time * 0.001;
     ctx.clearRect(0, 0, w, h);
     ctx.fillStyle = ${clearFill};
     ctx.fillRect(0, 0, w, h);
 
-${isBackground ? `    // --- FULL-FRAME MOTION BACKGROUND LAYER (100% COVERAGE, ZERO PARTICLES) ---
-    // (Render edge-to-edge mathematical motion graphics across (0, 0) to (w, h))` : `    // 1. BAYANGAN LANTAI REALISTIS (GROUND CONTACT SHADOW)
-    const floatY = Math.sin(t * 2.5) * (S * 0.038);
-
-
-    // 2. ROOT MATRIX TUNGGAL - 3D FLAT ELASTIS, BERBOBOT, & SOLID (100% ZERO DETACHED PARTS):
-    const squash = 1 + 0.06 * Math.cos(t * 2.5);
-    const stretch = 1 / Math.sqrt(squash);
+    // Kinetika 60 FPS presisi (Root Floating & Chiaroscuro 3D - TANPA BAYANGAN DI BAWAH OBJEK)
+    ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
     ctx.save();
     ctx.translate(cx, cy + floatY);
-    ctx.rotate(Math.sin(t * 1.8) * 0.025);
-    ctx.scale(squash, stretch); // Kinetika elastis squash-and-stretch alami
-
-    // [GAMBARKAN SELURUH ANATOMI 3D FLAT IKON MENYATU KOKOH DI SINI (SEMUA KOORDINAT RELATIF TERHADAP (0, 0))]:
-    // - PATUHI BENTUK GEOMETRIS ASLI SESUAI SUBJEK (Gunakan resep Bagian 2 di atas: Topi Toga = Diamond Rhombus; Atom Bohr = 3 Tilted Closed Ellipses TANPA outer glass bubble; Lonceng = Flared Bezier Bell Lip)
-    // - DILARANG KERAS MENGABSTRAKSI MENJADI KOTAK TEGAK (STRICT ZERO VERTICAL RECTANGLES)!
-    // - DILARANG KERAS BOLA KACA PEMBUNGKUS / ENCLOSING CONTAINER BUBBLES!
-    // - DILARANG KERAS KARTU CONTAINER / BACKDROP PLATES!
-    // - BIDANG ATAS (Top Plane): Warna terang (+20% highlight / key light specular)
-    // - BIDANG DEPAN (Front Facade): Warna midtone solid utama yang kaya
-    // - BIDANG BAWAH/SAMPING (Underside Shadow): Warna gelap (-35% ambient occlusion chiaroscuro)
-    // - BEVEL HIGHLIGHT RAILS: Garis 1.5px putih translusen (rgba(255, 255, 255, 0.45)) di tepi atas
-    // - INERSIA SEKUNDER: Muatan/isi berayun elastis dengan jeda fase (Math.sin(t * 2.5 - 0.45) * 4)
-    // - DILARANG KERAS RODA GERIGI / GIR: Fokus pada bentuk 3D isometrik asli yang solid dan elegan
-    // - SPECULAR GLEAM: Garis kilau diagonal 45 derajat di-clip di dalam bodi (ctx.clip())
-
+    // [Gambar bentuk 3D Monolithic subjek "${promptTopic}" dengan Chiaroscuro 45° & Bevel Rail di sini]
     ctx.restore();`}
 
     requestAnimationFrame(animate);
   }
-  animate(0);
+  requestAnimationFrame(animate);
 </script>
 </body>
-</html>
-
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
+</html>`;
 
   const primaryModel = sanitizeModel(model);
+  // Cukup 2 model: model utama pilihan, dan jika gagal/limit langsung ke model hemat kuota tercepat
   const candidateModels = [
     primaryModel,
-    ...(primaryModel === 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite-preview', 'gemini-3.1-flash-lite'] : []),
-    ...['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview'].filter(
-      (m) => m !== primaryModel
-    ),
+    primaryModel !== 'gemini-3.5-flash-lite' ? 'gemini-3.5-flash-lite' : 'gemini-2.5-flash',
   ];
 
   let lastDirectError: any = null;
@@ -1257,15 +941,17 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau markdown lainnya:`;
 
       const data = await res.json();
       let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let cleanHTML = extractHTML(rawText);
+      let cleanHTML = extractHTML(rawText, isGreenScreen);
 
       if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-        if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
+        if (cleanHTML.toLowerCase().includes('requestanimationframe') || cleanHTML.toLowerCase().includes('<canvas') || cleanHTML.toLowerCase().includes('function animate')) {
           rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-          cleanHTML = extractHTML(rawText);
-        } else {
-          throw new Error('Kode dari AI terpotong sebelum selesai');
+          cleanHTML = extractHTML(rawText, isGreenScreen);
         }
+      }
+
+      if (!cleanHTML || (!cleanHTML.toLowerCase().includes('<script') && !cleanHTML.toLowerCase().includes('<canvas'))) {
+        throw new Error('Kode dari AI belum lengkap');
       }
 
       return {
