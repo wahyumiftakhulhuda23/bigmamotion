@@ -226,9 +226,15 @@ export function parseSafeBody(req: Request | any): any {
 
 // Logic for testing a single API key with target model support and resilient diagnostics
 export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: string) {
-  const key = (rawKey || "").trim();
-  const maskedKey =
-    key.length > 10
+  let key = (rawKey || "").trim();
+  const isDefaultOrSystem = !key || key.toLowerCase() === "default" || key.toLowerCase() === "system";
+  if (isDefaultOrSystem && process.env.GEMINI_API_KEY) {
+    key = process.env.GEMINI_API_KEY.trim();
+  }
+
+  const maskedKey = (isDefaultOrSystem && process.env.GEMINI_API_KEY)
+    ? "Server System Key (Aktif)"
+    : key.length > 10
       ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}`
       : key || "(kosong)";
   const start = Date.now();
@@ -384,7 +390,10 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
 
 // Logic for testing all models compatibility with an API key
 export async function handleTestModelsLogic(rawKey: string) {
-  const key = (rawKey || "").trim();
+  let key = (rawKey || "").trim();
+  if ((!key || key.toLowerCase() === "default" || key.toLowerCase() === "system") && process.env.GEMINI_API_KEY) {
+    key = process.env.GEMINI_API_KEY.trim();
+  }
   if (!key) {
     return {
       success: false,
@@ -994,6 +1003,131 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
   };
 }
 
+// Server-side streaming endpoint for real-time animation code generation via Server-Sent Events (SSE)
+export async function handleStreamAnimationLogic(body: any, res: Response) {
+  const {
+    apiKey,
+    model,
+    promptTopic,
+    type = "icon",
+    subCategory = "teknologi",
+    style = "minimalist",
+    index = 1,
+    total = 1,
+    isGreenScreen = false,
+    colorMode = "gradient",
+    motionDynamics = "flow",
+    neonGlow = true,
+  } = body;
+
+  if (!promptTopic) {
+    res.status(400).json({ error: "Prompt topic wajib diisi" });
+    return;
+  }
+
+  const ai = getClient(apiKey);
+  const targetModel = sanitizeModel(model);
+  const isBackground = type === 'bg';
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+
+  const motionDirectives = {
+    bounce: "Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
+    orbital: "Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).",
+    morph: "Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.",
+    cyber: "Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.",
+    mechanical: "Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.",
+    flow: "Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px)."
+  }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
+
+  const colorStyleDirective = isGreenScreen
+    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! Dilarang ctx.shadowBlur atau shadowColor transparan yang merusak chroma key. Gunakan warna bodi solid kontras tinggi (Cyan, Gold, Ungu, Oranye, dsb.)."
+    : (neonGlow
+        ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
+        : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
+
+  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
+
+PARAMETER PROMPT:
+- Subjek/Topik: "${promptTopic}"
+- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
+- Gaya Visual: ${style} | Mode Warna: ${colorMode}
+- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+${colorStyleDirective}
+
+ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
+1. STRICT ZERO GROUND SHADOW (MUTLAK):
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK!
+   - Objek ikon melayang 100% bersih dan murni langsung di atas kanvas / green screen.
+2. 3D MONOLITHIC RIGGING (ZERO DETACHED PARTS):
+   - Seluruh anatomi objek harus menyatu kokoh di bawah 1 koordinat pusat (cx, cy + floatY). Dilarang bagian terlepas, mengambang liar, atau terputus!
+3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
+   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
+   - Berikan Bevel Highlight line 1.5px putih translusen di tepi atas untuk kilau material mewah.
+4. STRICT ZERO RODA GERIGI (NO COGWHEELS):
+   - Dilarang menggambar roda gerigi / gir berputar pada ikon.
+5. STRICT ZERO PARTICLES & ZERO WHITE FLARES:
+   - Dilarang partikel debu melayang, bintik acak, atau flare putih silau yang merusak visual.
+${isBackground ? '6. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
+
+WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  try {
+    const animConfig: any = {
+      temperature: 0.35,
+      maxOutputTokens: 8192,
+    };
+    if (targetModel.includes("pro") || targetModel.includes("thinking")) {
+      const animThinking = getSmartThinkingConfig(targetModel, 1024);
+      if (animThinking) animConfig.thinkingConfig = animThinking;
+    }
+
+    const responseStream = await ai.models.generateContentStream({
+      model: targetModel,
+      contents: systemPrompt,
+      config: animConfig,
+    });
+
+    let fullText = "";
+    for await (const chunk of responseStream) {
+      const text = chunk.text || "";
+      fullText += text;
+      res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
+    }
+
+    let cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
+    if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
+      if (cleanHTML.toLowerCase().includes('requestanimationframe') || cleanHTML.toLowerCase().includes('<canvas') || cleanHTML.toLowerCase().includes('function animate')) {
+        fullText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
+        cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({
+      done: true,
+      id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+      title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+      type,
+      style,
+      subCategory,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      html: cleanHTML,
+      isGreenScreen,
+    })}\n\n`);
+    res.end();
+  } catch (err: any) {
+    res.write(`data: ${JSON.stringify({ error: cleanErrorMessage(err) || "Gagal streaming animasi" })}\n\n`);
+    res.end();
+  }
+}
+
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.
 
 // Logic for Image to Motion (AI Multimodal Vision -> Pure Procedural Canvas 2D Vector Re-creation)
@@ -1520,6 +1654,25 @@ export function createApiRouter(): Router {
   };
   router.post("/gemini/generate-animation", generateAnimationHandler);
   router.post("/api/gemini/generate-animation", generateAnimationHandler);
+
+  // Stream Single HTML5 Animation Code (Server-Sent Events)
+  const streamAnimationHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      await handleStreamAnimationLogic(body, res);
+    } catch (err: any) {
+      console.warn("[StreamAnimation] Error:", cleanErrorMessage(err));
+      if (!res.headersSent) {
+        res.status(200).json({
+          success: false,
+          error: cleanErrorMessage(err) || "Gagal streaming animasi",
+          html: "",
+        });
+      }
+    }
+  };
+  router.post("/gemini/stream-animation", streamAnimationHandler);
+  router.post("/api/gemini/stream-animation", streamAnimationHandler);
 
   // Generate Image to Motion (Special AI Vision)
   const imageToMotionHandler = async (req: Request, res: Response) => {

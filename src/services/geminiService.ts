@@ -231,81 +231,7 @@ export async function testSingleApiKey(
     };
   }
 
-  // Strategy 1: Direct Google API check (Zero serverless dependency, works on any device & Vercel)
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-
-    const directUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`;
-    const res = await fetch(directUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timer);
-    const latencyMs = Date.now() - start;
-
-    if (res.ok) {
-      return {
-        key,
-        maskedKey,
-        valid: true,
-        latencyMs,
-        status: 'valid',
-        lineIndex,
-      };
-    }
-
-    // Parse Google's error response safely
-    const errData = await res.json().catch(() => ({}));
-    const rawMsg = errData?.error?.message || `HTTP ${res.status}`;
-    const lower = rawMsg.toLowerCase();
-    let userMsg = rawMsg;
-    let isValid = false;
-
-    if (
-      lower.includes('api_key_invalid') ||
-      lower.includes('api key not valid') ||
-      lower.includes('key not valid') ||
-      lower.includes('invalid api key') ||
-      (res.status === 400 && lower.includes('key'))
-    ) {
-      userMsg = 'API Key tidak valid atau salah';
-      isValid = false;
-    } else if (
-      lower.includes('resource_exhausted') ||
-      lower.includes('quota') ||
-      res.status === 429
-    ) {
-      userMsg = 'Key Valid • Kuota limit pada model ini (Gunakan model lain)';
-      isValid = true;
-    } else if (
-      lower.includes('permission_denied') ||
-      res.status === 403
-    ) {
-      userMsg = 'Key Valid • Izin API Gemini belum diaktifkan di GCP Console';
-      isValid = true;
-    } else {
-      userMsg = rawMsg;
-      isValid = res.status !== 401;
-    }
-
-    return {
-      key,
-      maskedKey,
-      valid: isValid,
-      error: isValid ? undefined : userMsg,
-      latencyMs,
-      status: isValid ? 'valid' : 'invalid',
-      lineIndex,
-    };
-  } catch (directErr: any) {
-    // If direct call had a network issue (e.g. adblocker, corporate firewall), try Strategy 2: Server Fallback
-    console.warn('Direct Google API probe failed, attempting server proxy fallback...', directErr);
-  }
-
-  // Strategy 2: Server fallback via /api/gemini/test-single-key
+  // Route key verification 100% through server proxy
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
@@ -322,7 +248,6 @@ export async function testSingleApiKey(
 
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      // If server returned HTML (e.g. index.html from an unhandled rewrite or 404 page)
       return {
         key,
         maskedKey,
@@ -586,71 +511,58 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`;
 
-  let lastDirectError: any = null;
+  try {
+    const res = await fetch('/api/gemini/generate-prompts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey,
+        model: primaryModel,
+        type,
+        subCategory,
+        style,
+        count: 1,
+        keywords,
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow,
+        previousPrompts: recentHistory,
+      }),
+    });
 
-  for (const currentModel of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
-        apiKey
-      )}`;
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptContent }] }],
-          generationConfig: {
-            temperature: 0.88,
-            maxOutputTokens: 380,
-            thinkingConfig: { thinkingBudget: 512 },
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-      }
-
+    if (res.ok) {
       const data = await res.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let cleanPrompt = rawText.trim();
-
-      // Clean markdown code blocks, quotes, or JSON arrays if returned
-      try {
-        const parsed = JSON.parse(cleanPrompt);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          cleanPrompt = String(parsed[0]).trim();
-        } else if (typeof parsed === 'string') {
-          cleanPrompt = parsed.trim();
-        } else if (parsed && typeof parsed.prompt === 'string') {
-          cleanPrompt = parsed.prompt.trim();
+      if (Array.isArray(data.prompts) && data.prompts[0]) {
+        let cleanPrompt = String(data.prompts[0]).trim();
+        if (cleanPrompt.length >= 10) {
+          if (isPromptDuplicateInBank(cleanPrompt, historyBank)) {
+            const uniqueQualifier = `with distinct custom isometric styling (variant #${Date.now().toString(36).slice(-4)})`;
+            cleanPrompt = `${cleanPrompt.replace(/\.$/, '')}, ${uniqueQualifier}.`;
+          }
+          addToPromptHistoryBank([cleanPrompt]);
+          return cleanPrompt;
         }
-      } catch {
-        cleanPrompt = cleanPrompt
-          .replace(/^```[a-z]*\s*/i, '')
-          .replace(/```$/, '')
-          .replace(/^["'\[\]]+|["'\[\]]+$/g, '')
-          .replace(/^[-*0-9.]+\s*/, '')
-          .trim();
       }
-
-      if (cleanPrompt.length >= 10) {
-        // Guarantee uniqueness against bank
-        if (isPromptDuplicateInBank(cleanPrompt, historyBank)) {
-          const uniqueQualifier = `with distinct custom isometric styling (variant #${Date.now().toString(36).slice(-4)})`;
-          cleanPrompt = `${cleanPrompt.replace(/\.$/, '')}, ${uniqueQualifier}.`;
-        }
-        addToPromptHistoryBank([cleanPrompt]);
-        return cleanPrompt;
-      }
-    } catch (err: any) {
-      lastDirectError = err;
-      continue;
     }
+  } catch (err: any) {
+    console.warn('Server prompt generation fallback:', err);
   }
 
-  throw lastDirectError || new Error('Gagal menghasilkan prompt dari Google Gemini');
+  // Procedural synthesized prompt fallback
+  const fallbackPrompt = generateProceduralPrompts(
+    1,
+    type,
+    subCategory,
+    style,
+    colorMode,
+    motionDynamics,
+    neonGlow,
+    keywords,
+    index
+  )[0];
+  addToPromptHistoryBank([fallbackPrompt]);
+  return fallbackPrompt;
 }
 
 // Backward-compatible helper for batch prompt generation
@@ -905,74 +817,42 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
 </body>
 </html>`;
 
-  const primaryModel = sanitizeModel(model);
-  // Cukup 2 model: model utama pilihan, dan jika gagal/limit langsung ke model hemat kuota tercepat
-  const candidateModels = [
-    primaryModel,
-    primaryModel !== 'gemini-3.5-flash-lite' ? 'gemini-3.5-flash-lite' : 'gemini-2.5-flash',
-  ];
+  const res = await fetch('/api/gemini/generate-animation', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      apiKey,
+      model,
+      promptTopic,
+      type,
+      subCategory,
+      style,
+      index,
+      total,
+      isGreenScreen,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+    }),
+  });
 
-  let lastDirectError: any = null;
-
-  for (const currentModel of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
-        apiKey
-      )}`;
-
-      const directGenConfig: any = {
-        temperature: 0.35,
-        maxOutputTokens: 8192,
-      };
-
-      let res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: systemPrompt }] }],
-          generationConfig: directGenConfig,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Google API Error ${res.status}`);
-      }
-
-      const data = await res.json();
-      let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      let cleanHTML = extractHTML(rawText, isGreenScreen);
-
-      if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-        if (cleanHTML.toLowerCase().includes('requestanimationframe') || cleanHTML.toLowerCase().includes('<canvas') || cleanHTML.toLowerCase().includes('function animate')) {
-          rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-          cleanHTML = extractHTML(rawText, isGreenScreen);
-        }
-      }
-
-      if (!cleanHTML || (!cleanHTML.toLowerCase().includes('<script') && !cleanHTML.toLowerCase().includes('<canvas'))) {
-        throw new Error('Kode dari AI belum lengkap');
-      }
-
-      return {
-        id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
-        title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
-        type,
-        style,
-        subCategory,
-        colorMode,
-        motionDynamics,
-        neonGlow,
-        html: cleanHTML,
-        isGreenScreen,
-      };
-    } catch (err: any) {
-      lastDirectError = err;
-      continue;
-    }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `HTTP ${res.status}`);
   }
 
-  throw lastDirectError || new Error('Gagal menghasilkan animasi Canvas');
+  const data = await res.json();
+  if (!data.html || data.html.trim().length === 0) {
+    throw new Error(data.error || 'AI mengembalikan kode kosong');
+  }
+
+  return {
+    ...data,
+    isGreenScreen,
+    colorMode,
+    motionDynamics,
+    neonGlow,
+  };
 }
 
 // Generate Single Animation Code with Multi-Level Fallback & Resilient Rate-Limit Handling
@@ -1128,252 +1008,38 @@ async function generateImageToMotionDirect(
   }
   pureBase64 = pureBase64.trim();
 
-  const primaryModel = sanitizeModel(model);
-  const candidateModels = [
-    primaryModel,
-    ...(primaryModel === 'gemini-3.5-flash-lite' ? ['gemini-3.5-flash-lite-preview', 'gemini-3.1-flash-lite'] : []),
-    ...['gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-3.1-pro-preview'].filter(
-      (m) => m !== primaryModel
-    ),
-  ];
+  const res = await fetch('/api/gemini/image-to-motion', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      apiKey,
+      model,
+      imageBase64: pureBase64,
+      mimeType,
+      fileName,
+      projectName,
+      motionDynamics,
+      colorMode,
+      neonGlow,
+      isGreenScreen,
+      customInstructions,
+    }),
+  });
 
-  const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error || `HTTP ${res.status}`);
+  }
 
-  const masterMultimodalPrompt = `Anda adalah Master Canvas 2D Motion Graphics, Lead Computer Vision Engineer, dan Senior 3D Animator (Adobe After Effects / Lottie 60 FPS Microstock Specialist).
+  const data = await res.json();
+  if (!data.html || data.html.trim().length === 0) {
+    throw new Error(data.error || 'AI mengembalikan kode kosong');
+  }
 
-TUGAS UTAMA (ULTRA-DETAIL PROFESSIONAL IMAGE-TO-MOTION):
-Analisis GAMBAR REFERENSI yang diunggah secara visual mendalam (pixel-level structural & chromatic analysis), lalu REKONSTRUKSI MENJADI KODE ANIMASI HTML5 CANVAS 2D yang SANGAT PRESISI, MIRIP DENGAN GAMBAR ASLI (bentuk anatomi, proporsi, rasio bevel, kode warna HEX asli), dan BERIKAN GERAKAN KINETIK 60 FPS KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL)!
-
-=============================================================================
-1. ANALISIS ANATOMI & KEMIRIPAN TINGGI (HIGH FIDELITY VISUAL RECONSTRUCTION):
-=============================================================================
-- DEKONSTRUKSI ELEMEN GAMBAR ASLI:
-  * Identifikasi subjek utama (apakah mikrofon studio, mobil, tas, trofi, kamera, roket, sepatu, gadget, robot, bangunan, kartu, dll.).
-  * Teliti rasio proporsi lebar vs tinggi (aspect ratio) dan bentuk geometris spesifiknya (beveled rectangle, kurva bezier khusus, sudut chamfer, dll.).
-  * EKSTRAK KODE WARNA HEX ASLI (#RRGGBB) langsung dari gambar: warna bodi utama, warna aksen sekunder, warna bayangan chiaroscuro (ambient occlusion), warna highlight kilau, dan warna garis kontur.
-  * REKONSTRUKSI SETIAP DETAIL SUB-KOMPONEN: Gambar ulang seluruh bagian yang tampak di gambar referensi (tombol, layar, display digital, lensa, indikator LED, kabel, tali, pegangan, sasis) menggunakan fungsi Canvas 2D presisi (\`ctx.roundRect\`, \`ctx.bezierCurveTo\`, \`ctx.ellipse\`, \`ctx.arc\`, \`ctx.fill()\`, \`ctx.stroke()\`).
-- DILARANG KERAS menyederhanakan menjadi bulatan/kotak biasa atau abstrak mentah! Bentuk harus sangat mirip dan dapat dikenali seketika sebagai kembaran animasi dari gambar referensi.
-- DILARANG KERAS memunculkan roda gerigi jika gambar aslinya bukan roda gigi!
-- DILARANG KERAS membungkus objek dalam gelembung bulat transparan (enclosing glass bubble) atau kotak kartu wadah latar belakang!
-
-=============================================================================
-2. PERGERAKAN KINETIK KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL 60 FPS):
-=============================================================================
-Jangan buat animasi kaku atau monoton! Terapkan sistem pergerakan multi-layer yang hidup dan berbobot:
-1. GERAKAN UTAMA (Root Floating & Inertia):
-   - Osilasi vertikal harmonis yang bernapas: \`const floatY = Math.sin(t * 2.4) * (S * 0.04);\`
-   - Kemiringan gimbal halus: \`const rot = Math.sin(t * 1.8) * 0.025;\`
-   - Elastisitas squash-and-stretch alami: \`const squash = 1 + 0.03 * Math.cos(t * 2.4); const stretch = 1 / Math.sqrt(squash);\`
-2. ARTIKULASI SUB-KOMPONEN SESUAI FUNGSI OBJEK (Secondary Kinetic Articulation):
-   - Bagian-bagian internal/aksesoris bergerak dengan inersia fisika tertunda (phase lag: \`Math.sin(t * 2.4 - 0.4)\`):
-     * Jika ada layar / display -> sapuan garis scanning laser ter-clip halus di area layar.
-     * Jika ada indikator LED / tombol -> denyut pendaran luminescence lembut (\`ctx.shadowBlur = 8 + Math.sin(t * 3.5) * 4\`).
-     * Jika ada lensa kamera / sensor -> denyut fokus halus atau aperture breathing.
-     * Jika ada pegangan / antena / tali -> getaran elastis responsif.
-     * Jika ada pelat / penutup -> artikulasi mikro pernapasan.
-3. SPECULAR GLEAM SWEEP BERKELAS:
-   - Sapuan kilau cahaya spekular miring 45 derajat yang menyapu melintasi permukaan objek (\`const gleamX = ((t * 0.8) % 3 - 1.5) * S * 2.5;\`) dan WAJIB di-clip di dalam siluet bentuk badan objek.
-4. BAYANGAN KONTAK LANTAI (Ground Contact Shadow):
-   - Bayangan elips di bawah objek yang membesar dan mengabur saat objek melayang naik, dan mengecil tajam saat objek turun.
-
-=============================================================================
-STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
-=============================================================================
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
-</style>
-<script type="application/json" id="shape-analysis">
-{
-  "objectName": "Nama objek spesifik dari gambar referensi",
-  "shapeDescription": "Deskripsi anatomi detail dan warna HEX asli yang dianalisis dari referensi",
-  "detectedElements": ["Komponen Bodi Utama", "Detail Sub-Struktur", "Palet HEX Asli", "Aksen Kinetik"],
-  "professionalMotionPlan": "Rencana pergerakan ultra modifikasi 60 FPS untuk setiap layer komponen",
-  "similaritySynthesis": "Rekonstruksi presisi kode warna dan proporsi gambar 1:1",
-  "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
+  return data;
 }
-</script>
-<script>
-  window.onerror = function(msg) { document.body.innerHTML += '<div id="err">Render Notice: ' + msg + '</div>'; };
-</script>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  
-  function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
-    cx = w / 2;
-    cy = h / 2;
-    S = Math.min(w, h) * 0.44;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // Safe fallback palette variables
-  const darkTone = '#0f172a';
-  const lightTone = '#38bdf8';
-  const primaryColor = '#3b82f6';
-  const secondaryColor = '#8b5cf6';
-  const accentColor = '#f59e0b';
-
-  function animate(time) {
-    const t = time * 0.001;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = ${clearFill};
-    ctx.fillRect(0, 0, w, h);
-
-    // 1. BAYANGAN LANTAI VOLUMETRIK (GROUND CONTACT SHADOW)
-    const floatY = Math.sin(t * 2.4) * (S * 0.038);
 
 
-    // 2. ROOT MATRIX TUNGGAL UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY):
-    // WAJIB: SELURUH ELEMEN PENYUSUN OBJEK DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
-    const squash = 1 + 0.03 * Math.cos(t * 2.4);
-    const stretch = 1 / Math.sqrt(squash);
-    ctx.save();
-    ctx.translate(cx, cy + floatY);
-    ctx.rotate(Math.sin(t * 1.8) * 0.025);
-    ctx.scale(squash, stretch);
-
-    // [GAMBARKAN REKONSTRUKSI ULTRA DETAIL SESUAI GAMBAR REFERENSI DI SINI]:
-    // - Gunakan kode warna HEX asli dari gambar referensi
-    // - Gambar setiap komponen secara proporsional dan presisi (bodi, aksen, bevel, layar, lensa, tombol)
-    // - Gerakkan sub-komponen dengan artikulasi inersia fase-tertunda
-    // - Clip specular sheen miring di siluet bodi
-
-    ctx.restore();
-
-    requestAnimationFrame(animate);
-  }
-  animate(0);
-</script>
-</body>
-</html>
-
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
-
-  let shapeAnalysis: ShapeAnalysis | undefined = undefined;
-  let detectedSubject = cleanTitle;
-  let generatedHtml = '';
-
-  for (const currentModel of candidateModels) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${encodeURIComponent(
-        apiKey
-      )}`;
-
-      const smartThinking = currentModel.includes('2.5') || currentModel.includes('3.8') || currentModel.includes('pro')
-        ? { thinkingBudget: 2048 }
-        : undefined;
-
-      const genConfig: any = {
-        temperature: 0.12,
-        maxOutputTokens: 8192,
-      };
-      if (smartThinking) genConfig.thinkingConfig = smartThinking;
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: mimeType || 'image/png',
-                    data: pureBase64,
-                  },
-                },
-                {
-                  text: masterMultimodalPrompt,
-                },
-              ],
-            },
-          ],
-          generationConfig: genConfig,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        let cleanHTML = extractHTML(rawText);
-
-        if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-          if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-            rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-            cleanHTML = extractHTML(rawText);
-          }
-        }
-
-        if (cleanHTML.toLowerCase().includes('<canvas') && cleanHTML.toLowerCase().includes('requestanimationframe')) {
-          const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
-          if (analysisMatch && analysisMatch[1]) {
-            try {
-              const parsed = JSON.parse(analysisMatch[1].trim());
-              if (parsed.objectName) {
-                detectedSubject = parsed.objectName;
-                shapeAnalysis = {
-                  objectName: String(parsed.objectName || ''),
-                  shapeDescription: String(parsed.shapeDescription || ''),
-                  detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
-                  professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
-                  similaritySynthesis: String(parsed.similaritySynthesis || ''),
-                };
-              }
-            } catch (e) {}
-          }
-          generatedHtml = cleanHTML;
-          break;
-        }
-      }
-    } catch (e) {
-      // Continue to next candidate model or fallback
-    }
-  }
-
-  // Jika AI gagal, lemparkan error agar dicoba ulang bertahap atau diskip (TIDAK menyajikan template dummy)
-  if (!generatedHtml) {
-    throw new Error('AI tidak berhasil menyusun kode animasi Canvas dari gambar referensi');
-  }
-
-  return {
-    id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
-    title: `Motion: ${detectedSubject}`,
-    type: 'icon' as AnimationType,
-    style: colorMode,
-    subCategory: 'image-to-motion',
-    colorMode,
-    motionDynamics,
-    neonGlow,
-    html: generatedHtml,
-    isGreenScreen,
-    projectName,
-    fileName,
-    detectedSubject,
-    shapeAnalysis,
-  };
-}
 
 // High-level Image To Motion Generator with Multi-Level Fallback & Auto-Retry
 export async function generateImageToMotion(
@@ -1507,72 +1173,6 @@ export async function generateMotionPromptFromImage(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 1. Direct browser API call if user has configured key
-      if (apiKey) {
-        try {
-          const promptDirective = `You are a World-Class Computer Vision Engineer & Lead Motion Designer for Microstock Video Assets (Adobe After Effects / Lottie / 60 FPS HTML5 Canvas Specialist).
-
-Analyze this reference image with extreme anatomical fidelity and output EXACTLY ONE SINGLE CONTINUOUS LINE of an ultra-detailed, production-ready motion graphics animation prompt that enables an AI code generator to recreate an animated twin identical to this image.
-
-Your output prompt MUST strictly follow this comprehensive blueprint format (all in ONE single continuous line):
-Central Subject: [Accurately name the central object/character/symbol, e.g. "Futuristic Studio Spotlight Camera", "Cyberpunk Delivery Drone", "Golden Bitcoin Shield", "Medical DNA Capsule", "Shopping Bag Icon"] with [Exact Art Style, e.g. "Modern Flat Vector Art with bold crisp outlines", "Isometric 3D Vector with clean lighting", "Glossy Glassmorphism with luminous cyber glow accents"];
-Geometric Anatomy & Structure: [Describe all visual components from top to bottom and center outward with exact proportions, shapes, rounded caps, lenses, dials, chassis, wings, or brackets];
-Exact Color Palette: Primary Body #[HEX], Secondary Structure #[HEX], Accent Trim #[HEX], Core Glow #[HEX], Outline #[HEX], Highlight #[HEX];
-60 FPS Microstock Kinetic Dynamics: Smooth continuous vertical floating oscillation along Y-axis (amplitude ±14px, period 2.4s) paired with gentle harmonic gimbal tilt (±8 degrees, period 3.0s), rhythmic breathing pulse scale (0.96x to 1.04x on smooth ease-in-out curve), articulated kinetic movement of internal sub-components, brilliant 45-degree diagonal specular gleam light-sheen sweep across bevels every 2.0s, and radiating luminescent energy particles with soft neon glow blur.
-
-CRITICAL RULES:
-- Output MUST be EXACTLY ONE SINGLE CONTINUOUS LINE (NO line breaks, NO newlines).
-- Output pure prompt text only (NO "Prompt:", NO quotes, NO bullet points, NO markdown bold).`;
-
-          const targetModel = sanitizeModel(model);
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${encodeURIComponent(apiKey)}`;
-          const directRes = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    {
-                      inlineData: {
-                        data: pureBase64,
-                        mimeType: params.mimeType || 'image/png',
-                      },
-                    },
-                    {
-                      text: promptDirective,
-                    },
-                  ],
-                },
-              ],
-              generationConfig: {
-                temperature: 0.3,
-                maxOutputTokens: 600,
-                thinkingConfig: { thinkingBudget: 0 },
-              },
-            }),
-          });
-
-          if (directRes.ok) {
-            const resultData = await directRes.json();
-            const text = resultData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            let clean = text
-              .replace(/^["'`\s]+|["'`\s]+$/g, '')
-              .replace(/^(?:Prompt|Motion Prompt|Result|Output|Here is the prompt)[\s:=*-]+/i, '')
-              .replace(/\r?\n+/g, ' ')
-              .replace(/\s{2,}/g, ' ')
-              .trim();
-
-            if (clean && clean.length > 20) {
-              return clean;
-            }
-          }
-        } catch (directErr) {
-          console.warn('Direct Image-to-Prompt error, trying server fallback...', directErr);
-        }
-      }
-
-      // 2. Server proxy fallback
       const res = await fetch('/api/gemini/image-to-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

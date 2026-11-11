@@ -449,6 +449,14 @@ export default function App() {
 
   // --- HANDLERS: PROMPTS ---
   const handleGeneratePrompts = async () => {
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     setIsGeneratingPrompts(true);
     setProgressShow(true);
     setProgressText(`Menghasilkan ${promptCount} Prompt (satu per satu secara cepat)...`);
@@ -535,6 +543,14 @@ export default function App() {
 
   // --- HANDLERS: ANIMATIONS GENERATION ---
   const handleGenerateAnimations = async () => {
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     if (generatedPrompts.length === 0) {
       showToast('Daftar prompt masih kosong.', 'warn');
       return;
@@ -638,6 +654,14 @@ export default function App() {
 
   // Re-try all failed prompts in standard workflow
   const handleRetryFailedPrompts = async () => {
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     if (failedPrompts.length === 0) {
       showToast('Tidak ada animasi yang gagal dibuat.', 'info');
       return;
@@ -660,7 +684,7 @@ export default function App() {
       setProgressPercent(Math.round(((i + 1) / total) * 100));
 
       try {
-        // Coba generate dengan model terpilih, jika gagal coba dengan fallback model hemat
+        // Coba generate dengan model terpilih, jika gagal coba dengan fallback model produksi stabil
         let anim = null;
         try {
           anim = await generateSingleAnimationCode(
@@ -680,28 +704,24 @@ export default function App() {
             neonGlow
           );
         } catch (firstErr) {
-          // Jika model utama limit/500, coba otomatis dengan model hemat kuota gemini-3.5-flash-lite
-          if (selectedModel !== 'gemini-3.5-flash-lite') {
-            addLog(`[Auto-Recovery] Mencoba ulang prompt #${i + 1} dengan model hemat (Gemini 3.5 Flash Lite)...`, 'info');
-            anim = await generateSingleAnimationCode(
-              apiKeys,
-              'gemini-3.5-flash-lite',
-              currentPrompt,
-              currentType,
-              nicheCategory,
-              visualStyle,
-              i + 1,
-              total,
-              undefined,
-              2,
-              isGreenScreen,
-              colorMode,
-              motionDynamics,
-              neonGlow
-            );
-          } else {
-            throw firstErr;
-          }
+          const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
+          addLog(`[Auto-Recovery] Mencoba ulang prompt #${i + 1} dengan model stabil (${fallbackModel})...`, 'info');
+          anim = await generateSingleAnimationCode(
+            apiKeys,
+            fallbackModel,
+            currentPrompt,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            i + 1,
+            total,
+            undefined,
+            2,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
         }
 
         if (anim) {
@@ -742,6 +762,14 @@ export default function App() {
 
   // Re-try a single failed prompt
   const handleRetrySinglePrompt = async (promptText: string, index: number) => {
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     addLog(`[Coba Ulang Tunggal] Memproses prompt #${index + 1}: "${promptText.substring(0, 35)}..."`, 'info');
     showToast(`Mencoba ulang render animasi #${index + 1}...`, 'info');
 
@@ -765,27 +793,24 @@ export default function App() {
           neonGlow
         );
       } catch (firstErr) {
-        if (selectedModel !== 'gemini-3.5-flash-lite') {
-          addLog(`[Auto-Recovery] Mencoba ulang prompt #${index + 1} dengan Gemini 3.5 Flash Lite...`, 'info');
-          anim = await generateSingleAnimationCode(
-            apiKeys,
-            'gemini-3.5-flash-lite',
-            promptText,
-            currentType,
-            nicheCategory,
-            visualStyle,
-            1,
-            1,
-            undefined,
-            2,
-            isGreenScreen,
-            colorMode,
-            motionDynamics,
-            neonGlow
-          );
-        } else {
-          throw firstErr;
-        }
+        const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
+        addLog(`[Auto-Recovery] Mencoba ulang prompt #${index + 1} dengan ${fallbackModel}...`, 'info');
+        anim = await generateSingleAnimationCode(
+          apiKeys,
+          fallbackModel,
+          promptText,
+          currentType,
+          nicheCategory,
+          visualStyle,
+          1,
+          1,
+          undefined,
+          2,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
+        );
       }
 
       if (anim) {
@@ -976,6 +1001,15 @@ export default function App() {
   // --- HANDLERS: NOTEPAD BATCH GENERATION ---
   const handleProcessNotepadBatches = async (batches: NotepadBatch[]) => {
     if (batches.length === 0) return;
+
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     setIsGeneratingAnimations(true);
 
     const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
@@ -1066,6 +1100,14 @@ export default function App() {
     }
     if (isAutoPilotRunning) {
       showToast('Auto Pilot sedang berjalan!', 'warn');
+      return;
+    }
+
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
       return;
     }
 
@@ -1220,6 +1262,14 @@ export default function App() {
 
   // Re-try failed animations from Auto Pilot sequentially
   const handleRetryFailedAutoPilot = async () => {
+    const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
+    if (!hasValidKey) {
+      showToast('API Key Gemini belum diatur atau kosong. Silakan masukkan API Key Anda terlebih dahulu.', 'error');
+      addLog('⚠️ Tindakan dibatalkan: Belum ada API Key Gemini aktif. Silakan buka menu "API Keys" di header.', 'error');
+      setIsApiModalOpen(true);
+      return;
+    }
+
     if (failedAutoPilotItems.length === 0) {
       showToast('Tidak ada animasi gagal dari Auto Pilot.', 'info');
       return;
@@ -1259,27 +1309,24 @@ export default function App() {
             item.neonGlow ?? true
           );
         } catch (firstErr) {
-          if (selectedModel !== 'gemini-3.5-flash-lite') {
-            addLog(`[Auto-Recovery] Mencoba ulang [${item.accountName}] dengan Gemini 3.5 Flash Lite...`, 'info');
-            anim = await generateSingleAnimationCode(
-              apiKeys,
-              'gemini-3.5-flash-lite',
-              item.prompt,
-              item.type,
-              item.subCategory,
-              item.style,
-              i + 1,
-              total,
-              undefined,
-              2,
-              item.isGreenScreen ?? false,
-              item.colorMode ?? 'gradient',
-              item.motionDynamics ?? 'flow',
-              item.neonGlow ?? true
-            );
-          } else {
-            throw firstErr;
-          }
+          const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
+          addLog(`[Auto-Recovery] Mencoba ulang [${item.accountName}] dengan ${fallbackModel}...`, 'info');
+          anim = await generateSingleAnimationCode(
+            apiKeys,
+            fallbackModel,
+            item.prompt,
+            item.type,
+            item.subCategory,
+            item.style,
+            i + 1,
+            total,
+            undefined,
+            2,
+            item.isGreenScreen ?? false,
+            item.colorMode ?? 'gradient',
+            item.motionDynamics ?? 'flow',
+            item.neonGlow ?? true
+          );
         }
 
         if (anim) {
