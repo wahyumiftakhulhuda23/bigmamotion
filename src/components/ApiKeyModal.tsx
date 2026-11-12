@@ -110,6 +110,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
     setIsTesting(true);
     for (let i = 0; i < currentLines.length; i++) {
       await handleTestSingleRow(i);
+      if (i < currentLines.length - 1) {
+        await new Promise((r) => setTimeout(r, 250));
+      }
     }
     setIsTesting(false);
   };

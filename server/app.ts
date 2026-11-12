@@ -560,7 +560,6 @@ export async function handleTestModelsLogic(rawKey: string) {
   };
 }
 
-// Logic for testing a list of API keys
 export async function handleTestKeysLogic(keysInput: any, requestedModel?: string) {
   let keys: string[] = [];
   if (Array.isArray(keysInput)) {
@@ -573,9 +572,14 @@ export async function handleTestKeysLogic(keysInput: any, requestedModel?: strin
     return { results: [], validCount: 0, total: 0 };
   }
 
-  const results = await Promise.all(
-    keys.map((rawKey: string) => handleTestSingleKeyLogic(rawKey, requestedModel))
-  );
+  const results: any[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    const res = await handleTestSingleKeyLogic(keys[i], requestedModel);
+    results.push(res);
+    if (i < keys.length - 1) {
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
 
   const validCount = results.filter((r) => r.valid).length;
   return { results, validCount, total: keys.length };
