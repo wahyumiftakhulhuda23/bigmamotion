@@ -165,7 +165,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
           showToast(`Baris #${index + 1}: Valid & Aktif (${result.latencyMs}ms)`, 'success');
         }
       } else {
-        showToast(`Baris #${index + 1}: ${result.error || 'Tidak Valid'}`, 'error');
+        const errText = typeof result.error === 'string' ? result.error : (result.error ? String(result.error) : 'Tidak Valid');
+        showToast(`Baris #${index + 1}: ${errText}`, 'error');
       }
     } catch (e: any) {
       setTestResults((prev) => {
@@ -433,8 +434,22 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                           </span>
                           <div className="flex items-center gap-2">
                             {res?.valid && !res?.isQuotaLimit && <span className="text-emerald-400 font-bold text-[10px]">✔ Valid ({res.latencyMs}ms)</span>}
-                            {res?.valid && res?.isQuotaLimit && <span className="text-amber-400 font-bold text-[10px]" title={res.error}>⚠ Valid (Limit Kuota)</span>}
-                            {res?.status === 'invalid' && <span className="text-red-400 font-bold text-[10px]" title={res.error}>✘ {res.error ? (res.error.length > 24 ? res.error.substring(0, 24) + '...' : res.error) : 'Gagal'}</span>}
+                            {res?.valid && res?.isQuotaLimit && (
+                              <span className="text-amber-400 font-bold text-[10px]" title={typeof res.error === 'string' ? res.error : 'Limit Kuota'}>
+                                ⚠ Valid (Limit Kuota)
+                              </span>
+                            )}
+                            {res?.status === 'invalid' && (
+                              <span
+                                className="text-red-400 font-bold text-[10px]"
+                                title={typeof res.error === 'string' ? res.error : 'Gagal'}
+                              >
+                                ✘ {(() => {
+                                  const errStr = typeof res.error === 'string' ? res.error : (res.error ? String(res.error) : 'Gagal');
+                                  return errStr.length > 24 ? errStr.substring(0, 24) + '...' : errStr;
+                                })()}
+                              </span>
+                            )}
                             <button
                               onClick={() => handleTestSingleRow(idx)}
                               disabled={isTestingThis}
