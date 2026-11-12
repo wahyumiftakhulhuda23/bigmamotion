@@ -330,33 +330,33 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
     try {
       let timerId: any = null;
       const timeoutPromise = new Promise((_, reject) => {
-        timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 6s)")), 6000);
+        timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 4s)")), 4000);
       });
 
       const probePromise = (async () => {
         try {
+          return await ai.models.countTokens({
+            model,
+            contents: "ping",
+          });
+        } catch (tokErr: any) {
+          const cleanTok = cleanErrorMessage(tokErr);
+          const tokMsg = cleanTok.toLowerCase();
+          if (
+            tokMsg.includes("api_key_invalid") ||
+            tokMsg.includes("api key not valid") ||
+            tokMsg.includes("key is not valid") ||
+            tokMsg.includes("invalid api key") ||
+            tokMsg.includes("api_key_expired") ||
+            tokMsg.includes("unauthenticated") ||
+            tokMsg.includes("401")
+          ) {
+            throw tokErr;
+          }
           return await ai.models.generateContent({
             model,
             contents: "hi",
             config: { maxOutputTokens: 1 },
-          });
-        } catch (genErr: any) {
-          const cleanGen = cleanErrorMessage(genErr);
-          const genMsg = cleanGen.toLowerCase();
-          if (
-            genMsg.includes("api_key_invalid") ||
-            genMsg.includes("api key not valid") ||
-            genMsg.includes("key is not valid") ||
-            genMsg.includes("invalid api key") ||
-            genMsg.includes("api_key_expired") ||
-            genMsg.includes("unauthenticated") ||
-            genMsg.includes("401")
-          ) {
-            throw genErr;
-          }
-          return await ai.models.countTokens({
-            model,
-            contents: "ping",
           });
         }
       })();
@@ -461,7 +461,7 @@ export async function handleTestModelsLogic(rawKey: string) {
       try {
         let timerId: any = null;
         const toPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout (> 8s)")), 8000);
+          timerId = setTimeout(() => reject(new Error("Timeout (> 6s)")), 6000);
         });
 
         const testTargetModel = sanitizeModel(m.id);
@@ -557,7 +557,7 @@ export async function handleTestModelsLogic(rawKey: string) {
           status: "network_issue" as const,
           valid: true,
           latencyMs: Date.now() - start,
-          message: lower.includes("timeout") ? "Respon Lambat (> 8s)" : raw.substring(0, 50),
+          message: lower.includes("timeout") ? "Respon Lambat (> 6s)" : raw.substring(0, 50),
         };
       }
     })
@@ -587,12 +587,16 @@ export async function handleTestKeysLogic(keysInput: any, requestedModel?: strin
     return { results: [], validCount: 0, total: 0 };
   }
 
-  const results: any[] = [];
-  for (let i = 0; i < keys.length; i++) {
-    const res = await handleTestSingleKeyLogic(keys[i], requestedModel);
-    results.push(res);
-    if (i < keys.length - 1) {
-      await new Promise((r) => setTimeout(r, 200));
+  const concurrency = 5;
+  const results: any[] = new Array(keys.length);
+
+  for (let i = 0; i < keys.length; i += concurrency) {
+    const chunk = keys.slice(i, i + concurrency);
+    const chunkResults = await Promise.all(
+      chunk.map((k) => handleTestSingleKeyLogic(k, requestedModel))
+    );
+    for (let j = 0; j < chunkResults.length; j++) {
+      results[i + j] = chunkResults[j];
     }
   }
 
@@ -1010,6 +1014,10 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
         temperature: 0.2,
         maxOutputTokens: 4096,
       };
+      const thinkingConfig = getSmartThinkingConfig(currentModel, 512);
+      if (thinkingConfig) {
+        animConfig.thinkingConfig = thinkingConfig;
+      }
       return { contents: systemPrompt, config: animConfig };
     }
   );
@@ -1118,6 +1126,10 @@ WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
       temperature: 0.2,
       maxOutputTokens: 4096,
     };
+    const thinkingConfig = getSmartThinkingConfig(targetModel, 512);
+    if (thinkingConfig) {
+      animConfig.thinkingConfig = thinkingConfig;
+    }
 
     const responseStream = await ai.models.generateContentStream({
       model: targetModel,
