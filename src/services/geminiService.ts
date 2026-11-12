@@ -194,6 +194,17 @@ function extractHTML(text: string, isGreenScreen: boolean = false): string {
     }
   }
 
+  // Auto-heal runtime safety: Ensure try/catch wrapping inside animate() function to prevent unhandled JS exceptions from blanking canvas
+  if (cleanHTML.includes('function animate(') && !cleanHTML.includes('catch')) {
+    cleanHTML = cleanHTML.replace(
+      /function animate\s*\(([^)]*)\)\s*\{([\s\S]*?)(requestAnimationFrame\s*\(\s*animate\s*\);?\s*\})/,
+      (fullMatch, param, body, reqCall) => {
+        if (body.includes('try {')) return fullMatch;
+        return `function animate(${param}) {\n    try {\n${body}\n    } catch (err) {\n      console.error("Canvas render error:", err);\n    }\n    ${reqCall}`;
+      }
+    );
+  }
+
   return cleanHTML.trim();
 }
 

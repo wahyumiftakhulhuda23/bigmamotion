@@ -231,6 +231,17 @@ export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = f
 </html>`;
     }
   }
+
+  // Auto-heal runtime safety: Ensure try/catch wrapping inside animate() function to prevent unhandled JS exceptions from blanking canvas
+  if (cleanHTML.includes('function animate(') && !cleanHTML.includes('catch')) {
+    cleanHTML = cleanHTML.replace(
+      /function animate\s*\(([^)]*)\)\s*\{([\s\S]*?)(requestAnimationFrame\s*\(\s*animate\s*\);?\s*\})/,
+      (fullMatch, param, body, reqCall) => {
+        if (body.includes('try {')) return fullMatch;
+        return `function animate(${param}) {\n    try {\n${body}\n    } catch (err) {\n      console.error("Canvas render error:", err);\n    }\n    ${reqCall}`;
+      }
+    );
+  }
     
   return cleanHTML.trim();
 }
@@ -913,7 +924,7 @@ export async function handleGenerateAnimationLogic(body: any) {
   }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
 
   const colorStyleDirective = isGreenScreen
-    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! Dilarang ctx.shadowBlur atau shadowColor transparan yang merusak chroma key. Gunakan warna bodi solid kontras tinggi (Cyan, Gold, Ungu, Oranye, dsb.)."
+    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen."
     : (neonGlow
         ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
         : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
@@ -929,19 +940,16 @@ PARAMETER PROMPT:
 ${colorStyleDirective}
 
 ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK!
-   - Objek ikon melayang 100% bersih dan murni langsung di atas kanvas / green screen.
-2. 3D MONOLITHIC RIGGING (ZERO DETACHED PARTS):
-   - Seluruh anatomi objek harus menyatu kokoh di bawah 1 koordinat pusat (cx, cy + floatY). Dilarang bagian terlepas, mengambang liar, atau terputus!
+1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
+   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
+   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
+2. STRICT ZERO GROUND SHADOW (MUTLAK):
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
 3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
    - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-   - Berikan Bevel Highlight line 1.5px putih translusen di tepi atas untuk kilau material mewah.
-4. STRICT ZERO RODA GERIGI (NO COGWHEELS):
-   - Dilarang menggambar roda gerigi / gir berputar pada ikon.
-5. STRICT ZERO PARTICLES & ZERO WHITE FLARES:
-   - Dilarang partikel debu melayang, bintik acak, atau flare putih silau yang merusak visual.
-${isBackground ? '6. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
+4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
+   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
+${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
 
 WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
 <!DOCTYPE html>
@@ -971,17 +979,20 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
   resize();
 
   function animate(time) {
-    const t = time * 0.001;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = ${clearFill};
-    ctx.fillRect(0, 0, w, h);
+    try {
+      const t = time * 0.001;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = ${clearFill};
+      ctx.fillRect(0, 0, w, h);
 
-    // Kinetika 60 FPS presisi (Root Floating & Chiaroscuro 3D - TANPA BAYANGAN DI BAWAH OBJEK)
-    ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
-    ctx.save();
-    ctx.translate(cx, cy + floatY);
-    // [Gambar bentuk 3D Monolithic subjek "${promptTopic}" dengan Chiaroscuro 45° & Bevel Rail di sini]
-    ctx.restore();`}
+      ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang di sini' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
+      ctx.save();
+      ctx.translate(cx, cy + floatY);
+      // Tuliskan seluruh kode menggambar anatomi 3D volumetric subjek "${promptTopic}" dengan chiaroscuro 45° & bevel rail di sini
+      ctx.restore();`}
+    } catch (err) {
+      console.error("Render loop error:", err);
+    }
 
     requestAnimationFrame(animate);
   }
@@ -1069,7 +1080,7 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
 
   const colorStyleDirective = isGreenScreen
-    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! Dilarang ctx.shadowBlur atau shadowColor transparan yang merusak chroma key. Gunakan warna bodi solid kontras tinggi (Cyan, Gold, Ungu, Oranye, dsb.)."
+    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen."
     : (neonGlow
         ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
         : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
@@ -1085,19 +1096,16 @@ PARAMETER PROMPT:
 ${colorStyleDirective}
 
 ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK!
-   - Objek ikon melayang 100% bersih dan murni langsung di atas kanvas / green screen.
-2. 3D MONOLITHIC RIGGING (ZERO DETACHED PARTS):
-   - Seluruh anatomi objek harus menyatu kokoh di bawah 1 koordinat pusat (cx, cy + floatY). Dilarang bagian terlepas, mengambang liar, atau terputus!
+1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
+   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
+   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
+2. STRICT ZERO GROUND SHADOW (MUTLAK):
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
 3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
    - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-   - Berikan Bevel Highlight line 1.5px putih translusen di tepi atas untuk kilau material mewah.
-4. STRICT ZERO RODA GERIGI (NO COGWHEELS):
-   - Dilarang menggambar roda gerigi / gir berputar pada ikon.
-5. STRICT ZERO PARTICLES & ZERO WHITE FLARES:
-   - Dilarang partikel debu melayang, bintik acak, atau flare putih silau yang merusak visual.
-${isBackground ? '6. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
+4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
+   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
+${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
 
 WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
 
