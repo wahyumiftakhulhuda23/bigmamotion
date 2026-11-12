@@ -840,101 +840,68 @@ async function generateAnimationDirect(
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
-  const targetModel = sanitizeModel(model);
+  const cleanKey = extractCleanApiKey(apiKey);
+  // Attempt direct Google GenAI SDK call in browser if user provided an API Key (0-latency, bypasses Vercel 10s timeout ceiling!)
+  if (cleanKey && cleanKey.startsWith('AIza')) {
+    try {
+      const ai = new GoogleGenAI({
+        apiKey: cleanKey,
+        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
+      });
+      const targetModel = sanitizeModel(model);
+      const isBackground = type === 'bg';
+      const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+      const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
-  const catMeta = findCategoryById(subCategory, type);
-  const catInfo = catMeta ? `${catMeta.enName} (${catMeta.name}) - ${catMeta.description}` : subCategory;
+      const motionDirectives = {
+        bounce: "Kinetika elastis squash-and-stretch alami.",
+        orbital: "Rotasi 3D pseudo-isometrik multi-sumbu.",
+        morph: "Transformasi kurva dinamis berbobot.",
+        cyber: "Presisi step kinetik cybernetic.",
+        mechanical: "Artikulasi sasis dan poros beveled presisi.",
+        flow: "Kinetika floating harmonis megah."
+      }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS.";
 
-  const isBackground = type === 'bg';
-  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+      const colorStyleDirective = isGreenScreen
+        ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. WARNA SUBJEK OBJEK WAJIB KONTRAS TINGGI NON-HIJAU."
+        : (neonGlow ? "- MODE NEON GLOW: Pencahayaan luminescent." : "- MODE CRISP FLAT: Vektor solid tajam.");
 
-  const motionDirectives = {
-    bounce: "Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
-    orbital: "Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).",
-    morph: "Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.",
-    cyber: "Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.",
-    mechanical: "Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.",
-    flow: "Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px)."
-  }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
-
-  const colorStyleDirective = isGreenScreen
-    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! Dilarang ctx.shadowBlur atau shadowColor transparan yang merusak chroma key. Gunakan warna bodi solid kontras tinggi (Cyan, Gold, Ungu, Oranye, dsb.)."
-    : (neonGlow
-        ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
-        : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
-
-  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
-
-PARAMETER PROMPT:
-- Subjek/Topik: "${promptTopic}"
-- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
-- Gaya Visual: ${style} | Mode Warna: ${colorMode}
-- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+      const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer.
+Buat 1 file HTML animasi Canvas 2D presisi 60 FPS untuk: "${promptTopic}".
+Tipe: ${isBackground ? 'BACKGROUND MOTION' : '3D MONOLITHIC ICON'} | Gaya: ${style} | Warna: ${colorMode} | Dinamika: ${motionDynamics.toUpperCase()}
 ${colorStyleDirective}
+ATURAN: ZERO GROUND SHADOW, ZERO RODA GERIGI, TULIS KODE CANVAS 2D LENGKAP UTUH (ctx.beginPath, ctx.fill, ctx.stroke, ctx.roundRect, gradients), BUNGKUS inner animate DENGAN try/catch.
+Outputkan HANYA file HTML lengkap:`;
 
-ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK!
-   - Objek ikon melayang 100% bersih dan murni langsung di atas kanvas / green screen.
-2. 3D MONOLITHIC RIGGING (ZERO DETACHED PARTS):
-   - Seluruh anatomi objek harus menyatu kokoh di bawah 1 koordinat pusat (cx, cy + floatY). Dilarang bagian terlepas, mengambang liar, atau terputus!
-3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
-   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-   - Berikan Bevel Highlight line 1.5px putih translusen di tepi atas untuk kilau material mewah.
-4. STRICT ZERO RODA GERIGI (NO COGWHEELS):
-   - Dilarang menggambar roda gerigi / gir berputar pada ikon.
-5. STRICT ZERO PARTICLES & ZERO WHITE FLARES:
-   - Dilarang partikel debu melayang, bintik acak, atau flare putih silau yang merusak visual.
-${isBackground ? '6. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
+      const response = await ai.models.generateContent({
+        model: targetModel,
+        contents: systemPrompt,
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+        },
+      });
 
-WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: ${bgColor}; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; width: 100%; height: 100%; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    cx = w / 2;
-    cy = h / 2;
-    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
+      const rawText = response.text || '';
+      let cleanHTML = extractHTML(rawText, isGreenScreen);
+      if (cleanHTML && (cleanHTML.includes('<script') || cleanHTML.includes('<canvas'))) {
+        return {
+          id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+          title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+          type,
+          style,
+          subCategory,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+          html: cleanHTML,
+          isGreenScreen,
+        };
+      }
+    } catch (directErr) {
+      console.warn('[generateAnimationDirect] Direct client SDK call failed, delegating to server proxy...', directErr);
+    }
   }
-  window.addEventListener('resize', resize);
-  resize();
-
-  function animate(time) {
-    const t = time * 0.001;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = ${clearFill};
-    ctx.fillRect(0, 0, w, h);
-
-    // Kinetika 60 FPS presisi (Root Floating & Chiaroscuro 3D - TANPA BAYANGAN DI BAWAH OBJEK)
-    ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
-    ctx.save();
-    ctx.translate(cx, cy + floatY);
-    // [Gambar bentuk 3D Monolithic subjek "${promptTopic}" dengan Chiaroscuro 45° & Bevel Rail di sini]
-    ctx.restore();`}
-
-    requestAnimationFrame(animate);
-  }
-  requestAnimationFrame(animate);
-</script>
-</body>
-</html>`;
 
   const res = await fetch('/api/gemini/generate-animation', {
     method: 'POST',
@@ -957,7 +924,7 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `HTTP ${res.status}`);
+    throw new Error(err?.error || `Koneksi API sementara tidak tersedia (${res.status})`);
   }
 
   const data = await res.json();
@@ -992,9 +959,8 @@ export async function generateSingleAnimationCode(
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   let lastError: any = null;
-  // Delay berjenjang adaptif untuk pemulihan kuota Gemini (15 RPM leaky-bucket):
-  // Percobaan 1 gagal: 6s, Percobaan 2 gagal: 10s, Percobaan 3 gagal: 15s
-  const retryDelays = [6000, 10000, 15000];
+  // Delay berjenjang cepat untuk pemulihan Vercel & rate limit
+  const retryDelays = [800, 1500, 2500];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -1072,7 +1038,7 @@ export async function generateSingleAnimationCode(
       };
     } catch (err: any) {
       lastError = err;
-      const delayMs = retryDelays[attempt - 1] || 6000;
+      const delayMs = retryDelays[attempt - 1] || 1500;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (menunggu jeda ${delayMs / 1000}s)`);
@@ -1084,8 +1050,8 @@ export async function generateSingleAnimationCode(
     }
   }
 
-  // Jika gagal 3x bertahap (6s, 10s, 15s), lewati prompt ini dan simpan ke daftar coba ulang
-  throw new Error(`Gagal setelah 3x percobaan bertahap (6s, 10s, 15s): ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
+  // Jika gagal 3x bertahap, lewati prompt ini dan simpan ke daftar coba ulang
+  throw new Error(`Gagal setelah 3x percobaan bertahap: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.

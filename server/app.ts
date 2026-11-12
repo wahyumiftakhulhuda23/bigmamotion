@@ -91,30 +91,40 @@ export async function generateContentWithFallback(
   ai: GoogleGenAI,
   primaryModel: string,
   generateParams: (model: string) => { contents: any; config?: any },
-  maxRetriesPerModel = 2
+  maxRetriesPerModel = 1
 ): Promise<{ response: any; usedModel: string }> {
-  const fallbackOrder = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-flash-latest", "gemini-3.1-pro-preview"];
+  const fallbackOrder = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
   const candidateModels = [
     primaryModel,
-    ...(primaryModel === "gemini-3.5-flash-lite" ? ["gemini-3.5-flash-lite-preview", "gemini-3.1-flash-lite"] : []),
+    ...(primaryModel === "gemini-3.5-flash-lite" ? ["gemini-3.1-flash-lite"] : []),
     ...fallbackOrder.filter((m) => m !== primaryModel),
   ];
 
   let lastError: any = null;
 
   for (const model of candidateModels) {
-    const isProOrPreview = model.includes("pro") || model.includes("preview");
-    const allowedAttempts = isProOrPreview ? 1 : maxRetriesPerModel;
+    const allowedAttempts = maxRetriesPerModel;
 
     for (let attempt = 1; attempt <= allowedAttempts; attempt++) {
       try {
+        let timerId: any = null;
+        const timeoutPromise = new Promise((_, reject) => {
+          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 4.5s)")), 4500);
+        });
+
         const { contents, config } = generateParams(model);
-        const response = await ai.models.generateContent({
+        const genPromise = ai.models.generateContent({
           model,
           contents,
           config,
         });
-        return { response, usedModel: model };
+
+        try {
+          const response: any = await Promise.race([genPromise, timeoutPromise]);
+          return { response, usedModel: model };
+        } finally {
+          if (timerId) clearTimeout(timerId);
+        }
       } catch (err: any) {
         lastError = err;
         const msg = cleanErrorMessage(err).toLowerCase();
@@ -159,10 +169,10 @@ export async function generateContentWithFallback(
           msg.includes("unavailable");
 
         if (isNotFound || isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
-          // Jika model mengalami error 500/overload di datacenter Google, langsung beralih ke model fallback berikutnya tanpa menunda
+          // Jika model mengalami error 500/overload di datacenter Google atau timeout Vercel, langsung beralih ke model fallback berikutnya tanpa menunda
           break;
         } else if (isTransient && attempt < allowedAttempts) {
-          await new Promise((res) => setTimeout(res, 500 * attempt));
+          await new Promise((res) => setTimeout(res, 300 * attempt));
           continue;
         } else {
           break;
