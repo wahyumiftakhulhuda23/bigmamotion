@@ -6,7 +6,10 @@ import { findCategoryById, generateProceduralPrompts } from "../src/constants/ca
 dotenv.config();
 
 export function getClient(apiKey?: string) {
-  const key = (apiKey && apiKey.trim().length > 0) ? apiKey.trim() : process.env.GEMINI_API_KEY;
+  let key = (apiKey && apiKey.trim().length > 0) ? apiKey.trim() : process.env.GEMINI_API_KEY;
+  if ((!key || key.toLowerCase() === "default" || key.toLowerCase() === "system") && process.env.GEMINI_API_KEY) {
+    key = process.env.GEMINI_API_KEY.trim();
+  }
   if (!key) {
     throw new Error("API Key tidak ditemukan. Mohon masukkan API Key Anda di menu Header (ikon Kunci).");
   }
@@ -48,17 +51,40 @@ export function sanitizeModel(model?: string): string {
 
 export function cleanErrorMessage(err: any): string {
   if (!err) return "Terjadi kesalahan tidak diketahui";
-  const raw = err.message || String(err);
-  try {
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed?.error?.message) {
-        return parsed.error.message;
+  if (typeof err === "string") {
+    try {
+      const jsonMatch = err.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed?.error?.message) return parsed.error.message;
       }
+    } catch {}
+    return err;
+  }
+  if (typeof err.message === "string" && err.message) {
+    try {
+      const jsonMatch = err.message.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed?.error?.message) return parsed.error.message;
+      }
+    } catch {}
+    return err.message;
+  }
+  if (typeof err.error === "string" && err.error) return err.error;
+  if (typeof err.error?.message === "string" && err.error.message) return err.error.message;
+  try {
+    const raw = JSON.stringify(err);
+    if (raw && raw !== '{}') {
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (parsed?.error?.message) return parsed.error.message;
+      }
+      return raw;
     }
   } catch {}
-  return raw;
+  return String(err?.message || err || "Terjadi kesalahan tidak diketahui");
 }
 
 export async function generateContentWithFallback(
@@ -91,7 +117,7 @@ export async function generateContentWithFallback(
         return { response, usedModel: model };
       } catch (err: any) {
         lastError = err;
-        const msg = String(err?.message || "").toLowerCase();
+        const msg = cleanErrorMessage(err).toLowerCase();
 
         // If error was caused by thinkingConfig or schema incompatibility, retry immediately without thinkingConfig
         try {
@@ -304,12 +330,14 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
             config: { maxOutputTokens: 1 },
           });
         } catch (genErr: any) {
-          const genMsg = String(genErr?.message || "").toLowerCase();
+          const cleanGen = cleanErrorMessage(genErr);
+          const genMsg = cleanGen.toLowerCase();
           if (
             genMsg.includes("api_key_invalid") ||
             genMsg.includes("api key not valid") ||
             genMsg.includes("key is not valid") ||
-            genMsg.includes("invalid api key")
+            genMsg.includes("invalid api key") ||
+            (genMsg.includes("400") && genMsg.includes("key"))
           ) {
             throw genErr;
           }
@@ -334,13 +362,15 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
       }
     } catch (err: any) {
       lastError = err;
-      const msg = String(err?.message || "").toLowerCase();
+      const cleanMsg = cleanErrorMessage(err);
+      const msg = cleanMsg.toLowerCase();
 
       const isKeyInvalid =
         msg.includes("api_key_invalid") ||
         msg.includes("api key not valid") ||
         msg.includes("key is not valid") ||
-        msg.includes("invalid api key");
+        msg.includes("invalid api key") ||
+        (msg.includes("400") && msg.includes("key"));
 
       if (isKeyInvalid) {
         return {
@@ -958,13 +988,9 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.35,
-        maxOutputTokens: 8192,
+        temperature: 0.2,
+        maxOutputTokens: 4096,
       };
-      if (currentModel.includes("pro") || currentModel.includes("thinking")) {
-        const animThinking = getSmartThinkingConfig(currentModel, 1024);
-        if (animThinking) animConfig.thinkingConfig = animThinking;
-      }
       return { contents: systemPrompt, config: animConfig };
     }
   );
@@ -1073,13 +1099,9 @@ WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
 
   try {
     const animConfig: any = {
-      temperature: 0.35,
-      maxOutputTokens: 8192,
+      temperature: 0.2,
+      maxOutputTokens: 4096,
     };
-    if (targetModel.includes("pro") || targetModel.includes("thinking")) {
-      const animThinking = getSmartThinkingConfig(targetModel, 1024);
-      if (animThinking) animConfig.thinkingConfig = animThinking;
-    }
 
     const responseStream = await ai.models.generateContentStream({
       model: targetModel,
