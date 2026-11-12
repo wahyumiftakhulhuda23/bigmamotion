@@ -197,13 +197,24 @@ function extractHTML(text: string, isGreenScreen: boolean = false): string {
   return cleanHTML.trim();
 }
 
+export function extractCleanApiKey(rawKey: string): string {
+  if (!rawKey) return '';
+  let key = rawKey.trim();
+  key = key.replace(/^["'`\s]+|["'`\s,;]+$/g, '');
+  const match = key.match(/AIza[0-9A-Za-z-_]{35}/);
+  if (match) {
+    return match[0];
+  }
+  return key;
+}
+
 // Accurate, robust test for a single key (Direct Google API probe with server proxy fallback)
 export async function testSingleApiKey(
   rawKey: string,
   lineIndex?: number,
   model?: GeminiModel
 ): Promise<ApiKeyTestResult> {
-  const key = (rawKey || '').trim();
+  const key = extractCleanApiKey(rawKey);
   const maskedKey =
     key.length > 10 ? `${key.substring(0, 6)}...${key.substring(key.length - 4)}` : key || '(kosong)';
   const start = Date.now();
@@ -246,6 +257,88 @@ export async function testSingleApiKey(
     }
   };
 
+  const candidateModels = Array.from(new Set([
+    sanitizeModel(model || 'gemini-3.8-flash'),
+    'gemini-3.8-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.1-flash-lite',
+    'gemini-flash-latest',
+    'gemini-2.5-flash',
+  ]));
+
+  // Direct client probe across candidate models (used for Vercel or when server route is unreachable)
+  const probeDirectInBrowser = async (): Promise<ApiKeyTestResult> => {
+    const ai = new GoogleGenAI({ apiKey: key });
+    let hadQuota = false;
+    let lastErr: any = null;
+
+    for (const m of candidateModels) {
+      try {
+        await ai.models.generateContent({
+          model: m,
+          contents: 'hi',
+          config: { maxOutputTokens: 1 },
+        });
+        return {
+          key,
+          maskedKey,
+          valid: true,
+          latencyMs: Date.now() - start,
+          status: 'valid',
+          lineIndex,
+          testedModel: m as GeminiModel,
+        };
+      } catch (err: any) {
+        lastErr = err;
+        const msg = sanitizeErrorText(err).toLowerCase();
+        if (
+          msg.includes('api_key_invalid') ||
+          msg.includes('api key not valid') ||
+          msg.includes('key is not valid') ||
+          msg.includes('invalid api key')
+        ) {
+          return {
+            key,
+            maskedKey,
+            valid: false,
+            error: 'API Key tidak valid atau salah',
+            latencyMs: Date.now() - start,
+            status: 'invalid',
+            lineIndex,
+          };
+        }
+        if (msg.includes('resource_exhausted') || msg.includes('429') || msg.includes('quota')) {
+          hadQuota = true;
+          continue;
+        }
+        continue;
+      }
+    }
+
+    if (hadQuota) {
+      return {
+        key,
+        maskedKey,
+        valid: true,
+        isQuotaLimit: true,
+        error: 'Key Valid • Kuota sementara penuh pada semua model',
+        latencyMs: Date.now() - start,
+        status: 'valid',
+        lineIndex,
+      };
+    }
+
+    return {
+      key,
+      maskedKey,
+      valid: false,
+      error: sanitizeErrorText(lastErr),
+      latencyMs: Date.now() - start,
+      status: 'invalid',
+      lineIndex,
+    };
+  };
+
   // Route key verification through server proxy with automatic direct client fallback for Vercel
   try {
     const controller = new AbortController();
@@ -277,37 +370,9 @@ export async function testSingleApiKey(
       };
     }
 
-    // If server returned non-OK or non-JSON (e.g. 404/502 on Vercel), fall back to direct browser probe if it's an AIza key
+    // If server returned non-OK or non-JSON (e.g. 404/502 on Vercel), fall back to direct browser probe
     if (key.startsWith('AIza')) {
-      try {
-        const ai = new GoogleGenAI({ apiKey: key });
-        const probeModel = sanitizeModel(model || 'gemini-2.5-flash');
-        await ai.models.countTokens({ model: probeModel, contents: 'ping' });
-        return {
-          key,
-          maskedKey,
-          valid: true,
-          latencyMs: Date.now() - start,
-          status: 'valid',
-          lineIndex,
-          testedModel: model,
-        };
-      } catch (directErr: any) {
-        const directMsg = sanitizeErrorText(directErr).toLowerCase();
-        const isKeyInvalid = directMsg.includes('api_key_invalid') || directMsg.includes('api key not valid') || directMsg.includes('key is not valid');
-        const isQuota = directMsg.includes('resource_exhausted') || directMsg.includes('429') || directMsg.includes('quota');
-        
-        return {
-          key,
-          maskedKey,
-          valid: isQuota, // Quota limit means key is actually valid!
-          isQuotaLimit: isQuota,
-          error: isKeyInvalid ? 'API Key tidak valid atau salah' : (isQuota ? 'Key Valid • Limit Kuota' : directMsg.substring(0, 60)),
-          latencyMs: Date.now() - start,
-          status: (isQuota || !isKeyInvalid) ? 'valid' : 'invalid',
-          lineIndex,
-        };
-      }
+      return await probeDirectInBrowser();
     }
 
     const err = await res.json().catch(() => ({}));
@@ -321,36 +386,8 @@ export async function testSingleApiKey(
       lineIndex,
     };
   } catch (serverErr: any) {
-    // If server proxy is unreachable (e.g. Vercel cold-start or static host), test directly via client
     if (key.startsWith('AIza')) {
-      try {
-        const ai = new GoogleGenAI({ apiKey: key });
-        const probeModel = sanitizeModel(model || 'gemini-2.5-flash');
-        await ai.models.countTokens({ model: probeModel, contents: 'ping' });
-        return {
-          key,
-          maskedKey,
-          valid: true,
-          latencyMs: Date.now() - start,
-          status: 'valid',
-          lineIndex,
-          testedModel: model,
-        };
-      } catch (directErr: any) {
-        const directMsg = sanitizeErrorText(directErr).toLowerCase();
-        const isKeyInvalid = directMsg.includes('api_key_invalid') || directMsg.includes('api key not valid');
-        const isQuota = directMsg.includes('resource_exhausted') || directMsg.includes('429');
-        return {
-          key,
-          maskedKey,
-          valid: isQuota,
-          isQuotaLimit: isQuota,
-          error: isKeyInvalid ? 'API Key tidak valid atau salah' : (isQuota ? 'Key Valid • Limit Kuota' : directMsg.substring(0, 60)),
-          latencyMs: Date.now() - start,
-          status: isQuota ? 'valid' : 'invalid',
-          lineIndex,
-        };
-      }
+      return await probeDirectInBrowser();
     }
 
     const isTimeout = serverErr.name === 'AbortError';

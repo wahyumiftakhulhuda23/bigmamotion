@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GeminiModel, ApiKeyTestResult, ModelHealthDiagnostic } from '../types';
-import { testSingleApiKey, testKeyAcrossModels } from '../services/geminiService';
+import { testSingleApiKey, testKeyAcrossModels, extractCleanApiKey } from '../services/geminiService';
 import { detectDeviceHardware, HardwareProfile } from '../services/hardwareService';
 
 interface ApiKeyModalProps {
@@ -85,7 +85,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
   const currentLines = textValue
     .split('\n')
-    .map((k) => k.trim())
+    .map((k) => extractCleanApiKey(k))
     .filter((k) => k.length > 0);
 
   const applyRecommendations = () => {
@@ -160,9 +160,9 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
 
       if (result.valid) {
         if (result.isQuotaLimit) {
-          showToast(`Baris #${index + 1}: Key Valid (Kuota model ini sedang limit, ganti model)`, 'warn');
+          showToast(`Baris #${index + 1}: Key Valid (Kuota penuh di semua model, coba sesaat lagi)`, 'warn');
         } else {
-          showToast(`Baris #${index + 1}: Valid & Aktif (${result.latencyMs}ms)`, 'success');
+          showToast(`Baris #${index + 1}: Valid & Aktif (${result.testedModel || modelValue}) [${result.latencyMs}ms]`, 'success');
         }
       } else {
         const errText = typeof result.error === 'string' ? result.error : (result.error ? String(result.error) : 'Tidak Valid');
@@ -433,7 +433,11 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                             #{idx + 1}: {line.length > 10 ? `${line.substring(0, 8)}...${line.substring(line.length - 4)}` : line}
                           </span>
                           <div className="flex items-center gap-2">
-                            {res?.valid && !res?.isQuotaLimit && <span className="text-emerald-400 font-bold text-[10px]">✔ Valid ({res.latencyMs}ms)</span>}
+                            {res?.valid && !res?.isQuotaLimit && (
+                              <span className="text-emerald-400 font-bold text-[10px]" title={`Terverifikasi aktif pada model ${res.testedModel || modelValue}`}>
+                                ✔ Valid ({res.testedModel ? res.testedModel.replace('gemini-', '') : 'Aktif'}) [{res.latencyMs}ms]
+                              </span>
+                            )}
                             {res?.valid && res?.isQuotaLimit && (
                               <span className="text-amber-400 font-bold text-[10px]" title={typeof res.error === 'string' ? res.error : 'Limit Kuota'}>
                                 ⚠ Valid (Limit Kuota)

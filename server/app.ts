@@ -225,8 +225,20 @@ export function parseSafeBody(req: Request | any): any {
 }
 
 // Logic for testing a single API key with target model support and resilient diagnostics
+export function extractCleanApiKey(rawKey: string): string {
+  if (!rawKey) return "";
+  let key = rawKey.trim();
+  key = key.replace(/^["'`\s]+|["'`\s,;]+$/g, "");
+  const match = key.match(/AIza[0-9A-Za-z-_]{35}/);
+  if (match) {
+    return match[0];
+  }
+  return key;
+}
+
+// Logic for testing a single API key with target model support and resilient diagnostics
 export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: string) {
-  let key = (rawKey || "").trim();
+  let key = extractCleanApiKey(rawKey);
   const isDefaultOrSystem = !key || key.toLowerCase() === "default" || key.toLowerCase() === "system";
   if (isDefaultOrSystem && process.env.GEMINI_API_KEY) {
     key = process.env.GEMINI_API_KEY.trim();
@@ -259,133 +271,115 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
     };
   }
 
-  const testModel = sanitizeModel(requestedModel || "gemini-3.5-flash-lite");
+  const primaryModel = sanitizeModel(requestedModel || "gemini-3.8-flash");
+  const candidateModels = Array.from(new Set([
+    primaryModel,
+    "gemini-3.8-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-2.5-flash",
+  ]));
 
-  try {
-    const ai = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-    });
+  const ai = new GoogleGenAI({
+    apiKey: key,
+    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
+  });
 
-    let timerId: any = null;
-    // Generous 12s timeout to accommodate transient network latency
-    const timeoutPromise = new Promise((_, reject) => {
-      timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 12s)")), 12000);
-    });
+  let lastError: any = null;
+  let encounteredQuota = false;
 
-    const verifyPromise = (async () => {
-      // 1. First probe: countTokens on the requested model
-      try {
-        return await ai.models.countTokens({
-          model: testModel,
-          contents: "ping",
-        });
-      } catch (err: any) {
-        const msg = String(err?.message || "").toLowerCase();
-        // If error indicates unauthorized/bad API key, bubble up immediately
-        if (
-          msg.includes("api_key_invalid") ||
-          msg.includes("api key not valid") ||
-          msg.includes("key is not valid")
-        ) {
-          throw err;
-        }
+  for (const model of candidateModels) {
+    try {
+      let timerId: any = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timerId = setTimeout(() => reject(new Error("Timeout verifikasi (> 6s)")), 6000);
+      });
 
-        // 2. Second probe: lightweight 1-token generateContent (without thinkingConfig)
+      const probePromise = (async () => {
         try {
           return await ai.models.generateContent({
-            model: testModel,
+            model,
             contents: "hi",
-            config: {
-              maxOutputTokens: 1,
-            },
+            config: { maxOutputTokens: 1 },
           });
         } catch (genErr: any) {
           const genMsg = String(genErr?.message || "").toLowerCase();
           if (
             genMsg.includes("api_key_invalid") ||
             genMsg.includes("api key not valid") ||
-            genMsg.includes("key is not valid")
+            genMsg.includes("key is not valid") ||
+            genMsg.includes("invalid api key")
           ) {
             throw genErr;
           }
-
-          // 3. Third probe: fallback to alternate stable model (gemini-3.5-flash-lite or gemini-2.5-flash)
-          const alternateModel =
-            testModel === "gemini-2.5-flash"
-              ? "gemini-3.5-flash-lite"
-              : "gemini-2.5-flash";
           return await ai.models.countTokens({
-            model: alternateModel,
+            model,
             contents: "ping",
           });
         }
+      })();
+
+      try {
+        await Promise.race([probePromise, timeoutPromise]);
+        return {
+          key,
+          maskedKey,
+          valid: true,
+          testedModel: model,
+          latencyMs: Date.now() - start,
+        };
+      } finally {
+        if (timerId) clearTimeout(timerId);
       }
-    })();
+    } catch (err: any) {
+      lastError = err;
+      const msg = String(err?.message || "").toLowerCase();
 
-    try {
-      await Promise.race([verifyPromise, timeoutPromise]);
-      return {
-        key,
-        maskedKey,
-        valid: true,
-        testedModel: testModel,
-        latencyMs: Date.now() - start,
-      };
-    } finally {
-      if (timerId) clearTimeout(timerId);
+      const isKeyInvalid =
+        msg.includes("api_key_invalid") ||
+        msg.includes("api key not valid") ||
+        msg.includes("key is not valid") ||
+        msg.includes("invalid api key");
+
+      if (isKeyInvalid) {
+        return {
+          key,
+          maskedKey,
+          valid: false,
+          error: "API Key tidak valid atau salah",
+          latencyMs: Date.now() - start,
+        };
+      }
+
+      if (msg.includes("resource_exhausted") || msg.includes("429") || msg.includes("quota")) {
+        encounteredQuota = true;
+        continue;
+      }
+
+      continue;
     }
-  } catch (e: any) {
-    let rawMsg = cleanErrorMessage(e) || "Gagal verifikasi";
-    const lower = rawMsg.toLowerCase();
+  }
 
-    // Check specifically for true API key invalidation (401 / bad key)
-    const isKeyInvalid =
-      lower.includes("api_key_invalid") ||
-      lower.includes("api key not valid") ||
-      lower.includes("key is not valid") ||
-      lower.includes("invalid api key") ||
-      (lower.includes("400") && lower.includes("key"));
-
-    // Check for rate limit / quota
-    const isQuota =
-      lower.includes("resource_exhausted") ||
-      lower.includes("429") ||
-      lower.includes("quota") ||
-      lower.includes("billing");
-
-    // Check for permissions
-    const isPermission = lower.includes("permission_denied") || lower.includes("403");
-    const isTimeout = lower.includes("timeout");
-
-    let errorLabel = rawMsg;
-    let isValidKey = false;
-    let isQuotaLimit = false;
-
-    if (isKeyInvalid) {
-      errorLabel = "API Key tidak valid atau salah";
-    } else if (isQuota) {
-      // NOTE: Key IS valid, but quota has hit temporary rate limit
-      isValidKey = true;
-      isQuotaLimit = true;
-      errorLabel = "Key Valid • Kuota limit pada model ini (Gunakan model lain)";
-    } else if (isPermission) {
-      errorLabel = "Key Valid • Izin API Gemini belum diaktifkan di Google Cloud Console";
-    } else if (isTimeout) {
-      errorLabel = "Timeout verifikasi (> 12s, koneksi lambat)";
-    } else {
-      errorLabel = rawMsg.length > 70 ? rawMsg.substring(0, 70) + "..." : rawMsg;
-    }
-
+  if (encounteredQuota) {
     return {
       key,
       maskedKey,
-      valid: isValidKey,
-      isQuotaLimit,
-      error: errorLabel,
+      valid: true,
+      isQuotaLimit: true,
+      error: "Key Valid • Kuota limit sementara (Gunakan model Gemini 3.8/3.5)",
       latencyMs: Date.now() - start,
     };
   }
+
+  const rawMsg = cleanErrorMessage(lastError) || "Gagal verifikasi API key";
+  return {
+    key,
+    maskedKey,
+    valid: false,
+    error: rawMsg.length > 70 ? rawMsg.substring(0, 70) + "..." : rawMsg,
+    latencyMs: Date.now() - start,
+  };
 }
 
 // Logic for testing all models compatibility with an API key
