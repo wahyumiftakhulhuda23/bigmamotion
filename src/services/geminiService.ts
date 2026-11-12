@@ -296,7 +296,9 @@ export async function testSingleApiKey(
           msg.includes('api key not valid') ||
           msg.includes('key is not valid') ||
           msg.includes('invalid api key') ||
-          (msg.includes('400') && msg.includes('key'))
+          msg.includes('api_key_expired') ||
+          msg.includes('unauthenticated') ||
+          msg.includes('401')
         ) {
           return {
             key,

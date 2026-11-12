@@ -337,7 +337,9 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
             genMsg.includes("api key not valid") ||
             genMsg.includes("key is not valid") ||
             genMsg.includes("invalid api key") ||
-            (genMsg.includes("400") && genMsg.includes("key"))
+            genMsg.includes("api_key_expired") ||
+            genMsg.includes("unauthenticated") ||
+            genMsg.includes("401")
           ) {
             throw genErr;
           }
@@ -365,14 +367,16 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
       const cleanMsg = cleanErrorMessage(err);
       const msg = cleanMsg.toLowerCase();
 
-      const isKeyInvalid =
+      const isTrueKeyInvalid =
         msg.includes("api_key_invalid") ||
         msg.includes("api key not valid") ||
         msg.includes("key is not valid") ||
         msg.includes("invalid api key") ||
-        (msg.includes("400") && msg.includes("key"));
+        msg.includes("api_key_expired") ||
+        msg.includes("unauthenticated") ||
+        msg.includes("401");
 
-      if (isKeyInvalid) {
+      if (isTrueKeyInvalid) {
         return {
           key,
           maskedKey,
