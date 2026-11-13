@@ -22,6 +22,7 @@ import {
   generatePromptsViaGemini,
   generateSingleAnimationCode,
   AllKeysExhaustedError,
+  resetKeyHealthPool,
 } from './services/geminiService';
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
@@ -292,6 +293,7 @@ export default function App() {
   const handleConfirmModelSwitch = (newModel: GeminiModel) => {
     setSelectedModel(newModel);
     saveStoredModel(newModel);
+    resetKeyHealthPool();
     setIsModelRotationModalOpen(false);
     addLog(`✅ [Rotasi Model AI] Berhasil beralih ke model ${newModel}.`, 'success');
     showToast(`Berhasil beralih ke model ${newModel}!`, 'success');
@@ -444,6 +446,7 @@ export default function App() {
     setSelectedModel(model);
     saveStoredApiKeys(keys);
     saveStoredModel(model);
+    resetKeyHealthPool();
     setIsApiModalOpen(false);
 
     if (keys.length > 0) {
@@ -692,45 +695,22 @@ export default function App() {
       setProgressPercent(Math.round(((i + 1) / total) * 100));
 
       try {
-        // Coba generate dengan model terpilih, jika gagal coba dengan fallback model produksi stabil
-        let anim = null;
-        try {
-          anim = await generateSingleAnimationCode(
-            apiKeys,
-            selectedModel,
-            currentPrompt,
-            currentType,
-            nicheCategory,
-            visualStyle,
-            i + 1,
-            total,
-            undefined,
-            3,
-            isGreenScreen,
-            colorMode,
-            motionDynamics,
-            neonGlow
-          );
-        } catch (firstErr) {
-          const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-          addLog(`[Auto-Recovery] Mencoba ulang prompt #${i + 1} dengan model stabil (${fallbackModel})...`, 'info');
-          anim = await generateSingleAnimationCode(
-            apiKeys,
-            fallbackModel,
-            currentPrompt,
-            currentType,
-            nicheCategory,
-            visualStyle,
-            i + 1,
-            total,
-            undefined,
-            2,
-            isGreenScreen,
-            colorMode,
-            motionDynamics,
-            neonGlow
-          );
-        }
+        const anim = await generateSingleAnimationCode(
+          apiKeys,
+          selectedModel,
+          currentPrompt,
+          currentType,
+          nicheCategory,
+          visualStyle,
+          i + 1,
+          total,
+          undefined,
+          3,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
+        );
 
         if (anim) {
           const newAnimItem: AnimationItem = {
@@ -782,44 +762,22 @@ export default function App() {
     showToast(`Mencoba ulang render animasi #${index + 1}...`, 'info');
 
     try {
-      let anim = null;
-      try {
-        anim = await generateSingleAnimationCode(
-          apiKeys,
-          selectedModel,
-          promptText,
-          currentType,
-          nicheCategory,
-          visualStyle,
-          1,
-          1,
-          undefined,
-          3,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow
-        );
-      } catch (firstErr) {
-        const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-        addLog(`[Auto-Recovery] Mencoba ulang prompt #${index + 1} dengan ${fallbackModel}...`, 'info');
-        anim = await generateSingleAnimationCode(
-          apiKeys,
-          fallbackModel,
-          promptText,
-          currentType,
-          nicheCategory,
-          visualStyle,
-          1,
-          1,
-          undefined,
-          2,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow
-        );
-      }
+      const anim = await generateSingleAnimationCode(
+        apiKeys,
+        selectedModel,
+        promptText,
+        currentType,
+        nicheCategory,
+        visualStyle,
+        1,
+        1,
+        undefined,
+        3,
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow
+      );
 
       if (anim) {
         const newAnimItem: AnimationItem = {
@@ -1298,44 +1256,22 @@ export default function App() {
       addLog(`⚡ [Coba Ulang Auto Pilot #${i + 1}/${total} - ${item.accountName}] Memproses "${item.prompt.substring(0, 30)}..."`, 'info');
 
       try {
-        let anim = null;
-        try {
-          anim = await generateSingleAnimationCode(
-            apiKeys,
-            selectedModel,
-            item.prompt,
-            item.type,
-            item.subCategory,
-            item.style,
-            i + 1,
-            total,
-            undefined,
-            3,
-            item.isGreenScreen ?? false,
-            item.colorMode ?? 'gradient',
-            item.motionDynamics ?? 'flow',
-            item.neonGlow ?? true
-          );
-        } catch (firstErr) {
-          const fallbackModel: GeminiModel = selectedModel === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-          addLog(`[Auto-Recovery] Mencoba ulang [${item.accountName}] dengan ${fallbackModel}...`, 'info');
-          anim = await generateSingleAnimationCode(
-            apiKeys,
-            fallbackModel,
-            item.prompt,
-            item.type,
-            item.subCategory,
-            item.style,
-            i + 1,
-            total,
-            undefined,
-            2,
-            item.isGreenScreen ?? false,
-            item.colorMode ?? 'gradient',
-            item.motionDynamics ?? 'flow',
-            item.neonGlow ?? true
-          );
-        }
+        const anim = await generateSingleAnimationCode(
+          apiKeys,
+          selectedModel,
+          item.prompt,
+          item.type,
+          item.subCategory,
+          item.style,
+          i + 1,
+          total,
+          undefined,
+          3,
+          item.isGreenScreen ?? false,
+          item.colorMode ?? 'gradient',
+          item.motionDynamics ?? 'flow',
+          item.neonGlow ?? true
+        );
 
         if (anim) {
           const newAnimItem: AnimationItem = {

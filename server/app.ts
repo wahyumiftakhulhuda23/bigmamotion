@@ -23,14 +23,42 @@ export function getClient(apiKey?: string) {
   });
 }
 
-// Server-side in-memory prompt history bank across sessions
+// Server-side in-memory prompt history bank & unsupported-model short-circuit cache (5 min TTL)
 const serverPromptHistoryBank = new Set<string>();
+const unsupportedServerModels = new Map<string, number>();
 
-export function getSmartThinkingConfig(targetModel: string, budget = 2048): any {
-  // Empower AI reasoning with an active thinking budget for models supporting extended thinking (3.8, 3.6, 2.5, 3.1-pro)
-  if (targetModel.includes("2.5") || targetModel.includes("3.8") || targetModel.includes("3.6") || targetModel.includes("pro") || targetModel.includes("thinking")) {
-    return { thinkingBudget: budget };
+export function isServerModelCachedUnsupported(model: string): boolean {
+  const ts = unsupportedServerModels.get(model);
+  if (!ts) return false;
+  if (Date.now() - ts > 5 * 60 * 1000) {
+    unsupportedServerModels.delete(model);
+    return false;
   }
+  return true;
+}
+
+export function getSmartThinkingConfig(
+  targetModel: string,
+  budgetOrPurpose: number | 'prompt' | 'animation' | 'vision' = 'animation'
+): any {
+  const purpose = typeof budgetOrPurpose === 'string' ? budgetOrPurpose : (budgetOrPurpose >= 1024 ? 'vision' : 'prompt');
+  const m = (targetModel || '').toLowerCase();
+
+  // Gemini 2.5 series: uses numeric thinkingBudget (0 skips reasoning tokens completely for fast/cheap codegen)
+  if (m.includes('2.5')) {
+    return { thinkingBudget: purpose === 'vision' ? 512 : 0 };
+  }
+
+  // Gemini 3.x Flash Lite series: uses ThinkingLevel.MINIMAL (prompt/anim) or LOW (vision)
+  if (m.includes('3.1-flash-lite') || m.includes('3.5-flash-lite') || m.includes('flash-lite')) {
+    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
+  }
+
+  // Gemini 3.6 / 3.8 / 3.1-Pro / 4.x series: uses ThinkingLevel.LOW (NEVER thinkingBudget which triggers 400 error & wastes tokens)
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.1-pro') || m.includes('4-') || m.includes('thinking')) {
+    return { thinkingLevel: ThinkingLevel.LOW };
+  }
+
   return undefined;
 }
 
@@ -93,24 +121,33 @@ export async function generateContentWithFallback(
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 1
 ): Promise<{ response: any; usedModel: string }> {
-  // Prioritize GA high-speed reliable models immediately after primaryModel so Vercel serverless never wastes multiple 404/timeout hops
-  const fallbackOrder = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+  // Put GA fast/cheap models first in fallback chain, skipping any model recently cached as unsupported (404)
+  const fallbackOrder = [
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
+  ];
   const candidateModels = Array.from(new Set([
     primaryModel,
-    ...(primaryModel === "gemini-3.5-flash-lite" ? ["gemini-3.1-flash-lite"] : []),
     ...fallbackOrder,
-  ])).slice(0, 4);
+  ]))
+    .filter((m) => !isServerModelCachedUnsupported(m))
+    .slice(0, 3);
 
+  const modelsToTry = candidateModels.length > 0 ? candidateModels : ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
   let lastError: any = null;
 
-  for (const model of candidateModels) {
+  for (const model of modelsToTry) {
     const allowedAttempts = maxRetriesPerModel;
 
     for (let attempt = 1; attempt <= allowedAttempts; attempt++) {
       try {
         let timerId: any = null;
         const timeoutPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 12s)")), 12000);
+          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 14s)")), 14000);
         });
 
         const { contents, config } = generateParams(model);
@@ -130,8 +167,27 @@ export async function generateContentWithFallback(
         lastError = err;
         const msg = cleanErrorMessage(err).toLowerCase();
 
+        // Fail fast on invalid/unauthorized key — NEVER burn fallback models with a bad key
+        const isAuthError =
+          msg.includes("api_key_invalid") ||
+          msg.includes("api key not valid") ||
+          msg.includes("key is not valid") ||
+          msg.includes("invalid api key") ||
+          msg.includes("api_key_expired") ||
+          msg.includes("unauthenticated") ||
+          msg.includes("permission_denied") ||
+          msg.includes("401") ||
+          msg.includes("403");
+        if (isAuthError) {
+          throw new Error(cleanErrorMessage(err));
+        }
+
         // Only retry same model without thinkingConfig if the error is specifically about thinking/budget/config argument
-        const isConfigIssue = msg.includes("thinking") || msg.includes("budget") || msg.includes("invalid_argument") || msg.includes("unsupported field");
+        const isConfigIssue =
+          msg.includes("thinking") ||
+          msg.includes("budget") ||
+          msg.includes("invalid_argument") ||
+          msg.includes("unsupported field");
         if (isConfigIssue) {
           try {
             const { contents, config } = generateParams(model);
@@ -140,7 +196,7 @@ export async function generateContentWithFallback(
               delete safeConfig.thinkingConfig;
               let retryTimer: any = null;
               const retryTimeout = new Promise((_, reject) => {
-                retryTimer = setTimeout(() => reject(new Error("Timeout Retry (> 10s)")), 10000);
+                retryTimer = setTimeout(() => reject(new Error("Timeout Retry (> 12s)")), 12000);
               });
               try {
                 const retryResp: any = await Promise.race([
@@ -169,6 +225,11 @@ export async function generateContentWithFallback(
           msg.includes("proxy_generation_disabled") ||
           msg.includes("is not found");
 
+        if (isNotFound) {
+          unsupportedServerModels.set(model, Date.now());
+          break;
+        }
+
         const isQuota =
           msg.includes("quota") ||
           msg.includes("exceeded") ||
@@ -184,8 +245,7 @@ export async function generateContentWithFallback(
           msg.includes("high demand") ||
           msg.includes("unavailable");
 
-        if (isNotFound || isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
-          // Langsung beralih ke model fallback berikutnya tanpa menunda
+        if (isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
           break;
         } else if (isTransient && attempt < allowedAttempts) {
           await new Promise((res) => setTimeout(res, 250 * attempt));
@@ -335,14 +395,11 @@ export async function handleTestSingleKeyLogic(rawKey: string, requestedModel?: 
   }
 
   const primaryModel = sanitizeModel(requestedModel || "gemini-3.8-flash");
+  // Test only primaryModel + max 1 GA fallback to avoid wasting RPM quota during key checks
   const candidateModels = Array.from(new Set([
     primaryModel,
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite",
-    "gemini-3.1-flash-lite",
-    "gemini-flash-latest",
     "gemini-2.5-flash",
-  ]));
+  ])).slice(0, 2);
 
   const ai = new GoogleGenAI({
     apiKey: key,
@@ -481,113 +538,113 @@ export async function handleTestModelsLogic(rawKey: string) {
     httpOptions: { headers: { "User-Agent": "aistudio-build" } },
   });
 
-  const modelResults = await Promise.all(
-    modelsToTest.map(async (m) => {
-      const start = Date.now();
-      try {
-        let timerId: any = null;
-        const toPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout (> 6s)")), 6000);
-        });
-
-        const testTargetModel = sanitizeModel(m.id);
-        const testRun = (async () => {
-          try {
-            return await ai.models.countTokens({
-              model: testTargetModel,
-              contents: "ping",
-            });
-          } catch {
-            return await ai.models.generateContent({
-              model: testTargetModel,
-              contents: "ok",
-              config: { maxOutputTokens: 1 },
-            });
-          }
-        })();
-
+  // Probe in gentle batches of 2 with 150ms spacing to prevent burst 429 rate-limiting on free-tier keys
+  const modelResults: any[] = [];
+  for (let i = 0; i < modelsToTest.length; i += 2) {
+    const pair = modelsToTest.slice(i, i + 2);
+    const pairResults = await Promise.all(
+      pair.map(async (m) => {
+        const start = Date.now();
         try {
-          await Promise.race([testRun, toPromise]);
+          let timerId: any = null;
+          const toPromise = new Promise((_, reject) => {
+            timerId = setTimeout(() => reject(new Error("Timeout (> 6s)")), 6000);
+          });
+
+          const testTargetModel = sanitizeModel(m.id);
+          // Zero-output-token countTokens probe first (preserves generation quota)
+          const testRun = ai.models.countTokens({
+            model: testTargetModel,
+            contents: "ping",
+          });
+
+          try {
+            await Promise.race([testRun, toPromise]);
+            return {
+              id: m.id,
+              name: m.name,
+              badge: m.badge,
+              status: "active" as const,
+              valid: true,
+              latencyMs: Date.now() - start,
+              message: "Siap Digunakan • Hemat Token",
+            };
+          } finally {
+            if (timerId) clearTimeout(timerId);
+          }
+        } catch (err: any) {
+          const raw = cleanErrorMessage(err);
+          const lower = raw.toLowerCase();
+
+          if (
+            lower.includes("api_key_invalid") ||
+            lower.includes("api key not valid") ||
+            lower.includes("key is not valid")
+          ) {
+            return {
+              id: m.id,
+              name: m.name,
+              badge: m.badge,
+              status: "invalid_key" as const,
+              valid: false,
+              latencyMs: Date.now() - start,
+              message: "API Key Salah / Tidak Ditemukan",
+            };
+          }
+
+          if (lower.includes("resource_exhausted") || lower.includes("429") || lower.includes("quota")) {
+            return {
+              id: m.id,
+              name: m.name,
+              badge: m.badge,
+              status: "quota_exhausted" as const,
+              valid: true,
+              latencyMs: Date.now() - start,
+              message: "Key Valid • Kuota Limit (Gunakan Model Lain)",
+            };
+          }
+
+          if (lower.includes("not found") || lower.includes("404") || lower.includes("unrecognized") || lower.includes("not supported")) {
+            return {
+              id: m.id,
+              name: m.name,
+              badge: m.badge,
+              status: "not_available" as const,
+              valid: true,
+              latencyMs: Date.now() - start,
+              message: "Model Belum Tersedia di Region Akun Ini",
+            };
+          }
+
+          if (lower.includes("permission") || lower.includes("403")) {
+            return {
+              id: m.id,
+              name: m.name,
+              badge: m.badge,
+              status: "permission_denied" as const,
+              valid: true,
+              latencyMs: Date.now() - start,
+              message: "Akses Belum Diaktifkan di GCP Console",
+            };
+          }
+
           return {
             id: m.id,
             name: m.name,
             badge: m.badge,
-            status: "active" as const,
+            status: "network_issue" as const,
             valid: true,
             latencyMs: Date.now() - start,
-            message: "Siap Digunakan • Respon Cepat",
-          };
-        } finally {
-          if (timerId) clearTimeout(timerId);
-        }
-      } catch (err: any) {
-        const raw = cleanErrorMessage(err);
-        const lower = raw.toLowerCase();
-
-        if (
-          lower.includes("api_key_invalid") ||
-          lower.includes("api key not valid") ||
-          lower.includes("key is not valid")
-        ) {
-          return {
-            id: m.id,
-            name: m.name,
-            badge: m.badge,
-            status: "invalid_key" as const,
-            valid: false,
-            latencyMs: Date.now() - start,
-            message: "API Key Salah / Tidak Ditemukan",
+            message: lower.includes("timeout") ? "Respon Lambat (> 6s)" : raw.substring(0, 50),
           };
         }
-
-        if (lower.includes("resource_exhausted") || lower.includes("429") || lower.includes("quota")) {
-          return {
-            id: m.id,
-            name: m.name,
-            badge: m.badge,
-            status: "quota_exhausted" as const,
-            valid: true, // Key is valid
-            latencyMs: Date.now() - start,
-            message: "Key Valid • Kuota Limit (Gunakan Model Lain)",
-          };
-        }
-
-        if (lower.includes("not found") || lower.includes("404") || lower.includes("unrecognized")) {
-          return {
-            id: m.id,
-            name: m.name,
-            badge: m.badge,
-            status: "not_available" as const,
-            valid: true, // Key is valid
-            latencyMs: Date.now() - start,
-            message: "Model Belum Tersedia di Region Akun Ini",
-          };
-        }
-
-        if (lower.includes("permission") || lower.includes("403")) {
-          return {
-            id: m.id,
-            name: m.name,
-            badge: m.badge,
-            status: "permission_denied" as const,
-            valid: true,
-            latencyMs: Date.now() - start,
-            message: "Akses Belum Diaktifkan di GCP Console",
-          };
-        }
-
-        return {
-          id: m.id,
-          name: m.name,
-          badge: m.badge,
-          status: "network_issue" as const,
-          valid: true,
-          latencyMs: Date.now() - start,
-          message: lower.includes("timeout") ? "Respon Lambat (> 6s)" : raw.substring(0, 50),
-        };
-      }
-    })
-  );
+      })
+    );
+    modelResults.push(...pairResults);
+    if (i + 2 < modelsToTest.length) {
+      await new Promise((res) => setTimeout(res, 150));
+    }
+  }
 
   const activeCount = modelResults.filter((r) => r.status === "active").length;
   const isKeyValid = !modelResults.some((r) => r.status === "invalid_key");
@@ -692,15 +749,18 @@ export async function handleGeneratePromptsLogic(body: any) {
     : (subCategory && subCategory !== 'all' && subCategory !== 'general' ? `Category / Domain: ${subCategory}\n` : '');
 
   const previousPrompts: string[] = Array.isArray(body.previousPrompts) ? body.previousPrompts : [];
-  const mergedBank = Array.from(new Set([...previousPrompts, ...serverPromptHistoryBank])).slice(0, 20);
+  // Keep top 8 concise snippets for anti-repetition to save hundreds of input tokens per request
+  const mergedBank = Array.from(new Set([...previousPrompts, ...serverPromptHistoryBank]))
+    .slice(0, 8)
+    .map((p) => p.substring(0, 75));
   const negativeList = mergedBank.length > 0
-    ? `\nANTI-REPETITION MANDATE (ABSOLUTELY NEVER REPEAT PREVIOUS PROMPTS ACROSS DAYS OR SESSIONS):\nDo NOT generate any concept, subject, or composition similar to these previously generated prompts:\n${mergedBank.map((p, idx) => `[Prior #${idx + 1}]: ${p}`).join('\n')}\nYou MUST invent a completely novel, fresh subject and distinct mechanical/artistic composition.`
+    ? `\nAVOID repeating concepts similar to: ${mergedBank.join(' | ')}`
     : '';
 
-  const dynamicSessionSeed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1000000).toString(36)}`;
+  const dynamicSessionSeed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 100000).toString(36)}`;
 
   const targetCount = Math.max(1, count || 1);
-  const CHUNK_SIZE = 12;
+  const CHUNK_SIZE = 10;
   const numChunks = Math.ceil(targetCount / CHUNK_SIZE);
   let allPrompts: string[] = [];
 
@@ -712,99 +772,17 @@ export async function handleGeneratePromptsLogic(body: any) {
     const isSingle = batchCount === 1;
     let promptContent = '';
     if (type === 'bg') {
-      promptContent = isSingle
-        ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable FULL-FRAME MOTION BACKGROUND prompt in English (Seed: ${dynamicSessionSeed}).
-
-MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES & ZERO WHITE FLARES):
-1. FULL-FRAME EDGE-TO-EDGE CANVAS COVERAGE:
-   - The prompt MUST describe a continuous, edge-to-edge widescreen looping motion graphics environment spanning the entire 100% canvas from corner to corner (e.g. "Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport", "3D perspective neon cyber grid terrain receding toward luminous horizon with waving contour lines", "Architectural structural geometric lattice mesh with dynamic linkage lines across full screen", "Luxury obsidian black silk satin fabric undulating with rich champagne gold light caustics").
-   - FORBIDDEN: Isolated centered icons, symbols, floating emblems, logos, or empty border margins.
-   - STRICT BAN ON PARTICLES: NEVER describe floating particles, dust motes, stardust, or loose dots. Visuals must be pure continuous wave ribbons, geometric topographic contours, or undulating silk caustics.
-   - STRICT BAN ON WHITE FLARES & WHITEOUTS: NEVER describe blinding white light flares, central white radial bursts, or harsh whiteouts. All lighting must be subtle, chromatic, and elegant with deep background contrast.
-2. 3-TIER ATMOSPHERIC DEPTH:
-   - Deep background atmospheric gradient, dynamic midground motion graphics, and subtle foreground ambient chromatic sweeps.
-3. 60 FPS SEAMLESS HARMONIC LOOP:
-   - Smooth periodic wave functions, continuous flow, and studio-grade cinematic motion.
-${negativeList}
-
-${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
-Visual Style: ${style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-
-Output format: JSON array containing exactly 1 string, e.g. ["Fluid multi-layered chromatic wave ribbons flowing diagonally across widescreen viewport..."]`
-        : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} UNIQUE FULL-FRAME MOTION BACKGROUND prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different atmospheric environment, motion dynamic, and visual theme. Start EVERY prompt with a unique [ID_CODE] (e.g., [CHROMATIC_WAVES], [CYBER_HORIZON], [AURORA_RIBBONS], [SILK_CAUSTICS]).
-
-MANDATORY RULES FOR FULL-FRAME BACKGROUND DIVERSITY (STRICT ZERO PARTICLES & ZERO WHITE FLARES):
-1. NO REPETITION & NO CENTERING: Each prompt MUST describe a FULL-FRAME EDGE-TO-EDGE motion graphics scene filling the entire widescreen canvas. NEVER describe isolated icons, centered logos, or static borders.
-2. STRICT BAN ON PARTICLES: DO NOT describe floating particles, dust motes, or loose speckled dots. All graphics must be clean continuous spline ribbons, 3D perspective grids, topographic contour waves, or luxury liquid caustics.
-3. STRICT BAN ON WHITE LIGHT FLARES: NEVER describe white flares, white light bursts, or blinding center blooms. Use rich, moody chromatic palette harmonies.
-4. DIVERSE VISUAL CONCEPTS:
-   - Prompt 1: Multi-layered chromatic fluid wave ribbons and smooth liquid gradient displacement.
-   - Prompt 2: 3D perspective cyber grid, digital wireframe topography, or matrix elevation lines.
-   - Prompt 3: Interconnected structural geometric lattice mesh with clean vector linkage lines.
-   - Prompt 4: Luxury satin fabric folds, liquid metallic gold waves, or ambient studio caustics.
-   - (Vary concepts continuously across all items).
-5. 60 FPS SEAMLESS KINETICS: Include harmonic wave oscillations, continuous panning, and atmospheric depth.
-${negativeList}
-
-${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
-Visual Style: ${style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-
-Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]`;
+      promptContent = `Microstock Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompt(s) in English (Seed: ${dynamicSessionSeed}).
+RULES: Edge-to-edge full-canvas ribbons/waves/grids/silk caustics; NO centered icons/logos, NO particles/dots, NO white flares; 3-tier depth; smooth harmonic loop.${negativeList}
+${categoryLine}Style: ${style}${colorModeDirective}${glowDirective}
+${typeInstruction}${keywordsDirective}${greenScreenDirective}
+Return JSON array of ${batchCount} concise studio-grade string(s).`;
     } else {
-      promptContent = isSingle
-        ? `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Seed: ${dynamicSessionSeed}).
-
-MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO BACKGROUND PLATES, ZERO BROKEN POLYGONS):
-1. STANDALONE VOLUMETRIC 3D ICON OBJECT (THE OBJECT ITSELF IS 3D):
-   - The prompt MUST describe the subject/icon itself (e.g. 3D Camera, 3D Notification Bell, 3D Studio Microphone, 3D Padlock, 3D Trophy, 3D Crypto Vault, 3D Shopping Cart) as a physical, sculpted, standalone 3D volumetric artifact.
-   - STRICT ZERO CONTAINER / ZERO RHOMBUS / ZERO SHIELD RULE:
-     * NEVER place the icon on a diamond (belah ketupat), rhombus plate, hexagon, shield plate, pedestal base, or background card!
-     * The icon must stand 100% naked and standalone on the canvas/green screen.
-   - ULTRA-REALISTIC CHIAROSCURO & VOLUMETRIC LIGHTING:
-     * Pristine native curved silhouette with smooth chamfered fillets.
-     * Crisp 1.5px specular highlight bevel rails along top-left edges catching key studio lighting.
-     * Rich multi-stop directional chiaroscuro gradients across body facets (e.g. lustrous imperial gold, chrome titanium, matte obsidian, or vivid saturated materials).
-     * Deep ambient occlusion crease shadows beneath joints and under-rims.
-     * Soft breathing elliptical ground contact shadow cast directly below the object on the canvas/green screen.
-2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES):
-   - All internal components (lens barrel on camera, clapper inside bell, mesh grille on microphone, dial on vault) are physically welded into the unified chassis.
-   - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, outer glass bubbles, or outer background cards.
-3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
-   - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents).
-4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
-   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal micro-articulation with secondary inertia, and a clipped 45-degree diagonal specular gleam sweep.
-${negativeList}
-
-${categoryLine}Animation Type: ${String(type).toUpperCase()}
-Visual Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-
-Output format: JSON array containing exactly 1 string, e.g. ["Masterpiece 3D volumetric model of professional DSLR Camera: standalone sculpted solid body with rich titanium chiaroscuro gradients, beveled chamfers with crisp 1.5px specular highlight rails, concentric multi-ring cylindrical optical lens barrel with glass reflections, spring-loaded shutter button, and soft breathing elliptical ground shadow on green screen (completely standalone, zero background plates, zero rhombus)..."]`
-        : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly ${batchCount} UNIQUE animation prompts (Seed: ${dynamicSessionSeed}). STRICT RULE: NO REPETITION. Each prompt must describe a completely different object, concept, and movement, using varied vocabulary and structure. Start EVERY prompt with a unique [ID_CODE] (e.g., [CAMERA_3D], [BELL_VOLUMETRIC], [VAULT_3D]).
-
-MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO SHIELD, ZERO PLATES):
-1. STANDALONE VOLUMETRIC 3D ICON OBJECT (THE OBJECT ITSELF IS 3D):
-   - Each prompt must describe a solid standalone 3D volumetric physical object (e.g., 3D Camera, 3D Notification Bell, 3D Microphone, 3D Padlock, 3D Trophy) with rich chiaroscuro surface, beveled chamfers with crisp specular highlight rails, and elliptical ground contact shadow.
-   - STRICT BAN: ZERO diamond/rhombus plates, ZERO shield badges, ZERO background cards. The object must stand completely uncontained on the canvas.
-2. EXTREME PROMPT DIVERSITY & STRUCTURAL VARIATION:
-   - EACH prompt in this batch MUST have a COMPLETELY DIFFERENT sentence structure, vocabulary, and thematic focus from the category: ${catMeta?.enName || subCategory}.
-3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
-   - NEVER describe rotating gear wheels or cogs on icons.
-4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
-   - Include harmonic vertical floating with elastic squash-and-stretch spring bounce, synchronized internal articulation on rigid anchors, and clipped specular sheen sweep.
-${negativeList}
-
-${categoryLine}Animation Type: ${String(type).toUpperCase()}
-Visual Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-
-Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]`;
+      promptContent = `Microstock Motion Director. Generate ${batchCount} unique standalone 3D VOLUMETRIC ICON motion prompt(s) in English (Seed: ${dynamicSessionSeed}).
+RULES: Physical sculpted standalone 3D icon with chiaroscuro 45-deg gradients, 1.5px bevel highlight rails, elastic 60 FPS spring motion & internal articulation; ZERO diamond/rhombus/shield plates, ZERO background cards, ZERO gears/cogs, ZERO particles.${negativeList}
+${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
+${typeInstruction}${keywordsDirective}${greenScreenDirective}
+Return JSON array of ${batchCount} concise studio-grade string(s).`;
     }
 
     try {
@@ -812,9 +790,9 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
         ai,
         targetModel,
         (currentModel) => {
-          const batchMaxTokens = isSingle ? 250 : Math.min(2500, Math.max(400, batchCount * 100));
+          const batchMaxTokens = isSingle ? 180 : Math.min(1800, Math.max(300, batchCount * 90));
           const config: any = {
-            temperature: 0.95,
+            temperature: 0.9,
             maxOutputTokens: batchMaxTokens,
             responseMimeType: "application/json",
             responseSchema: {
@@ -824,7 +802,7 @@ Output format: JSON array of ${batchCount} strings e.g. ["prompt 1", "prompt 2"]
               },
             },
           };
-          const thinkingConfig = getSmartThinkingConfig(currentModel, 512);
+          const thinkingConfig = getSmartThinkingConfig(currentModel, 'prompt');
           if (thinkingConfig) {
             config.thinkingConfig = thinkingConfig;
           }
@@ -959,77 +937,19 @@ export async function handleGenerateAnimationLogic(body: any) {
         ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
         : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
 
-  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
-
-PARAMETER PROMPT:
-- Subjek/Topik: "${promptTopic}"
-- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
-- Gaya Visual: ${style} | Mode Warna: ${colorMode}
-- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
+PARAMETER:
+- Topik: "${promptTopic}" (${catInfo})
+- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
+- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
 ${colorStyleDirective}
-
-ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
-   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
-   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
-2. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
-3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
-   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
-   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
-${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
-
-WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: ${bgColor}; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; width: 100%; height: 100%; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    cx = w / 2;
-    cy = h / 2;
-    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  function animate(time) {
-    try {
-      const t = time * 0.001;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = ${clearFill};
-      ctx.fillRect(0, 0, w, h);
-
-      ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang di sini' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
-      ctx.save();
-      ctx.translate(cx, cy + floatY);
-      // Tuliskan seluruh kode menggambar anatomi 3D volumetric subjek "${promptTopic}" dengan chiaroscuro 45° & bevel rail di sini
-      ctx.restore();`}
-    } catch (err) {
-      console.error("Render loop error:", err);
-    }
-
-    requestAnimationFrame(animate);
-  }
-  requestAnimationFrame(animate);
-</script>
-</body>
-</html>`;
+ATURAN MUTLAK:
+1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
+2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
+3. CHIAROSCURO 45°: Top highlight cerah, front facade midtone kaya, underside ambient occlusion -35%.
+4. ZERO RODA GERIGI & ZERO PARTICLES.
+5. HARUS bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background HTML ${bgColor}).
+Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penjelasan.`;
 
   let cleanHTML = '';
   const { response } = await generateContentWithFallback(
@@ -1038,11 +958,11 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.2,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 3600,
       };
-      // Zero thinking budget on Gemini 2.5 models skips internal CoT pause and cuts animation generation time from ~7s down to ~1.8s
-      if (currentModel.includes("2.5")) {
-        animConfig.thinkingConfig = { thinkingBudget: 0 };
+      const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
+      if (smartThinking) {
+        animConfig.thinkingConfig = smartThinking;
       }
       return { contents: systemPrompt, config: animConfig };
     }
@@ -1119,29 +1039,18 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
         ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
         : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
 
-  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
-
-PARAMETER PROMPT:
-- Subjek/Topik: "${promptTopic}"
-- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
-- Gaya Visual: ${style} | Mode Warna: ${colorMode}
-- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
+PARAMETER:
+- Topik: "${promptTopic}"
+- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
+- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
 ${colorStyleDirective}
-
-ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
-   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
-   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
-2. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
-3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
-   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
-   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
-${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
-
-WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
+ATURAN MUTLAK:
+1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
+2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
+3. CHIAROSCURO 45° & ZERO RODA GERIGI/PARTICLES.
+4. Bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background HTML ${bgColor}).
+Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa penjelasan.`;
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -1150,10 +1059,11 @@ WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
   try {
     const animConfig: any = {
       temperature: 0.2,
-      maxOutputTokens: 4096,
+      maxOutputTokens: 3600,
     };
-    if (targetModel.includes("2.5")) {
-      animConfig.thinkingConfig = { thinkingBudget: 0 };
+    const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
+    if (smartThinking) {
+      animConfig.thinkingConfig = smartThinking;
     }
 
     const responseStream = await ai.models.generateContentStream({
@@ -1374,10 +1284,10 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       targetModel,
       (currentModel) => {
         const config: any = {
-          temperature: 0.12,
-          maxOutputTokens: 8192,
+          temperature: 0.15,
+          maxOutputTokens: 4500,
         };
-        const smartThinking = getSmartThinkingConfig(currentModel, 2048);
+        const smartThinking = getSmartThinkingConfig(currentModel, 'vision');
         if (smartThinking) config.thinkingConfig = smartThinking;
         return {
           contents: [
@@ -1398,12 +1308,12 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
     );
 
     let rawText = response.text || "";
-    let cleanHTML = extractHTMLFromMarkdown(rawText);
+    let cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
 
     if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
       if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
         rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-        cleanHTML = extractHTMLFromMarkdown(rawText);
+        cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
       }
     }
 
@@ -1489,9 +1399,9 @@ CRITICAL RULES:
       (currentModel) => {
         const config: any = {
           temperature: 0.3,
-          maxOutputTokens: 600,
+          maxOutputTokens: 450,
         };
-        const smartThinking = getSmartThinkingConfig(currentModel, 512);
+        const smartThinking = getSmartThinkingConfig(currentModel, 'prompt');
         if (smartThinking) config.thinkingConfig = smartThinking;
         return {
           contents: [
@@ -1508,7 +1418,7 @@ CRITICAL RULES:
           config,
         };
       },
-      2
+      1
     );
 
     let raw = response.text || "";

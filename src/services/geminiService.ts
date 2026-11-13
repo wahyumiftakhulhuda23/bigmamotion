@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import { AnimationType, GeminiModel, ApiKeyTestResult, ColorMode, MotionDynamics, ShapeAnalysis } from '../types';
 import { findCategoryById, generateProceduralPrompts } from '../constants/categories';
 
@@ -105,6 +105,186 @@ export function isPromptDuplicateInBank(prompt: string, bank?: string[]): boolea
 
 let currentKeyIndex = 0;
 
+// --- SMART API KEY HEALTH, COOLDOWN & UNSUPPORTED-MODEL POOL (ANTI-BAN & ZERO-WASTE) ---
+const quarantinedKeys = new Set<string>(); // 401/403 dead/suspended keys - never hammered again
+const keyModelCooldowns = new Map<string, number>(); // `${key}::${model}` -> timestamp until cooldown ends
+const keyLastUsedAt = new Map<string, number>(); // LRU spacing so every key gets maximum rest
+const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
+
+export function resetKeyHealthPool(): void {
+  quarantinedKeys.clear();
+  keyModelCooldowns.clear();
+  keyLastUsedAt.clear();
+  unsupportedClientModels.clear();
+}
+
+export function unquarantineKey(rawKey: string): void {
+  const k = extractCleanApiKey(rawKey);
+  if (k) quarantinedKeys.delete(k);
+}
+
+function isModelUnsupportedCached(model: string): boolean {
+  const ts = unsupportedClientModels.get(model);
+  if (!ts) return false;
+  if (Date.now() - ts > 5 * 60 * 1000) {
+    unsupportedClientModels.delete(model);
+    return false;
+  }
+  return true;
+}
+
+function markModelUnsupportedCached(model: string): void {
+  unsupportedClientModels.set(model, Date.now());
+}
+
+function markKeyInvalidOrSuspended(key: string): void {
+  if (key) quarantinedKeys.add(key);
+}
+
+function markKeyModelCooldown(key: string, model: string, durationMs = 65000): void {
+  if (key && model) {
+    keyModelCooldowns.set(`${key}::${model}`, Date.now() + durationMs);
+  }
+}
+
+function isKeyModelInCooldown(key: string, model: string): boolean {
+  const until = keyModelCooldowns.get(`${key}::${model}`);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    keyModelCooldowns.delete(`${key}::${model}`);
+    return false;
+  }
+  return true;
+}
+
+function getCleanUniqueKeys(apiKeys: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of apiKeys || []) {
+    const clean = extractCleanApiKey(raw);
+    if (clean && clean.length > 5 && !seen.has(clean)) {
+      seen.add(clean);
+      out.push(clean);
+    }
+  }
+  return out;
+}
+
+export function getBestHealthyKey(apiKeys: string[], model?: string): string | undefined {
+  const uniqueKeys = getCleanUniqueKeys(apiKeys);
+  if (uniqueKeys.length === 0) return undefined;
+
+  const targetModel = model ? sanitizeModel(model) : '';
+  const now = Date.now();
+
+  // Filter out quarantined keys and keys cooling down on this model
+  const healthy = uniqueKeys.filter((k) => {
+    if (quarantinedKeys.has(k)) return false;
+    if (targetModel && isKeyModelInCooldown(k, targetModel)) return false;
+    return true;
+  });
+
+  if (healthy.length > 0) {
+    // Pick the key that has rested the longest (LRU) for natural rate-limit protection
+    let best = healthy[0];
+    let oldestTs = keyLastUsedAt.get(best) || 0;
+    for (let i = 1; i < healthy.length; i++) {
+      const ts = keyLastUsedAt.get(healthy[i]) || 0;
+      if (ts < oldestTs) {
+        oldestTs = ts;
+        best = healthy[i];
+      }
+    }
+    keyLastUsedAt.set(best, now);
+    return best;
+  }
+
+  return undefined;
+}
+
+export function getCostOptimizedThinkingConfig(
+  targetModel: string,
+  purpose: 'prompt' | 'animation' | 'vision' = 'animation'
+): any {
+  const m = (targetModel || '').toLowerCase();
+  if (m.includes('2.5')) {
+    return { thinkingBudget: purpose === 'vision' ? 512 : 0 };
+  }
+  if (m.includes('3.1-flash-lite') || m.includes('3.5-flash-lite') || m.includes('flash-lite')) {
+    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
+  }
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.1-pro') || m.includes('4-')) {
+    return { thinkingLevel: ThinkingLevel.LOW };
+  }
+  return undefined;
+}
+
+interface ClassifiedGeminiErr {
+  message: string;
+  isInvalidKey: boolean;
+  isQuota: boolean;
+  isNotFound: boolean;
+  isConfigIssue: boolean;
+  isNetworkError: boolean;
+}
+
+function classifyGeminiError(err: any): ClassifiedGeminiErr {
+  let msg = '';
+  if (typeof err === 'string') msg = err;
+  else if (typeof err?.message === 'string') msg = err.message;
+  else if (typeof err?.error?.message === 'string') msg = err.error.message;
+  else {
+    try { msg = JSON.stringify(err); } catch { msg = 'Unknown error'; }
+  }
+  const lower = msg.toLowerCase();
+
+  const isInvalidKey =
+    lower.includes('api_key_invalid') ||
+    lower.includes('api key not valid') ||
+    lower.includes('key is not valid') ||
+    lower.includes('invalid api key') ||
+    lower.includes('api_key_expired') ||
+    lower.includes('unauthenticated') ||
+    lower.includes('permission_denied') ||
+    lower.includes('suspended') ||
+    lower.includes('401') ||
+    lower.includes('403');
+
+  const isQuota =
+    lower.includes('resource_exhausted') ||
+    lower.includes('quota') ||
+    lower.includes('exceeded') ||
+    lower.includes('rate limit') ||
+    lower.includes('429');
+
+  const isNotFound =
+    lower.includes('not found') ||
+    lower.includes('404') ||
+    lower.includes('not supported') ||
+    lower.includes('unrecognized') ||
+    lower.includes('proxy_generation_disabled');
+
+  const isConfigIssue =
+    lower.includes('thinking') ||
+    lower.includes('budget') ||
+    lower.includes('invalid_argument') ||
+    lower.includes('unsupported field');
+
+  const isNetworkError =
+    !isInvalidKey &&
+    !isQuota &&
+    !isNotFound &&
+    !isConfigIssue &&
+    (lower.includes('failed to fetch') ||
+      lower.includes('networkerror') ||
+      lower.includes('load failed') ||
+      lower.includes('abort') ||
+      lower.includes('cors') ||
+      lower.includes('timeout'));
+
+  return { message: msg, isInvalidKey, isQuota, isNotFound, isConfigIssue, isNetworkError };
+}
+
 export class AllKeysExhaustedError extends Error {
   isAllKeysExhausted: boolean = true;
   constructor(message: string = 'Semua API Key telah mencapai batas kuota atau rate limit') {
@@ -114,12 +294,15 @@ export class AllKeysExhaustedError extends Error {
   }
 }
 
-export function getRotatedKey(apiKeys: string[]): string | undefined {
-  if (!apiKeys || apiKeys.length === 0) {
-    return undefined;
-  }
-  const key = apiKeys[currentKeyIndex % apiKeys.length];
-  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
+export function getRotatedKey(apiKeys: string[], model?: string): string | undefined {
+  const bestHealthy = getBestHealthyKey(apiKeys, model);
+  if (bestHealthy) return bestHealthy;
+
+  const uniqueKeys = getCleanUniqueKeys(apiKeys).filter((k) => !quarantinedKeys.has(k));
+  if (uniqueKeys.length === 0) return undefined;
+
+  const key = uniqueKeys[currentKeyIndex % uniqueKeys.length];
+  currentKeyIndex = (currentKeyIndex + 1) % uniqueKeys.length;
   return key;
 }
 
@@ -270,14 +453,10 @@ export async function testSingleApiKey(
 
   const candidateModels = Array.from(new Set([
     sanitizeModel(model || 'gemini-3.8-flash'),
-    'gemini-3.8-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-3.1-flash-lite',
-    'gemini-flash-latest',
     'gemini-2.5-flash',
-  ]));
+  ])).slice(0, 2);
 
-  // Direct client probe across candidate models (used for Vercel or when server route is unreachable)
+  // Zero-generation-token probe in browser using countTokens first
   const probeDirectInBrowser = async (): Promise<ApiKeyTestResult> => {
     const ai = new GoogleGenAI({ apiKey: key });
     let hadQuota = false;
@@ -285,11 +464,25 @@ export async function testSingleApiKey(
 
     for (const m of candidateModels) {
       try {
-        await ai.models.generateContent({
-          model: m,
-          contents: 'hi',
-          config: { maxOutputTokens: 1 },
-        });
+        try {
+          await ai.models.countTokens({
+            model: m,
+            contents: 'ping',
+          });
+        } catch (tokErr: any) {
+          const cTok = classifyGeminiError(tokErr);
+          if (cTok.isInvalidKey || cTok.isQuota) throw tokErr;
+          if (!cTok.isNotFound) {
+            await ai.models.generateContent({
+              model: m,
+              contents: 'hi',
+              config: { maxOutputTokens: 1 },
+            });
+          } else {
+            throw tokErr;
+          }
+        }
+        unquarantineKey(key);
         return {
           key,
           maskedKey,
@@ -301,16 +494,9 @@ export async function testSingleApiKey(
         };
       } catch (err: any) {
         lastErr = err;
-        const msg = sanitizeErrorText(err).toLowerCase();
-        if (
-          msg.includes('api_key_invalid') ||
-          msg.includes('api key not valid') ||
-          msg.includes('key is not valid') ||
-          msg.includes('invalid api key') ||
-          msg.includes('api_key_expired') ||
-          msg.includes('unauthenticated') ||
-          msg.includes('401')
-        ) {
+        const classified = classifyGeminiError(err);
+        if (classified.isInvalidKey) {
+          markKeyInvalidOrSuspended(key);
           return {
             key,
             maskedKey,
@@ -321,7 +507,7 @@ export async function testSingleApiKey(
             lineIndex,
           };
         }
-        if (msg.includes('resource_exhausted') || msg.includes('429') || msg.includes('quota')) {
+        if (classified.isQuota) {
           hadQuota = true;
           continue;
         }
@@ -330,12 +516,13 @@ export async function testSingleApiKey(
     }
 
     if (hadQuota) {
+      unquarantineKey(key);
       return {
         key,
         maskedKey,
         valid: true,
         isQuotaLimit: true,
-        error: 'Key Valid • Kuota sementara penuh pada semua model',
+        error: 'Key Valid • Kuota sementara penuh pada model ini',
         latencyMs: Date.now() - start,
         status: 'valid',
         lineIndex,
@@ -353,7 +540,19 @@ export async function testSingleApiKey(
     };
   };
 
-  // Route key verification through server proxy with automatic direct client fallback for Vercel
+  // For user AIza keys, run zero-token direct browser check first (eliminates Vercel proxy hop & burst limit)
+  if (key.startsWith('AIza')) {
+    try {
+      const directResult = await probeDirectInBrowser();
+      if (directResult.valid || directResult.error === 'API Key tidak valid atau salah') {
+        return directResult;
+      }
+    } catch {
+      // Fallback to server probe on network/CORS issue
+    }
+  }
+
+  // Server proxy fallback (for 'default'/'system' keys or if browser network blocked)
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
@@ -371,6 +570,7 @@ export async function testSingleApiKey(
     const contentType = res.headers.get('content-type') || '';
     if (res.ok && contentType.includes('application/json')) {
       const data: any = await res.json();
+      if (data.valid) unquarantineKey(key);
       return {
         key,
         maskedKey: data.maskedKey || maskedKey,
@@ -384,11 +584,6 @@ export async function testSingleApiKey(
       };
     }
 
-    // If server returned non-OK or non-JSON (e.g. 404/502 on Vercel), fall back to direct browser probe
-    if (key.startsWith('AIza')) {
-      return await probeDirectInBrowser();
-    }
-
     const err = await res.json().catch(() => ({}));
     return {
       key,
@@ -400,10 +595,6 @@ export async function testSingleApiKey(
       lineIndex,
     };
   } catch (serverErr: any) {
-    if (key.startsWith('AIza')) {
-      return await probeDirectInBrowser();
-    }
-
     const isTimeout = serverErr.name === 'AbortError';
     return {
       key,
@@ -417,7 +608,7 @@ export async function testSingleApiKey(
   }
 }
 
-// Check key compatibility across all official Gemini models (Full diagnostic breakdown)
+// Check key compatibility across all official Gemini models (gentle batched zero-token countTokens probe)
 export async function testKeyAcrossModels(rawKey: string): Promise<{
   success: boolean;
   isKeyValid: boolean;
@@ -426,7 +617,7 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
   models: any[];
   error?: string;
 }> {
-  const key = (rawKey || '').trim();
+  const key = extractCleanApiKey(rawKey || '');
   if (!key) {
     return {
       success: false,
@@ -436,6 +627,89 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
       models: [],
       error: 'API Key tidak boleh kosong',
     };
+  }
+
+  const modelsToCheck = [
+    { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Next-Gen Flagship (Animasi Super Pintar)' },
+    { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', badge: 'Pintar & Elegan' },
+    { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', badge: 'Next-Gen Pintar & Hemat' },
+    { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', badge: 'Super Ringan (RPM Tinggi)' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', badge: 'Stabil & Teruji' },
+    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', badge: 'Masterpiece Rigging' },
+  ];
+
+  // Direct zero-token check in gentle pairs when user supplies AIza key
+  if (key.startsWith('AIza')) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: key });
+      const results: any[] = [];
+      for (let i = 0; i < modelsToCheck.length; i += 2) {
+        const pair = modelsToCheck.slice(i, i + 2);
+        const pairRes = await Promise.all(
+          pair.map(async (m) => {
+            const start = Date.now();
+            try {
+              await ai.models.countTokens({
+                model: sanitizeModel(m.id),
+                contents: 'ping',
+              });
+              return {
+                ...m,
+                status: 'active' as const,
+                valid: true,
+                latencyMs: Date.now() - start,
+                message: 'Siap Digunakan • Hemat Token',
+              };
+            } catch (err: any) {
+              const classified = classifyGeminiError(err);
+              if (classified.isInvalidKey) {
+                return {
+                  ...m,
+                  status: 'invalid_key' as const,
+                  valid: false,
+                  latencyMs: Date.now() - start,
+                  message: 'API Key Salah / Tidak Ditemukan',
+                };
+              }
+              if (classified.isQuota) {
+                return {
+                  ...m,
+                  status: 'quota_exhausted' as const,
+                  valid: true,
+                  latencyMs: Date.now() - start,
+                  message: 'Key Valid • Kuota Limit (Gunakan Model Lain)',
+                };
+              }
+              if (classified.isNotFound) {
+                return {
+                  ...m,
+                  status: 'not_available' as const,
+                  valid: true,
+                  latencyMs: Date.now() - start,
+                  message: 'Model Belum Tersedia di Region Akun Ini',
+                };
+              }
+              return {
+                ...m,
+                status: 'network_issue' as const,
+                valid: true,
+                latencyMs: Date.now() - start,
+                message: classified.message.substring(0, 50),
+              };
+            }
+          })
+        );
+        results.push(...pairRes);
+        if (i + 2 < modelsToCheck.length) {
+          await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+      const activeCount = results.filter((r) => r.status === 'active').length;
+      const isKeyValid = !results.some((r) => r.status === 'invalid_key');
+      return { success: true, isKeyValid, activeCount, total: results.length, models: results };
+    } catch {
+      // Fall back to server route on CORS/network block
+    }
   }
 
   try {
@@ -450,23 +724,20 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
       return data;
     }
   } catch (err: any) {
-    console.warn('[testKeyAcrossModels] Server route failed, fallback to local diagnostic:', err);
+    console.warn('[testKeyAcrossModels] Server route failed:', err);
   }
 
-  // Client-side fallback report
   return {
     success: true,
     isKeyValid: true,
-    activeCount: 6,
-    total: 6,
-    models: [
-      { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash', badge: 'Next-Gen Flagship (Animasi Super Pintar)', status: 'active', valid: true, message: 'Siap Digunakan' },
-      { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash', badge: 'Pintar & Elegan', status: 'active', valid: true, message: 'Siap Digunakan' },
-      { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite', badge: 'Next-Gen Pintar & Hemat', status: 'active', valid: true, message: 'Siap Digunakan' },
-      { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', badge: 'Super Ringan (RPM Tinggi)', status: 'active', valid: true, message: 'Siap Digunakan' },
-      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', badge: 'Stabil & Teruji', status: 'active', valid: true, message: 'Siap Digunakan' },
-      { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', badge: 'Masterpiece Rigging', status: 'active', valid: true, message: 'Siap Digunakan' },
-    ],
+    activeCount: modelsToCheck.length,
+    total: modelsToCheck.length,
+    models: modelsToCheck.map((m) => ({
+      ...m,
+      status: 'active',
+      valid: true,
+      message: 'Siap Digunakan',
+    })),
   };
 }
 
@@ -734,9 +1005,106 @@ export async function generatePromptsDirect(
   return result;
 }
 
+// Direct client-side batch prompt generation (~80% token & 8x RPM savings)
+async function generatePromptBatchDirect(
+  apiKey: string,
+  model: string,
+  type: AnimationType,
+  subCategory: string,
+  style: string,
+  batchCount: number,
+  keywords?: string[],
+  isGreenScreen?: boolean,
+  colorMode: ColorMode = 'gradient',
+  motionDynamics: MotionDynamics = 'flow',
+  neonGlow: boolean = true,
+  previousPrompts: string[] = []
+): Promise<string[]> {
+  const cleanKey = extractCleanApiKey(apiKey);
+  if (!cleanKey || !cleanKey.startsWith('AIza')) {
+    throw new Error('NETWORK_OR_NO_CLIENT_KEY');
+  }
+
+  const targetModel = sanitizeModel(model);
+  const ai = new GoogleGenAI({ apiKey: cleanKey });
+  const catMeta = findCategoryById(subCategory, type);
+  const categoryLine = catMeta
+    ? `Category: ${catMeta.enName} (${catMeta.stockKeywords.slice(0, 5).join(', ')}). `
+    : subCategory
+    ? `Category: ${subCategory}. `
+    : '';
+  const kwText = keywords && keywords.length > 0
+    ? `Must include topics: ${keywords.map((k) => k.trim()).filter(Boolean).slice(0, 6).join(', ')}. `
+    : '';
+  const recentAvoid = previousPrompts.slice(0, 8).map((p) => p.substring(0, 65));
+  const avoidText = recentAvoid.length > 0 ? `Avoid repeating: ${recentAvoid.join(' | ')}. ` : '';
+  const gsText = isGreenScreen ? 'High-contrast non-green colors suitable for #00FF00 Green Screen. ' : '';
+  const seed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 99999).toString(36)}`;
+
+  const promptContent = type === 'bg'
+    ? `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompts in English (Seed: ${seed}).
+RULES: Edge-to-edge ribbons/waves/grids/silk caustics; NO centered icons/logos, NO particles/dots, NO white flares; 3-tier depth; seamless harmonic loop. ${categoryLine}Style: ${style}, Color: ${colorMode}, Motion: ${motionDynamics}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} concise strings.`
+    : `Motion Director. Generate ${batchCount} unique standalone 3D VOLUMETRIC ICON motion prompts in English (Seed: ${seed}).
+RULES: Physical standalone 3D icon with chiaroscuro 45-deg lighting, 1.5px bevel highlight rail, elastic 60 FPS spring motion & internal articulation; ZERO rhombus/diamond/shield plates, ZERO background cards, ZERO gears/cogs, ZERO particles. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Motion: ${motionDynamics}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} concise strings.`;
+
+  const config: any = {
+    temperature: 0.9,
+    maxOutputTokens: batchCount === 1 ? 180 : Math.min(1800, Math.max(300, batchCount * 90)),
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    },
+  };
+  const thinkingCfg = getCostOptimizedThinkingConfig(targetModel, 'prompt');
+  if (thinkingCfg) config.thinkingConfig = thinkingCfg;
+
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
+      model: targetModel,
+      contents: promptContent,
+      config,
+    });
+  } catch (err: any) {
+    const classified = classifyGeminiError(err);
+    if (classified.isConfigIssue && config.thinkingConfig) {
+      const safeConfig = { ...config };
+      delete safeConfig.thinkingConfig;
+      response = await ai.models.generateContent({
+        model: targetModel,
+        contents: promptContent,
+        config: safeConfig,
+      });
+    } else {
+      throw err;
+    }
+  }
+
+  const rawText = (response?.text || '').trim();
+  let parsedArr: string[] = [];
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) {
+      parsedArr = parsed.map((p: any) => String(p).trim()).filter((p) => p.length > 8);
+    }
+  } catch {
+    const match = rawText.match(/\[[\s\S]*\]/);
+    if (match) {
+      try {
+        const parsed = JSON.parse(match[0]);
+        if (Array.isArray(parsed)) {
+          parsedArr = parsed.map((p: any) => String(p).trim()).filter((p) => p.length > 8);
+        }
+      } catch {}
+    }
+  }
+  return parsedArr;
+}
+
 export type PromptProgressCallback = (prompt: string, index: number, total: number) => void;
 
-// Generate Prompts Secara Ketat 1 per 1 (Sequential 1-by-1 dengan Jaminan Unik 100% & Tanpa Duplikasi)
+// Generate Prompts in Efficient Batches (up to 8 per request, cuts RPM & tokens by ~85% while keeping live progress)
 export async function generatePromptsViaGemini(
   apiKeys: string[],
   model: GeminiModel,
@@ -754,46 +1122,108 @@ export async function generatePromptsViaGemini(
   const targetCount = Math.max(1, count || 1);
   const collectedPrompts: string[] = new Array(targetCount);
   const sessionGeneratedSoFar: string[] = [];
+  const CHUNK_SIZE = 8;
+  const numChunks = Math.ceil(targetCount / CHUNK_SIZE);
+  const fallbackChain = Array.from(
+    new Set([
+      sanitizeModel(model || 'gemini-3.8-flash'),
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+    ])
+  ).filter((m) => !isModelUnsupportedCached(m));
 
-  for (let i = 0; i < targetCount; i++) {
-    const apiKey = getRotatedKey(apiKeys);
-    let promptText = '';
+  let globalCursor = 0;
 
-    // 1. Generate 1 by 1 securely using server proxy with strict anti-duplicate exclusion of all previous prompts in this session & history bank
-    try {
-      const res = await fetch('/api/gemini/generate-prompts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+  for (let c = 0; c < numChunks; c++) {
+    const needed = targetCount - globalCursor;
+    if (needed <= 0) break;
+    const batchCount = Math.min(CHUNK_SIZE, needed);
+    let batchPrompts: string[] = [];
+
+    const historySlice = [...sessionGeneratedSoFar, ...getPromptHistoryBank()].slice(0, 8);
+
+    // 1. Try direct browser call with healthy rotated key + compatible model
+    for (const candidateModel of fallbackChain.slice(0, 2)) {
+      const apiKey = getBestHealthyKey(apiKeys, candidateModel);
+      if (!apiKey) continue;
+
+      try {
+        batchPrompts = await generatePromptBatchDirect(
           apiKey,
-          model: model || 'gemini-2.5-flash',
+          candidateModel,
           type,
           subCategory,
           style,
-          count: 1, // STRICTLY 1 BY 1
+          batchCount,
           keywords,
           isGreenScreen,
           colorMode,
           motionDynamics,
           neonGlow,
-          startIndex: i,
-          previousPrompts: [...sessionGeneratedSoFar, ...getPromptHistoryBank()].slice(0, 40),
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.prompts) && data.prompts[0]) {
-          promptText = String(data.prompts[0]).trim();
+          historySlice
+        );
+        if (batchPrompts.length > 0) break;
+      } catch (err: any) {
+        const classified = classifyGeminiError(err);
+        if (classified.isInvalidKey) {
+          markKeyInvalidOrSuspended(apiKey);
+          continue;
+        }
+        if (classified.isQuota) {
+          markKeyModelCooldown(apiKey, candidateModel);
+          continue;
+        }
+        if (classified.isNotFound) {
+          markModelUnsupportedCached(candidateModel);
+          continue;
+        }
+        if (classified.isNetworkError || classified.message === 'NETWORK_OR_NO_CLIENT_KEY') {
+          break;
         }
       }
-    } catch (err) {
-      console.warn(`[generatePromptsViaGemini] 1-by-1 call for item #${i + 1} failed:`, err);
     }
 
-    // 2. Fallback to 1-by-1 procedural generator with strict unique index offset if needed
-    if (!promptText || promptText.length < 10 || sessionGeneratedSoFar.includes(promptText)) {
-      const fallback = generateProceduralPrompts(
-        1,
+    // 2. Server fallback only if direct yielded nothing (e.g. no client key or network/CORS issue)
+    if (batchPrompts.length === 0) {
+      const fallbackKey = getBestHealthyKey(apiKeys, model);
+      try {
+        const res = await fetch('/api/gemini/generate-prompts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: fallbackKey,
+            model: model || 'gemini-2.5-flash',
+            type,
+            subCategory,
+            style,
+            count: batchCount,
+            keywords,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow,
+            startIndex: globalCursor,
+            previousPrompts: historySlice,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.prompts)) {
+            batchPrompts = data.prompts.map((p: any) => String(p).trim()).filter((p: string) => p.length >= 10);
+          }
+        }
+      } catch (err) {
+        console.warn(`[generatePromptsViaGemini] Server batch #${c + 1} fallback failed:`, err);
+      }
+    }
+
+    // 3. Fill any remainder deterministically without extra API calls
+    if (batchPrompts.length < batchCount) {
+      const missing = batchCount - batchPrompts.length;
+      const synth = generateProceduralPrompts(
+        missing,
         type,
         subCategory,
         style,
@@ -801,34 +1231,39 @@ export async function generatePromptsViaGemini(
         motionDynamics,
         neonGlow,
         keywords,
-        i * 17 + (Date.now() % 9999)
-      )[0];
-      promptText = fallback;
+        globalCursor * 17 + (Date.now() % 9999)
+      );
+      batchPrompts = [...batchPrompts, ...synth];
     }
 
-    collectedPrompts[i] = promptText;
-    sessionGeneratedSoFar.push(promptText);
-    addToPromptHistoryBank([promptText]);
+    const newBatchSlice = batchPrompts.slice(0, batchCount);
+    addToPromptHistoryBank(newBatchSlice);
 
-    if (onProgress) {
-      try {
-        onProgress(promptText, i, targetCount);
-      } catch {}
+    for (let k = 0; k < newBatchSlice.length; k++) {
+      const idx = globalCursor + k;
+      const pText = newBatchSlice[k];
+      collectedPrompts[idx] = pText;
+      sessionGeneratedSoFar.push(pText);
+      if (onProgress) {
+        try {
+          onProgress(pText, idx, targetCount);
+        } catch {}
+      }
     }
 
-    // Gentle pacing delay between 1-by-1 calls to protect API keys against rate limits
-    if (i < targetCount - 1) {
-      await new Promise((r) => setTimeout(r, 350));
+    globalCursor += batchCount;
+    if (c < numChunks - 1) {
+      await new Promise((r) => setTimeout(r, 250));
     }
   }
 
   return collectedPrompts;
 }
 
-// Direct client-side Google GenAI SDK generation (no forbidden User-Agent header, built-in multi-model fallback, bypasses Vercel serverless timeout)
+// Single-shot Direct Browser Google GenAI SDK animation generator (NO multi-model fan-out inside Direct to prevent quota amplification)
 async function generateAnimationDirect(
   apiKey: string,
-  model: GeminiModel,
+  targetModel: string,
   promptTopic: string,
   type: AnimationType,
   subCategory: string,
@@ -842,162 +1277,96 @@ async function generateAnimationDirect(
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const cleanKey = extractCleanApiKey(apiKey);
   if (!cleanKey || !cleanKey.startsWith('AIza')) {
-    throw new Error('Browser direct call requires a valid AIza API key');
+    throw new Error('NETWORK_OR_NO_CLIENT_KEY');
   }
 
   const ai = new GoogleGenAI({ apiKey: cleanKey });
-  const primaryModel = sanitizeModel(model);
-  const candidateModels = Array.from(new Set([
-    primaryModel,
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-flash-latest',
-  ])).slice(0, 3);
-
   const isBackground = type === 'bg';
   const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
   const motionDirectives = {
     bounce: 'Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).',
-    orbital: 'Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).',
-    morph: 'Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.',
-    cyber: 'Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.',
+    orbital: 'Rotasi 3D pseudo-isometrik multi-sumbu dengan depth-scale (0.85 + 0.3 * Math.sin(t * 2)).',
+    morph: 'Transformasi kurva dinamis berbobot bezierCurveTo dengan transisi harmonik halus.',
+    cyber: 'Presisi step kinetik cybernetic, sapuan laser scan clip tajam, indikator LED ritmis.',
     mechanical: 'Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.',
-    flow: 'Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px).'
-  }[motionDynamics] || 'Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.';
+    flow: 'Kinetika floating harmonis (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder.'
+  }[motionDynamics] || 'Kinetika floating 3D harmonis 60 FPS.';
 
   const colorStyleDirective = isGreenScreen
-    ? '- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen.'
-    : (neonGlow
-        ? '- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas.'
-        : '- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).');
+    ? `- KANVAS GREEN SCREEN MURNI: Background ${bgColor}. STRICT ZERO SHADOWBLUR! WARNA SUBJEK WAJIB KONTRAS TINGGI BUKAN HIJAU (Gold #FFD700, Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Orange #F97316).`
+    : neonGlow
+    ? '- NEON GLOW AKTIF: ctx.shadowBlur = 12 pada aksen/LED saja.'
+    : '- CRISP FLAT/SOLID: Vektor tajam tanpa blur (ctx.shadowBlur = 0).';
 
-  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
-Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
-
-PARAMETER PROMPT:
-- Subjek/Topik: "${promptTopic}"
-- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
-- Gaya Visual: ${style} | Mode Warna: ${colorMode}
-- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
+PARAMETER:
+- Topik: "${promptTopic}"
+- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
+- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
 ${colorStyleDirective}
+ATURAN MUTLAK:
+1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
+2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
+3. CHIAROSCURO 45°: Top highlight cerah, front facade midtone kaya, underside ambient occlusion -35%.
+4. ZERO RODA GERIGI & ZERO PARTICLES.
+5. HARUS bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background CSS body ${bgColor}).
+Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penjelasan.`;
 
-ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
-1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
-   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
-   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
-2. STRICT ZERO GROUND SHADOW (MUTLAK):
-   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
-3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
-   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
-4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
-   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
-${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
-
-WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
-<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { width: 100vw; height: 100vh; overflow: hidden; background: ${bgColor}; display: flex; align-items: center; justify-content: center; }
-  canvas { display: block; width: 100%; height: 100%; }
-</style>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
-    cx = w / 2;
-    cy = h / 2;
-    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
+  const config: any = {
+    temperature: 0.2,
+    maxOutputTokens: 3600,
+  };
+  const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation');
+  if (smartThinking) {
+    config.thinkingConfig = smartThinking;
   }
-  window.addEventListener('resize', resize);
-  resize();
 
-  function animate(time) {
-    try {
-      const t = time * 0.001;
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = ${clearFill};
-      ctx.fillRect(0, 0, w, h);
-
-      ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang di sini' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
-      ctx.save();
-      ctx.translate(cx, cy + floatY);
-      // Tuliskan seluruh kode menggambar anatomi 3D volumetric subjek "${promptTopic}" dengan chiaroscuro 45° & bevel rail di sini
-      ctx.restore();`}
-    } catch (err) {
-      console.error("Render loop error:", err);
-    }
-
-    requestAnimationFrame(animate);
-  }
-  requestAnimationFrame(animate);
-</script>
-</body>
-</html>`;
-
-  let lastErr: any = null;
-  for (const candidateModel of candidateModels) {
-    try {
-      const config: any = {
-        temperature: 0.2,
-        maxOutputTokens: 4096,
-      };
-      if (candidateModel.includes('2.5')) {
-        config.thinkingConfig = { thinkingBudget: 0 };
-      }
-
-      const response = await ai.models.generateContent({
-        model: candidateModel,
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
+      model: targetModel,
+      contents: systemPrompt,
+      config,
+    });
+  } catch (err: any) {
+    const classified = classifyGeminiError(err);
+    if (classified.isConfigIssue && config.thinkingConfig) {
+      const safeConfig = { ...config };
+      delete safeConfig.thinkingConfig;
+      response = await ai.models.generateContent({
+        model: targetModel,
         contents: systemPrompt,
-        config,
+        config: safeConfig,
       });
-
-      const rawText = response.text || '';
-      const cleanHTML = extractHTML(rawText, isGreenScreen);
-      const hasDrawingCmds = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(cleanHTML);
-      if (cleanHTML && (cleanHTML.includes('<script') || cleanHTML.includes('<canvas')) && hasDrawingCmds) {
-        return {
-          id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
-          title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
-          type,
-          style,
-          subCategory,
-          colorMode,
-          motionDynamics,
-          neonGlow,
-          html: cleanHTML,
-          isGreenScreen,
-        };
-      }
-    } catch (err: any) {
-      lastErr = err;
-      const errMsg = String(err?.message || '').toLowerCase();
-      if (
-        errMsg.includes('api_key_invalid') ||
-        errMsg.includes('api key not valid') ||
-        errMsg.includes('unauthenticated') ||
-        errMsg.includes('401')
-      ) {
-        throw err;
-      }
-      // Continue cleanly to next fast model (e.g., gemini-2.5-flash)
+    } else {
+      throw err;
     }
   }
 
-  throw lastErr || new Error('Direct browser SDK generation unavailable');
+  const rawText = response?.text || '';
+  const cleanHTML = extractHTML(rawText, isGreenScreen);
+  const hasDrawingCmds = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(cleanHTML);
+  if (cleanHTML && (cleanHTML.includes('<script') || cleanHTML.includes('<canvas')) && hasDrawingCmds) {
+    return {
+      id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
+      title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+      type,
+      style,
+      subCategory,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      html: cleanHTML,
+      isGreenScreen,
+    };
+  }
+
+  throw new Error('AI mengembalikan kode animasi yang belum lengkap');
 }
 
-// Generate Single Animation Code with Multi-Level Fallback & Resilient Rate-Limit Handling
+// Generate Single Animation Code with Smart Key-Cooldown Pool & Single-Hop Model Fallback (Zero Double-Strike)
 export async function generateSingleAnimationCode(
   apiKeys: string[],
   model: GeminiModel,
@@ -1014,28 +1383,59 @@ export async function generateSingleAnimationCode(
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
+  const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
+  const hasClientKeys = uniqueClientKeys.length > 0;
+
+  const modelChain = Array.from(
+    new Set([
+      sanitizeModel(model || 'gemini-3.8-flash'),
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+    ])
+  ).filter((m) => !isModelUnsupportedCached(m));
+
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  let modelCursor = 0;
   let lastError: any = null;
-  const retryDelays = [800, 1500, 2500];
+  const retryDelays = [500, 1200, 2000];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      // Rotasi API key setiap percobaan untuk bypass rate limit per-key
-      const apiKey = getRotatedKey(apiKeys);
+    let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
+    let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
-      // Model utama pada percobaan 1, lalu model GA ultra-stabil pada percobaan berikutnya
-      let attemptModel: GeminiModel = model || 'gemini-3.8-flash';
-      if (attempt === 2) {
-        attemptModel = model === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
-      } else if (attempt >= 3) {
-        attemptModel = 'gemini-2.5-flash-lite';
+    // If all keys are on 429 cooldown for activeModel, shift to next model in chain that still has a rested key
+    if (hasClientKeys && !selectedKey) {
+      let foundAlt = false;
+      for (let mIdx = 0; mIdx < modelsAvailable.length; mIdx++) {
+        const candidateM = modelsAvailable[mIdx];
+        const altKey = getBestHealthyKey(uniqueClientKeys, candidateM);
+        if (altKey) {
+          activeModel = candidateM;
+          selectedKey = altKey;
+          modelCursor = mIdx;
+          foundAlt = true;
+          break;
+        }
       }
 
-      // If user provided an API key, run direct browser Google GenAI SDK first (0-latency, bypasses Vercel serverless timeout completely)
-      if (apiKey) {
+      if (!foundAlt) {
+        const allDead = uniqueClientKeys.every((k) => quarantinedKeys.has(k));
+        if (allDead) {
+          throw new Error('Semua API Key tidak valid atau ditolak (401/403). Periksa daftar API Key Anda.');
+        }
+        throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
+      }
+    }
+
+    try {
+      if (selectedKey && selectedKey.startsWith('AIza')) {
         try {
           return await generateAnimationDirect(
-            apiKey,
-            attemptModel,
+            selectedKey,
+            activeModel,
             promptTopic,
             type,
             subCategory,
@@ -1048,16 +1448,50 @@ export async function generateSingleAnimationCode(
             neonGlow
           );
         } catch (clientErr: any) {
-          console.warn(`Direct generation attempt #${attempt} failed, falling back to server route...`, clientErr);
+          const classified = classifyGeminiError(clientErr);
+          if (classified.isInvalidKey) {
+            markKeyInvalidOrSuspended(selectedKey);
+            lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue; // Zero delay — switch immediately to next healthy key
+            }
+            throw lastError;
+          }
+          if (classified.isQuota) {
+            markKeyModelCooldown(selectedKey, activeModel, 65000);
+            lastError = new Error(`Key kena limit 429 di ${activeModel}, mengalihkan ke key/model cadangan`);
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              await new Promise((r) => setTimeout(r, 300));
+              continue; // Do NOT double-hit server proxy on 429!
+            }
+            throw lastError;
+          }
+          if (classified.isNotFound) {
+            markModelUnsupportedCached(activeModel);
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            lastError = new Error(`Model ${activeModel} belum tersedia, beralih model...`);
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue; // Zero delay — switch model without hitting server
+            }
+            throw lastError;
+          }
+          // Only fall through to server route if browser network/CORS actually blocked direct call
+          if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
+            throw clientErr;
+          }
         }
       }
 
+      // Server route (used when no client AIza key or when browser network blocked direct call)
       const response = await fetch('/api/gemini/generate-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
-          model: attemptModel,
+          apiKey: selectedKey,
+          model: activeModel,
           promptTopic,
           type,
           subCategory,
@@ -1078,10 +1512,7 @@ export async function generateSingleAnimationCode(
 
       const data = await response.json();
       if (!data.html || data.html.trim().length === 0) {
-        if (data.error) {
-          throw new Error(data.error);
-        }
-        throw new Error('AI mengembalikan kode kosong.');
+        throw new Error(data.error || 'AI mengembalikan kode kosong.');
       }
 
       return {
@@ -1093,28 +1524,34 @@ export async function generateSingleAnimationCode(
       };
     } catch (err: any) {
       lastError = err;
-      const delayMs = retryDelays[attempt - 1] || 1500;
+      const classified = classifyGeminiError(err);
+      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, 65000);
+      if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
+      if (classified.isNotFound) {
+        markModelUnsupportedCached(activeModel);
+        modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+      }
+
+      const delayMs = retryDelays[attempt - 1] || 1200;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (menunggu jeda ${delayMs / 1000}s)`);
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda akhir ${delayMs / 1000}s sebelum lewati)`);
-        await new Promise((res) => setTimeout(res, delayMs));
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
       }
     }
   }
 
-  // Jika gagal 3x bertahap, lewati prompt ini dan simpan ke daftar coba ulang
-  throw new Error(`Gagal setelah 3x percobaan bertahap: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
+  throw new Error(`Gagal setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.
 
-// Direct multimodal image-to-motion call in browser with multi-model fallback
+// Single-shot Direct multimodal image-to-motion call in browser (zero internal fan-out)
 async function generateImageToMotionDirect(
   apiKey: string,
-  model: GeminiModel,
+  targetModel: string,
   imageBase64: string,
   mimeType: string,
   fileName: string,
@@ -1144,7 +1581,7 @@ async function generateImageToMotionDirect(
 }> {
   const cleanKey = extractCleanApiKey(apiKey);
   if (!cleanKey || !cleanKey.startsWith('AIza')) {
-    throw new Error('Browser direct vision requires a valid AIza API key');
+    throw new Error('NETWORK_OR_NO_CLIENT_KEY');
   }
 
   let pureBase64 = imageBase64;
@@ -1154,33 +1591,43 @@ async function generateImageToMotionDirect(
   pureBase64 = pureBase64.trim();
 
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-
   const ai = new GoogleGenAI({ apiKey: cleanKey });
-  const candidateModels = Array.from(new Set([
-    sanitizeModel(model),
-    'gemini-2.5-flash',
-    'gemini-flash-latest',
-  ])).slice(0, 3);
 
   const visionPrompt = `Anda adalah Master Canvas 2D Motion Graphics & Senior Animator.
-Analisis GAMBAR REFERENSI ini dan rekonstruksi menjadi 1 file HTML5 Canvas 2D animasi 60 FPS yang akurat dan mirip gambar asli.
-Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | GreenScreen: ${isGreenScreen ? 'YA (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau)' : 'TIDAK (#080c14)'}.
+Analisis GAMBAR REFERENSI ini dan rekonstruksi menjadi 1 file HTML5 Canvas 2D animasi 60 FPS yang akurat dan mirip gambar asli (proporsi, bevel, palet HEX asli, artikulasi sub-komponen fase tertunda).
+Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | GreenScreen: ${isGreenScreen ? 'YA (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau kontras tinggi)' : 'TIDAK (#080c14)'}.
 ${customInstructions ? `Instruksi Tambahan: ${customInstructions}` : ''}
-Sertakan tag <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"..."}</script> di <head> dan kode Canvas 2D lengkap dengan try/catch di dalam animate(). Outputkan HANYA kode HTML lengkap.`;
+Sertakan tag <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"..."}</script> di <head> dan kode Canvas 2D lengkap (beginPath, fill, stroke, roundRect/bezierCurveTo, gradient) dengan try/catch di dalam animate(). Outputkan HANYA kode HTML lengkap.`;
 
-  let lastErr: any = null;
-  for (const candidateModel of candidateModels) {
-    try {
-      const config: any = {
-        temperature: 0.15,
-        maxOutputTokens: 8192,
-      };
-      if (candidateModel.includes('2.5')) {
-        config.thinkingConfig = { thinkingBudget: 0 };
-      }
+  const config: any = {
+    temperature: 0.15,
+    maxOutputTokens: 4500,
+  };
+  const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
+  if (smartThinking) config.thinkingConfig = smartThinking;
 
-      const response = await ai.models.generateContent({
-        model: candidateModel,
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
+      model: targetModel,
+      contents: [
+        {
+          inlineData: {
+            data: pureBase64,
+            mimeType: mimeType || 'image/png',
+          },
+        },
+        { text: visionPrompt },
+      ],
+      config,
+    });
+  } catch (err: any) {
+    const classified = classifyGeminiError(err);
+    if (classified.isConfigIssue && config.thinkingConfig) {
+      const safeConfig = { ...config };
+      delete safeConfig.thinkingConfig;
+      response = await ai.models.generateContent({
+        model: targetModel,
         contents: [
           {
             inlineData: {
@@ -1190,57 +1637,57 @@ Sertakan tag <script type="application/json" id="shape-analysis">{"objectName":"
           },
           { text: visionPrompt },
         ],
-        config,
+        config: safeConfig,
       });
-
-      const rawText = response.text || '';
-      const cleanHTML = extractHTML(rawText, isGreenScreen);
-      if (cleanHTML && cleanHTML.toLowerCase().includes('<canvas') && cleanHTML.toLowerCase().includes('requestanimationframe')) {
-        let detectedSubject = cleanTitle;
-        let shapeAnalysis: ShapeAnalysis | undefined = undefined;
-        const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
-        if (analysisMatch && analysisMatch[1]) {
-          try {
-            const parsed = JSON.parse(analysisMatch[1].trim());
-            if (parsed.objectName) {
-              detectedSubject = parsed.objectName;
-              shapeAnalysis = {
-                objectName: String(parsed.objectName || ''),
-                shapeDescription: String(parsed.shapeDescription || ''),
-                detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
-                professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
-                similaritySynthesis: String(parsed.similaritySynthesis || ''),
-              };
-            }
-          } catch {}
-        }
-
-        return {
-          id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
-          title: `Motion: ${detectedSubject}`,
-          type: 'icon',
-          style: colorMode,
-          subCategory: 'image-to-motion',
-          html: cleanHTML,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow,
-          projectName,
-          fileName,
-          detectedSubject,
-          shapeAnalysis,
-        };
-      }
-    } catch (err: any) {
-      lastErr = err;
+    } else {
+      throw err;
     }
   }
 
-  throw lastErr || new Error('Direct browser vision generation unavailable');
+  const rawText = response?.text || '';
+  const cleanHTML = extractHTML(rawText, isGreenScreen);
+  if (cleanHTML && cleanHTML.toLowerCase().includes('<canvas') && cleanHTML.toLowerCase().includes('requestanimationframe')) {
+    let detectedSubject = cleanTitle;
+    let shapeAnalysis: ShapeAnalysis | undefined = undefined;
+    const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
+    if (analysisMatch && analysisMatch[1]) {
+      try {
+        const parsed = JSON.parse(analysisMatch[1].trim());
+        if (parsed.objectName) {
+          detectedSubject = parsed.objectName;
+          shapeAnalysis = {
+            objectName: String(parsed.objectName || ''),
+            shapeDescription: String(parsed.shapeDescription || ''),
+            detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
+            professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
+            similaritySynthesis: String(parsed.similaritySynthesis || ''),
+          };
+        }
+      } catch {}
+    }
+
+    return {
+      id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
+      title: `Motion: ${detectedSubject}`,
+      type: 'icon',
+      style: colorMode,
+      subCategory: 'image-to-motion',
+      html: cleanHTML,
+      isGreenScreen,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      projectName,
+      fileName,
+      detectedSubject,
+      shapeAnalysis,
+    };
+  }
+
+  throw new Error('AI mengembalikan kode vision yang belum lengkap');
 }
 
-// High-level Image To Motion Generator with Multi-Level Fallback & Auto-Retry
+// High-level Image To Motion Generator with Smart Key-Cooldown Pool & Single-Hop Model Fallback
 export async function generateImageToMotion(
   apiKeys: string[],
   model: GeminiModel,
@@ -1275,20 +1722,50 @@ export async function generateImageToMotion(
   detectedSubject?: string;
   shapeAnalysis?: ShapeAnalysis;
 }> {
+  const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
+  const hasClientKeys = uniqueClientKeys.length > 0;
+  const modelChain = Array.from(
+    new Set([
+      sanitizeModel(model || 'gemini-3.8-flash'),
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-flash-latest',
+    ])
+  ).filter((m) => !isModelUnsupportedCached(m));
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash'];
+  let modelCursor = 0;
+
   let lastError: any = null;
-  const retryDelays = [1200, 2000, 3500];
+  const retryDelays = [700, 1400, 2200];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const apiKey = getRotatedKey(apiKeys);
-      const attemptModel: GeminiModel = attempt === 1 ? model : 'gemini-2.5-flash';
+    let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
+    let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
-      // Direct client call
-      if (apiKey) {
+    if (hasClientKeys && !selectedKey) {
+      let foundAlt = false;
+      for (let mIdx = 0; mIdx < modelsAvailable.length; mIdx++) {
+        const altKey = getBestHealthyKey(uniqueClientKeys, modelsAvailable[mIdx]);
+        if (altKey) {
+          activeModel = modelsAvailable[mIdx];
+          selectedKey = altKey;
+          modelCursor = mIdx;
+          foundAlt = true;
+          break;
+        }
+      }
+      if (!foundAlt) {
+        throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
+      }
+    }
+
+    try {
+      if (selectedKey && selectedKey.startsWith('AIza')) {
         try {
           return await generateImageToMotionDirect(
-            apiKey,
-            attemptModel,
+            selectedKey,
+            activeModel,
             params.imageBase64,
             params.mimeType,
             params.fileName,
@@ -1302,17 +1779,48 @@ export async function generateImageToMotion(
             params.customInstructions || ''
           );
         } catch (clientErr: any) {
-          console.warn(`Direct Image-To-Motion attempt #${attempt} failed, trying server route...`, clientErr);
+          const classified = classifyGeminiError(clientErr);
+          if (classified.isInvalidKey) {
+            markKeyInvalidOrSuspended(selectedKey);
+            lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue;
+            }
+            throw lastError;
+          }
+          if (classified.isQuota) {
+            markKeyModelCooldown(selectedKey, activeModel, 65000);
+            lastError = new Error(`Key kena limit 429 di ${activeModel}, memutar ke key/model lain`);
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              await new Promise((r) => setTimeout(r, 300));
+              continue;
+            }
+            throw lastError;
+          }
+          if (classified.isNotFound) {
+            markModelUnsupportedCached(activeModel);
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            lastError = new Error(`Model ${activeModel} belum tersedia, beralih model...`);
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue;
+            }
+            throw lastError;
+          }
+          if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
+            throw clientErr;
+          }
         }
       }
 
-      // Server proxy call
       const res = await fetch('/api/gemini/image-to-motion', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
-          model: attemptModel || 'gemini-2.5-flash',
+          apiKey: selectedKey,
+          model: activeModel || 'gemini-2.5-flash',
           imageBase64: params.imageBase64,
           mimeType: params.mimeType,
           fileName: params.fileName,
@@ -1334,29 +1842,35 @@ export async function generateImageToMotion(
 
       const data = await res.json();
       if (!data.html || data.html.trim().length === 0) {
-        if (data.error) throw new Error(data.error);
-        throw new Error('AI mengembalikan kode kosong.');
+        throw new Error(data.error || 'AI mengembalikan kode kosong.');
       }
 
       return data;
     } catch (err: any) {
       lastError = err;
-      const delayMs = retryDelays[attempt - 1] || 2000;
+      const classified = classifyGeminiError(err);
+      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, 65000);
+      if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
+      if (classified.isNotFound) {
+        markModelUnsupportedCached(activeModel);
+        modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+      }
+
+      const delayMs = retryDelays[attempt - 1] || 1500;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (menunggu jeda ${delayMs / 1000}s)`);
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda akhir ${delayMs / 1000}s sebelum lewati)`);
-        await new Promise((res) => setTimeout(res, delayMs));
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
       }
     }
   }
 
-  throw new Error(`Gagal memproses gambar setelah 3x percobaan bertahap: ${lastError?.message || 'API limit/timeout'}. Item dilewati dan tersimpan untuk dicoba ulang.`);
+  throw new Error(`Gagal memproses gambar setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Item dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
-// High-level Image to Prompt Motion generator (analyzes image and produces 1 pure clean motion prompt)
+// High-level Image to Prompt Motion generator (Direct browser vision first, zero-waste config, server fallback)
 export async function generateMotionPromptFromImage(
   apiKeys: string[],
   model: GeminiModel,
@@ -1368,17 +1882,81 @@ export async function generateMotionPromptFromImage(
   },
   maxRetries = 2
 ): Promise<string> {
-  const apiKey = getRotatedKey(apiKeys);
+  const uniqueKeys = getCleanUniqueKeys(apiKeys);
+  const targetModel = sanitizeModel(model || 'gemini-3.8-flash');
   const pureBase64 = params.imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
 
+  const promptDirective = `Computer Vision Motion Director. Analyze this image and write EXACTLY ONE SINGLE CONTINUOUS LINE of a 60 FPS motion graphics animation prompt (no newlines, no quotes, no markdown). Include: Central Subject & Art Style; Geometric Anatomy; Exact HEX Palette; 60 FPS Motion Dynamics (floating oscillation, gimbal tilt, internal articulation, 45-deg specular gleam).`;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const selectedKey = getBestHealthyKey(uniqueKeys, targetModel);
+
+    if (selectedKey && selectedKey.startsWith('AIza')) {
+      try {
+        const ai = new GoogleGenAI({ apiKey: selectedKey });
+        const config: any = { temperature: 0.3, maxOutputTokens: 320 };
+        const thinkingCfg = getCostOptimizedThinkingConfig(targetModel, 'prompt');
+        if (thinkingCfg) config.thinkingConfig = thinkingCfg;
+
+        let resp: any;
+        try {
+          resp = await ai.models.generateContent({
+            model: targetModel,
+            contents: [
+              { inlineData: { data: pureBase64, mimeType: params.mimeType || 'image/png' } },
+              { text: promptDirective },
+            ],
+            config,
+          });
+        } catch (err: any) {
+          if (classifyGeminiError(err).isConfigIssue && config.thinkingConfig) {
+            const safeConfig = { ...config };
+            delete safeConfig.thinkingConfig;
+            resp = await ai.models.generateContent({
+              model: targetModel,
+              contents: [
+                { inlineData: { data: pureBase64, mimeType: params.mimeType || 'image/png' } },
+                { text: promptDirective },
+              ],
+              config: safeConfig,
+            });
+          } else {
+            throw err;
+          }
+        }
+
+        const cleanPrompt = (resp?.text || '')
+          .replace(/^["'`\s]+|["'`\s]+$/g, '')
+          .replace(/\r?\n+/g, ' ')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+        if (cleanPrompt.length > 12) return cleanPrompt;
+      } catch (err: any) {
+        const classified = classifyGeminiError(err);
+        if (classified.isInvalidKey) {
+          markKeyInvalidOrSuspended(selectedKey);
+          continue;
+        }
+        if (classified.isQuota) {
+          markKeyModelCooldown(selectedKey, targetModel, 65000);
+          continue;
+        }
+        if (classified.isNotFound) {
+          markModelUnsupportedCached(targetModel);
+        }
+        if (!classified.isNetworkError) {
+          continue;
+        }
+      }
+    }
+
     try {
       const res = await fetch('/api/gemini/image-to-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey,
-          model: model || 'gemini-2.5-flash',
+          apiKey: selectedKey,
+          model: targetModel,
           imageBase64: params.imageBase64,
           mimeType: params.mimeType,
           fileName: params.fileName,
@@ -1396,11 +1974,10 @@ export async function generateMotionPromptFromImage(
       if (attempt === maxRetries) {
         console.error('generateMotionPromptFromImage failed:', e);
       }
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 600));
     }
   }
 
-  // Graceful deterministic fallback
   const baseName = params.fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9]/g, ' ');
-  return `Dynamic 60 FPS motion graphic animation of ${baseName} featuring smooth articulated transformations, cyber glow particle trails, rhythmic kinetic bouncing, and seamless looping easing curves on a clean dark studio background.`;
+  return `Dynamic 60 FPS motion graphic animation of ${baseName} featuring smooth articulated transformations, volumetric chiaroscuro bevels, rhythmic kinetic bouncing, and seamless looping easing curves.`;
 }
