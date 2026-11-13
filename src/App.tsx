@@ -51,6 +51,13 @@ const STORAGE_PROMPT_SUB_TAB = 'bigma_prompt_sub_tab';
 const STORAGE_I2M_AUTOPILOT_ACCOUNTS = 'bigma_i2m_autopilot_accounts_flow';
 const STORAGE_AUTOPILOT_ACCOUNTS = 'bigma_prompt_autopilot_accounts';
 
+// Smart adaptive pacing based on active rotating API keys (fast transition with multi-key rotation, safe against 15 RPM on single key)
+function getAdaptivePacingDelay(keyCount: number): number {
+  if (keyCount >= 5) return 400;
+  if (keyCount >= 2) return 1000;
+  return 2200;
+}
+
 export default function App() {
   // --- LICENSE & TRIAL STATE ---
   const [isLicenseActive, setIsLicenseActive] = useState<boolean>(() => {
@@ -559,12 +566,12 @@ export default function App() {
     setIsGeneratingAnimations(true);
     setFailedPrompts([]);
     const total = generatedPrompts.length;
-    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
     addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM) ==========`, 'info');
     if (apiKeys.length <= 1) {
-      addLog(`[Proteksi Kuota API] Terdeteksi 1 API Key aktif. Menerapkan jeda pendinginan aman ${pacingDelay / 1000}s (~12 RPM, aman dari limit 15 RPM). Tip: Tambahkan 2-3 API Key di modal 'API Keys' untuk rotasi otomatis & kecepatan lebih tinggi.`, 'cyan');
+      addLog(`[Proteksi Kuota API] Terdeteksi 1 API Key aktif. Menerapkan jeda adaptif aman ${(pacingDelay / 1000).toFixed(1)}s. Tip: Tambahkan lebih banyak API Key untuk transisi instan.`, 'cyan');
     } else {
-      addLog(`[Proteksi Kuota API] Terdeteksi ${apiKeys.length} API Key aktif dengan rotasi otomatis. Menerapkan jeda aman ${pacingDelay / 1000}s.`, 'cyan');
+      addLog(`[Rotasi Multi-Key Aktif] Terdeteksi ${apiKeys.length} API Key. Menerapkan transisi cepat ${(pacingDelay / 1000).toFixed(1)}s antar animasi.`, 'cyan');
     }
 
     let currentAnimList = [...animations];
@@ -631,10 +638,11 @@ export default function App() {
         const isQuotaOrServerIssue = errMsg.includes('500') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted') || errMsg.includes('overload');
         
         if (isQuotaOrServerIssue && i < total - 1) {
-          addLog(`[Pendinginan Kuota] Mengaktifkan jeda 10s agar batas kuota Google pulih sebelum prompt #${i + 2}...`, 'warn');
-          await new Promise((res) => setTimeout(res, 10000));
+          const cooldownMs = apiKeys.length >= 2 ? 1500 : 4000;
+          addLog(`[Pendinginan Kuota] Mengaktifkan jeda pemulihan ${(cooldownMs / 1000).toFixed(1)}s sebelum prompt #${i + 2}...`, 'warn');
+          await new Promise((res) => setTimeout(res, cooldownMs));
         } else {
-          await new Promise((res) => setTimeout(res, 3000));
+          await new Promise((res) => setTimeout(res, 800));
         }
         continue;
       }
@@ -670,7 +678,7 @@ export default function App() {
     setIsGeneratingAnimations(true);
     const promptsToRetry = [...failedPrompts];
     const total = promptsToRetry.length;
-    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
     addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL ==========`, 'warn');
     showToast(`Mencoba ulang ${total} animasi yang sebelumnya mengalami kendala...`, 'info');
 
@@ -744,7 +752,7 @@ export default function App() {
       } catch (e: any) {
         addLog(`[Masih Kendala] Prompt #${i + 1}: ${e.message}`, 'error');
         remainingFailed.push(currentPrompt);
-        await new Promise((res) => setTimeout(res, 3500));
+        await new Promise((res) => setTimeout(res, 1200));
       }
     }
 
@@ -1013,13 +1021,13 @@ export default function App() {
     setIsGeneratingAnimations(true);
 
     const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
-    const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
     let completedOverall = 0;
     let currentAnimList = [...animations];
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
     addLog(
-      `🚀 [BATCH NOTEPAD] Memulai generate animasi dari ${batches.length} file Notepad (${totalPromptsOverall} total prompt)... (Jeda anti-limit: ${pacingDelay / 1000}s)`,
+      `🚀 [BATCH NOTEPAD] Memulai generate animasi dari ${batches.length} file Notepad (${totalPromptsOverall} total prompt)... (Transisi adaptif: ${(pacingDelay / 1000).toFixed(1)}s)`,
       'cyan'
     );
     showToast(`🚀 Memulai generate animasi dari ${batches.length} file Notepad...`, 'info');
@@ -1155,8 +1163,7 @@ export default function App() {
             }
           );
           addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt satu per satu. Memulai render animasi...`, 'success');
-          addLog(`⏳ [${acc.name}] Menyiapkan antrian render berurutan satu per satu (jeda 2.5s pendinginan kuota API)...`, 'info');
-          await new Promise((res) => setTimeout(res, 2500));
+          await new Promise((res) => setTimeout(res, 500));
         } catch (e: any) {
           addLog(`❌ [${acc.name}] Gagal generate prompt background: ${e.message}`, 'error');
           newFailedItems.push({
@@ -1209,8 +1216,8 @@ export default function App() {
             addLog(`✅ [${acc.name}] Animasi #${j + 1}/${prompts.length} berhasil dibuat & disimpan ke Galeri!`, 'success');
           }
 
-          // Delay adaptif antar animasi sukses untuk kestabilan token API dan anti limit
-          const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+          // Delay adaptif cepat antar animasi sukses sesuai jumlah key rotasi
+          const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
           if (j < prompts.length - 1) {
             await new Promise((res) => setTimeout(res, pacingDelay));
           }
@@ -1234,10 +1241,11 @@ export default function App() {
           const isQuotaOrServerIssue = errMsg.includes('500') || errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('resource_exhausted') || errMsg.includes('overload');
 
           if (isQuotaOrServerIssue && j < prompts.length - 1) {
-            addLog(`[AutoPilot Cooldown] Mengaktifkan jeda pemulihan 10s agar batas kuota Google pulih sebelum animasi berikutnya...`, 'warn');
-            await new Promise((res) => setTimeout(res, 10000));
+            const cooldownMs = apiKeys.length >= 2 ? 1500 : 4000;
+            addLog(`[AutoPilot Cooldown] Mengaktifkan jeda pemulihan ${(cooldownMs / 1000).toFixed(1)}s sebelum animasi berikutnya...`, 'warn');
+            await new Promise((res) => setTimeout(res, cooldownMs));
           } else {
-            const pacingDelay = apiKeys.length <= 1 ? 5000 : 3500;
+            const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
             if (j < prompts.length - 1) {
               await new Promise((res) => setTimeout(res, pacingDelay));
             }
@@ -1341,14 +1349,14 @@ export default function App() {
           showToast(`✅ [${item.accountName}] Animasi berhasil diperbaiki!`, 'success');
         }
 
-        // Delay 3 detik antar percobaan sukses
+        // Delay adaptif cepat antar percobaan sukses
         if (i < total - 1) {
-          await new Promise((res) => setTimeout(res, 3000));
+          await new Promise((res) => setTimeout(res, getAdaptivePacingDelay(apiKeys.length)));
         }
       } catch (e: any) {
         addLog(`❌ [Masih Kendala] [${item.accountName}]: ${e.message}`, 'error');
         remainingFailed.push({ ...item, error: e.message || 'Masih kendala saat dicoba ulang' });
-        await new Promise((res) => setTimeout(res, 2000));
+        await new Promise((res) => setTimeout(res, 1000));
       }
     }
 

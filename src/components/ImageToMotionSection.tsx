@@ -556,9 +556,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         );
       }
 
-      // Small breather between items
+      // Smart breather between items scaled by rotating key pool size
       if (autoPilotRef.current.isRunning && i < targetItems.length - 1) {
-        await new Promise((res) => setTimeout(res, 3000));
+        const breatherMs = apiKeys.length >= 5 ? 400 : apiKeys.length >= 2 ? 1000 : 2200;
+        await new Promise((res) => setTimeout(res, breatherMs));
       }
     }
 
@@ -638,7 +639,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       }
 
       if (autoPilotRef.current.isRunning && i < failedItems.length - 1) {
-        await new Promise((res) => setTimeout(res, 3000));
+        const breatherMs = apiKeys.length >= 5 ? 400 : apiKeys.length >= 2 ? 1000 : 2200;
+        await new Promise((res) => setTimeout(res, breatherMs));
       }
     }
 
