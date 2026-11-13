@@ -825,7 +825,7 @@ export async function generatePromptsViaGemini(
   return collectedPrompts;
 }
 
-// Direct client fallback for HTML animation generation
+// Direct client-side Google GenAI SDK generation (no forbidden User-Agent header, built-in multi-model fallback, bypasses Vercel serverless timeout)
 async function generateAnimationDirect(
   apiKey: string,
   model: GeminiModel,
@@ -841,50 +841,131 @@ async function generateAnimationDirect(
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const cleanKey = extractCleanApiKey(apiKey);
-  // Attempt direct Google GenAI SDK call in browser if user provided an API Key (0-latency, bypasses Vercel 10s timeout ceiling!)
-  if (cleanKey && cleanKey.startsWith('AIza')) {
-    try {
-      const ai = new GoogleGenAI({
-        apiKey: cleanKey,
-        httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
-      });
-      const targetModel = sanitizeModel(model);
-      const isBackground = type === 'bg';
-      const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-      const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+  if (!cleanKey || !cleanKey.startsWith('AIza')) {
+    throw new Error('Browser direct call requires a valid AIza API key');
+  }
 
-      const motionDirectives = {
-        bounce: "Kinetika elastis squash-and-stretch alami.",
-        orbital: "Rotasi 3D pseudo-isometrik multi-sumbu.",
-        morph: "Transformasi kurva dinamis berbobot.",
-        cyber: "Presisi step kinetik cybernetic.",
-        mechanical: "Artikulasi sasis dan poros beveled presisi.",
-        flow: "Kinetika floating harmonis megah."
-      }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS.";
+  const ai = new GoogleGenAI({ apiKey: cleanKey });
+  const primaryModel = sanitizeModel(model);
+  const candidateModels = Array.from(new Set([
+    primaryModel,
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-flash-latest',
+  ])).slice(0, 3);
 
-      const colorStyleDirective = isGreenScreen
-        ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. WARNA SUBJEK OBJEK WAJIB KONTRAS TINGGI NON-HIJAU."
-        : (neonGlow ? "- MODE NEON GLOW: Pencahayaan luminescent." : "- MODE CRISP FLAT: Vektor solid tajam.");
+  const isBackground = type === 'bg';
+  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
-      const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer.
-Buat 1 file HTML animasi Canvas 2D presisi 60 FPS untuk: "${promptTopic}".
-Tipe: ${isBackground ? 'BACKGROUND MOTION' : '3D MONOLITHIC ICON'} | Gaya: ${style} | Warna: ${colorMode} | Dinamika: ${motionDynamics.toUpperCase()}
+  const motionDirectives = {
+    bounce: 'Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).',
+    orbital: 'Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).',
+    morph: 'Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.',
+    cyber: 'Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.',
+    mechanical: 'Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.',
+    flow: 'Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px).'
+  }[motionDynamics] || 'Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.';
+
+  const colorStyleDirective = isGreenScreen
+    ? '- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen.'
+    : (neonGlow
+        ? '- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas.'
+        : '- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).');
+
+  const systemPrompt = `Anda adalah Master HTML5 Canvas 2D Motion Designer & Microstock Specialist.
+Tugas: Buat 1 file HTML animasi Canvas 2D yang SANGAT PRESISI, BENTUK AKURAT SESUAI PROMPT, 60 FPS, dan 100% BEBAS CACAT.
+
+PARAMETER PROMPT:
+- Subjek/Topik: "${promptTopic}"
+- Tipe Animasi: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (100% Widescreen Coverage)' : '3D MONOLITHIC ICON (Pusat Kanvas)'}
+- Gaya Visual: ${style} | Mode Warna: ${colorMode}
+- Dinamika Gerakan: ${motionDynamics.toUpperCase()} (${motionDirectives})
 ${colorStyleDirective}
-ATURAN: ZERO GROUND SHADOW, ZERO RODA GERIGI, TULIS KODE CANVAS 2D LENGKAP UTUH (ctx.beginPath, ctx.fill, ctx.stroke, ctx.roundRect, gradients), BUNGKUS inner animate DENGAN try/catch.
-Outputkan HANYA file HTML lengkap:`;
+
+ATURAN MUTLAK ANIMASI (ZERO DEFECT & STRICT ZERO GROUND SHADOW):
+1. KODE MENGGAMBAR LENGKAP & UTUH (MANDATORY):
+   - TULIS KODE KINETIK CANVAS 2D SECARA LENGKAP UTUH & PRESISI UNTUK "${promptTopic}". DILARANG MEMBIARKAN KOMENTAR KOSONG ATAU SKELETON KODE!
+   - WAJIB gunakan ctx.beginPath(), ctx.fillStyle, ctx.createLinearGradient(), ctx.roundRect()/ctx.arc(), ctx.fill(), ctx.stroke() untuk melukis bodi 3D volumetric, bevel highlight rail 1.5px, dan detail internal objek.
+2. STRICT ZERO GROUND SHADOW (MUTLAK):
+   - DILARANG KERAS MENGGAMBAR BAYANGAN LANTAI, BAYANGAN DI BAWAH IKON, ATAU ELIPS HITAM/HIJAU DI BAWAH OBJEK! Objek melayang bersih 100%.
+3. CHIAROSCURO VOLUMETRIC STUDIO LIGHTING:
+   - Kesan 3D dibangun melalui gradien multi-stop directional 45°: Top plane (key light highlight cerah), Front facade (warna midtone kaya), dan Underside rim (ambient occlusion gelap -35%).
+4. STRICT ZERO RODA GERIGI & ZERO PARTICLES:
+   - Dilarang menggambar roda gerigi / gir berputar atau partikel debu liar.
+${isBackground ? '5. FULL-FRAME COVERAGE: Animasi background WAJIB mengisi kanvas dari (0, 0) hingga (w, h) secara penuh dan bergerak 60 FPS seamless loop.' : ''}
+
+WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan):
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { width: 100vw; height: 100vh; overflow: hidden; background: ${bgColor}; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  let w, h, cx, cy, S;
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+    cx = w / 2;
+    cy = h / 2;
+    S = ${isBackground ? 'Math.max(w, h)' : 'Math.min(w, h) * 0.44'};
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function animate(time) {
+    try {
+      const t = time * 0.001;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = ${clearFill};
+      ctx.fillRect(0, 0, w, h);
+
+      ${isBackground ? '// Render Edge-to-Edge Widescreen Motion Graphics Latar Belakang di sini' : `const floatY = Math.sin(t * 2.4) * (S * 0.04);
+      ctx.save();
+      ctx.translate(cx, cy + floatY);
+      // Tuliskan seluruh kode menggambar anatomi 3D volumetric subjek "${promptTopic}" dengan chiaroscuro 45° & bevel rail di sini
+      ctx.restore();`}
+    } catch (err) {
+      console.error("Render loop error:", err);
+    }
+
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);
+</script>
+</body>
+</html>`;
+
+  let lastErr: any = null;
+  for (const candidateModel of candidateModels) {
+    try {
+      const config: any = {
+        temperature: 0.2,
+        maxOutputTokens: 4096,
+      };
+      if (candidateModel.includes('2.5')) {
+        config.thinkingConfig = { thinkingBudget: 0 };
+      }
 
       const response = await ai.models.generateContent({
-        model: targetModel,
+        model: candidateModel,
         contents: systemPrompt,
-        config: {
-          temperature: 0.2,
-          maxOutputTokens: 4096,
-        },
+        config,
       });
 
       const rawText = response.text || '';
-      let cleanHTML = extractHTML(rawText, isGreenScreen);
-      if (cleanHTML && (cleanHTML.includes('<script') || cleanHTML.includes('<canvas'))) {
+      const cleanHTML = extractHTML(rawText, isGreenScreen);
+      const hasDrawingCmds = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(cleanHTML);
+      if (cleanHTML && (cleanHTML.includes('<script') || cleanHTML.includes('<canvas')) && hasDrawingCmds) {
         return {
           id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
           title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
@@ -898,47 +979,22 @@ Outputkan HANYA file HTML lengkap:`;
           isGreenScreen,
         };
       }
-    } catch (directErr) {
-      console.warn('[generateAnimationDirect] Direct client SDK call failed, delegating to server proxy...', directErr);
+    } catch (err: any) {
+      lastErr = err;
+      const errMsg = String(err?.message || '').toLowerCase();
+      if (
+        errMsg.includes('api_key_invalid') ||
+        errMsg.includes('api key not valid') ||
+        errMsg.includes('unauthenticated') ||
+        errMsg.includes('401')
+      ) {
+        throw err;
+      }
+      // Continue cleanly to next fast model (e.g., gemini-2.5-flash)
     }
   }
 
-  const res = await fetch('/api/gemini/generate-animation', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      apiKey,
-      model,
-      promptTopic,
-      type,
-      subCategory,
-      style,
-      index,
-      total,
-      isGreenScreen,
-      colorMode,
-      motionDynamics,
-      neonGlow,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `Koneksi API sementara tidak tersedia (${res.status})`);
-  }
-
-  const data = await res.json();
-  if (!data.html || data.html.trim().length === 0) {
-    throw new Error(data.error || 'AI mengembalikan kode kosong');
-  }
-
-  return {
-    ...data,
-    isGreenScreen,
-    colorMode,
-    motionDynamics,
-    neonGlow,
-  };
+  throw lastErr || new Error('Direct browser SDK generation unavailable');
 }
 
 // Generate Single Animation Code with Multi-Level Fallback & Resilient Rate-Limit Handling
@@ -959,7 +1015,6 @@ export async function generateSingleAnimationCode(
   neonGlow: boolean = true
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   let lastError: any = null;
-  // Delay berjenjang cepat untuk pemulihan Vercel & rate limit
   const retryDelays = [800, 1500, 2500];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -967,15 +1022,15 @@ export async function generateSingleAnimationCode(
       // Rotasi API key setiap percobaan untuk bypass rate limit per-key
       const apiKey = getRotatedKey(apiKeys);
 
-      // Model rotasi otomatis jika attempt > 1 untuk mengatasi temporary 500 / overload pada model tertentu
+      // Model utama pada percobaan 1, lalu model GA ultra-stabil pada percobaan berikutnya
       let attemptModel: GeminiModel = model || 'gemini-3.8-flash';
       if (attempt === 2) {
-        attemptModel = (model === 'gemini-3.5-flash-lite' ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash-lite');
+        attemptModel = model === 'gemini-2.5-flash' ? 'gemini-2.5-flash-lite' : 'gemini-2.5-flash';
       } else if (attempt >= 3) {
-        attemptModel = 'gemini-2.5-flash';
+        attemptModel = 'gemini-2.5-flash-lite';
       }
 
-      // If user provided an API key, try direct client call first for 0-latency
+      // If user provided an API key, run direct browser Google GenAI SDK first (0-latency, bypasses Vercel serverless timeout completely)
       if (apiKey) {
         try {
           return await generateAnimationDirect(
@@ -993,7 +1048,7 @@ export async function generateSingleAnimationCode(
             neonGlow
           );
         } catch (clientErr: any) {
-          console.warn(`Direct generation attempt #${attempt} failed, trying server route...`, clientErr);
+          console.warn(`Direct generation attempt #${attempt} failed, falling back to server route...`, clientErr);
         }
       }
 
@@ -1056,7 +1111,7 @@ export async function generateSingleAnimationCode(
 
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.
 
-// Direct multimodal image to motion call with model fallback
+// Direct multimodal image-to-motion call in browser with multi-model fallback
 async function generateImageToMotionDirect(
   apiKey: string,
   model: GeminiModel,
@@ -1087,44 +1142,103 @@ async function generateImageToMotionDirect(
   detectedSubject?: string;
   shapeAnalysis?: ShapeAnalysis;
 }> {
+  const cleanKey = extractCleanApiKey(apiKey);
+  if (!cleanKey || !cleanKey.startsWith('AIza')) {
+    throw new Error('Browser direct vision requires a valid AIza API key');
+  }
+
   let pureBase64 = imageBase64;
   if (pureBase64.includes(';base64,')) {
     pureBase64 = pureBase64.split(';base64,')[1];
   }
   pureBase64 = pureBase64.trim();
 
-  const res = await fetch('/api/gemini/image-to-motion', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      apiKey,
-      model,
-      imageBase64: pureBase64,
-      mimeType,
-      fileName,
-      projectName,
-      motionDynamics,
-      colorMode,
-      neonGlow,
-      isGreenScreen,
-      customInstructions,
-    }),
-  });
+  const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error || `HTTP ${res.status}`);
+  const ai = new GoogleGenAI({ apiKey: cleanKey });
+  const candidateModels = Array.from(new Set([
+    sanitizeModel(model),
+    'gemini-2.5-flash',
+    'gemini-flash-latest',
+  ])).slice(0, 3);
+
+  const visionPrompt = `Anda adalah Master Canvas 2D Motion Graphics & Senior Animator.
+Analisis GAMBAR REFERENSI ini dan rekonstruksi menjadi 1 file HTML5 Canvas 2D animasi 60 FPS yang akurat dan mirip gambar asli.
+Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | GreenScreen: ${isGreenScreen ? 'YA (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau)' : 'TIDAK (#080c14)'}.
+${customInstructions ? `Instruksi Tambahan: ${customInstructions}` : ''}
+Sertakan tag <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"..."}</script> di <head> dan kode Canvas 2D lengkap dengan try/catch di dalam animate(). Outputkan HANYA kode HTML lengkap.`;
+
+  let lastErr: any = null;
+  for (const candidateModel of candidateModels) {
+    try {
+      const config: any = {
+        temperature: 0.15,
+        maxOutputTokens: 8192,
+      };
+      if (candidateModel.includes('2.5')) {
+        config.thinkingConfig = { thinkingBudget: 0 };
+      }
+
+      const response = await ai.models.generateContent({
+        model: candidateModel,
+        contents: [
+          {
+            inlineData: {
+              data: pureBase64,
+              mimeType: mimeType || 'image/png',
+            },
+          },
+          { text: visionPrompt },
+        ],
+        config,
+      });
+
+      const rawText = response.text || '';
+      const cleanHTML = extractHTML(rawText, isGreenScreen);
+      if (cleanHTML && cleanHTML.toLowerCase().includes('<canvas') && cleanHTML.toLowerCase().includes('requestanimationframe')) {
+        let detectedSubject = cleanTitle;
+        let shapeAnalysis: ShapeAnalysis | undefined = undefined;
+        const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
+        if (analysisMatch && analysisMatch[1]) {
+          try {
+            const parsed = JSON.parse(analysisMatch[1].trim());
+            if (parsed.objectName) {
+              detectedSubject = parsed.objectName;
+              shapeAnalysis = {
+                objectName: String(parsed.objectName || ''),
+                shapeDescription: String(parsed.shapeDescription || ''),
+                detectedElements: Array.isArray(parsed.detectedElements) ? parsed.detectedElements.map(String) : [],
+                professionalMotionPlan: String(parsed.professionalMotionPlan || ''),
+                similaritySynthesis: String(parsed.similaritySynthesis || ''),
+              };
+            }
+          } catch {}
+        }
+
+        return {
+          id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
+          title: `Motion: ${detectedSubject}`,
+          type: 'icon',
+          style: colorMode,
+          subCategory: 'image-to-motion',
+          html: cleanHTML,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+          projectName,
+          fileName,
+          detectedSubject,
+          shapeAnalysis,
+        };
+      }
+    } catch (err: any) {
+      lastErr = err;
+    }
   }
 
-  const data = await res.json();
-  if (!data.html || data.html.trim().length === 0) {
-    throw new Error(data.error || 'AI mengembalikan kode kosong');
-  }
-
-  return data;
+  throw lastErr || new Error('Direct browser vision generation unavailable');
 }
-
-
 
 // High-level Image To Motion Generator with Multi-Level Fallback & Auto-Retry
 export async function generateImageToMotion(
@@ -1162,18 +1276,19 @@ export async function generateImageToMotion(
   shapeAnalysis?: ShapeAnalysis;
 }> {
   let lastError: any = null;
-  const retryDelays = [3000, 5000, 10000];
+  const retryDelays = [1200, 2000, 3500];
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const apiKey = getRotatedKey(apiKeys);
+      const attemptModel: GeminiModel = attempt === 1 ? model : 'gemini-2.5-flash';
 
       // Direct client call
       if (apiKey) {
         try {
           return await generateImageToMotionDirect(
             apiKey,
-            model,
+            attemptModel,
             params.imageBase64,
             params.mimeType,
             params.fileName,
@@ -1197,7 +1312,7 @@ export async function generateImageToMotion(
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          model: model || 'gemini-2.5-flash',
+          model: attemptModel || 'gemini-2.5-flash',
           imageBase64: params.imageBase64,
           mimeType: params.mimeType,
           fileName: params.fileName,
@@ -1226,7 +1341,7 @@ export async function generateImageToMotion(
       return data;
     } catch (err: any) {
       lastError = err;
-      const delayMs = retryDelays[attempt - 1] || 3000;
+      const delayMs = retryDelays[attempt - 1] || 2000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (menunggu jeda ${delayMs / 1000}s)`);
@@ -1238,7 +1353,7 @@ export async function generateImageToMotion(
     }
   }
 
-  throw new Error(`Gagal memproses gambar setelah 3x percobaan bertahap (3s, 5s, 10s): ${lastError?.message || 'API limit/timeout'}. Item dilewati dan tersimpan untuk dicoba ulang.`);
+  throw new Error(`Gagal memproses gambar setelah 3x percobaan bertahap: ${lastError?.message || 'API limit/timeout'}. Item dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
 // High-level Image to Prompt Motion generator (analyzes image and produces 1 pure clean motion prompt)

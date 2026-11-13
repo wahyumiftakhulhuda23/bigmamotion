@@ -1,5 +1,7 @@
 import { handleImageToPromptLogic, parseSafeBody, cleanErrorMessage } from '../../server/app';
 
+export const maxDuration = 60;
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -19,6 +21,9 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (err: any) {
     console.error('[API image-to-prompt] Serverless Error:', err);
-    return res.status(500).json({ error: cleanErrorMessage(err) || 'Gagal menganalisa gambar ke motion prompt' });
+    return res.status(200).json({
+      success: false,
+      error: cleanErrorMessage(err) || 'Gagal menganalisa gambar ke motion prompt',
+    });
   }
 }

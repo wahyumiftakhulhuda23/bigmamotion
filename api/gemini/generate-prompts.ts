@@ -1,6 +1,8 @@
 import { handleGeneratePromptsLogic, parseSafeBody } from '../../server/app';
 import { generateProceduralPrompts } from '../../src/constants/categories';
 
+export const maxDuration = 60;
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

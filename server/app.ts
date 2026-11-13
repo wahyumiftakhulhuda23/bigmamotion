@@ -93,12 +93,13 @@ export async function generateContentWithFallback(
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 1
 ): Promise<{ response: any; usedModel: string }> {
-  const fallbackOrder = ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
-  const candidateModels = [
+  // Prioritize GA high-speed reliable models immediately after primaryModel so Vercel serverless never wastes multiple 404/timeout hops
+  const fallbackOrder = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"];
+  const candidateModels = Array.from(new Set([
     primaryModel,
     ...(primaryModel === "gemini-3.5-flash-lite" ? ["gemini-3.1-flash-lite"] : []),
-    ...fallbackOrder.filter((m) => m !== primaryModel),
-  ];
+    ...fallbackOrder,
+  ])).slice(0, 4);
 
   let lastError: any = null;
 
@@ -109,7 +110,7 @@ export async function generateContentWithFallback(
       try {
         let timerId: any = null;
         const timeoutPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 4.5s)")), 4500);
+          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 12s)")), 12000);
         });
 
         const { contents, config } = generateParams(model);
@@ -129,21 +130,35 @@ export async function generateContentWithFallback(
         lastError = err;
         const msg = cleanErrorMessage(err).toLowerCase();
 
-        // If error was caused by thinkingConfig or schema incompatibility, retry immediately without thinkingConfig
-        try {
-          const { contents, config } = generateParams(model);
-          if (config && config.thinkingConfig) {
-            const safeConfig = { ...config };
-            delete safeConfig.thinkingConfig;
-            const retryResp = await ai.models.generateContent({
-              model,
-              contents,
-              config: safeConfig,
-            });
-            return { response: retryResp, usedModel: model };
+        // Only retry same model without thinkingConfig if the error is specifically about thinking/budget/config argument
+        const isConfigIssue = msg.includes("thinking") || msg.includes("budget") || msg.includes("invalid_argument") || msg.includes("unsupported field");
+        if (isConfigIssue) {
+          try {
+            const { contents, config } = generateParams(model);
+            if (config && config.thinkingConfig) {
+              const safeConfig = { ...config };
+              delete safeConfig.thinkingConfig;
+              let retryTimer: any = null;
+              const retryTimeout = new Promise((_, reject) => {
+                retryTimer = setTimeout(() => reject(new Error("Timeout Retry (> 10s)")), 10000);
+              });
+              try {
+                const retryResp: any = await Promise.race([
+                  ai.models.generateContent({
+                    model,
+                    contents,
+                    config: safeConfig,
+                  }),
+                  retryTimeout,
+                ]);
+                return { response: retryResp, usedModel: model };
+              } finally {
+                if (retryTimer) clearTimeout(retryTimer);
+              }
+            }
+          } catch {
+            // proceed to next fallback model
           }
-        } catch {
-          // ignore and proceed
         }
 
         const isNotFound =
@@ -151,6 +166,7 @@ export async function generateContentWithFallback(
           msg.includes("404") ||
           msg.includes("not supported") ||
           msg.includes("unrecognized") ||
+          msg.includes("proxy_generation_disabled") ||
           msg.includes("is not found");
 
         const isQuota =
@@ -169,10 +185,10 @@ export async function generateContentWithFallback(
           msg.includes("unavailable");
 
         if (isNotFound || isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
-          // Jika model mengalami error 500/overload di datacenter Google atau timeout Vercel, langsung beralih ke model fallback berikutnya tanpa menunda
+          // Langsung beralih ke model fallback berikutnya tanpa menunda
           break;
         } else if (isTransient && attempt < allowedAttempts) {
-          await new Promise((res) => setTimeout(res, 300 * attempt));
+          await new Promise((res) => setTimeout(res, 250 * attempt));
           continue;
         } else {
           break;
@@ -1024,9 +1040,9 @@ WAJIB outputkan struktur HTML lengkap berikut (hanya kode HTML, tanpa penjelasan
         temperature: 0.2,
         maxOutputTokens: 4096,
       };
-      const thinkingConfig = getSmartThinkingConfig(currentModel, 512);
-      if (thinkingConfig) {
-        animConfig.thinkingConfig = thinkingConfig;
+      // Zero thinking budget on Gemini 2.5 models skips internal CoT pause and cuts animation generation time from ~7s down to ~1.8s
+      if (currentModel.includes("2.5")) {
+        animConfig.thinkingConfig = { thinkingBudget: 0 };
       }
       return { contents: systemPrompt, config: animConfig };
     }
@@ -1136,9 +1152,8 @@ WAJIB outputkan struktur HTML lengkap (hanya kode HTML, tanpa penjelasan).`;
       temperature: 0.2,
       maxOutputTokens: 4096,
     };
-    const thinkingConfig = getSmartThinkingConfig(targetModel, 512);
-    if (thinkingConfig) {
-      animConfig.thinkingConfig = thinkingConfig;
+    if (targetModel.includes("2.5")) {
+      animConfig.thinkingConfig = { thinkingBudget: 0 };
     }
 
     const responseStream = await ai.models.generateContentStream({

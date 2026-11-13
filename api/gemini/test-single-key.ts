@@ -1,5 +1,7 @@
 import { handleTestSingleKeyLogic, parseSafeBody, cleanErrorMessage } from '../../server/app';
 
+export const maxDuration = 60;
+
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -16,7 +18,8 @@ export default async function handler(req: any, res: any) {
   try {
     const body = parseSafeBody(req);
     const key = body.key || req.body?.key || '';
-    const result = await handleTestSingleKeyLogic(key);
+    const model = body.model || req.body?.model;
+    const result = await handleTestSingleKeyLogic(key, model);
     return res.status(200).json(result);
   } catch (err: any) {
     console.error('[API test-single-key] Serverless Error:', err);

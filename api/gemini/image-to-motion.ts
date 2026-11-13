@@ -1,5 +1,7 @@
 import { handleImageToMotionLogic, parseSafeBody, cleanErrorMessage } from '../../server/app';
 
+export const maxDuration = 60;
+
 export const config = {
   api: {
     bodyParser: {
@@ -27,6 +29,10 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json(result);
   } catch (err: any) {
     console.error('[API image-to-motion] Serverless Error:', err);
-    return res.status(500).json({ error: cleanErrorMessage(err) || 'Gagal menganalisa gambar dan membuat animasi' });
+    return res.status(200).json({
+      success: false,
+      error: cleanErrorMessage(err) || 'Gagal menganalisa gambar dan membuat animasi',
+      html: '',
+    });
   }
 }
