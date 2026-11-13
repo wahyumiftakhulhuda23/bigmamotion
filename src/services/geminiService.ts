@@ -108,12 +108,16 @@ let currentKeyIndex = 0;
 // --- SMART API KEY HEALTH, COOLDOWN & UNSUPPORTED-MODEL POOL (ANTI-BAN & ZERO-WASTE) ---
 const quarantinedKeys = new Set<string>(); // 401/403 dead/suspended keys - never hammered again
 const keyModelCooldowns = new Map<string, number>(); // `${key}::${model}` -> timestamp until cooldown ends
+const keyModelStrikeCount = new Map<string, number>(); // consecutive 429 strikes for adaptive escalation
+const keyModelDailyExhausted = new Map<string, number>(); // `${key}::${model}` -> timestamp when RPD cooldown ends
 const keyLastUsedAt = new Map<string, number>(); // LRU spacing so every key gets maximum rest
 const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
 
 export function resetKeyHealthPool(): void {
   quarantinedKeys.clear();
   keyModelCooldowns.clear();
+  keyModelStrikeCount.clear();
+  keyModelDailyExhausted.clear();
   keyLastUsedAt.clear();
   unsupportedClientModels.clear();
 }
@@ -141,20 +145,103 @@ function markKeyInvalidOrSuspended(key: string): void {
   if (key) quarantinedKeys.add(key);
 }
 
-function markKeyModelCooldown(key: string, model: string, durationMs = 65000): void {
-  if (key && model) {
-    keyModelCooldowns.set(`${key}::${model}`, Date.now() + durationMs);
+function parseRetryDelayMs(err: any): number | null {
+  const msg = typeof err === 'string' ? err : (err?.message || err?.error?.message || '');
+  if (!msg) return null;
+  const retryInMatch = msg.match(/retry\s+(?:in|after)\s+(\d+(?:\.\d+)?)\s*s/i) || msg.match(/"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/i);
+  if (retryInMatch && retryInMatch[1]) {
+    const secs = parseFloat(retryInMatch[1]);
+    if (!Number.isNaN(secs) && secs > 0) {
+      return Math.min(65000, Math.max(8000, Math.ceil(secs * 1000) + 1000));
+    }
   }
+  return null;
+}
+
+function isDailyQuotaMessage(msg: string): boolean {
+  const lower = (msg || '').toLowerCase();
+  return (
+    lower.includes('per day') ||
+    lower.includes('per_day') ||
+    lower.includes('requests per day') ||
+    lower.includes('daily') ||
+    lower.includes('rpd') ||
+    lower.includes('limit: 0')
+  );
+}
+
+function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any = 22000): void {
+  if (!key || !model) return;
+  const pair = `${key}::${model}`;
+  const msg = typeof errOrDurationMs === 'string'
+    ? errOrDurationMs
+    : (errOrDurationMs?.message || errOrDurationMs?.error?.message || '');
+
+  if (typeof errOrDurationMs !== 'number' && isDailyQuotaMessage(msg)) {
+    // Daily quota exhausted on this model for this key — avoid hammering it for 15 minutes
+    keyModelDailyExhausted.set(pair, Date.now() + 15 * 60 * 1000);
+    keyModelCooldowns.set(pair, Date.now() + 15 * 60 * 1000);
+    return;
+  }
+
+  let durationMs: number;
+  if (typeof errOrDurationMs === 'number') {
+    durationMs = errOrDurationMs;
+  } else {
+    const parsed = parseRetryDelayMs(errOrDurationMs);
+    const strikes = (keyModelStrikeCount.get(pair) || 0) + 1;
+    keyModelStrikeCount.set(pair, strikes);
+    if (parsed) {
+      durationMs = parsed;
+    } else {
+      // Adaptive escalation: 22s -> 40s -> 65s
+      durationMs = strikes === 1 ? 22000 : strikes === 2 ? 40000 : 65000;
+    }
+  }
+  keyModelCooldowns.set(pair, Date.now() + durationMs);
 }
 
 function isKeyModelInCooldown(key: string, model: string): boolean {
-  const until = keyModelCooldowns.get(`${key}::${model}`);
+  const pair = `${key}::${model}`;
+  const dailyUntil = keyModelDailyExhausted.get(pair);
+  if (dailyUntil) {
+    if (Date.now() < dailyUntil) return true;
+    keyModelDailyExhausted.delete(pair);
+  }
+  const until = keyModelCooldowns.get(pair);
   if (!until) return false;
   if (Date.now() >= until) {
-    keyModelCooldowns.delete(`${key}::${model}`);
+    keyModelCooldowns.delete(pair);
     return false;
   }
   return true;
+}
+
+export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]): number {
+  const uniqueKeys = getCleanUniqueKeys(apiKeys).filter((k) => !quarantinedKeys.has(k));
+  if (uniqueKeys.length === 0) return 0;
+
+  const targetModels = (models && models.length > 0
+    ? models
+    : ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
+  ).map((m) => sanitizeModel(m)).filter((m) => !isModelUnsupportedCached(m));
+
+  const now = Date.now();
+  let minWait = Infinity;
+
+  for (const k of uniqueKeys) {
+    for (const m of targetModels) {
+      const pair = `${k}::${m}`;
+      const dailyUntil = keyModelDailyExhausted.get(pair);
+      if (dailyUntil && dailyUntil > now) continue; // skip daily-exhausted pairs
+      const until = keyModelCooldowns.get(pair);
+      if (!until || until <= now) return 0; // already available!
+      const wait = until - now;
+      if (wait < minWait) minWait = wait;
+    }
+  }
+
+  return Number.isFinite(minWait) && minWait > 0 ? Math.min(minWait + 500, 68000) : 0;
 }
 
 function getCleanUniqueKeys(apiKeys: string[]): string[] {
@@ -208,13 +295,13 @@ export function getCostOptimizedThinkingConfig(
 ): any {
   const m = (targetModel || '').toLowerCase();
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 512 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 256 : 0 };
   }
-  if (m.includes('3.1-flash-lite') || m.includes('3.5-flash-lite') || m.includes('flash-lite')) {
-    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
-  }
-  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.1-pro') || m.includes('4-')) {
+  if (m.includes('3.1-pro') || m.includes('4-')) {
     return { thinkingLevel: ThinkingLevel.LOW };
+  }
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
   return undefined;
 }
@@ -321,6 +408,99 @@ export function sanitizeModel(model?: string): string {
   return 'gemini-3.8-flash';
 }
 
+export function wrapCanvasCodeToHtml(
+  rawCode: string,
+  isGreenScreen: boolean = false,
+  shapeAnalysisTag: string = ''
+): string {
+  const bg = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+  const tick3 = String.fromCharCode(96, 96, 96);
+
+  let jsBody = (rawCode || '').trim();
+  const jsFenceRegex = new RegExp(tick3 + '(?:javascript|js|ts|html)?\\s*([\\s\\S]*?)' + tick3, 'i');
+  const fenceMatch = jsBody.match(jsFenceRegex);
+  if (fenceMatch && fenceMatch[1]) {
+    jsBody = fenceMatch[1].trim();
+  }
+  jsBody = jsBody
+    .replace(new RegExp('^' + tick3 + '(?:javascript|js|ts|html)?\\s*', 'i'), '')
+    .replace(new RegExp(tick3 + '\\s*$'), '')
+    .trim();
+
+  let extractedAnalysisTag = shapeAnalysisTag;
+  const analysisRegex = /<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>[\s\S]*?<\/script>/i;
+  const analysisMatch = jsBody.match(analysisRegex);
+  if (analysisMatch) {
+    if (!extractedAnalysisTag) extractedAnalysisTag = analysisMatch[0];
+    jsBody = jsBody.replace(analysisRegex, '').trim();
+  }
+
+  const hasDrawFrame = /(?:function\s+drawFrame\s*\(|(?:const|let|var)\s+drawFrame\s*=)/i.test(jsBody);
+  const hasAnimate = /function\s+animate\s*\(/i.test(jsBody);
+
+  const runnerScript = hasDrawFrame
+    ? `${jsBody}
+  function animate(time) {
+    const t = (time || 0) * 0.001;
+    try {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = ${clearFill};
+      ctx.fillRect(0, 0, w, h);
+      ctx.save();
+      drawFrame(ctx, w, h, cx, cy, S, t);
+      ctx.restore();
+    } catch (err) {
+      console.error("Canvas render error:", err);
+      try { ctx.restore(); } catch {}
+    }
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);`
+    : hasAnimate
+    ? `${jsBody}\n  if (typeof requestAnimationFrame === 'function') { try { animate(0); } catch {} }`
+    : `function drawFrame(ctx, w, h, cx, cy, S, t) {\n${jsBody}\n  }\n  function animate(time) {\n    const t = (time || 0) * 0.001;\n    try {\n      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);\n      ctx.clearRect(0, 0, w, h);\n      ctx.fillStyle = ${clearFill};\n      ctx.fillRect(0, 0, w, h);\n      ctx.save();\n      drawFrame(ctx, w, h, cx, cy, S, t);\n      ctx.restore();\n    } catch (err) {\n      console.error("Canvas render error:", err);\n      try { ctx.restore(); } catch {}\n    }\n    requestAnimationFrame(animate);\n  }\n  requestAnimationFrame(animate);`;
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canvas Animation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: ${bg}; display: flex; align-items: center; justify-content: center; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+  ${extractedAnalysisTag}
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth || 800;
+      h = window.innerHeight || 600;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      cx = w / 2;
+      cy = h / 2;
+      S = Math.min(w, h) * 0.44;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    ${runnerScript}
+  </script>
+</body>
+</html>`;
+}
+
 function extractHTML(text: string, isGreenScreen: boolean = false): string {
   let cleanHTML = text;
   const tick3 = String.fromCharCode(96, 96, 96);
@@ -347,6 +527,12 @@ function extractHTML(text: string, isGreenScreen: boolean = false): string {
 
   const lower = cleanHTML.toLowerCase();
   const bg = isGreenScreen ? '#00ff00' : '#080c14';
+
+  // If AI returned lean JS drawFrame/canvas code (without HTML shell), wrap deterministically
+  const looksLikePureJs = !lower.includes('<!doctype') && !lower.includes('<html') && !lower.includes('<canvas');
+  if (looksLikePureJs && (/function\s+drawFrame|ctx\.(fill|stroke|beginPath|roundRect|arc|bezierCurveTo)/i.test(cleanHTML))) {
+    return wrapCanvasCodeToHtml(cleanHTML, isGreenScreen);
+  }
 
   // Auto-heal: If HTML is missing <!DOCTYPE html> or <html>/<body> wrap, but has <canvas> or <script>
   if (!lower.includes('<!doctype') || !lower.includes('</html>')) {
@@ -1260,7 +1446,7 @@ export async function generatePromptsViaGemini(
   return collectedPrompts;
 }
 
-// Single-shot Direct Browser Google GenAI SDK animation generator (NO multi-model fan-out inside Direct to prevent quota amplification)
+// Single-shot Direct Browser Google GenAI SDK animation generator (lean drawFrame output cuts ~45% output tokens)
 async function generateAnimationDirect(
   apiKey: string,
   targetModel: string,
@@ -1282,8 +1468,6 @@ async function generateAnimationDirect(
 
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
-  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
   const motionDirectives = {
     bounce: 'Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).',
@@ -1295,28 +1479,20 @@ async function generateAnimationDirect(
   }[motionDynamics] || 'Kinetika floating 3D harmonis 60 FPS.';
 
   const colorStyleDirective = isGreenScreen
-    ? `- KANVAS GREEN SCREEN MURNI: Background ${bgColor}. STRICT ZERO SHADOWBLUR! WARNA SUBJEK WAJIB KONTRAS TINGGI BUKAN HIJAU (Gold #FFD700, Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Orange #F97316).`
+    ? '- GREEN SCREEN (#00ff00): STRICT ZERO SHADOWBLUR! WARNA SUBJEK NON-HIJAU KONTRAS TINGGI (Gold #FFD700, Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Orange #F97316).'
     : neonGlow
-    ? '- NEON GLOW AKTIF: ctx.shadowBlur = 12 pada aksen/LED saja.'
-    : '- CRISP FLAT/SOLID: Vektor tajam tanpa blur (ctx.shadowBlur = 0).';
+    ? '- NEON GLOW: ctx.shadowBlur = 12 pada aksen/LED saja.'
+    : '- CRISP FLAT: Vektor tajam tanpa blur (ctx.shadowBlur = 0).';
 
-  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
-PARAMETER:
-- Topik: "${promptTopic}"
-- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
-- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master Canvas 2D Motion Designer. Tulis 1 fungsi JS 60 FPS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (w,h=ukuran canvas, cx,cy=pusat, S=Math.min(w,h)*0.44, t=detik; background sudah bersih).
+PARAM: Topik "${promptTopic}" | Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives})
 ${colorStyleDirective}
-ATURAN MUTLAK:
-1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
-2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
-3. CHIAROSCURO 45°: Top highlight cerah, front facade midtone kaya, underside ambient occlusion -35%.
-4. ZERO RODA GERIGI & ZERO PARTICLES.
-5. HARUS bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background CSS body ${bgColor}).
-Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penjelasan.`;
+ATURAN: 1) Gambar Canvas 2D utuh (beginPath, createLinearGradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, artikulasi internal. DILARANG skeleton/komentar kosong. 2) ZERO GROUND SHADOW. 3) Chiaroscuro 45°. 4) ZERO roda gerigi & ZERO particles.
+Output HANYA kode JS function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (tanpa HTML/CSS/resize/rAF/penjelasan).`;
 
   const config: any = {
     temperature: 0.2,
-    maxOutputTokens: 3600,
+    maxOutputTokens: 2400,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation');
   if (smartThinking) {
@@ -1366,7 +1542,119 @@ Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penj
   throw new Error('AI mengembalikan kode animasi yang belum lengkap');
 }
 
-// Generate Single Animation Code with Smart Key-Cooldown Pool & Single-Hop Model Fallback (Zero Double-Strike)
+// 2-in-1 Direct Browser Batch Animation Generator (cuts RPM, RPD, thinking & system prompt tokens by ~50%)
+async function generateAnimationBatchDirect(
+  apiKey: string,
+  targetModel: string,
+  prompts: string[],
+  type: AnimationType,
+  subCategory: string,
+  style: string,
+  isGreenScreen?: boolean,
+  colorMode: ColorMode = 'gradient',
+  motionDynamics: MotionDynamics = 'flow',
+  neonGlow: boolean = true
+): Promise<Array<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean } | null>> {
+  const cleanKey = extractCleanApiKey(apiKey);
+  if (!cleanKey || !cleanKey.startsWith('AIza')) {
+    throw new Error('NETWORK_OR_NO_CLIENT_KEY');
+  }
+
+  const ai = new GoogleGenAI({ apiKey: cleanKey });
+  const isBackground = type === 'bg';
+
+  const motionDirectives = {
+    bounce: 'squash-and-stretch elastis',
+    orbital: 'rotasi 3D pseudo-isometrik multi-sumbu',
+    morph: 'transformasi kurva bezierCurveTo halus',
+    cyber: 'laser scan clip & LED ritmis',
+    mechanical: 'artikulasi sasis presisi tanpa roda gerigi',
+    flow: 'floating harmonis Math.sin(t*2.4)*(S*0.045) + inersia',
+  }[motionDynamics] || 'floating 3D harmonis 60 FPS';
+
+  const colorStyleDirective = isGreenScreen
+    ? 'GREEN SCREEN (#00ff00): STRICT ZERO SHADOWBLUR! WARNA NON-HIJAU KONTRAS TINGGI.'
+    : neonGlow
+    ? 'NEON GLOW: shadowBlur=12 pada aksen saja.'
+    : 'CRISP FLAT: shadowBlur=0.';
+
+  const batchPrompt = `Master Canvas 2D Motion Designer. Hasilkan JSON array berisi tepat ${prompts.length} string kode JS independen.
+Setiap elemen array WAJIB mendefinisikan: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (background sudah bersih; gunakan ctx,w,h,cx,cy,S,t).
+Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives}) | ${colorStyleDirective}
+ATURAN: Gambar utuh (beginPath, gradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, Chiaroscuro 45°, ZERO ground shadow, ZERO gerigi/particles.
+Daftar Topik:
+${prompts.map((p, idx) => `[${idx}]: "${p}"`).join('\n')}`;
+
+  const config: any = {
+    temperature: 0.2,
+    maxOutputTokens: Math.min(4200, Math.max(2000, prompts.length * 1850)),
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+    },
+  };
+  const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation');
+  if (smartThinking) config.thinkingConfig = smartThinking;
+
+  let response: any;
+  try {
+    response = await ai.models.generateContent({
+      model: targetModel,
+      contents: batchPrompt,
+      config,
+    });
+  } catch (err: any) {
+    const classified = classifyGeminiError(err);
+    if (classified.isConfigIssue && config.thinkingConfig) {
+      const safeConfig = { ...config };
+      delete safeConfig.thinkingConfig;
+      response = await ai.models.generateContent({
+        model: targetModel,
+        contents: batchPrompt,
+        config: safeConfig,
+      });
+    } else {
+      throw err;
+    }
+  }
+
+  const rawText = (response?.text || '').trim();
+  let codeItems: string[] = [];
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
+  } catch {
+    const m = rawText.match(/\[[\s\S]*\]/);
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
+      } catch {}
+    }
+  }
+
+  return prompts.map((promptTopic, idx) => {
+    const rawCode = codeItems[idx] || '';
+    const html = rawCode ? extractHTML(rawCode, isGreenScreen) : '';
+    const valid = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(html);
+    if (!html || !valid) return null;
+    return {
+      id: 'anim_' + Date.now() + '_' + idx + Math.random().toString(36).substring(7),
+      title: `${promptTopic.substring(0, 35)}... (${idx + 1}/${prompts.length})`,
+      type,
+      style,
+      subCategory,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      html,
+      isGreenScreen,
+    };
+  });
+}
+
+// Generate Single Animation Code with Smart Key-Cooldown Pool, Auto-Wait Recovery & Single-Hop Model Fallback
 export async function generateSingleAnimationCode(
   apiKeys: string[],
   model: GeminiModel,
@@ -1400,13 +1688,14 @@ export async function generateSingleAnimationCode(
   const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
   let modelCursor = 0;
   let lastError: any = null;
-  const retryDelays = [500, 1200, 2000];
+  const retryDelays = [400, 900, 1500];
+  let didWaitForCooldown = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
-    // If all keys are on 429 cooldown for activeModel, shift to next model in chain that still has a rested key
+    // If all keys are on cooldown for activeModel, shift to next model in chain that still has a rested key
     if (hasClientKeys && !selectedKey) {
       let foundAlt = false;
       for (let mIdx = 0; mIdx < modelsAvailable.length; mIdx++) {
@@ -1425,6 +1714,17 @@ export async function generateSingleAnimationCode(
         const allDead = uniqueClientKeys.every((k) => quarantinedKeys.has(k));
         if (allDead) {
           throw new Error('Semua API Key tidak valid atau ditolak (401/403). Periksa daftar API Key Anda.');
+        }
+        // Check if we only have a short RPM/TPM cooldown we can wait out cleanly
+        const waitMs = !didWaitForCooldown ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
+        if (waitMs > 0 && waitMs <= 68000) {
+          didWaitForCooldown = true;
+          if (onRetry) {
+            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`);
+          }
+          await new Promise((r) => setTimeout(r, waitMs));
+          attempt = Math.max(0, attempt - 1); // Give this item a fresh retry after cooldown clears
+          continue;
         }
         throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
       }
@@ -1454,17 +1754,17 @@ export async function generateSingleAnimationCode(
             lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              continue; // Zero delay — switch immediately to next healthy key
+              continue;
             }
             throw lastError;
           }
           if (classified.isQuota) {
-            markKeyModelCooldown(selectedKey, activeModel, 65000);
+            markKeyModelCooldown(selectedKey, activeModel, clientErr);
             lastError = new Error(`Key kena limit 429 di ${activeModel}, mengalihkan ke key/model cadangan`);
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              await new Promise((r) => setTimeout(r, 300));
-              continue; // Do NOT double-hit server proxy on 429!
+              await new Promise((r) => setTimeout(r, 250));
+              continue;
             }
             throw lastError;
           }
@@ -1474,11 +1774,10 @@ export async function generateSingleAnimationCode(
             lastError = new Error(`Model ${activeModel} belum tersedia, beralih model...`);
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              continue; // Zero delay — switch model without hitting server
+              continue;
             }
             throw lastError;
           }
-          // Only fall through to server route if browser network/CORS actually blocked direct call
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             throw clientErr;
           }
@@ -1523,16 +1822,17 @@ export async function generateSingleAnimationCode(
         neonGlow,
       };
     } catch (err: any) {
+      if (err instanceof AllKeysExhaustedError) throw err;
       lastError = err;
       const classified = classifyGeminiError(err);
-      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, 65000);
+      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
       if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
       }
 
-      const delayMs = retryDelays[attempt - 1] || 1200;
+      const delayMs = retryDelays[attempt - 1] || 1000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);
@@ -1543,12 +1843,233 @@ export async function generateSingleAnimationCode(
     }
   }
 
+  // Final check: if all keys ended up cooling down on the last attempt, surface AllKeysExhaustedError cleanly
+  if (hasClientKeys && !uniqueClientKeys.every((k) => quarantinedKeys.has(k))) {
+    const anyHealthy = modelsAvailable.some((m) => !!getBestHealthyKey(uniqueClientKeys, m));
+    if (!anyHealthy) {
+      throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
+    }
+  }
+
   throw new Error(`Gagal setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
+}
+
+// High-throughput Batch Animation Generator (2 animations per 1 request, with automatic single-item recovery)
+export async function generateBatchAnimationCodes(
+  apiKeys: string[],
+  model: GeminiModel,
+  prompts: string[],
+  type: AnimationType,
+  subCategory: string,
+  style: string,
+  startIndex: number,
+  totalOverall: number,
+  options: {
+    isGreenScreen?: boolean;
+    colorMode?: ColorMode;
+    motionDynamics?: MotionDynamics;
+    neonGlow?: boolean;
+    onLog?: (msg: string, level?: 'info' | 'warn' | 'error' | 'success') => void;
+  } = {}
+): Promise<Array<{ prompt: string; anim?: any; error?: string; exhausted?: boolean }>> {
+  const {
+    isGreenScreen = false,
+    colorMode = 'gradient',
+    motionDynamics = 'flow',
+    neonGlow = true,
+    onLog,
+  } = options;
+
+  if (!prompts || prompts.length === 0) return [];
+  if (prompts.length === 1) {
+    try {
+      const anim = await generateSingleAnimationCode(
+        apiKeys,
+        model,
+        prompts[0],
+        type,
+        subCategory,
+        style,
+        startIndex,
+        totalOverall,
+        undefined,
+        3,
+        isGreenScreen,
+        colorMode,
+        motionDynamics,
+        neonGlow
+      );
+      return [{ prompt: prompts[0], anim }];
+    } catch (e: any) {
+      return [{
+        prompt: prompts[0],
+        error: e?.message || 'Gagal merender animasi',
+        exhausted: e instanceof AllKeysExhaustedError || !!e?.isAllKeysExhausted,
+      }];
+    }
+  }
+
+  const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
+  const hasClientKeys = uniqueClientKeys.length > 0;
+  const modelChain = Array.from(
+    new Set([
+      sanitizeModel(model || 'gemini-3.8-flash'),
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-3.5-flash-lite',
+      'gemini-3.1-flash-lite',
+      'gemini-flash-latest',
+    ])
+  ).filter((m) => !isModelUnsupportedCached(m));
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+
+  let batchItems: Array<any | null> = new Array(prompts.length).fill(null);
+  let batchSuccess = false;
+  let waitedOnce = false;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    let activeModel = modelsAvailable[Math.min(attempt - 1, modelsAvailable.length - 1)];
+    let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
+
+    if (hasClientKeys && !selectedKey) {
+      for (const candidateM of modelsAvailable) {
+        const alt = getBestHealthyKey(uniqueClientKeys, candidateM);
+        if (alt) {
+          activeModel = candidateM;
+          selectedKey = alt;
+          break;
+        }
+      }
+      if (!selectedKey) {
+        const waitMs = !waitedOnce ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
+        if (waitMs > 0 && waitMs <= 68000) {
+          waitedOnce = true;
+          if (onLog) onLog(`⏳ Kuota RPM/TPM penuh — menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`, 'warn');
+          await new Promise((r) => setTimeout(r, waitMs));
+          attempt--;
+          continue;
+        }
+        return prompts.map((p) => ({
+          prompt: p,
+          error: 'Semua API Key sedang dalam masa pendinginan kuota (429).',
+          exhausted: true,
+        }));
+      }
+    }
+
+    try {
+      if (selectedKey && selectedKey.startsWith('AIza')) {
+        try {
+          batchItems = await generateAnimationBatchDirect(
+            selectedKey,
+            activeModel,
+            prompts,
+            type,
+            subCategory,
+            style,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow
+          );
+          batchSuccess = batchItems.some(Boolean);
+          if (batchSuccess) break;
+        } catch (clientErr: any) {
+          const classified = classifyGeminiError(clientErr);
+          if (classified.isInvalidKey) {
+            markKeyInvalidOrSuspended(selectedKey);
+            continue;
+          }
+          if (classified.isQuota) {
+            markKeyModelCooldown(selectedKey, activeModel, clientErr);
+            await new Promise((r) => setTimeout(r, 250));
+            continue;
+          }
+          if (classified.isNotFound) {
+            markModelUnsupportedCached(activeModel);
+            continue;
+          }
+          if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
+            break;
+          }
+        }
+      }
+
+      // Server proxy fallback only if no client key or network block
+      const res = await fetch('/api/gemini/generate-animation-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: selectedKey,
+          model: activeModel,
+          prompts,
+          type,
+          subCategory,
+          style,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.items)) {
+          batchItems = data.items;
+          batchSuccess = batchItems.some(Boolean);
+          if (batchSuccess) break;
+        }
+      }
+    } catch (err: any) {
+      const classified = classifyGeminiError(err);
+      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
+      if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
+      if (classified.isNotFound) markModelUnsupportedCached(activeModel);
+    }
+  }
+
+  // Build final output, filling any missing item via single-item fallback ONLY for missing slot(s)
+  const finalOut: Array<{ prompt: string; anim?: any; error?: string; exhausted?: boolean }> = [];
+  for (let i = 0; i < prompts.length; i++) {
+    const item = batchItems[i];
+    if (item && item.html) {
+      item.title = `${prompts[i].substring(0, 35)}... (${startIndex + i}/${totalOverall})`;
+      finalOut.push({ prompt: prompts[i], anim: item });
+    } else {
+      try {
+        const single = await generateSingleAnimationCode(
+          apiKeys,
+          model,
+          prompts[i],
+          type,
+          subCategory,
+          style,
+          startIndex + i,
+          totalOverall,
+          undefined,
+          2,
+          isGreenScreen,
+          colorMode,
+          motionDynamics,
+          neonGlow
+        );
+        finalOut.push({ prompt: prompts[i], anim: single });
+      } catch (e: any) {
+        finalOut.push({
+          prompt: prompts[i],
+          error: e?.message || 'Gagal merender animasi',
+          exhausted: e instanceof AllKeysExhaustedError || !!e?.isAllKeysExhausted,
+        });
+      }
+    }
+  }
+
+  return finalOut;
 }
 
 // Zero-Dummy Policy: Animasi murni disusun oleh AI sesuai prompt & referensi. Tidak ada fallback dummy/template.
 
-// Single-shot Direct multimodal image-to-motion call in browser (zero internal fan-out)
+// Single-shot Direct multimodal image-to-motion call in browser (lean drawFrame output cuts ~450 output tokens)
 async function generateImageToMotionDirect(
   apiKey: string,
   targetModel: string,
@@ -1593,15 +2114,18 @@ async function generateImageToMotionDirect(
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   const ai = new GoogleGenAI({ apiKey: cleanKey });
 
-  const visionPrompt = `Anda adalah Master Canvas 2D Motion Graphics & Senior Animator.
-Analisis GAMBAR REFERENSI ini dan rekonstruksi menjadi 1 file HTML5 Canvas 2D animasi 60 FPS yang akurat dan mirip gambar asli (proporsi, bevel, palet HEX asli, artikulasi sub-komponen fase tertunda).
-Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | GreenScreen: ${isGreenScreen ? 'YA (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau kontras tinggi)' : 'TIDAK (#080c14)'}.
+  const visionPrompt = `Master Canvas 2D Motion Graphics & Computer Vision Engineer.
+Analisis GAMBAR REFERENSI (proporsi, bevel, palet HEX asli, komponen internal) lalu rekonstruksi menjadi animasi 60 FPS akurat.
+Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau kontras tinggi)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi Tambahan: ${customInstructions}` : ''}
-Sertakan tag <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"..."}</script> di <head> dan kode Canvas 2D lengkap (beginPath, fill, stroke, roundRect/bezierCurveTo, gradient) dengan try/catch di dalam animate(). Outputkan HANYA kode HTML lengkap.`;
+ATURAN: 1) Gambar ulang semua sub-komponen dengan Canvas 2D presisi (beginPath, roundRect, bezierCurveTo, arc, createLinearGradient, fill, stroke). DILARANG simplifikasi polos, ZERO gerigi kecuali asli ada, ZERO glass bubble. 2) Gerak: floating harmonis, gimbal tilt halus, squash-and-stretch, artikulasi sub-komponen fase tertunda, specular sheen diagonal di-clip siluet bodi.
+Outputkan HANYA blok metadata + fungsi JS:
+<script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
+function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: 4500,
+    maxOutputTokens: 3200,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -1737,7 +2261,8 @@ export async function generateImageToMotion(
   let modelCursor = 0;
 
   let lastError: any = null;
-  const retryDelays = [700, 1400, 2200];
+  const retryDelays = [500, 1100, 1800];
+  let didWaitForCooldown = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
@@ -1756,6 +2281,16 @@ export async function generateImageToMotion(
         }
       }
       if (!foundAlt) {
+        const waitMs = !didWaitForCooldown ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
+        if (waitMs > 0 && waitMs <= 68000) {
+          didWaitForCooldown = true;
+          if (onRetry) {
+            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`);
+          }
+          await new Promise((r) => setTimeout(r, waitMs));
+          attempt = Math.max(0, attempt - 1);
+          continue;
+        }
         throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
       }
     }
@@ -1790,11 +2325,11 @@ export async function generateImageToMotion(
             throw lastError;
           }
           if (classified.isQuota) {
-            markKeyModelCooldown(selectedKey, activeModel, 65000);
+            markKeyModelCooldown(selectedKey, activeModel, clientErr);
             lastError = new Error(`Key kena limit 429 di ${activeModel}, memutar ke key/model lain`);
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              await new Promise((r) => setTimeout(r, 300));
+              await new Promise((r) => setTimeout(r, 250));
               continue;
             }
             throw lastError;
@@ -1847,16 +2382,17 @@ export async function generateImageToMotion(
 
       return data;
     } catch (err: any) {
+      if (err instanceof AllKeysExhaustedError) throw err;
       lastError = err;
       const classified = classifyGeminiError(err);
-      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, 65000);
+      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
       if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
       }
 
-      const delayMs = retryDelays[attempt - 1] || 1500;
+      const delayMs = retryDelays[attempt - 1] || 1400;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);

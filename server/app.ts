@@ -46,17 +46,18 @@ export function getSmartThinkingConfig(
 
   // Gemini 2.5 series: uses numeric thinkingBudget (0 skips reasoning tokens completely for fast/cheap codegen)
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 512 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 256 : 0 };
   }
 
-  // Gemini 3.x Flash Lite series: uses ThinkingLevel.MINIMAL (prompt/anim) or LOW (vision)
-  if (m.includes('3.1-flash-lite') || m.includes('3.5-flash-lite') || m.includes('flash-lite')) {
-    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
-  }
-
-  // Gemini 3.6 / 3.8 / 3.1-Pro / 4.x series: uses ThinkingLevel.LOW (NEVER thinkingBudget which triggers 400 error & wastes tokens)
-  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.1-pro') || m.includes('4-') || m.includes('thinking')) {
+  // Gemini 3.1-Pro / 4.x Pro series: uses ThinkingLevel.LOW
+  if (m.includes('3.1-pro') || m.includes('4-') || m.includes('thinking')) {
     return { thinkingLevel: ThinkingLevel.LOW };
+  }
+
+  // Gemini 3.x Flash & Flash-Lite series (3.1-flash-lite, 3.5-flash-lite, 3.6, 3.8):
+  // MINIMAL for prompt/animation saves ~75-90% hidden thinking tokens; LOW for vision
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+    return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
 
   return undefined;
@@ -260,13 +261,106 @@ export async function generateContentWithFallback(
   throw new Error(cleanErrorMessage(lastError));
 }
 
+export function wrapCanvasCodeToHtml(
+  rawCode: string,
+  isGreenScreen: boolean = false,
+  shapeAnalysisTag: string = ""
+): string {
+  const bg = isGreenScreen ? '#00ff00' : '#080c14';
+  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
+  const tick3 = String.fromCharCode(96, 96, 96);
+
+  let jsBody = (rawCode || '').trim();
+  const jsFenceRegex = new RegExp(tick3 + '(?:javascript|js|ts|html)?\\s*([\\s\\S]*?)' + tick3, 'i');
+  const fenceMatch = jsBody.match(jsFenceRegex);
+  if (fenceMatch && fenceMatch[1]) {
+    jsBody = fenceMatch[1].trim();
+  }
+  jsBody = jsBody
+    .replace(new RegExp('^' + tick3 + '(?:javascript|js|ts|html)?\\s*', 'i'), '')
+    .replace(new RegExp(tick3 + '\\s*$'), '')
+    .trim();
+
+  // Extract optional embedded <script id="shape-analysis"> if returned alongside JS
+  let extractedAnalysisTag = shapeAnalysisTag;
+  const analysisRegex = /<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>[\s\S]*?<\/script>/i;
+  const analysisMatch = jsBody.match(analysisRegex);
+  if (analysisMatch) {
+    if (!extractedAnalysisTag) extractedAnalysisTag = analysisMatch[0];
+    jsBody = jsBody.replace(analysisRegex, '').trim();
+  }
+
+  const hasDrawFrame = /(?:function\s+drawFrame\s*\(|(?:const|let|var)\s+drawFrame\s*=)/i.test(jsBody);
+  const hasAnimate = /function\s+animate\s*\(/i.test(jsBody);
+
+  const runnerScript = hasDrawFrame
+    ? `${jsBody}
+  function animate(time) {
+    const t = (time || 0) * 0.001;
+    try {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = ${clearFill};
+      ctx.fillRect(0, 0, w, h);
+      ctx.save();
+      drawFrame(ctx, w, h, cx, cy, S, t);
+      ctx.restore();
+    } catch (err) {
+      console.error("Canvas render error:", err);
+      try { ctx.restore(); } catch {}
+    }
+    requestAnimationFrame(animate);
+  }
+  requestAnimationFrame(animate);`
+    : hasAnimate
+    ? `${jsBody}\n  if (typeof requestAnimationFrame === 'function') { try { animate(0); } catch {} }`
+    : `function drawFrame(ctx, w, h, cx, cy, S, t) {\n${jsBody}\n  }\n  function animate(time) {\n    const t = (time || 0) * 0.001;\n    try {\n      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);\n      ctx.clearRect(0, 0, w, h);\n      ctx.fillStyle = ${clearFill};\n      ctx.fillRect(0, 0, w, h);\n      ctx.save();\n      drawFrame(ctx, w, h, cx, cy, S, t);\n      ctx.restore();\n    } catch (err) {\n      console.error("Canvas render error:", err);\n      try { ctx.restore(); } catch {}\n    }\n    requestAnimationFrame(animate);\n  }\n  requestAnimationFrame(animate);`;
+
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Canvas Animation</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: ${bg}; display: flex; align-items: center; justify-content: center; }
+    canvas { display: block; width: 100%; height: 100%; }
+  </style>
+  ${extractedAnalysisTag}
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      w = window.innerWidth || 800;
+      h = window.innerHeight || 600;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      cx = w / 2;
+      cy = h / 2;
+      S = Math.min(w, h) * 0.44;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+    ${runnerScript}
+  </script>
+</body>
+</html>`;
+}
+
 export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = false): string {
   let cleanHTML = text;
-  
   const tick3 = String.fromCharCode(96, 96, 96);
   const regex = new RegExp(tick3 + '(?:html)?\\s*([\\s\\S]*?)' + tick3, 'i');
   const match = text.match(regex);
-  
+
   if (match) {
     cleanHTML = match[1].trim();
   } else {
@@ -278,7 +372,7 @@ export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = f
       cleanHTML = text.trim();
     }
   }
-  
+
   cleanHTML = cleanHTML
     .replace(new RegExp('^' + tick3 + 'html\\s*', 'i'), '')
     .replace(new RegExp('^' + tick3 + '\\s*'), '')
@@ -288,10 +382,15 @@ export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = f
   const lower = cleanHTML.toLowerCase();
   const bg = isGreenScreen ? '#00ff00' : '#080c14';
 
+  // If AI returned lean JS drawFrame/canvas code (without full HTML shell), wrap deterministically
+  const looksLikePureJs = !lower.includes('<!doctype') && !lower.includes('<html') && !lower.includes('<canvas');
+  if (looksLikePureJs && (/function\s+drawFrame|ctx\.(fill|stroke|beginPath|roundRect|arc|bezierCurveTo)/i.test(cleanHTML))) {
+    return wrapCanvasCodeToHtml(cleanHTML, isGreenScreen);
+  }
+
   // Auto-heal: If HTML is missing <!DOCTYPE html> or <html>/<body> wrap, but has <canvas> or <script>
   if (!lower.includes('<!doctype') || !lower.includes('</html>')) {
     if (lower.includes('<script') || lower.includes('requestanimationframe') || lower.includes('<canvas')) {
-      // Ensure closing script and canvas exist
       let bodyContent = cleanHTML;
       if (!bodyContent.toLowerCase().includes('</script>')) {
         bodyContent += '\n  }\n  animate(0);\n</' + 'script>';
@@ -328,7 +427,7 @@ export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = f
       }
     );
   }
-    
+
   return cleanHTML.trim();
 }
 
@@ -932,33 +1031,24 @@ export async function handleGenerateAnimationLogic(body: any) {
   }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
 
   const colorStyleDirective = isGreenScreen
-    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen."
+    ? "- GREEN SCREEN MURNI (#00ff00): STRICT ZERO SHADOWBLUR! WARNA OBJEK WAJIB KONTRAS TINGGI NON-HIJAU (Gold #FFD700, Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Orange #F97316)."
     : (neonGlow
-        ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
-        : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
+        ? "- NEON GLOW: ctx.shadowBlur = 12 pada aksen/LED saja."
+        : "- CRISP FLAT: Vektor tajam tanpa blur (ctx.shadowBlur = 0).");
 
-  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
-PARAMETER:
-- Topik: "${promptTopic}" (${catInfo})
-- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
-- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master Canvas 2D Motion Designer. Tulis 1 fungsi JS 60 FPS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (w,h=ukuran canvas, cx,cy=pusat, S=Math.min(w,h)*0.44, t=detik; background sudah dibersihkan).
+PARAM: Topik "${promptTopic}" (${catInfo}) | Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives})
 ${colorStyleDirective}
-ATURAN MUTLAK:
-1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
-2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
-3. CHIAROSCURO 45°: Top highlight cerah, front facade midtone kaya, underside ambient occlusion -35%.
-4. ZERO RODA GERIGI & ZERO PARTICLES.
-5. HARUS bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background HTML ${bgColor}).
-Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penjelasan.`;
+ATURAN: 1) Gambar Canvas 2D utuh (beginPath, createLinearGradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, artikulasi internal. DILARANG skeleton/komentar kosong. 2) ZERO GROUND SHADOW. 3) Chiaroscuro 45°. 4) ZERO roda gerigi & ZERO particles.
+Output HANYA kode JS function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (tanpa HTML/CSS/resize/rAF/penjelasan).`;
 
-  let cleanHTML = '';
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.2,
-        maxOutputTokens: 3600,
+        maxOutputTokens: 2400,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -968,15 +1058,8 @@ Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penj
     }
   );
 
-  let rawText = response.text || "";
-  cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
-
-  if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-    if (cleanHTML.toLowerCase().includes('requestanimationframe') || cleanHTML.toLowerCase().includes('<canvas') || cleanHTML.toLowerCase().includes('function animate')) {
-      rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-      cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
-    }
-  }
+  const rawText = response.text || "";
+  const cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
 
   if (!cleanHTML || (!cleanHTML.toLowerCase().includes('<script') && !cleanHTML.toLowerCase().includes('<canvas'))) {
     throw new Error('AI mengembalikan kode yang belum lengkap');
@@ -994,6 +1077,109 @@ Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa markdown/penj
     html: cleanHTML,
     isGreenScreen,
   };
+}
+
+// 2-in-1 Batch Animation Code Generator (cuts RPM, RPD & system prompt tokens by ~50%)
+export async function handleGenerateAnimationBatchLogic(body: any) {
+  const {
+    apiKey,
+    model,
+    prompts = [],
+    type = "icon",
+    subCategory = "teknologi",
+    style = "minimalist",
+    isGreenScreen = false,
+    colorMode = "gradient",
+    motionDynamics = "flow",
+    neonGlow = true,
+  } = body;
+
+  const promptList: string[] = Array.isArray(prompts)
+    ? prompts.map((p: any) => String(p).trim()).filter(Boolean)
+    : [];
+
+  if (promptList.length === 0) {
+    throw new Error("Daftar prompt batch wajib diisi");
+  }
+
+  const ai = getClient(apiKey);
+  const targetModel = sanitizeModel(model);
+  const isBackground = type === 'bg';
+
+  const motionDirectives = {
+    bounce: "squash-and-stretch elastis",
+    orbital: "rotasi 3D pseudo-isometrik multi-sumbu",
+    morph: "transformasi kurva bezierCurveTo halus",
+    cyber: "laser scan clip & LED ritmis",
+    mechanical: "artikulasi sasis presisi tanpa roda gerigi",
+    flow: "floating harmonis Math.sin(t*2.4)*(S*0.045) + inersia"
+  }[motionDynamics] || "floating 3D harmonis 60 FPS";
+
+  const colorStyleDirective = isGreenScreen
+    ? "GREEN SCREEN (#00ff00): STRICT ZERO SHADOWBLUR! WARNA NON-HIJAU KONTRAS TINGGI."
+    : (neonGlow ? "NEON GLOW: shadowBlur=12 pada aksen saja." : "CRISP FLAT: shadowBlur=0.");
+
+  const batchPrompt = `Master Canvas 2D Motion Designer. Hasilkan JSON array berisi tepat ${promptList.length} string kode JS independen.
+Setiap elemen array WAJIB mendefinisikan: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (background sudah bersih; gunakan ctx,w,h,cx,cy,S,t).
+Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives}) | ${colorStyleDirective}
+ATURAN: Gambar utuh (beginPath, gradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, Chiaroscuro 45°, ZERO ground shadow, ZERO gerigi/particles.
+Daftar Topik:
+${promptList.map((p, idx) => `[${idx}]: "${p}"`).join('\n')}`;
+
+  const { response } = await generateContentWithFallback(
+    ai,
+    targetModel,
+    (currentModel) => {
+      const cfg: any = {
+        temperature: 0.2,
+        maxOutputTokens: Math.min(4200, Math.max(2000, promptList.length * 1850)),
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      };
+      const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
+      if (smartThinking) cfg.thinkingConfig = smartThinking;
+      return { contents: batchPrompt, config: cfg };
+    }
+  );
+
+  const rawText = (response.text || "").trim();
+  let codeItems: string[] = [];
+  try {
+    const parsed = JSON.parse(rawText);
+    if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
+  } catch {
+    const m = rawText.match(/\[[\s\S]*\]/);
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
+      } catch {}
+    }
+  }
+
+  const results = promptList.map((promptTopic, idx) => {
+    const rawCode = codeItems[idx] || '';
+    const html = rawCode ? extractHTMLFromMarkdown(rawCode, isGreenScreen) : '';
+    const valid = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(html);
+    if (!html || !valid) return null;
+    return {
+      id: 'anim_' + Date.now() + '_' + idx + Math.random().toString(36).substring(7),
+      title: `${promptTopic.substring(0, 35)}... (${idx + 1}/${promptList.length})`,
+      type,
+      style,
+      subCategory,
+      colorMode,
+      motionDynamics,
+      neonGlow,
+      html,
+      isGreenScreen,
+    };
+  });
+
+  return { items: results };
 }
 
 // Server-side streaming endpoint for real-time animation code generation via Server-Sent Events (SSE)
@@ -1021,8 +1207,6 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
   const isBackground = type === 'bg';
-  const bgColor = isGreenScreen ? '#00ff00' : '#080c14';
-  const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
   const motionDirectives = {
     bounce: "Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
@@ -1034,23 +1218,16 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
 
   const colorStyleDirective = isGreenScreen
-    ? "- KANVAS GREEN SCREEN MURNI: Background #00ff00. STRICT ZERO SHADOWBLUR! WARNA SUBJEK OBJEK WAJIB MENGGUNAKAN WARNA KONTRAS TINGGI yang BUKAN HIJAU (Gold #FFD700, Electric Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Vivid Orange #F97316) agar objek tidak pudar atau menyatu dengan green screen."
+    ? "- GREEN SCREEN MURNI (#00ff00): STRICT ZERO SHADOWBLUR! WARNA OBJEK KONTRAS TINGGI NON-HIJAU."
     : (neonGlow
-        ? "- MODE NEON GLOW: Pencahayaan luminescent tajam pada aksen/LED (ctx.shadowBlur = 12; ctx.shadowColor = primaryColor). Dilarang shadowBlur pada seluruh kanvas."
-        : "- MODE CRISP FLAT/SOLID: Vektor solid tajam tanpa blur (ctx.shadowBlur = 0).");
+        ? "- MODE NEON GLOW: ctx.shadowBlur = 12 pada aksen/LED saja."
+        : "- MODE CRISP FLAT/SOLID: Vektor tajam tanpa blur (ctx.shadowBlur = 0).");
 
-  const systemPrompt = `Master HTML5 Canvas 2D Motion Designer. Buat 1 file HTML animasi Canvas 2D 60 FPS yang SANGAT PRESISI & BEBAS CACAT.
-PARAMETER:
-- Topik: "${promptTopic}"
-- Tipe: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (isi penuh 0,0..w,h)' : '3D MONOLITHIC ICON (pusat cx,cy)'}
-- Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics.toUpperCase()} (${motionDirectives})
+  const systemPrompt = `Master Canvas 2D Motion Designer. Tulis 1 fungsi JS 60 FPS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (background sudah bersih).
+PARAM: Topik "${promptTopic}" | Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives})
 ${colorStyleDirective}
-ATURAN MUTLAK:
-1. KODE LENGKAP: Tulis perintah gambar Canvas 2D utuh (ctx.beginPath, ctx.createLinearGradient, ctx.roundRect/ctx.arc/ctx.bezierCurveTo, ctx.fill, ctx.stroke) melukis bodi 3D volumetric, bevel rail 1.5px, dan artikulasi internal. DILARANG komentar kosong/skeleton.
-2. STRICT ZERO GROUND SHADOW: JANGAN menggambar bayangan lantai/elips di bawah objek.
-3. CHIAROSCURO 45° & ZERO RODA GERIGI/PARTICLES.
-4. Bungkus body animate(time) dengan try { ... } catch(e){} dan clear canvas dengan ${clearFill} (background HTML ${bgColor}).
-Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa penjelasan.`;
+ATURAN: Gambar utuh (beginPath, gradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, Chiaroscuro 45°, ZERO ground shadow, ZERO gerigi/particles.
+Output HANYA kode JS function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (tanpa HTML/CSS/resize/rAF).`;
 
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
@@ -1059,7 +1236,7 @@ Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa penjelasan.`;
   try {
     const animConfig: any = {
       temperature: 0.2,
-      maxOutputTokens: 3600,
+      maxOutputTokens: 2400,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
     if (smartThinking) {
@@ -1079,13 +1256,7 @@ Output HANYA kode HTML5 lengkap (<!DOCTYPE html>...</html>), tanpa penjelasan.`;
       res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
     }
 
-    let cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
-    if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-      if (cleanHTML.toLowerCase().includes('requestanimationframe') || cleanHTML.toLowerCase().includes('<canvas') || cleanHTML.toLowerCase().includes('function animate')) {
-        fullText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-        cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
-      }
-    }
+    const cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
 
     res.write(`data: ${JSON.stringify({
       done: true,
@@ -1149,135 +1320,14 @@ export async function handleImageToMotionLogic(body: any) {
     const ai = getClient(apiKey);
     const targetModel = sanitizeModel(model);
 
-    const masterMultimodalPrompt = `Anda adalah Master Canvas 2D Motion Graphics, Lead Computer Vision Engineer, dan Senior 3D Animator (Adobe After Effects / Lottie 60 FPS Microstock Specialist).
-
-TUGAS UTAMA (ULTRA-DETAIL PROFESSIONAL IMAGE-TO-MOTION):
-Analisis GAMBAR REFERENSI yang diunggah secara visual mendalam (pixel-level structural & chromatic analysis), lalu REKONSTRUKSI MENJADI KODE ANIMASI HTML5 CANVAS 2D yang SANGAT PRESISI, MIRIP DENGAN GAMBAR ASLI (bentuk anatomi, proporsi, rasio bevel, kode warna HEX asli), dan BERIKAN GERAKAN KINETIK 60 FPS KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL)!
-
-=============================================================================
-1. ANALISIS ANATOMI & KEMIRIPAN TINGGI (HIGH FIDELITY VISUAL RECONSTRUCTION):
-=============================================================================
-- DEKONSTRUKSI ELEMEN GAMBAR ASLI:
-  * Identifikasi subjek utama (apakah mikrofon studio, mobil, tas, trofi, kamera, roket, sepatu, gadget, robot, bangunan, kartu, dll.).
-  * Teliti rasio proporsi lebar vs tinggi (aspect ratio) dan bentuk geometris spesifiknya (beveled rectangle, kurva bezier khusus, sudut chamfer, dll.).
-  * EKSTRAK KODE WARNA HEX ASLI (#RRGGBB) langsung dari gambar: warna bodi utama, warna aksen sekunder, warna bayangan chiaroscuro (ambient occlusion), warna highlight kilau, dan warna garis kontur.
-  * REKONSTRUKSI SETIAP DETAIL SUB-KOMPONEN: Gambar ulang seluruh bagian yang tampak di gambar referensi (tombol, layar, display digital, lensa, indikator LED, kabel, tali, pegangan, sasis) menggunakan fungsi Canvas 2D presisi (\`ctx.roundRect\`, \`ctx.bezierCurveTo\`, \`ctx.ellipse\`, \`ctx.arc\`, \`ctx.fill()\`, \`ctx.stroke()\`).
-- DILARANG KERAS menyederhanakan menjadi bulatan/kotak biasa atau abstrak mentah! Bentuk harus sangat mirip dan dapat dikenali seketika sebagai kembaran animasi dari gambar referensi.
-- DILARANG KERAS memunculkan roda gerigi jika gambar aslinya bukan roda gigi!
-- DILARANG KERAS membungkus objek dalam gelembung bulat transparan (enclosing glass bubble) atau kotak kartu wadah latar belakang!
-
-=============================================================================
-2. PERGERAKAN KINETIK KELAS ATAS (ULTRA-MODIFIKASI PROFESSIONAL 60 FPS):
-=============================================================================
-Jangan buat animasi kaku atau monoton! Terapkan sistem pergerakan multi-layer yang hidup dan berbobot:
-1. GERAKAN UTAMA (Root Floating & Inertia):
-   - Osilasi vertikal harmonis yang bernapas: \`const floatY = Math.sin(t * 2.4) * (S * 0.04);\`
-   - Kemiringan gimbal halus: \`const rot = Math.sin(t * 1.8) * 0.025;\`
-   - Elastisitas squash-and-stretch alami: \`const squash = 1 + 0.03 * Math.cos(t * 2.4); const stretch = 1 / Math.sqrt(squash);\`
-2. ARTIKULASI SUB-KOMPONEN SESUAI FUNGSI OBJEK (Secondary Kinetic Articulation):
-   - Bagian-bagian internal/aksesoris bergerak dengan inersia fisika tertunda (phase lag: \`Math.sin(t * 2.4 - 0.4)\`):
-     * Jika ada layar / display -> sapuan garis scanning laser ter-clip halus di area layar.
-     * Jika ada indikator LED / tombol -> denyut pendaran luminescence lembut (\`ctx.shadowBlur = 8 + Math.sin(t * 3.5) * 4\`).
-     * Jika ada lensa kamera / sensor -> denyut fokus halus atau aperture breathing.
-     * Jika ada pegangan / antena / tali -> getaran elastis responsif.
-     * Jika ada pelat / penutup -> artikulasi mikro pernapasan.
-3. SPECULAR GLEAM SWEEP BERKELAS:
-   - Sapuan kilau cahaya spekular miring 45 derajat yang menyapu melintasi permukaan objek (\`const gleamX = ((t * 0.8) % 3 - 1.5) * S * 2.5;\`) dan WAJIB di-clip di dalam siluet bentuk badan objek.
-4. BAYANGAN KONTAK LANTAI (Ground Contact Shadow):
-   - Bayangan elips di bawah objek yang membesar dan mengabur saat objek melayang naik, dan mengecil tajam saat objek turun.
-
-=============================================================================
-STRUKTUR WAJIB KODE HTML5 CANVAS 2D:
-=============================================================================
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<style>
-  body { margin: 0; padding: 0; overflow: hidden; background-color: ${bgColor}; font-family: system-ui, -apple-system, sans-serif; }
-  canvas { display: block; width: 100vw; height: 100vh; }
-  #err { position: absolute; top: 10px; left: 10px; color: #ef4444; font-size: 12px; z-index: 10; pointer-events: none; }
-</style>
-<script type="application/json" id="shape-analysis">
-{
-  "objectName": "Nama objek spesifik dari gambar referensi",
-  "shapeDescription": "Deskripsi anatomi detail dan warna HEX asli yang dianalisis dari referensi",
-  "detectedElements": ["Komponen Bodi Utama", "Detail Sub-Struktur", "Palet HEX Asli", "Aksen Kinetik"],
-  "professionalMotionPlan": "Rencana pergerakan ultra modifikasi 60 FPS untuk setiap layer komponen",
-  "similaritySynthesis": "Rekonstruksi presisi kode warna dan proporsi gambar 1:1",
-  "glowColor": "${colorMode === 'neon' ? '#00f0ff' : colorMode === 'luxury' ? '#ffd700' : '#38bdf8'}"
-}
-</script>
-<script>
-  window.onerror = function(msg) { document.body.innerHTML += '<div id="err">Render Notice: ' + msg + '</div>'; };
-</script>
-</head>
-<body>
-<canvas id="c"></canvas>
-<script>
-  const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
-  let w, h, cx, cy, S;
-  
-  function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    w = window.innerWidth;
-    h = window.innerHeight;
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    canvas.style.width = w + 'px';
-    canvas.style.height = h + 'px';
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
-    cx = w / 2;
-    cy = h / 2;
-    S = Math.min(w, h) * 0.44;
-  }
-  window.addEventListener('resize', resize);
-  resize();
-
-  // Safe fallback palette variables
-  const darkTone = '#0f172a';
-  const lightTone = '#38bdf8';
-  const primaryColor = '#3b82f6';
-  const secondaryColor = '#8b5cf6';
-  const accentColor = '#f59e0b';
-
-  function animate(time) {
-    const t = time * 0.001;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = ${clearFill};
-    ctx.fillRect(0, 0, w, h);
-
-    // 1. BAYANGAN LANTAI VOLUMETRIK (GROUND CONTACT SHADOW)
-    const floatY = Math.sin(t * 2.4) * (S * 0.038);
-
-
-    // 2. ROOT MATRIX TUNGGAL UNTUK SELURUH OBJEK (SINGLE MONOLITHIC RIGID BODY):
-    // WAJIB: SELURUH ELEMEN PENYUSUN OBJEK DIGAMBAR DI DALAM BLOK INI DENGAN TITIK PUSAT (0, 0)!
-    const squash = 1 + 0.03 * Math.cos(t * 2.4);
-    const stretch = 1 / Math.sqrt(squash);
-    ctx.save();
-    ctx.translate(cx, cy + floatY);
-    ctx.rotate(Math.sin(t * 1.8) * 0.025);
-    ctx.scale(squash, stretch);
-
-    // [GAMBARKAN REKONSTRUKSI ULTRA DETAIL SESUAI GAMBAR REFERENSI DI SINI]:
-    // - Gunakan kode warna HEX asli dari gambar referensi
-    // - Gambar setiap komponen secara proporsional dan presisi (bodi, aksen, bevel, layar, lensa, tombol)
-    // - Gerakkan sub-komponen dengan artikulasi inersia fase-tertunda
-    // - Clip specular sheen miring di siluet bodi
-
-    ctx.restore();
-
-    requestAnimationFrame(animate);
-  }
-  animate(0);
-</script>
-</body>
-</html>
-
-Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
+    const masterMultimodalPrompt = `Master Canvas 2D Motion Graphics & Computer Vision Engineer.
+Analisis GAMBAR REFERENSI (proporsi, bevel, palet HEX asli, komponen internal) lalu rekonstruksi menjadi animasi 60 FPS akurat.
+Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau kontras tinggi)' : 'BG Gelap (#080c14)'}.
+${customInstructions ? `Instruksi Tambahan: ${customInstructions}` : ''}
+ATURAN: 1) Gambar ulang semua sub-komponen dengan Canvas 2D presisi (beginPath, roundRect, bezierCurveTo, arc, createLinearGradient, fill, stroke). DILARANG simplifikasi kotak/bulat polos, ZERO gerigi kecuali asli ada, ZERO glass bubble. 2) Gerak: floating harmonis, gimbal tilt halus, squash-and-stretch, artikulasi sub-komponen fase tertunda, specular sheen diagonal di-clip siluet bodi.
+Outputkan HANYA blok metadata + fungsi JS:
+<script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
+function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
     const { response } = await generateContentWithFallback(
       ai,
@@ -1285,7 +1335,7 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       (currentModel) => {
         const config: any = {
           temperature: 0.15,
-          maxOutputTokens: 4500,
+          maxOutputTokens: 3200,
         };
         const smartThinking = getSmartThinkingConfig(currentModel, 'vision');
         if (smartThinking) config.thinkingConfig = smartThinking;
@@ -1307,18 +1357,10 @@ Outputkan HANYA file HTML lengkap tanpa teks pembuka atau penjelas markdown:`;
       1
     );
 
-    let rawText = response.text || "";
-    let cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
-
-    if (!cleanHTML.toLowerCase().includes('</html>') || !cleanHTML.toLowerCase().includes('</script>')) {
-      if (cleanHTML.toLowerCase().includes('requestanimationframe')) {
-        rawText += '\n  }\n  animate(0);\n</' + 'script>\n</body>\n</html>';
-        cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
-      }
-    }
+    const rawText = response.text || "";
+    const cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
 
     if (cleanHTML.toLowerCase().includes('<canvas') && cleanHTML.toLowerCase().includes('requestanimationframe')) {
-      // Check for embedded shape-analysis JSON
       const analysisMatch = cleanHTML.match(/<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>([\s\S]*?)<\/script>/i);
       if (analysisMatch && analysisMatch[1]) {
         try {
@@ -1633,6 +1675,24 @@ export function createApiRouter(): Router {
   };
   router.post("/gemini/generate-animation", generateAnimationHandler);
   router.post("/api/gemini/generate-animation", generateAnimationHandler);
+
+  // Generate Batch HTML5 Animation Code (2-in-1 per request)
+  const generateAnimationBatchHandler = async (req: Request, res: Response) => {
+    try {
+      const body = parseSafeBody(req);
+      const result = await handleGenerateAnimationBatchLogic(body);
+      res.json(result);
+    } catch (err: any) {
+      console.warn("[GenerateAnimationBatch] Handled gracefully:", cleanErrorMessage(err));
+      res.status(200).json({
+        success: false,
+        error: cleanErrorMessage(err) || "Gagal menghasilkan batch animasi",
+        items: [],
+      });
+    }
+  };
+  router.post("/gemini/generate-animation-batch", generateAnimationBatchHandler);
+  router.post("/api/gemini/generate-animation-batch", generateAnimationBatchHandler);
 
   // Stream Single HTML5 Animation Code (Server-Sent Events)
   const streamAnimationHandler = async (req: Request, res: Response) => {

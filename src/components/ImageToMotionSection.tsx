@@ -306,8 +306,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     }
   };
 
-  // Process a single item
-  const processSingleItem = async (item: ImageToMotionItem): Promise<boolean> => {
+  // Process a single item (returns 'ok' | 'error' | 'exhausted')
+  const processSingleItem = async (item: ImageToMotionItem): Promise<'ok' | 'error' | 'exhausted'> => {
     setCurrentProcessingId(item.id);
     const accName = item.projectName || currentAccountName || 'Akun Utama';
 
@@ -429,12 +429,11 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           : null
       );
       addLog(`[Image to Motion] [${accName}] Berhasil membuat motion untuk "${item.fileName}"!`, 'success');
-      return true;
+      return 'ok';
     } catch (err: any) {
-      if (err instanceof AllKeysExhaustedError || err?.isAllKeysExhausted) {
-        if (onModelQuotaExceeded) {
-          onModelQuotaExceeded(selectedModel);
-        }
+      const isExhausted = err instanceof AllKeysExhaustedError || !!err?.isAllKeysExhausted;
+      if (isExhausted && onModelQuotaExceeded) {
+        onModelQuotaExceeded(selectedModel);
       }
       const errorMsg = err?.message || 'Gagal memproses animasi gambar';
       onUpdateItem(item.id, { status: 'error', progress: 0, error: errorMsg });
@@ -450,7 +449,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             }
           : null
       );
-      return false;
+      return isExhausted ? 'exhausted' : 'error';
     } finally {
       setCurrentProcessingId(null);
     }
@@ -523,7 +522,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         'info'
       );
 
-      const success = await processSingleItem(currentItem);
+      const statusRes = await processSingleItem(currentItem);
+      const success = statusRes === 'ok';
       completedOverall++;
 
       const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
@@ -549,6 +549,12 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           `✨ [Antrian #${i + 1}] "${currentItem.fileName}" selesai dibuat 60 FPS!`,
           'success'
         );
+      } else if (statusRes === 'exhausted') {
+        addLog(
+          `⏸️ [Auto Pilot Dijeda] Kuota seluruh API Key habis pada "${currentItem.fileName}". Silakan ganti model atau tambahkan API Key lalu lanjutkan antrian.`,
+          'warn'
+        );
+        break;
       } else {
         addLog(
           `⚠️ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
@@ -558,7 +564,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
       // Smart breather between items scaled by rotating key pool size
       if (autoPilotRef.current.isRunning && i < targetItems.length - 1) {
-        const breatherMs = apiKeys.length >= 5 ? 400 : apiKeys.length >= 2 ? 1000 : 2200;
+        const breatherMs = apiKeys.length >= 5 ? 600 : apiKeys.length >= 2 ? 1200 : 2500;
         await new Promise((res) => setTimeout(res, breatherMs));
       }
     }
@@ -630,16 +636,19 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       });
 
       addLog(`🔄 [Coba Ulang #${i + 1}/${totalToRetry}] Memproses "${currentItem.fileName}"...`, 'info');
-      const success = await processSingleItem(currentItem);
+      const statusRes = await processSingleItem(currentItem);
       completedRetries++;
 
-      if (success) {
+      if (statusRes === 'ok') {
         addLog(`✅ [Coba Ulang #${i + 1}] Berhasil memperbaiki "${currentItem.fileName}"!`, 'success');
         showToast(`✅ Berhasil memperbaiki "${currentItem.fileName}"!`, 'success');
+      } else if (statusRes === 'exhausted') {
+        addLog(`⏸️ [Coba Ulang Dijeda] Kuota seluruh API Key sedang habis.`, 'warn');
+        break;
       }
 
       if (autoPilotRef.current.isRunning && i < failedItems.length - 1) {
-        const breatherMs = apiKeys.length >= 5 ? 400 : apiKeys.length >= 2 ? 1000 : 2200;
+        const breatherMs = apiKeys.length >= 5 ? 600 : apiKeys.length >= 2 ? 1200 : 2500;
         await new Promise((res) => setTimeout(res, breatherMs));
       }
     }
