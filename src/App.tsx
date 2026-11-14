@@ -23,6 +23,8 @@ import {
   generateSingleAnimationCode,
   generateBatchAnimationCodes,
   getEarliestCooldownWaitMs,
+  buildModelFallbackChain,
+  getAdaptiveModelPacingDelay,
   AllKeysExhaustedError,
   resetKeyHealthPool,
 } from './services/geminiService';
@@ -53,13 +55,6 @@ const STORAGE_ACTIVE_TAB = 'bigma_active_tab';
 const STORAGE_PROMPT_SUB_TAB = 'bigma_prompt_sub_tab';
 const STORAGE_I2M_AUTOPILOT_ACCOUNTS = 'bigma_i2m_autopilot_accounts_flow';
 const STORAGE_AUTOPILOT_ACCOUNTS = 'bigma_prompt_autopilot_accounts';
-
-// Smart adaptive pacing per request (each batch request produces 2 animations, cutting RPM & RPD by 50%)
-function getAdaptivePacingDelay(keyCount: number): number {
-  if (keyCount >= 5) return 900;
-  if (keyCount >= 2) return 2000;
-  return 3600;
-}
 
 export default function App() {
   // --- LICENSE & TRIAL STATE ---
@@ -571,18 +566,19 @@ export default function App() {
     setIsGeneratingAnimations(true);
     setFailedPrompts([]);
     const total = generatedPrompts.length;
-    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
+    const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const BATCH_ANIM_SIZE = 2;
     addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM • MODE HEMAT BATCH 2-IN-1) ==========`, 'info');
     if (apiKeys.length <= 1) {
-      addLog(`[Mode Hemat Token + Proteksi 1 Key] 2 animasi/request + jeda ${(pacingDelay / 1000).toFixed(1)}s per batch.`, 'cyan');
+      addLog(`[Mode Hemat Token + Pacing ${selectedModel}] 2 animasi/request + jeda ${(pacingDelay / 1000).toFixed(1)}s per batch.`, 'cyan');
     } else {
-      addLog(`[Rotasi ${apiKeys.length} API Key + Batch 2-in-1] Memangkas request & token sistem 50%+ (jeda ${(pacingDelay / 1000).toFixed(1)}s/batch).`, 'cyan');
+      addLog(`[Rotasi ${apiKeys.length} API Key + Pacing ${selectedModel}] Batch 2-in-1 (jeda ${(pacingDelay / 1000).toFixed(1)}s/batch).`, 'cyan');
     }
 
     let currentAnimList = [...animations];
     const caughtFailures: string[] = [];
     let quotaStopped = false;
+    let consecutiveExhaustedBatches = 0;
 
     for (let i = 0; i < total; i += BATCH_ANIM_SIZE) {
       const slice = generatedPrompts.slice(i, i + BATCH_ANIM_SIZE);
@@ -594,7 +590,7 @@ export default function App() {
       setProgressPercent(percent);
       addLog(`Batch Canvas #${i + 1}${slice.length > 1 ? `–#${endNum}` : ''}/${total}: "${slice[0].substring(0, 38)}..."`, 'info');
 
-      const results = await generateBatchAnimationCodes(
+      let results = await generateBatchAnimationCodes(
         apiKeys,
         selectedModel,
         slice,
@@ -612,10 +608,37 @@ export default function App() {
         }
       );
 
+      if (results.every((r) => r.exhausted)) {
+        const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
+        if (waitMs > 0 && waitMs <= 68000) {
+          addLog(`⏳ Kuota RPM/TPM penuh — jeda pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu mencoba batch #${i + 1} kembali...`, 'warn');
+          await new Promise((res) => setTimeout(res, waitMs));
+          results = await generateBatchAnimationCodes(
+            apiKeys,
+            selectedModel,
+            slice,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            i + 1,
+            total,
+            {
+              isGreenScreen,
+              colorMode,
+              motionDynamics,
+              neonGlow,
+              onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+            }
+          );
+        }
+      }
+
+      let hadSuccessInBatch = false;
       let hadExhausted = false;
       for (let rIdx = 0; rIdx < results.length; rIdx++) {
         const res = results[rIdx];
         if (res.anim) {
+          hadSuccessInBatch = true;
           const newAnimItem: AnimationItem = {
             ...res.anim,
             isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
@@ -633,23 +656,31 @@ export default function App() {
         }
       }
 
-      if (hadExhausted) {
-        const waitMs = getEarliestCooldownWaitMs(apiKeys, [selectedModel]);
-        if (waitMs === 0) {
-          // Daily RPD quota genuinely exhausted across all keys & models — stop cleanly & keep remaining prompts
-          const remaining = generatedPrompts.slice(endNum);
-          if (remaining.length > 0) {
-            caughtFailures.push(...remaining);
-            setFailedPrompts((prev) => [...prev, ...remaining]);
-          }
-          handleModelQuotaExceeded(selectedModel);
-          quotaStopped = true;
-          break;
+      if (hadSuccessInBatch) {
+        consecutiveExhaustedBatches = 0;
+      } else if (hadExhausted) {
+        consecutiveExhaustedBatches++;
+      }
+
+      const remainingWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+      if (hadExhausted && (remainingWait === 0 || consecutiveExhaustedBatches >= 2)) {
+        // Daily RPD or shared-project quota genuinely exhausted — stop cleanly & keep remaining prompts
+        const remaining = generatedPrompts.slice(endNum);
+        if (remaining.length > 0) {
+          caughtFailures.push(...remaining);
+          setFailedPrompts((prev) => [...prev, ...remaining]);
         }
+        handleModelQuotaExceeded(selectedModel);
+        quotaStopped = true;
+        break;
       }
 
       if (endNum < total) {
-        await new Promise((res) => setTimeout(res, pacingDelay));
+        const extraBreath = hadExhausted ? 18000 : 0;
+        if (extraBreath > 0) {
+          addLog(`⏸️ [Adaptive Backoff] Jeda pemulihan 18s sebelum batch berikutnya agar kuota 429 tidak beruntun...`, 'warn');
+        }
+        await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
     }
 
@@ -685,13 +716,14 @@ export default function App() {
     setIsGeneratingAnimations(true);
     const promptsToRetry = [...failedPrompts];
     const total = promptsToRetry.length;
-    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
+    const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const BATCH_ANIM_SIZE = 2;
     addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL (BATCH 2-IN-1) ==========`, 'warn');
     showToast(`Mencoba ulang ${total} animasi yang sebelumnya mengalami kendala...`, 'info');
 
     let currentAnimList = [...animations];
     const remainingFailed: string[] = [];
+    let consecutiveExhaustedBatches = 0;
 
     for (let i = 0; i < total; i += BATCH_ANIM_SIZE) {
       const slice = promptsToRetry.slice(i, i + BATCH_ANIM_SIZE);
@@ -700,7 +732,7 @@ export default function App() {
       setProgressText(`Mencoba Ulang #${i + 1}${slice.length > 1 ? `–#${endNum}` : ''} dari ${total}...`);
       setProgressPercent(Math.round((endNum / total) * 100));
 
-      const results = await generateBatchAnimationCodes(
+      let results = await generateBatchAnimationCodes(
         apiKeys,
         selectedModel,
         slice,
@@ -718,10 +750,37 @@ export default function App() {
         }
       );
 
+      if (results.every((r) => r.exhausted)) {
+        const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
+        if (waitMs > 0 && waitMs <= 68000) {
+          addLog(`⏳ Menunggu pemulihan kuota ${Math.ceil(waitMs / 1000)}s sebelum mencoba ulang #${i + 1}...`, 'warn');
+          await new Promise((res) => setTimeout(res, waitMs));
+          results = await generateBatchAnimationCodes(
+            apiKeys,
+            selectedModel,
+            slice,
+            currentType,
+            nicheCategory,
+            visualStyle,
+            i + 1,
+            total,
+            {
+              isGreenScreen,
+              colorMode,
+              motionDynamics,
+              neonGlow,
+              onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+            }
+          );
+        }
+      }
+
+      let hadSuccess = false;
       let hadExhausted = false;
       for (let rIdx = 0; rIdx < results.length; rIdx++) {
         const res = results[rIdx];
         if (res.anim) {
+          hadSuccess = true;
           const newAnimItem: AnimationItem = {
             ...res.anim,
             isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
@@ -738,14 +797,19 @@ export default function App() {
         }
       }
 
-      if (hadExhausted && getEarliestCooldownWaitMs(apiKeys, [selectedModel]) === 0) {
+      if (hadSuccess) consecutiveExhaustedBatches = 0;
+      else if (hadExhausted) consecutiveExhaustedBatches++;
+
+      const remWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+      if (hadExhausted && (remWait === 0 || consecutiveExhaustedBatches >= 2)) {
         remainingFailed.push(...promptsToRetry.slice(endNum));
         handleModelQuotaExceeded(selectedModel);
         break;
       }
 
       if (endNum < total) {
-        await new Promise((res) => setTimeout(res, pacingDelay));
+        const extraBreath = hadExhausted ? 18000 : 0;
+        await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
     }
 
@@ -992,7 +1056,7 @@ export default function App() {
     setIsGeneratingAnimations(true);
 
     const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
-    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
+    const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const BATCH_ANIM_SIZE = 2;
     let completedOverall = 0;
     let currentAnimList = [...animations];
@@ -1005,6 +1069,7 @@ export default function App() {
     );
     showToast(`🚀 Memulai generate animasi dari ${batches.length} file Notepad...`, 'info');
 
+    let consecutiveExhaustedBatches = 0;
     for (let bIdx = 0; bIdx < batches.length && !stopAll; bIdx++) {
       const batch = batches[bIdx];
       addLog(`📁 [Notepad ${bIdx + 1}/${batches.length}] Memproses file: "${batch.fileName}" (${batch.prompts.length} prompt)...`, 'info');
@@ -1019,7 +1084,7 @@ export default function App() {
         setProgressText(`[${batch.name}] Prompt ${pIdx + 1}${slice.length > 1 ? `–${endNum}` : ''}/${batch.prompts.length} (${completedOverall}/${totalPromptsOverall})...`);
         setProgressPercent(percent);
 
-        const results = await generateBatchAnimationCodes(
+        let results = await generateBatchAnimationCodes(
           apiKeys,
           selectedModel,
           slice,
@@ -1037,10 +1102,37 @@ export default function App() {
           }
         );
 
+        if (results.every((r) => r.exhausted)) {
+          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
+          if (waitMs > 0 && waitMs <= 68000) {
+            addLog(`⏳ [${batch.name}] Semua API Key pendinginan kuota — menunggu ${Math.ceil(waitMs / 1000)}s...`, 'warn');
+            await new Promise((res) => setTimeout(res, waitMs));
+            results = await generateBatchAnimationCodes(
+              apiKeys,
+              selectedModel,
+              slice,
+              currentType,
+              nicheCategory,
+              visualStyle,
+              pIdx + 1,
+              batch.prompts.length,
+              {
+                isGreenScreen,
+                colorMode,
+                motionDynamics,
+                neonGlow,
+                onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+              }
+            );
+          }
+        }
+
+        let hadSuccess = false;
         let hadExhausted = false;
         for (let rIdx = 0; rIdx < results.length; rIdx++) {
           const res = results[rIdx];
           if (res.anim) {
+            hadSuccess = true;
             const newAnimItem: AnimationItem = {
               ...res.anim,
               isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
@@ -1057,14 +1149,23 @@ export default function App() {
           }
         }
 
-        if (hadExhausted && getEarliestCooldownWaitMs(apiKeys, [selectedModel]) === 0) {
+        if (hadSuccess) consecutiveExhaustedBatches = 0;
+        else if (hadExhausted) consecutiveExhaustedBatches++;
+
+        const remWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+        if (hadExhausted && (remWait === 0 || consecutiveExhaustedBatches >= 2)) {
+          const remainingPrompts = batch.prompts.slice(endNum);
+          if (remainingPrompts.length > 0) {
+            setFailedPrompts((prev) => [...prev, ...remainingPrompts]);
+          }
           handleModelQuotaExceeded(selectedModel);
           stopAll = true;
           break;
         }
 
         if (completedOverall < totalPromptsOverall) {
-          await new Promise((res) => setTimeout(res, pacingDelay));
+          const extraBreath = hadExhausted ? 18000 : 0;
+          await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
       }
     }
@@ -1115,7 +1216,8 @@ export default function App() {
     let currentAnimList = [...animations];
     const newFailedItems: FailedAutoPilotItem[] = [];
     const BATCH_ANIM_SIZE = 2;
-    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
+    const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
+    addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda antar batch disetel ke ${(pacingDelay / 1000).toFixed(1)}s agar thinking model stabil tanpa retry beruntun.`, 'cyan');
     let stopAllForQuota = false;
 
     for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
@@ -1170,6 +1272,7 @@ export default function App() {
         }
       }
 
+      let consecutiveExhaustedBatches = 0;
       for (let j = 0; j < prompts.length; j += BATCH_ANIM_SIZE) {
         const slice = prompts.slice(j, j + BATCH_ANIM_SIZE);
         const endNum = Math.min(prompts.length, j + slice.length);
@@ -1193,9 +1296,9 @@ export default function App() {
           }
         );
 
-        // If all returned exhausted (short RPM/TPM cooldown), wait out the exact cooldown and retry ONCE before giving up!
+        // If all returned exhausted (short RPM/TPM cooldown), wait out the exact cooldown across fallback chain and retry ONCE before giving up!
         if (results.every((r) => r.exhausted)) {
-          const waitMs = getEarliestCooldownWaitMs(apiKeys, [selectedModel]);
+          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
           if (waitMs > 0 && waitMs <= 68000) {
             addLog(`⏳ [${acc.name}] Semua API Key pendinginan kuota. Menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu melanjutkan #${j + 1}...`, 'warn');
             await new Promise((res) => setTimeout(res, waitMs));
@@ -1219,10 +1322,12 @@ export default function App() {
           }
         }
 
+        let hadSuccessInBatch = false;
         let stillExhausted = false;
         for (let rIdx = 0; rIdx < results.length; rIdx++) {
           const res = results[rIdx];
           if (res.anim) {
+            hadSuccessInBatch = true;
             const newAnimItem: AnimationItem = {
               ...res.anim,
               account: acc.name,
@@ -1250,8 +1355,15 @@ export default function App() {
           }
         }
 
-        // If daily quota is genuinely exhausted across ALL keys & models, stop skipping remaining items blindly
-        if (stillExhausted && getEarliestCooldownWaitMs(apiKeys, [selectedModel]) === 0) {
+        if (hadSuccessInBatch) {
+          consecutiveExhaustedBatches = 0;
+        } else if (stillExhausted) {
+          consecutiveExhaustedBatches++;
+        }
+
+        // If daily/shared-project quota is genuinely exhausted across ALL keys & models (or 2 consecutive batches stayed exhausted after cooldown wait), stop skipping blindly!
+        const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+        if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
           const remainingPrompts = prompts.slice(endNum);
           remainingPrompts.forEach((remP, remIdx) => {
             newFailedItems.push({
@@ -1265,16 +1377,21 @@ export default function App() {
               colorMode: acc.colorMode ?? 'gradient',
               motionDynamics: acc.motionDynamics ?? 'flow',
               neonGlow: acc.neonGlow ?? true,
-              error: 'Kuota harian/limit semua API Key habis — disimpan untuk dicoba ulang setelah ganti model/key',
+              error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
             });
           });
+          addLog(`⏸️ [${acc.name}] Menghentikan antrean secara aman agar ${remainingPrompts.length} prompt sisa tidak terbakar error 429 beruntun. Kemungkinan besar kuota harian (RPD) atau kuota Project Google Cloud bersama dari 9 key telah penuh.`, 'warn');
           handleModelQuotaExceeded(selectedModel);
           stopAllForQuota = true;
           break;
         }
 
         if (endNum < prompts.length) {
-          await new Promise((res) => setTimeout(res, pacingDelay));
+          const extraBreath = stillExhausted ? 18000 : 0;
+          if (extraBreath > 0) {
+            addLog(`⏸️ [Adaptive Backoff] Memberi jeda pemulihan 18s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
+          }
+          await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
       }
     }
@@ -1310,7 +1427,7 @@ export default function App() {
     setIsAutoPilotRunning(true);
     const itemsToRetry = [...failedAutoPilotItems];
     const total = itemsToRetry.length;
-    const pacingDelay = getAdaptivePacingDelay(apiKeys.length);
+    const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     addLog('═══════════════════════════════════════════════════════════════', 'warn');
     addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Mencoba ulang ${total} animasi dengan mode hemat & pemulihan cooldown...`, 'warn');
     showToast(`🔄 Mencoba ulang ${total} animasi Auto Pilot yang gagal...`, 'info');

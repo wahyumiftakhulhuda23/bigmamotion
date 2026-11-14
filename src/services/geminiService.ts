@@ -111,6 +111,8 @@ const keyModelCooldowns = new Map<string, number>(); // `${key}::${model}` -> ti
 const keyModelStrikeCount = new Map<string, number>(); // consecutive 429 strikes for adaptive escalation
 const keyModelDailyExhausted = new Map<string, number>(); // `${key}::${model}` -> timestamp when RPD cooldown ends
 const keyLastUsedAt = new Map<string, number>(); // LRU spacing so every key gets maximum rest
+const modelGlobalCooldowns = new Map<string, number>(); // Burst guard if 3+ keys hit 429 on same model within 10s (shared GCP project)
+const recentModelQuotaHits = new Map<string, number[]>(); // Timestamps of recent 429 hits per model
 const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
 
 export function resetKeyHealthPool(): void {
@@ -119,6 +121,8 @@ export function resetKeyHealthPool(): void {
   keyModelStrikeCount.clear();
   keyModelDailyExhausted.clear();
   keyLastUsedAt.clear();
+  modelGlobalCooldowns.clear();
+  recentModelQuotaHits.clear();
   unsupportedClientModels.clear();
 }
 
@@ -163,24 +167,38 @@ function isDailyQuotaMessage(msg: string): boolean {
   return (
     lower.includes('per day') ||
     lower.includes('per_day') ||
+    lower.includes('perday') ||
+    lower.includes('requestsperday') ||
+    lower.includes('requests_per_day') ||
     lower.includes('requests per day') ||
     lower.includes('daily') ||
     lower.includes('rpd') ||
-    lower.includes('limit: 0')
+    lower.includes('limit: 0') ||
+    lower.includes('limit:0')
   );
 }
 
-function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any = 22000): void {
+function recordKeyModelSuccess(key: string, model: string): void {
   if (!key || !model) return;
   const pair = `${key}::${model}`;
+  keyModelStrikeCount.delete(pair);
+  keyModelCooldowns.delete(pair);
+  recentModelQuotaHits.delete(model);
+  modelGlobalCooldowns.delete(model);
+}
+
+function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any = 28000): void {
+  if (!key || !model) return;
+  const pair = `${key}::${model}`;
+  const now = Date.now();
   const msg = typeof errOrDurationMs === 'string'
     ? errOrDurationMs
     : (errOrDurationMs?.message || errOrDurationMs?.error?.message || '');
 
   if (typeof errOrDurationMs !== 'number' && isDailyQuotaMessage(msg)) {
     // Daily quota exhausted on this model for this key — avoid hammering it for 15 minutes
-    keyModelDailyExhausted.set(pair, Date.now() + 15 * 60 * 1000);
-    keyModelCooldowns.set(pair, Date.now() + 15 * 60 * 1000);
+    keyModelDailyExhausted.set(pair, now + 15 * 60 * 1000);
+    keyModelCooldowns.set(pair, now + 15 * 60 * 1000);
     return;
   }
 
@@ -194,27 +212,151 @@ function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any =
     if (parsed) {
       durationMs = parsed;
     } else {
-      // Adaptive escalation: 22s -> 40s -> 65s
-      durationMs = strikes === 1 ? 22000 : strikes === 2 ? 40000 : 65000;
+      // Adaptive escalation: 28s -> 48s -> 70s
+      durationMs = strikes === 1 ? 28000 : strikes === 2 ? 48000 : 70000;
+    }
+
+    // Shared-project / RPM burst detector: if >= 3 keys hit 429 on this model within 10s, cool the whole model briefly
+    const hits = (recentModelQuotaHits.get(model) || []).filter((ts) => now - ts < 10000);
+    hits.push(now);
+    recentModelQuotaHits.set(model, hits);
+    if (hits.length >= 3) {
+      modelGlobalCooldowns.set(model, now + Math.min(durationMs, 24000));
     }
   }
-  keyModelCooldowns.set(pair, Date.now() + durationMs);
+  keyModelCooldowns.set(pair, now + durationMs);
 }
 
 function isKeyModelInCooldown(key: string, model: string): boolean {
+  const now = Date.now();
+  const globalUntil = modelGlobalCooldowns.get(model);
+  if (globalUntil) {
+    if (now < globalUntil) return true;
+    modelGlobalCooldowns.delete(model);
+  }
   const pair = `${key}::${model}`;
   const dailyUntil = keyModelDailyExhausted.get(pair);
   if (dailyUntil) {
-    if (Date.now() < dailyUntil) return true;
+    if (now < dailyUntil) return true;
     keyModelDailyExhausted.delete(pair);
   }
   const until = keyModelCooldowns.get(pair);
   if (!until) return false;
-  if (Date.now() >= until) {
+  if (now >= until) {
     keyModelCooldowns.delete(pair);
     return false;
   }
   return true;
+}
+
+export interface ModelExecutionProfile {
+  tier: 'ultra_lite' | 'smart_lite' | 'balanced_flash' | 'flagship_flash' | 'pro_rigging';
+  pacingManyKeysMs: number;
+  pacingFewKeysMs: number;
+  pacingSingleKeyMs: number;
+  minKeyReuseGapMs: number;
+  retryDelaysMs: [number, number, number];
+  timeoutMs: number;
+}
+
+export function getModelExecutionProfile(model?: string): ModelExecutionProfile {
+  const m = sanitizeModel(model || 'gemini-3.8-flash').toLowerCase();
+  if (m.includes('3.1-pro') || m.includes('4-')) {
+    return {
+      tier: 'pro_rigging',
+      pacingManyKeysMs: 3200,
+      pacingFewKeysMs: 5200,
+      pacingSingleKeyMs: 7800,
+      minKeyReuseGapMs: 9000,
+      retryDelaysMs: [2800, 5500, 8500],
+      timeoutMs: 38000,
+    };
+  }
+  if (m.includes('3.8') || m.includes('3.6')) {
+    return {
+      tier: 'flagship_flash',
+      pacingManyKeysMs: 2000,
+      pacingFewKeysMs: 3600,
+      pacingSingleKeyMs: 5600,
+      minKeyReuseGapMs: 6500,
+      retryDelaysMs: [2000, 4200, 6500],
+      timeoutMs: 32000,
+    };
+  }
+  if (m.includes('2.5-flash-lite') || m.includes('3.1-flash-lite')) {
+    return {
+      tier: 'ultra_lite',
+      pacingManyKeysMs: 700,
+      pacingFewKeysMs: 1600,
+      pacingSingleKeyMs: 2800,
+      minKeyReuseGapMs: 2500,
+      retryDelaysMs: [800, 1800, 3000],
+      timeoutMs: 18000,
+    };
+  }
+  if (m.includes('3.5-flash-lite')) {
+    return {
+      tier: 'smart_lite',
+      pacingManyKeysMs: 1000,
+      pacingFewKeysMs: 2200,
+      pacingSingleKeyMs: 3800,
+      minKeyReuseGapMs: 3500,
+      retryDelaysMs: [1200, 2500, 4000],
+      timeoutMs: 22000,
+    };
+  }
+  // gemini-2.5-flash / gemini-flash-latest
+  return {
+    tier: 'balanced_flash',
+    pacingManyKeysMs: 1400,
+    pacingFewKeysMs: 2800,
+    pacingSingleKeyMs: 4600,
+    minKeyReuseGapMs: 4500,
+    retryDelaysMs: [1500, 3000, 5000],
+    timeoutMs: 24000,
+  };
+}
+
+export function getAdaptiveModelPacingDelay(model: string | undefined, keyCount: number): number {
+  const profile = getModelExecutionProfile(model);
+  if (keyCount >= 5) return profile.pacingManyKeysMs;
+  if (keyCount >= 2) return profile.pacingFewKeysMs;
+  return profile.pacingSingleKeyMs;
+}
+
+async function withModelTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timerId: any = null;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timerId = setTimeout(() => reject(new Error(`Timeout ${label} (> ${Math.round(timeoutMs / 1000)}s)`)), timeoutMs);
+  });
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
+}
+
+export function buildModelFallbackChain(primaryModel?: string): string[] {
+  const primary = sanitizeModel(primaryModel || 'gemini-3.8-flash');
+  const isLitePrimary = primary.includes('lite');
+  const ordered = isLitePrimary
+    ? [
+        primary,
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-flash-latest',
+      ]
+    : [
+        primary,
+        'gemini-2.5-flash-lite',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-2.5-flash',
+        'gemini-flash-latest',
+      ];
+  return Array.from(new Set(ordered)).filter((m) => !isModelUnsupportedCached(m));
 }
 
 export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]): number {
@@ -223,7 +365,7 @@ export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]):
 
   const targetModels = (models && models.length > 0
     ? models
-    : ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite']
+    : ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash']
   ).map((m) => sanitizeModel(m)).filter((m) => !isModelUnsupportedCached(m));
 
   const now = Date.now();
@@ -234,14 +376,16 @@ export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]):
       const pair = `${k}::${m}`;
       const dailyUntil = keyModelDailyExhausted.get(pair);
       if (dailyUntil && dailyUntil > now) continue; // skip daily-exhausted pairs
-      const until = keyModelCooldowns.get(pair);
-      if (!until || until <= now) return 0; // already available!
-      const wait = until - now;
+      const globalUntil = modelGlobalCooldowns.get(m);
+      const keyUntil = keyModelCooldowns.get(pair) || 0;
+      const effectiveUntil = Math.max(keyUntil, globalUntil && globalUntil > now ? globalUntil : 0);
+      if (!effectiveUntil || effectiveUntil <= now) return 0; // already available!
+      const wait = effectiveUntil - now;
       if (wait < minWait) minWait = wait;
     }
   }
 
-  return Number.isFinite(minWait) && minWait > 0 ? Math.min(minWait + 500, 68000) : 0;
+  return Number.isFinite(minWait) && minWait > 0 ? Math.min(minWait + 800, 68000) : 0;
 }
 
 function getCleanUniqueKeys(apiKeys: string[]): string[] {
@@ -263,6 +407,11 @@ export function getBestHealthyKey(apiKeys: string[], model?: string): string | u
 
   const targetModel = model ? sanitizeModel(model) : '';
   const now = Date.now();
+
+  if (targetModel) {
+    const globalUntil = modelGlobalCooldowns.get(targetModel);
+    if (globalUntil && now < globalUntil) return undefined;
+  }
 
   // Filter out quarantined keys and keys cooling down on this model
   const healthy = uniqueKeys.filter((k) => {
@@ -367,8 +516,7 @@ function classifyGeminiError(err: any): ClassifiedGeminiErr {
       lower.includes('networkerror') ||
       lower.includes('load failed') ||
       lower.includes('abort') ||
-      lower.includes('cors') ||
-      lower.includes('timeout'));
+      lower.includes('cors'));
 
   return { message: msg, isInvalidKey, isQuota, isNotFound, isConfigIssue, isNetworkError };
 }
@@ -1937,23 +2085,32 @@ SPEC:
     config.thinkingConfig = smartThinking;
   }
 
+  const profile = getModelExecutionProfile(targetModel);
   let response: any;
   try {
-    response = await ai.models.generateContent({
-      model: targetModel,
-      contents: systemPrompt,
-      config,
-    });
+    response = await withModelTimeout(
+      ai.models.generateContent({
+        model: targetModel,
+        contents: systemPrompt,
+        config,
+      }),
+      profile.timeoutMs,
+      targetModel
+    );
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
-      response = await ai.models.generateContent({
-        model: targetModel,
-        contents: systemPrompt,
-        config: safeConfig,
-      });
+      response = await withModelTimeout(
+        ai.models.generateContent({
+          model: targetModel,
+          contents: systemPrompt,
+          config: safeConfig,
+        }),
+        profile.timeoutMs,
+        targetModel
+      );
     } else {
       throw err;
     }
@@ -2086,23 +2243,33 @@ ${prompts.map((p, idx) => `// ===ANIM_${idx}=== "${p}"`).join('\n')}`;
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
 
+  const profile = getModelExecutionProfile(targetModel);
+  const batchTimeoutMs = Math.min(46000, profile.timeoutMs + 8000);
   let response: any;
   try {
-    response = await ai.models.generateContent({
-      model: targetModel,
-      contents: batchPrompt,
-      config,
-    });
+    response = await withModelTimeout(
+      ai.models.generateContent({
+        model: targetModel,
+        contents: batchPrompt,
+        config,
+      }),
+      batchTimeoutMs,
+      `${targetModel} batch`
+    );
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
-      response = await ai.models.generateContent({
-        model: targetModel,
-        contents: batchPrompt,
-        config: safeConfig,
-      });
+      response = await withModelTimeout(
+        ai.models.generateContent({
+          model: targetModel,
+          contents: batchPrompt,
+          config: safeConfig,
+        }),
+        batchTimeoutMs,
+        `${targetModel} batch`
+      );
     } else {
       throw err;
     }
@@ -2155,25 +2322,17 @@ export async function generateSingleAnimationCode(
   const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
   const hasClientKeys = uniqueClientKeys.length > 0;
 
-  const modelChain = Array.from(
-    new Set([
-      sanitizeModel(model || 'gemini-3.8-flash'),
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest',
-    ])
-  ).filter((m) => !isModelUnsupportedCached(m));
-
-  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  const modelChain = buildModelFallbackChain(model);
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
   let modelCursor = 0;
   let lastError: any = null;
-  const retryDelays = [400, 900, 1500];
   let didWaitForCooldown = false;
+  let sawQuotaError = false;
+  let sawRenderDefect = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
+    const activeProfile = getModelExecutionProfile(activeModel);
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
     // If all keys are on cooldown for activeModel, shift to next model in chain that still has a rested key
@@ -2204,7 +2363,7 @@ export async function generateSingleAnimationCode(
             onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`);
           }
           await new Promise((r) => setTimeout(r, waitMs));
-          attempt = Math.max(0, attempt - 1); // Give this item a fresh retry after cooldown clears
+          attempt = Math.max(0, attempt - 1);
           continue;
         }
         throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
@@ -2214,7 +2373,7 @@ export async function generateSingleAnimationCode(
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
         try {
-          return await generateAnimationDirect(
+          const result = await generateAnimationDirect(
             selectedKey,
             activeModel,
             promptTopic,
@@ -2227,8 +2386,10 @@ export async function generateSingleAnimationCode(
             colorMode,
             motionDynamics,
             neonGlow,
-            attempt > 1 // Boost precision on retry if pass #1 rendered blank or errored
+            sawRenderDefect // Only escalate thinking if prior pass failed shape/syntax, NEVER on 429!
           );
+          recordKeyModelSuccess(selectedKey, activeModel);
+          return result;
         } catch (clientErr: any) {
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
@@ -2241,14 +2402,31 @@ export async function generateSingleAnimationCode(
             throw lastError;
           }
           if (classified.isQuota) {
+            sawQuotaError = true;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
-            lastError = new Error(`Key kena limit 429 di ${activeModel}, mengalihkan ke key/model cadangan`);
+            lastError = new Error(`Limit 429 di ${activeModel}, memutar/mendinginkan key...`);
+            // Shift model on repeated 429 or global model cooldown
+            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
+              modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            }
             if (attempt < maxRetries) {
+              const quotaPause = activeProfile.retryDelaysMs[attempt - 1] || 2000;
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              await new Promise((r) => setTimeout(r, 250));
+              await new Promise((r) => setTimeout(r, quotaPause));
               continue;
             }
-            throw lastError;
+            // Attempt wait-and-retry once before giving up on 429
+            if (!didWaitForCooldown) {
+              const waitMs = getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable);
+              if (waitMs > 0 && waitMs <= 68000) {
+                didWaitForCooldown = true;
+                if (onRetry) onRetry(attempt, maxRetries, `Menunggu pemulihan kuota 429 selama ${Math.ceil(waitMs / 1000)}s...`);
+                await new Promise((r) => setTimeout(r, waitMs));
+                attempt = maxRetries - 1;
+                continue;
+              }
+            }
+            throw new AllKeysExhaustedError(`Limit kuota 429 di ${activeModel} — seluruh jalur sedang pendinginan.`);
           }
           if (classified.isNotFound) {
             markModelUnsupportedCached(activeModel);
@@ -2261,14 +2439,14 @@ export async function generateSingleAnimationCode(
             throw lastError;
           }
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
-            // Render/syntax validation failure: shift model cursor or retry cleanly without triggering HTTP proxy unnecessarily
+            sawRenderDefect = true;
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             throw clientErr;
           }
         }
       }
 
-      // Server route (used when no client AIza key or when browser network blocked direct call)
+      // Server route (used ONLY when no client AIza key or when browser network blocked direct call)
       const response = await fetch('/api/gemini/generate-animation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2298,14 +2476,15 @@ export async function generateSingleAnimationCode(
         throw new Error(data.error || 'AI mengembalikan kode kosong.');
       }
 
-      // Verify server-generated HTML in browser offscreen canvas too!
       const healedHtml = extractHTML(data.html, isGreenScreen);
       const serverCheck = verifyCanvasAnimationHtml(healedHtml, !!isGreenScreen, type);
       if (!serverCheck.ok) {
+        sawRenderDefect = true;
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
         throw new Error(`Validasi render server gagal (${serverCheck.reason || 'canvas blank'})`);
       }
 
+      if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
       return {
         ...data,
         html: healedHtml,
@@ -2318,17 +2497,20 @@ export async function generateSingleAnimationCode(
       if (err instanceof AllKeysExhaustedError) throw err;
       lastError = err;
       const classified = classifyGeminiError(err);
-      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
+      if (classified.isQuota) {
+        sawQuotaError = true;
+        if (selectedKey) markKeyModelCooldown(selectedKey, activeModel, err);
+      }
       if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
       }
 
-      const delayMs = retryDelays[attempt - 1] || 1000;
+      const delayMs = activeProfile.retryDelaysMs[attempt - 1] || 2000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
@@ -2336,7 +2518,11 @@ export async function generateSingleAnimationCode(
     }
   }
 
-  // Final check: if all keys ended up cooling down on the last attempt, surface AllKeysExhaustedError cleanly
+  // Always classify repeated 429 failures as AllKeysExhaustedError so AutoPilot pauses/recovers instead of skipping 40 items!
+  if (sawQuotaError) {
+    throw new AllKeysExhaustedError('Kuota/Rate Limit (429) aktif di jalur Gemini — mengaktifkan jeda pemulihan...');
+  }
+
   if (hasClientKeys && !uniqueClientKeys.every((k) => quarantinedKeys.has(k))) {
     const anyHealthy = modelsAvailable.some((m) => !!getBestHealthyKey(uniqueClientKeys, m));
     if (!anyHealthy) {
@@ -2347,7 +2533,7 @@ export async function generateSingleAnimationCode(
   throw new Error(`Gagal setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
 }
 
-// High-throughput Batch Animation Generator (2 animations per 1 request, with automatic single-item recovery)
+// High-throughput Batch Animation Generator (2 animations per 1 request, with anti-429-avalanche protection)
 export async function generateBatchAnimationCodes(
   apiKeys: string[],
   model: GeminiModel,
@@ -2404,41 +2590,38 @@ export async function generateBatchAnimationCodes(
 
   const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
   const hasClientKeys = uniqueClientKeys.length > 0;
-  const modelChain = Array.from(
-    new Set([
-      sanitizeModel(model || 'gemini-3.8-flash'),
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-3.1-flash-lite',
-      'gemini-flash-latest',
-    ])
-  ).filter((m) => !isModelUnsupportedCached(m));
-  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+  const modelChain = buildModelFallbackChain(model);
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
 
   let batchItems: Array<any | null> = new Array(prompts.length).fill(null);
   let batchSuccess = false;
   let waitedOnce = false;
+  let batchHitQuota = false;
+  let modelCursor = 0;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
-    let activeModel = modelsAvailable[Math.min(attempt - 1, modelsAvailable.length - 1)];
+    let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
     if (hasClientKeys && !selectedKey) {
-      for (const candidateM of modelsAvailable) {
-        const alt = getBestHealthyKey(uniqueClientKeys, candidateM);
+      let foundAlt = false;
+      for (let mIdx = 0; mIdx < modelsAvailable.length; mIdx++) {
+        const alt = getBestHealthyKey(uniqueClientKeys, modelsAvailable[mIdx]);
         if (alt) {
-          activeModel = candidateM;
+          activeModel = modelsAvailable[mIdx];
           selectedKey = alt;
+          modelCursor = mIdx;
+          foundAlt = true;
           break;
         }
       }
-      if (!selectedKey) {
+      if (!foundAlt) {
         const waitMs = !waitedOnce ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
         if (waitMs > 0 && waitMs <= 68000) {
           waitedOnce = true;
           if (onLog) onLog(`⏳ Kuota RPM/TPM penuh — menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`, 'warn');
           await new Promise((r) => setTimeout(r, waitMs));
+          modelCursor = 0;
           attempt--;
           continue;
         }
@@ -2466,7 +2649,10 @@ export async function generateBatchAnimationCodes(
             neonGlow
           );
           batchSuccess = batchItems.some(Boolean);
-          if (batchSuccess) break;
+          if (batchSuccess) {
+            recordKeyModelSuccess(selectedKey, activeModel);
+            break;
+          }
         } catch (clientErr: any) {
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
@@ -2474,15 +2660,38 @@ export async function generateBatchAnimationCodes(
             continue;
           }
           if (classified.isQuota) {
+            batchHitQuota = true;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
-            await new Promise((r) => setTimeout(r, 250));
+            // If primary model hit 3x burst 429 or attempt >= 2, move cleanly to fallback model
+            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
+              modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            }
+            if (attempt >= 2 && !waitedOnce) {
+              const waitMs = getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable);
+              if (waitMs > 0 && waitMs <= 68000) {
+                waitedOnce = true;
+                if (onLog) onLog(`⏳ Limit 429 beruntun — jeda pemulihan otomatis ${Math.ceil(waitMs / 1000)}s sebelum lanjut...`, 'warn');
+                await new Promise((r) => setTimeout(r, waitMs));
+                continue;
+              }
+            }
+            const batchRetryPause = getModelExecutionProfile(activeModel).retryDelaysMs[attempt - 1] || 1800;
+            await new Promise((r) => setTimeout(r, batchRetryPause));
             continue;
           }
           if (classified.isNotFound) {
             markModelUnsupportedCached(activeModel);
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             continue;
           }
-          if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
+          // On transient server/timeout errors (e.g. 500/503/Timeout on flagship 3.8-flash), wait model delay & rotate
+          if (classified.isNetworkError || /timeout|500|502|503|504|unavailable|overloaded/i.test(classified.message)) {
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            const transientPause = getModelExecutionProfile(activeModel).retryDelaysMs[attempt - 1] || 1800;
+            await new Promise((r) => setTimeout(r, transientPause));
+            continue;
+          }
+          if (classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             break;
           }
         }
@@ -2519,18 +2728,33 @@ export async function generateBatchAnimationCodes(
             return { ...it, html: healed };
           });
           batchSuccess = batchItems.some(Boolean);
-          if (batchSuccess) break;
+          if (batchSuccess) {
+            if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
+            break;
+          }
         }
       }
     } catch (err: any) {
       const classified = classifyGeminiError(err);
-      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
+      if (classified.isQuota) {
+        batchHitQuota = true;
+        if (selectedKey) markKeyModelCooldown(selectedKey, activeModel, err);
+      }
       if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
       if (classified.isNotFound) markModelUnsupportedCached(activeModel);
     }
   }
 
-  // Build final output, filling any missing/rejected slot via single-item verified regeneration
+  // ANTI-AVALANCHE GUARD: If the entire batch failed due to 429 quota, NEVER fan out into 2x3 = 6 more 429 calls!
+  if (!batchSuccess && batchHitQuota) {
+    return prompts.map((p) => ({
+      prompt: p,
+      error: 'Batas kuota 429 tercapai — menahan antrean untuk pemulihan kuota.',
+      exhausted: true,
+    }));
+  }
+
+  // Build final output, filling ONLY missing/rejected slots via single-item verified regeneration
   const finalOut: Array<{ prompt: string; anim?: any; error?: string; exhausted?: boolean }> = [];
   for (let i = 0; i < prompts.length; i++) {
     const item = batchItems[i];
@@ -2549,7 +2773,7 @@ export async function generateBatchAnimationCodes(
           startIndex + i,
           totalOverall,
           undefined,
-          3,
+          2,
           isGreenScreen,
           colorMode,
           motionDynamics,
@@ -2560,7 +2784,7 @@ export async function generateBatchAnimationCodes(
         finalOut.push({
           prompt: prompts[i],
           error: e?.message || 'Gagal merender animasi',
-          exhausted: e instanceof AllKeysExhaustedError || !!e?.isAllKeysExhausted,
+          exhausted: e instanceof AllKeysExhaustedError || !!e?.isAllKeysExhausted || batchHitQuota,
         });
       }
     }
@@ -2633,27 +2857,12 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
 
+  const visionProfile = getModelExecutionProfile(targetModel);
+  const visionTimeoutMs = Math.min(45000, visionProfile.timeoutMs + 6000);
   let response: any;
   try {
-    response = await ai.models.generateContent({
-      model: targetModel,
-      contents: [
-        {
-          inlineData: {
-            data: pureBase64,
-            mimeType: mimeType || 'image/png',
-          },
-        },
-        { text: visionPrompt },
-      ],
-      config,
-    });
-  } catch (err: any) {
-    const classified = classifyGeminiError(err);
-    if (classified.isConfigIssue && config.thinkingConfig) {
-      const safeConfig = { ...config };
-      delete safeConfig.thinkingConfig;
-      response = await ai.models.generateContent({
+    response = await withModelTimeout(
+      ai.models.generateContent({
         model: targetModel,
         contents: [
           {
@@ -2664,8 +2873,33 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
           },
           { text: visionPrompt },
         ],
-        config: safeConfig,
-      });
+        config,
+      }),
+      visionTimeoutMs,
+      `${targetModel} vision`
+    );
+  } catch (err: any) {
+    const classified = classifyGeminiError(err);
+    if (classified.isConfigIssue && config.thinkingConfig) {
+      const safeConfig = { ...config };
+      delete safeConfig.thinkingConfig;
+      response = await withModelTimeout(
+        ai.models.generateContent({
+          model: targetModel,
+          contents: [
+            {
+              inlineData: {
+                data: pureBase64,
+                mimeType: mimeType || 'image/png',
+              },
+            },
+            { text: visionPrompt },
+          ],
+          config: safeConfig,
+        }),
+        visionTimeoutMs,
+        `${targetModel} vision`
+      );
     } else {
       throw err;
     }
@@ -2752,24 +2986,17 @@ export async function generateImageToMotion(
 }> {
   const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
   const hasClientKeys = uniqueClientKeys.length > 0;
-  const modelChain = Array.from(
-    new Set([
-      sanitizeModel(model || 'gemini-3.8-flash'),
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-flash-latest',
-    ])
-  ).filter((m) => !isModelUnsupportedCached(m));
-  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash'];
+  const modelChain = buildModelFallbackChain(model);
+  const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
   let modelCursor = 0;
 
   let lastError: any = null;
-  const retryDelays = [500, 1100, 1800];
   let didWaitForCooldown = false;
+  let sawQuotaError = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
+    const activeProfile = getModelExecutionProfile(activeModel);
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
     if (hasClientKeys && !selectedKey) {
@@ -2802,7 +3029,7 @@ export async function generateImageToMotion(
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
         try {
-          return await generateImageToMotionDirect(
+          const i2mResult = await generateImageToMotionDirect(
             selectedKey,
             activeModel,
             params.imageBase64,
@@ -2817,6 +3044,8 @@ export async function generateImageToMotion(
             params.strokeWeight || 'bold',
             params.customInstructions || ''
           );
+          recordKeyModelSuccess(selectedKey, activeModel);
+          return i2mResult;
         } catch (clientErr: any) {
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
@@ -2829,14 +3058,18 @@ export async function generateImageToMotion(
             throw lastError;
           }
           if (classified.isQuota) {
+            sawQuotaError = true;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
+            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
+              modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            }
             lastError = new Error(`Key kena limit 429 di ${activeModel}, memutar ke key/model lain`);
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              await new Promise((r) => setTimeout(r, 250));
+              await new Promise((r) => setTimeout(r, activeProfile.retryDelaysMs[attempt - 1] || 2000));
               continue;
             }
-            throw lastError;
+            throw new AllKeysExhaustedError(`Limit kuota 429 di ${activeModel} — seluruh jalur pendinginan.`);
           }
           if (classified.isNotFound) {
             markModelUnsupportedCached(activeModel);
@@ -2849,6 +3082,7 @@ export async function generateImageToMotion(
             throw lastError;
           }
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             throw clientErr;
           }
         }
@@ -2891,27 +3125,35 @@ export async function generateImageToMotion(
         throw new Error(`Validasi render vision gagal (${check.reason || 'canvas blank'})`);
       }
 
+      if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
       return { ...data, html: healedHtml };
     } catch (err: any) {
       if (err instanceof AllKeysExhaustedError) throw err;
       lastError = err;
       const classified = classifyGeminiError(err);
-      if (selectedKey && classified.isQuota) markKeyModelCooldown(selectedKey, activeModel, err);
+      if (classified.isQuota) {
+        sawQuotaError = true;
+        if (selectedKey) markKeyModelCooldown(selectedKey, activeModel, err);
+      }
       if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
       }
 
-      const delayMs = retryDelays[attempt - 1] || 1400;
+      const delayMs = activeProfile.retryDelaysMs[attempt - 1] || 2000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
       if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${delayMs / 1000}s)`);
+        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
         if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
       }
     }
+  }
+
+  if (sawQuotaError) {
+    throw new AllKeysExhaustedError('Kuota/Rate Limit (429) aktif di jalur Gemini — mengaktifkan jeda pemulihan...');
   }
 
   throw new Error(`Gagal memproses gambar setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Item dilewati dan tersimpan untuk dicoba ulang.`);

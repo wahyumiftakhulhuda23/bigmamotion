@@ -7,7 +7,7 @@ import {
   AnimationItem,
   GeminiModel,
 } from '../types';
-import { generateImageToMotion, AllKeysExhaustedError } from '../services/geminiService';
+import { generateImageToMotion, getAdaptiveModelPacingDelay, AllKeysExhaustedError } from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
 import JSZip from 'jszip';
 
@@ -562,9 +562,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         );
       }
 
-      // Smart breather between items scaled by rotating key pool size
+      // Smart breather between items scaled by model thinking tier and rotating key pool size
       if (autoPilotRef.current.isRunning && i < targetItems.length - 1) {
-        const breatherMs = apiKeys.length >= 5 ? 600 : apiKeys.length >= 2 ? 1200 : 2500;
+        const breatherMs = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
         await new Promise((res) => setTimeout(res, breatherMs));
       }
     }
@@ -648,7 +648,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       }
 
       if (autoPilotRef.current.isRunning && i < failedItems.length - 1) {
-        const breatherMs = apiKeys.length >= 5 ? 600 : apiKeys.length >= 2 ? 1200 : 2500;
+        const breatherMs = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
         await new Promise((res) => setTimeout(res, breatherMs));
       }
     }

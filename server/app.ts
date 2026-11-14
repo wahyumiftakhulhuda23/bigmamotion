@@ -116,18 +116,30 @@ export function cleanErrorMessage(err: any): string {
   return String(err?.message || err || "Terjadi kesalahan tidak diketahui");
 }
 
+export function getServerModelTimeoutMs(model: string): number {
+  const m = sanitizeModel(model).toLowerCase();
+  if (m.includes("3.1-pro") || m.includes("4-")) return 34000;
+  if (m.includes("3.8") || m.includes("3.6")) return 30000;
+  if (m.includes("3.5-flash-lite") || m.includes("2.5-flash") || m === "gemini-flash-latest") return 22000;
+  // gemini-2.5-flash-lite / gemini-3.1-flash-lite
+  return 16000;
+}
+
 export async function generateContentWithFallback(
   ai: GoogleGenAI,
   primaryModel: string,
   generateParams: (model: string) => { contents: any; config?: any },
   maxRetriesPerModel = 1
 ): Promise<{ response: any; usedModel: string }> {
-  // Put GA fast/cheap models first in fallback chain, skipping any model recently cached as unsupported (404)
+  const startedAt = Date.now();
+  const VERCEL_SAFE_BUDGET_MS = 52000; // Leave 8s headroom below Vercel maxDuration: 60s
+
+  // Put high-RPM lite models first in fallback chain, skipping any model recently cached as unsupported (404)
   const fallbackOrder = [
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
     "gemini-3.5-flash-lite",
     "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
     "gemini-flash-latest",
     "gemini-3.8-flash",
   ];
@@ -138,17 +150,26 @@ export async function generateContentWithFallback(
     .filter((m) => !isServerModelCachedUnsupported(m))
     .slice(0, 3);
 
-  const modelsToTry = candidateModels.length > 0 ? candidateModels : ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+  const modelsToTry = candidateModels.length > 0 ? candidateModels : ["gemini-3.5-flash-lite", "gemini-2.5-flash-lite"];
   let lastError: any = null;
 
   for (const model of modelsToTry) {
     const allowedAttempts = maxRetriesPerModel;
 
     for (let attempt = 1; attempt <= allowedAttempts; attempt++) {
+      const remainingBudget = VERCEL_SAFE_BUDGET_MS - (Date.now() - startedAt);
+      if (remainingBudget < 5000) {
+        throw new Error(cleanErrorMessage(lastError) || "Batas waktu aman server Vercel tercapai — mencoba model lebih cepat pada request berikutnya");
+      }
+      const modelTimeoutMs = Math.min(getServerModelTimeoutMs(model), remainingBudget);
+
       try {
         let timerId: any = null;
         const timeoutPromise = new Promise((_, reject) => {
-          timerId = setTimeout(() => reject(new Error("Timeout Vercel Guard (> 14s)")), 14000);
+          timerId = setTimeout(
+            () => reject(new Error(`Timeout ${model} (> ${Math.round(modelTimeoutMs / 1000)}s)`)),
+            modelTimeoutMs
+          );
         });
 
         const { contents, config } = generateParams(model);
@@ -195,22 +216,26 @@ export async function generateContentWithFallback(
             if (config && config.thinkingConfig) {
               const safeConfig = { ...config };
               delete safeConfig.thinkingConfig;
-              let retryTimer: any = null;
-              const retryTimeout = new Promise((_, reject) => {
-                retryTimer = setTimeout(() => reject(new Error("Timeout Retry (> 12s)")), 12000);
-              });
-              try {
-                const retryResp: any = await Promise.race([
-                  ai.models.generateContent({
-                    model,
-                    contents,
-                    config: safeConfig,
-                  }),
-                  retryTimeout,
-                ]);
-                return { response: retryResp, usedModel: model };
-              } finally {
-                if (retryTimer) clearTimeout(retryTimer);
+              const retryRemaining = VERCEL_SAFE_BUDGET_MS - (Date.now() - startedAt);
+              if (retryRemaining >= 5000) {
+                const retryTimeoutMs = Math.min(Math.max(12000, getServerModelTimeoutMs(model) - 4000), retryRemaining);
+                let retryTimer: any = null;
+                const retryTimeout = new Promise((_, reject) => {
+                  retryTimer = setTimeout(() => reject(new Error(`Timeout Retry (> ${Math.round(retryTimeoutMs / 1000)}s)`)), retryTimeoutMs);
+                });
+                try {
+                  const retryResp: any = await Promise.race([
+                    ai.models.generateContent({
+                      model,
+                      contents,
+                      config: safeConfig,
+                    }),
+                    retryTimeout,
+                  ]);
+                  return { response: retryResp, usedModel: model };
+                } finally {
+                  if (retryTimer) clearTimeout(retryTimer);
+                }
               }
             }
           } catch {
@@ -247,9 +272,14 @@ export async function generateContentWithFallback(
           msg.includes("unavailable");
 
         if (isQuota || msg.includes("500") || msg.includes("overloaded") || msg.includes("503") || msg.includes("internal")) {
+          // Small breather before switching fallback model so Google burst subsides
+          const left = VERCEL_SAFE_BUDGET_MS - (Date.now() - startedAt);
+          if (left > 8000) {
+            await new Promise((res) => setTimeout(res, 400));
+          }
           break;
         } else if (isTransient && attempt < allowedAttempts) {
-          await new Promise((res) => setTimeout(res, 250 * attempt));
+          await new Promise((res) => setTimeout(res, Math.min(1200, 400 * attempt)));
           continue;
         } else {
           break;
