@@ -261,6 +261,35 @@ export async function generateContentWithFallback(
   throw new Error(cleanErrorMessage(lastError));
 }
 
+function stripLeadingCodeFenceAndLang(raw: string): string {
+  const tick3 = String.fromCharCode(96, 96, 96);
+  let text = (raw || '').trim();
+  const fenceRegex = new RegExp(tick3 + '(?:[a-zA-Z0-9_-]+)?\\s*([\\s\\S]*?)' + tick3, 'i');
+  const fenceMatch = text.match(fenceRegex);
+  if (fenceMatch && fenceMatch[1]) {
+    text = fenceMatch[1].trim();
+  }
+  text = text
+    .replace(new RegExp('^' + tick3 + '(?:[a-zA-Z0-9_-]+)?\\s*', 'i'), '')
+    .replace(new RegExp(tick3 + '\\s*$'), '')
+    .trim();
+  text = text.replace(/^(?:javascript|typescript|jsx?|tsx?|html)\s*(?:\r?\n|$)/i, '').trim();
+  return text;
+}
+
+function sanitizeInjectedJsBody(rawJs: string): string {
+  let js = stripLeadingCodeFenceAndLang(rawJs);
+  js = js
+    .replace(/^[ \t]*(?:const|let|var)\s+canvas\s*=\s*document\.(?:getElementById|querySelector)\s*\([^)]*\)\s*;?[ \t]*$/gm, '')
+    .replace(/^[ \t]*(?:const|let|var)\s+ctx\s*=\s*(?:canvas|document\.(?:getElementById|querySelector)\s*\([^)]*\))\.getContext\s*\([^)]*\)\s*;?[ \t]*$/gm, '')
+    .replace(/^[ \t]*window\.addEventListener\s*\(\s*['"]resize['"][^)]*\)\s*;?[ \t]*$/gm, '')
+    .replace(/^[ \t]*(?:resize|init)\s*\(\s*\)\s*;?[ \t]*$/gm, '')
+    .replace(/^[ \t]*requestAnimationFrame\s*\(\s*animate\s*\)\s*;?[ \t]*$/gm, '')
+    .trim();
+  js = js.replace(/^(?:const|let)\s+(canvas|ctx|dpr|w|h|cx|cy|S)\b/gm, 'var $1');
+  return js.trim();
+}
+
 export function wrapCanvasCodeToHtml(
   rawCode: string,
   isGreenScreen: boolean = false,
@@ -268,20 +297,9 @@ export function wrapCanvasCodeToHtml(
 ): string {
   const bg = isGreenScreen ? '#00ff00' : '#080c14';
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
-  const tick3 = String.fromCharCode(96, 96, 96);
 
-  let jsBody = (rawCode || '').trim();
-  const jsFenceRegex = new RegExp(tick3 + '(?:javascript|js|ts|html)?\\s*([\\s\\S]*?)' + tick3, 'i');
-  const fenceMatch = jsBody.match(jsFenceRegex);
-  if (fenceMatch && fenceMatch[1]) {
-    jsBody = fenceMatch[1].trim();
-  }
-  jsBody = jsBody
-    .replace(new RegExp('^' + tick3 + '(?:javascript|js|ts|html)?\\s*', 'i'), '')
-    .replace(new RegExp(tick3 + '\\s*$'), '')
-    .trim();
+  let jsBody = stripLeadingCodeFenceAndLang(rawCode);
 
-  // Extract optional embedded <script id="shape-analysis"> if returned alongside JS
   let extractedAnalysisTag = shapeAnalysisTag;
   const analysisRegex = /<script\s+type=["']application\/json["']\s+id=["']shape-analysis["']>[\s\S]*?<\/script>/i;
   const analysisMatch = jsBody.match(analysisRegex);
@@ -290,31 +308,76 @@ export function wrapCanvasCodeToHtml(
     jsBody = jsBody.replace(analysisRegex, '').trim();
   }
 
-  const hasDrawFrame = /(?:function\s+drawFrame\s*\(|(?:const|let|var)\s+drawFrame\s*=)/i.test(jsBody);
-  const hasAnimate = /function\s+animate\s*\(/i.test(jsBody);
+  jsBody = sanitizeInjectedJsBody(jsBody);
 
-  const runnerScript = hasDrawFrame
+  const fnMatch = jsBody.match(
+    /(?:^|\n)[ \t]*(?:function\s+(drawFrame|renderFrame|renderIcon|drawIcon|drawScene|render|draw|paint)\s*\(|(?:const|let|var)\s+(drawFrame|renderFrame|renderIcon|drawIcon|drawScene|render|draw|paint)\s*=)/
+  );
+  const detectedDrawFn = fnMatch ? (fnMatch[1] || fnMatch[2]) : null;
+  const hasAnimate = /(?:^|\n)[ \t]*(?:function\s+animate\s*\(|(?:const|let|var)\s+animate\s*=)/i.test(jsBody);
+
+  const runnerScript = detectedDrawFn
     ? `${jsBody}
-  function animate(time) {
-    const t = (time || 0) * 0.001;
+  var __bigmaTargetDraw = typeof ${detectedDrawFn} === 'function' ? ${detectedDrawFn} : null;
+  function __bigmaAnimate(time) {
+    var __curW = window.innerWidth || document.documentElement.clientWidth || 800;
+    var __curH = window.innerHeight || document.documentElement.clientHeight || 600;
+    if (__curW > 0 && __curH > 0 && (__curW !== w || __curH !== h || canvas.width === 0)) {
+      __bigmaResize();
+    }
+    var t = (time || 0) * 0.001;
     try {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = ${clearFill};
       ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = 'source-over';
       ctx.save();
-      drawFrame(ctx, w, h, cx, cy, S, t);
+      if (__bigmaTargetDraw) __bigmaTargetDraw(ctx, w, h, cx, cy, S, t);
       ctx.restore();
     } catch (err) {
       console.error("Canvas render error:", err);
       try { ctx.restore(); } catch {}
     }
-    requestAnimationFrame(animate);
+    requestAnimationFrame(__bigmaAnimate);
   }
-  requestAnimationFrame(animate);`
+  requestAnimationFrame(__bigmaAnimate);`
     : hasAnimate
-    ? `${jsBody}\n  if (typeof requestAnimationFrame === 'function') { try { animate(0); } catch {} }`
-    : `function drawFrame(ctx, w, h, cx, cy, S, t) {\n${jsBody}\n  }\n  function animate(time) {\n    const t = (time || 0) * 0.001;\n    try {\n      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);\n      ctx.clearRect(0, 0, w, h);\n      ctx.fillStyle = ${clearFill};\n      ctx.fillRect(0, 0, w, h);\n      ctx.save();\n      drawFrame(ctx, w, h, cx, cy, S, t);\n      ctx.restore();\n    } catch (err) {\n      console.error("Canvas render error:", err);\n      try { ctx.restore(); } catch {}\n    }\n    requestAnimationFrame(animate);\n  }\n  requestAnimationFrame(animate);`;
+    ? `${jsBody}
+  var __bigmaUserAnim = typeof animate === 'function' ? animate : null;
+  if (__bigmaUserAnim) {
+    try { requestAnimationFrame(__bigmaUserAnim); } catch {}
+  }`
+    : `function __bigmaRawDraw(ctx, w, h, cx, cy, S, t) {
+${jsBody}
+  }
+  function __bigmaAnimate(time) {
+    var __curW = window.innerWidth || document.documentElement.clientWidth || 800;
+    var __curH = window.innerHeight || document.documentElement.clientHeight || 600;
+    if (__curW > 0 && __curH > 0 && (__curW !== w || __curH !== h || canvas.width === 0)) {
+      __bigmaResize();
+    }
+    var t = (time || 0) * 0.001;
+    try {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = ${clearFill};
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.save();
+      __bigmaRawDraw(ctx, w, h, cx, cy, S, t);
+      ctx.restore();
+    } catch (err) {
+      console.error("Canvas render error:", err);
+      try { ctx.restore(); } catch {}
+    }
+    requestAnimationFrame(__bigmaAnimate);
+  }
+  requestAnimationFrame(__bigmaAnimate);`;
 
   return `<!DOCTYPE html>
 <html lang="id">
@@ -332,23 +395,24 @@ export function wrapCanvasCodeToHtml(
 <body>
   <canvas id="c"></canvas>
   <script>
-    const canvas = document.getElementById('c');
-    const ctx = canvas.getContext('2d');
-    let w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
-    function resize() {
+    var canvas = document.getElementById('c');
+    var ctx = canvas.getContext('2d');
+    var w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
+    function __bigmaResize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = window.innerWidth || 800;
-      h = window.innerHeight || 600;
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
+      w = window.innerWidth || document.documentElement.clientWidth || 800;
+      h = window.innerHeight || document.documentElement.clientHeight || 600;
+      canvas.width = Math.max(1, Math.floor(w * dpr));
+      canvas.height = Math.max(1, Math.floor(h * dpr));
       canvas.style.width = w + 'px';
       canvas.style.height = h + 'px';
       cx = w / 2;
       cy = h / 2;
       S = Math.min(w, h) * 0.44;
     }
-    window.addEventListener('resize', resize);
-    resize();
+    var resize = __bigmaResize;
+    window.addEventListener('resize', __bigmaResize);
+    __bigmaResize();
     ${runnerScript}
   </script>
 </body>
@@ -356,47 +420,42 @@ export function wrapCanvasCodeToHtml(
 }
 
 export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = false): string {
-  let cleanHTML = text;
   const tick3 = String.fromCharCode(96, 96, 96);
-  const regex = new RegExp(tick3 + '(?:html)?\\s*([\\s\\S]*?)' + tick3, 'i');
-  const match = text.match(regex);
+  let cleanHTML = stripLeadingCodeFenceAndLang(text);
 
-  if (match) {
-    cleanHTML = match[1].trim();
+  const htmlFenceRegex = new RegExp(tick3 + 'html\\s*([\\s\\S]*?)' + tick3, 'i');
+  const htmlMatch = (text || '').match(htmlFenceRegex);
+  if (htmlMatch && htmlMatch[1]) {
+    cleanHTML = htmlMatch[1].trim();
   } else {
-    const startIdx = text.toLowerCase().indexOf('<!doctype');
-    const endIdx = text.toLowerCase().lastIndexOf('</html>');
+    const startIdx = (text || '').toLowerCase().indexOf('<!doctype');
+    const endIdx = (text || '').toLowerCase().lastIndexOf('</html>');
     if (startIdx !== -1 && endIdx !== -1) {
-      cleanHTML = text.substring(startIdx, endIdx + 7);
-    } else {
-      cleanHTML = text.trim();
+      cleanHTML = text.substring(startIdx, endIdx + 7).trim();
     }
   }
 
-  cleanHTML = cleanHTML
-    .replace(new RegExp('^' + tick3 + 'html\\s*', 'i'), '')
-    .replace(new RegExp('^' + tick3 + '\\s*'), '')
-    .replace(new RegExp(tick3 + '\\s*$'), '')
-    .trim();
+  cleanHTML = stripLeadingCodeFenceAndLang(cleanHTML);
 
   const lower = cleanHTML.toLowerCase();
   const bg = isGreenScreen ? '#00ff00' : '#080c14';
 
-  // If AI returned lean JS drawFrame/canvas code (without full HTML shell), wrap deterministically
   const looksLikePureJs = !lower.includes('<!doctype') && !lower.includes('<html') && !lower.includes('<canvas');
-  if (looksLikePureJs && (/function\s+drawFrame|ctx\.(fill|stroke|beginPath|roundRect|arc|bezierCurveTo)/i.test(cleanHTML))) {
+  if (
+    looksLikePureJs &&
+    (/(?:function\s+(?:drawFrame|renderFrame|drawIcon|drawScene|render|draw|paint|animate)\s*\(|ctx\.(?:fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo))/i.test(cleanHTML))
+  ) {
     return wrapCanvasCodeToHtml(cleanHTML, isGreenScreen);
   }
 
-  // Auto-heal: If HTML is missing <!DOCTYPE html> or <html>/<body> wrap, but has <canvas> or <script>
   if (!lower.includes('<!doctype') || !lower.includes('</html>')) {
     if (lower.includes('<script') || lower.includes('requestanimationframe') || lower.includes('<canvas')) {
       let bodyContent = cleanHTML;
       if (!bodyContent.toLowerCase().includes('</script>')) {
-        bodyContent += '\n  }\n  animate(0);\n</' + 'script>';
+        bodyContent += '\n  }\n  requestAnimationFrame(animate);\n</' + 'script>';
       }
       if (!bodyContent.toLowerCase().includes('<canvas')) {
-        bodyContent = `<canvas id="canvas"></canvas>\n` + bodyContent;
+        bodyContent = `<canvas id="c"></canvas>\n` + bodyContent;
       }
       cleanHTML = `<!DOCTYPE html>
 <html lang="id">
@@ -417,7 +476,13 @@ export function extractHTMLFromMarkdown(text: string, isGreenScreen: boolean = f
     }
   }
 
-  // Auto-heal runtime safety: Ensure try/catch wrapping inside animate() function to prevent unhandled JS exceptions from blanking canvas
+  if (isGreenScreen && lower.includes('<style')) {
+    cleanHTML = cleanHTML.replace(
+      /(html\s*,\s*body\s*\{[^}]*background(?:-color)?\s*:\s*)(#[0-9a-fA-F]{3,8}|rgba?\([^)]+\)|[a-z]+)/gi,
+      '$1#00ff00'
+    );
+  }
+
   if (cleanHTML.includes('function animate(') && !cleanHTML.includes('catch')) {
     cleanHTML = cleanHTML.replace(
       /function animate\s*\(([^)]*)\)\s*\{([\s\S]*?)(requestAnimationFrame\s*\(\s*animate\s*\);?\s*\})/,
@@ -1022,33 +1087,47 @@ export async function handleGenerateAnimationLogic(body: any) {
   const clearFill = isGreenScreen ? "'#00ff00'" : "'#080c14'";
 
   const motionDirectives = {
-    bounce: "Kinetika elastis squash-and-stretch alami (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
-    orbital: "Rotasi 3D pseudo-isometrik multi-sumbu dengan kedalaman depth-scale (depth = 0.85 + 0.3 * Math.sin(t * 2)).",
-    morph: "Transformasi kurva dinamis berbobot dengan transisi harmonik halus bezierCurveTo.",
-    cyber: "Presisi step kinetik cybernetic, sapuan laser scan clip tajam, dan indikator status LED ritmis.",
-    mechanical: "Artikulasi sasis dan poros beveled presisi tanpa roda gerigi, redaman inersia harmonis.",
-    flow: "Kinetika floating harmonis megah (floatY = Math.sin(t * 2.4) * (S * 0.045)) dengan inersia sekunder (Math.sin(t * 2.4 - 0.45) * 4px)."
-  }[motionDynamics] || "Kinetika floating 3D harmonis 60 FPS dengan redaman inersia alami.";
+    bounce: "Elastic squash-and-stretch spring (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).",
+    orbital: "Smooth 3D pseudo-isometric multi-axis rotation with sinusoidal depth scale (0.85 + 0.3 * Math.sin(t * 2)).",
+    morph: "Fluid bezierCurveTo harmonic curve morphing and weighted organic transitions.",
+    cyber: "Precision cybernetic stepped kinematics, crisp clipped laser scan sweep, and rhythmic LED accents.",
+    mechanical: "Precision beveled chassis & articulated pistons/hinges with damped inertia (ZERO gears/cogs).",
+    flow: "Smooth harmonic floating (floatY = Math.sin(t * 2.4) * (S * 0.045)) with secondary delayed inertia."
+  }[motionDynamics] || "Harmonic 60 FPS 3D floating kinematics.";
 
   const colorStyleDirective = isGreenScreen
-    ? "- GREEN SCREEN MURNI (#00ff00): STRICT ZERO SHADOWBLUR! WARNA OBJEK WAJIB KONTRAS TINGGI NON-HIJAU (Gold #FFD700, Cyan #00E5FF, Violet #A855F7, Crimson #EF4444, Platinum #E2E8F0, Orange #F97316)."
+    ? `- GREEN SCREEN (#00ff00 ALREADY PAINTED BEHIND):
+  * NEVER call ctx.fillRect(0,0,w,h) or ctx.clearRect(0,0,w,h) inside drawFrame!
+  * Strictly ctx.shadowBlur = 0.
+  * Use HIGH-CONTRAST NON-GREEN palette ONLY (Gold #FFD700, Electric Cyan #00E5FF, Violet #9333EA, Crimson #F43F5E, Platinum #F1F5F9, Orange #F97316, Navy #1E293B).`
     : (neonGlow
-        ? "- NEON GLOW: ctx.shadowBlur = 12 pada aksen/LED saja."
-        : "- CRISP FLAT: Vektor tajam tanpa blur (ctx.shadowBlur = 0).");
+        ? "- DARK MODE (#080c14 behind) + NEON GLOW: NEVER overwrite canvas if ICON; ctx.shadowBlur = 12 only on accents/LEDs (reset afterward)."
+        : "- CRISP VECTOR (#080c14 behind): Clean sharp vector shapes, ctx.shadowBlur = 0.");
 
-  const systemPrompt = `Master Canvas 2D Motion Designer. Tulis 1 fungsi JS 60 FPS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (w,h=ukuran canvas, cx,cy=pusat, S=Math.min(w,h)*0.44, t=detik; background sudah dibersihkan).
-PARAM: Topik "${promptTopic}" (${catInfo}) | Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives})
+  const systemPrompt = `You are a Principal 60 FPS HTML5 Canvas 2D Motion Graphics Engineer.
+Write ONLY ONE self-contained JavaScript function with exact signature:
+function drawFrame(ctx, w, h, cx, cy, S, t) {
+  // canvas size is w x h, center is (cx, cy), base icon scale is S = Math.min(w, h) * 0.44, time in seconds is t
+}
+
+SPECIFICATION:
+- Subject: "${promptTopic}" (${catInfo})
+- Mode: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (draw waves/ribbons/grids spanning 0..w and 0..h edge-to-edge)' : 'STANDALONE 3D VOLUMETRIC ICON (centered around cx, cy sized ~0.65*S..1.35*S, NO diamond/rhombus plate, NO background card, NO ground shadow)'}
+- Visual Style: ${style} | Palette: ${colorMode} | Dynamics: ${motionDynamics} (${motionDirectives})
 ${colorStyleDirective}
-ATURAN: 1) Gambar Canvas 2D utuh (beginPath, createLinearGradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, artikulasi internal. DILARANG skeleton/komentar kosong. 2) ZERO GROUND SHADOW. 3) Chiaroscuro 45°. 4) ZERO roda gerigi & ZERO particles.
-Output HANYA kode JS function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (tanpa HTML/CSS/resize/rAF/penjelasan).`;
+
+RULES:
+1. Do NOT output HTML, <canvas>, <script>, resize(), requestAnimationFrame, markdown code fences, or declarations of canvas/ctx/w/h/cx/cy/S.
+2. Output RAW JavaScript with function drawFrame(ctx, w, h, cx, cy, S, t) { ... }.
+3. Paint complete rich Canvas 2D geometry (createLinearGradient, beginPath, roundRect/arc/bezierCurveTo, fill, 1.5px highlight stroke, clipped diagonal sheen). Use Math.max(1, r) for radii.`;
 
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.2,
-        maxOutputTokens: 2400,
+        temperature: 0.25,
+        maxOutputTokens: 3200,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -1079,7 +1158,47 @@ Output HANYA kode JS function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (tanpa 
   };
 }
 
-// 2-in-1 Batch Animation Code Generator (cuts RPM, RPD & system prompt tokens by ~50%)
+function parseServerBatchDelimiterOutput(rawText: string, expectedCount: number): string[] {
+  const out: string[] = new Array(expectedCount).fill('');
+  const trimmed = (rawText || '').trim();
+  if (!trimmed) return out;
+
+  const markerRegex = /\/\/\s*={2,}\s*ANIM[_\s-]*(\d+)\s*={2,}/gi;
+  const matches = Array.from(trimmed.matchAll(markerRegex));
+  if (matches.length > 0) {
+    for (let i = 0; i < matches.length; i++) {
+      const idx = parseInt(matches[i][1], 10);
+      if (Number.isNaN(idx) || idx < 0 || idx >= expectedCount) continue;
+      const start = (matches[i].index || 0) + matches[i][0].length;
+      const end = i + 1 < matches.length ? (matches[i + 1].index || trimmed.length) : trimmed.length;
+      out[idx] = trimmed.slice(start, end).trim();
+    }
+    if (out.some(Boolean)) return out;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) return parsed.map((c: any) => String(c || '')).slice(0, expectedCount);
+  } catch {
+    const m = trimmed.match(/\[[\s\S]*\]/);
+    if (m) {
+      try {
+        const parsed = JSON.parse(m[0]);
+        if (Array.isArray(parsed)) return parsed.map((c: any) => String(c || '')).slice(0, expectedCount);
+      } catch {}
+    }
+  }
+
+  const fnParts = trimmed.split(/(?=(?:^|\n)[ \t]*function\s+drawFrame\s*\()/);
+  const filteredParts = fnParts.map((p) => p.trim()).filter((p) => /function\s+drawFrame\s*\(/.test(p));
+  for (let i = 0; i < Math.min(expectedCount, filteredParts.length); i++) {
+    out[i] = filteredParts[i];
+  }
+
+  return out;
+}
+
+// 2-in-1 Batch Animation Code Generator (delimiter raw JS — eliminates JSON string escaping corruption)
 export async function handleGenerateAnimationBatchLogic(body: any) {
   const {
     apiKey,
@@ -1107,37 +1226,38 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
   const isBackground = type === 'bg';
 
   const motionDirectives = {
-    bounce: "squash-and-stretch elastis",
-    orbital: "rotasi 3D pseudo-isometrik multi-sumbu",
-    morph: "transformasi kurva bezierCurveTo halus",
-    cyber: "laser scan clip & LED ritmis",
-    mechanical: "artikulasi sasis presisi tanpa roda gerigi",
-    flow: "floating harmonis Math.sin(t*2.4)*(S*0.045) + inersia"
-  }[motionDynamics] || "floating 3D harmonis 60 FPS";
+    bounce: "elastic squash-and-stretch spring",
+    orbital: "3D pseudo-isometric multi-axis rotation with depth scaling",
+    morph: "fluid harmonic bezierCurveTo morphing",
+    cyber: "cybernetic stepped motion, crisp laser scan sweep & pulsing LEDs",
+    mechanical: "articulated beveled chassis & pistons without gears",
+    flow: "harmonic floating Math.sin(t*2.4)*(S*0.045) with secondary inertia"
+  }[motionDynamics] || "harmonic 60 FPS 3D floating";
 
   const colorStyleDirective = isGreenScreen
-    ? "GREEN SCREEN (#00ff00): STRICT ZERO SHADOWBLUR! WARNA NON-HIJAU KONTRAS TINGGI."
-    : (neonGlow ? "NEON GLOW: shadowBlur=12 pada aksen saja." : "CRISP FLAT: shadowBlur=0.");
+    ? "GREEN SCREEN (#00ff00 ALREADY BEHIND): NEVER call ctx.fillRect(0,0,w,h) or clearRect; ctx.shadowBlur=0; use ONLY vibrant non-green high-contrast colors (#FFD700, #00E5FF, #9333EA, #F43F5E, #F1F5F9, #F97316)."
+    : (neonGlow ? "DARK BG (#080c14 behind) + NEON GLOW: ctx.shadowBlur=12 only on LED accents (reset to 0 after)." : "CRISP FLAT VECTOR (#080c14 behind): ctx.shadowBlur=0.");
 
-  const batchPrompt = `Master Canvas 2D Motion Designer. Hasilkan JSON array berisi tepat ${promptList.length} string kode JS independen.
-Setiap elemen array WAJIB mendefinisikan: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (background sudah bersih; gunakan ctx,w,h,cx,cy,S,t).
-Tipe: ${isBackground ? 'FULL-FRAME BG (0,0..w,h)' : '3D ICON (pusat cx,cy)'} | Gaya: ${style} | Warna: ${colorMode} | Gerak: ${motionDynamics} (${motionDirectives}) | ${colorStyleDirective}
-ATURAN: Gambar utuh (beginPath, gradient, roundRect/arc/bezierCurveTo, fill, stroke), bevel 1.5px, Chiaroscuro 45°, ZERO ground shadow, ZERO gerigi/particles.
-Daftar Topik:
-${promptList.map((p, idx) => `[${idx}]: "${p}"`).join('\n')}`;
+  const batchPrompt = `You are a Principal 60 FPS HTML5 Canvas 2D Motion Graphics Engineer.
+Write ${promptList.length} completely independent animations separated ONLY by exact markers:
+${promptList.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
+
+SPECIFICATIONS:
+- Mode: ${isBackground ? 'FULL-FRAME BACKGROUND (draw across 0..w, 0..h edge-to-edge)' : 'STANDALONE 3D ICON (centered around cx, cy, size ~0.7*S..1.35*S, NO diamond/rhombus card, NO ground drop-shadow)'}
+- Style: ${style} | Palette: ${colorMode} | Motion: ${motionDynamics} (${motionDirectives})
+- ${colorStyleDirective}
+- RULES: Output RAW JS ONLY (no markdown \`\`\`, no HTML/canvas/resize/rAF, do NOT declare canvas/ctx/w/h/cx/cy/S). Paint rich layered Canvas 2D shapes (createLinearGradient, beginPath, roundRect/arc/bezierCurveTo, fill, 1.5px highlight stroke, clipped diagonal sheen). Use positive radii Math.max(1, r).
+
+TOPICS:
+${promptList.map((p, idx) => `// ===ANIM_${idx}=== Topic: "${p}"`).join('\n')}`;
 
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const cfg: any = {
-        temperature: 0.2,
-        maxOutputTokens: Math.min(4200, Math.max(2000, promptList.length * 1850)),
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING },
-        },
+        temperature: 0.25,
+        maxOutputTokens: Math.min(6200, Math.max(3000, promptList.length * 2900)),
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) cfg.thinkingConfig = smartThinking;
@@ -1146,19 +1266,7 @@ ${promptList.map((p, idx) => `[${idx}]: "${p}"`).join('\n')}`;
   );
 
   const rawText = (response.text || "").trim();
-  let codeItems: string[] = [];
-  try {
-    const parsed = JSON.parse(rawText);
-    if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
-  } catch {
-    const m = rawText.match(/\[[\s\S]*\]/);
-    if (m) {
-      try {
-        const parsed = JSON.parse(m[0]);
-        if (Array.isArray(parsed)) codeItems = parsed.map((c: any) => String(c || ''));
-      } catch {}
-    }
-  }
+  const codeItems = parseServerBatchDelimiterOutput(rawText, promptList.length);
 
   const results = promptList.map((promptTopic, idx) => {
     const rawCode = codeItems[idx] || '';
