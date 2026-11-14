@@ -439,10 +439,111 @@ function sanitizeInjectedJsBody(rawJs: string): string {
     .trim();
 
   // Downgrade ONLY top-level (column-0) `const|let` on reserved harness symbols to `var` so block-scoped locals stay intact
-  js = js.replace(/^(?:const|let)\s+(canvas|ctx|dpr|w|h|cx|cy|S)\b/gm, 'var $1');
+  js = js.replace(/^(?:const|let)\s+(canvas|ctx|dpr|w|h|cx|cy|S|G)\b/gm, 'var $1');
 
   return js.trim();
 }
+
+const STUDIO_GEOMETRY_ENGINE_JS = `
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.miterLimit = 2;
+    (function(){
+      var _arc = ctx.arc.bind(ctx);
+      ctx.arc = function(x, y, r, sa, ea, ccw) {
+        return _arc(x, y, Math.max(0.1, Math.abs(r || 0)), sa, ea, !!ccw);
+      };
+      if (ctx.ellipse) {
+        var _ell = ctx.ellipse.bind(ctx);
+        ctx.ellipse = function(x, y, rx, ry, rot, sa, ea, ccw) {
+          return _ell(x, y, Math.max(0.1, Math.abs(rx || 0)), Math.max(0.1, Math.abs(ry || 0)), rot || 0, sa, ea, !!ccw);
+        };
+      }
+      if (ctx.roundRect) {
+        var _rr = ctx.roundRect.bind(ctx);
+        ctx.roundRect = function(x, y, rw, rh, rad) {
+          var aw = Math.abs(rw || 0), ah = Math.abs(rh || 0);
+          var rx = rw < 0 ? x + rw : x, ry = rh < 0 ? y + rh : y;
+          var sr = Array.isArray(rad) ? rad.map(function(v){ return Math.max(0, v || 0); }) : Math.max(0, rad || 0);
+          return _rr(rx, ry, aw, ah, sr);
+        };
+      }
+    })();
+    var G = {
+      grad: function(c1, c2, c3, x0, y0, x1, y1) {
+        var gx0 = x0, gy0 = y0, gx1 = x1, gy1 = y1, mid = c3;
+        if (typeof c3 === 'number') { gx0 = c3; gy0 = x0; gx1 = y0; gy1 = x1; mid = null; }
+        if (typeof gx0 !== 'number' || !isFinite(gx0)) gx0 = -100;
+        if (typeof gy0 !== 'number' || !isFinite(gy0)) gy0 = -100;
+        if (typeof gx1 !== 'number' || !isFinite(gx1)) gx1 = 100;
+        if (typeof gy1 !== 'number' || !isFinite(gy1)) gy1 = 100;
+        if (gx0 === gx1 && gy0 === gy1) { gx1 = gx0 + 1; gy1 = gy0 + 1; }
+        var g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+        g.addColorStop(0, c1 || '#ffffff');
+        if (mid) { g.addColorStop(0.52, c2 || c1 || '#888888'); g.addColorStop(1, mid); }
+        else { g.addColorStop(1, c2 || c1 || '#888888'); }
+        return g;
+      },
+      box: function(x, y, bw, bh, r, fill, rim, lw) {
+        bw = Math.max(1, Math.abs(bw || 1)); bh = Math.max(1, Math.abs(bh || 1));
+        var rr = Math.min(Math.max(0, r || 0), bw * 0.49, bh * 0.49);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, rr);
+        else ctx.rect(x - bw / 2, y - bh / 2, bw, bh);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+      },
+      disc: function(x, y, r, fill, rim, lw) {
+        r = Math.max(0.5, Math.abs(r || 1));
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+      },
+      ring: function(x, y, r, thick, a0, a1, col) {
+        r = Math.max(0.5, Math.abs(r || 1));
+        ctx.beginPath(); ctx.arc(x, y, r, a0 != null ? a0 : 0, a1 != null ? a1 : Math.PI * 2);
+        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(thick || 2)); ctx.stroke();
+      },
+      poly: function(pts, fill, rim, lw, close) {
+        if (!pts || pts.length < 2) return;
+        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+        for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        if (close !== false) ctx.closePath();
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+      },
+      ngon: function(x, y, r, n, rot, fill, rim, lw) {
+        if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = -Math.PI / 2; }
+        r = Math.max(1, Math.abs(r || 1)); n = Math.max(3, Math.floor(n || 6));
+        var a0 = (typeof rot === 'number' && isFinite(rot)) ? rot : -Math.PI / 2, pts = [];
+        for (var i = 0; i < n; i++) { var a = a0 + (i * Math.PI * 2) / n; pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
+        G.poly(pts, fill, rim, lw, true);
+      },
+      star: function(x, y, ro, ri, n, rot, fill, rim, lw) {
+        if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = -Math.PI / 2; }
+        ro = Math.max(1, Math.abs(ro || 1)); ri = Math.max(0.5, Math.abs(ri || ro * 0.45)); n = Math.max(3, Math.floor(n || 5));
+        var a0 = (typeof rot === 'number' && isFinite(rot)) ? rot : -Math.PI / 2, pts = [];
+        for (var i = 0; i < n * 2; i++) { var rr = i % 2 === 0 ? ro : ri; var a = a0 + (i * Math.PI) / n; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
+        G.poly(pts, fill, rim, lw, true);
+      },
+      pill: function(x1, y1, x2, y2, thick, col) {
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(thick || 4)); ctx.lineCap = 'round'; ctx.stroke();
+      },
+      sheen: function(clipFn, t, sc) {
+        if (typeof clipFn !== 'function') return;
+        var sp = Math.max(50, sc || S);
+        var sx = ((((t * 0.45) % 1.8) - 0.4) * 2 - 1) * sp;
+        ctx.save(); ctx.beginPath(); clipFn(); ctx.clip();
+        var sg = ctx.createLinearGradient(sx - sp * 0.3, -sp * 0.7, sx + sp * 0.3, sp * 0.7);
+        sg.addColorStop(0, 'rgba(255,255,255,0)');
+        sg.addColorStop(0.5, 'rgba(255,255,255,0.28)');
+        sg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sg; ctx.fillRect(-sp * 2, -sp * 2, sp * 4, sp * 4);
+        ctx.restore();
+      }
+    };
+`;
 
 export function wrapCanvasCodeToHtml(
   rawCode: string,
@@ -471,6 +572,10 @@ export function wrapCanvasCodeToHtml(
   const detectedDrawFn = fnMatch ? (fnMatch[1] || fnMatch[2]) : null;
   const hasAnimate = /(?:^|\n)[ \t]*(?:function\s+animate\s*\(|(?:const|let|var)\s+animate\s*=)/i.test(jsBody);
 
+  const greenShadowLock = isGreenScreen
+    ? `try { Object.defineProperty(ctx, 'shadowBlur', { set: function(){}, get: function(){ return 0; }, configurable: true }); } catch(e) {}`
+    : '';
+
   const runnerScript = detectedDrawFn
     ? `${jsBody}
   var __bigmaTargetDraw = typeof ${detectedDrawFn} === 'function' ? ${detectedDrawFn} : null;
@@ -488,6 +593,9 @@ export function wrapCanvasCodeToHtml(
       ctx.fillRect(0, 0, w, h);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.miterLimit = 2;
       ctx.globalCompositeOperation = 'source-over';
       ctx.save();
       if (__bigmaTargetDraw) __bigmaTargetDraw(ctx, w, h, cx, cy, S, t);
@@ -522,6 +630,9 @@ ${jsBody}
       ctx.fillRect(0, 0, w, h);
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
+      ctx.miterLimit = 2;
       ctx.globalCompositeOperation = 'source-over';
       ctx.save();
       __bigmaRawDraw(ctx, w, h, cx, cy, S, t);
@@ -552,6 +663,8 @@ ${jsBody}
   <script>
     var canvas = document.getElementById('c');
     var ctx = canvas.getContext('2d');
+    ${greenShadowLock}
+    ${STUDIO_GEOMETRY_ENGINE_JS}
     var w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
     function __bigmaResize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -804,35 +917,65 @@ export function verifyCanvasAnimationHtml(
       }
     }
 
-    // Count pixels visibly distinct from target background (#00ff00 vs #080c14)
-    const imgData = offCtx.getImageData(0, 0, offscreen.width, offscreen.height).data;
+    // Count pixels visibly distinct from target background (#00ff00 vs #080c14) + check geometric bounding box
+    const rw = offscreen.width;
+    const rh = offscreen.height;
+    const imgData = offCtx.getImageData(0, 0, rw, rh).data;
     const bgR = isGreenScreen ? 0 : 8;
     const bgG = isGreenScreen ? 255 : 12;
     const bgB = isGreenScreen ? 0 : 20;
 
     let visiblePixels = 0;
     let nonZeroAlphaPixels = 0;
-    for (let i = 0; i < imgData.length; i += 4) {
-      const a = imgData[i + 3];
-      if (a > 10) nonZeroAlphaPixels++;
-      const dist = Math.abs(imgData[i] - bgR) + Math.abs(imgData[i + 1] - bgG) + Math.abs(imgData[i + 2] - bgB);
-      if (dist > 36) {
-        visiblePixels++;
+    let minX = rw, maxX = -1, minY = rh, maxY = -1;
+
+    for (let py = 0; py < rh; py++) {
+      for (let px = 0; px < rw; px++) {
+        const i = (py * rw + px) * 4;
+        const a = imgData[i + 3];
+        if (a > 10) nonZeroAlphaPixels++;
+        const dist = Math.abs(imgData[i] - bgR) + Math.abs(imgData[i + 1] - bgG) + Math.abs(imgData[i + 2] - bgB);
+        if (dist > 36) {
+          visiblePixels++;
+          if (px < minX) minX = px;
+          if (px > maxX) maxX = px;
+          if (py < minY) minY = py;
+          if (py > maxY) maxY = py;
+        }
       }
     }
 
-    if (nonZeroAlphaPixels === 0 || visiblePixels < 120) {
+    const bboxW = maxX >= minX ? maxX - minX + 1 : 0;
+    const bboxH = maxY >= minY ? maxY - minY + 1 : 0;
+
+    if (nonZeroAlphaPixels === 0 || visiblePixels < (type === 'bg' ? 350 : 180)) {
       return {
         ok: false,
         visiblePixels,
-        reason: `Canvas blank (${visiblePixels} pixel objek terlihat di layar${isGreenScreen ? ' Green Screen' : ''})`,
+        reason: `Canvas blank/terlalu kecil (${visiblePixels} pixel terlihat${isGreenScreen ? ' pada Green Screen' : ''})`,
       };
+    }
+
+    if (type === 'bg') {
+      if (bboxW < 140 || bboxH < 70) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Background tidak full-frame (${bboxW}x${bboxH}px dari 320x180)`,
+        };
+      }
+    } else {
+      if (Math.max(bboxW, bboxH) < 34 || Math.min(bboxW, bboxH) < 14) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Bentuk ikon terlalu kecil/cacat (${bboxW}x${bboxH}px)`,
+        };
+      }
     }
 
     // Extra guard for Green Screen icons: verify corners aren't flooded dark by accidental full-canvas fillRect
     if (isGreenScreen && type === 'icon') {
-      const rw = offscreen.width;
-      const rh = offscreen.height;
       const corners = [0, (rw - 1) * 4, ((rh - 1) * rw) * 4, ((rh - 1) * rw + (rw - 1)) * 4];
       let greenCorners = 0;
       for (const idx of corners) {
@@ -1753,44 +1896,41 @@ async function generateAnimationDirect(
   const isBackground = type === 'bg';
 
   const motionDirectives = {
-    bounce: 'Elastic squash-and-stretch spring (squash = 1 + 0.12 * Math.cos(t * 3); stretch = 1 / Math.sqrt(squash)).',
-    orbital: 'Smooth 3D pseudo-isometric multi-axis rotation with sinusoidal depth scale (0.85 + 0.3 * Math.sin(t * 2)).',
-    morph: 'Fluid bezierCurveTo harmonic curve morphing and weighted organic transitions.',
-    cyber: 'Precision cybernetic stepped kinematics, crisp clipped laser scan sweep, and rhythmic LED accents.',
-    mechanical: 'Precision beveled chassis & articulated pistons/hinges with damped inertia (ZERO gears/cogs).',
-    flow: 'Smooth harmonic floating (floatY = Math.sin(t * 2.4) * (S * 0.045)) with secondary delayed inertia.'
-  }[motionDynamics] || 'Harmonic 60 FPS 3D floating kinematics.';
+    bounce: 'const sq=1+0.11*Math.cos(t*3), sx=1/Math.sqrt(sq), sy=sq;',
+    orbital: 'const rotY=Math.sin(t*2)*0.16, sx=0.88+0.12*Math.cos(t*2), sy=1;',
+    morph: 'const pulse=1+0.06*Math.sin(t*2.6), sx=pulse, sy=2-pulse;',
+    cyber: 'const scan=(t*0.8)%1, sx=1, sy=1;',
+    mechanical: 'const tilt=Math.sin(t*2.2)*0.08, sx=1, sy=1;',
+    flow: 'const bobY=Math.sin(t*2.4)*(S*0.045), tilt=Math.sin(t*1.8)*0.05, sx=1, sy=1;'
+  }[motionDynamics] || 'const bobY=Math.sin(t*2.4)*(S*0.045), tilt=Math.sin(t*1.8)*0.05, sx=1, sy=1;';
 
   const colorStyleDirective = isGreenScreen
-    ? `- GREEN SCREEN (#00ff00 ALREADY PAINTED BEHIND):
-  * NEVER call ctx.fillRect(0,0,w,h) or ctx.clearRect(0,0,w,h) inside drawFrame!
-  * Strictly ctx.shadowBlur = 0.
-  * Use HIGH-CONTRAST NON-GREEN palette ONLY (e.g. Gold #FFD700, Electric Cyan #00E5FF, Violet #9333EA, Crimson #F43F5E, Platinum #F1F5F9, Orange #F97316, Navy #1E293B). NEVER use pure green.`
+    ? `GREEN SCREEN (#00ff00 already cleared): NEVER call fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; use ONLY vibrant NON-GREEN high-contrast fills (#FFD700, #00E5FF, #9333EA, #F43F5E, #F8FAFC, #F97316, #1E293B).`
     : neonGlow
-    ? '- DARK MODE (#080c14 behind) + NEON GLOW: NEVER overwrite canvas if ICON; apply ctx.shadowBlur = 12 only on glowing accents/LEDs (reset ctx.shadowBlur = 0 afterward).'
-    : '- CRISP VECTOR: Clean sharp vector shapes on #080c14 background, ctx.shadowBlur = 0.';
+    ? `DARK BG (#080c14 cleared) + NEON GLOW: NEVER fillRect(0,0,w,h) for icons; use ctx.shadowBlur=10 ONLY on bright accents (reset shadowBlur=0).`
+    : `CRISP FLAT VECTOR (#080c14 cleared): Sharp clean geometry, ctx.shadowBlur=0.`;
 
-  const systemPrompt = `You are a Principal 60 FPS HTML5 Canvas 2D Motion Graphics Engineer.
-Write ONLY ONE self-contained JavaScript function with exact signature:
-function drawFrame(ctx, w, h, cx, cy, S, t) {
-  // canvas size is w x h, center is (cx, cy), base icon radius scale is S = Math.min(w, h) * 0.44, time in seconds is t
-}
+  const geometryGuide = isBackground
+    ? `FULL-FRAME BG (0..w, 0..h): Draw edge-to-edge overlapping smooth wave ribbons/perspective grid/silk bands spanning -0.1*w..1.1*w seamlessly using smooth cosine curves & G.grad.`
+    : `PERFECT 3D ICON ANATOMY: Wrap inside ctx.save(); ctx.translate(cx, cy + (Math.sin(t*2.4)*S*0.04)); ctx.scale(sx, sy); ... ctx.restore(). Use unit R = S*0.72 centered at (0,0). Weld 3-5 clean, symmetric, unmistakable sub-parts anchored strictly to R ratios (-0.65*R..+0.65*R) so nothing floats detached or misaligned. NO diamond/rhombus plate, NO background card, NO ground drop-shadow, NO random gears/particles.`;
 
-SPECIFICATION:
-- Subject: "${promptTopic}"
-- Category: ${subCategory} | Mode: ${isBackground ? 'FULL-FRAME MOTION BACKGROUND (draw waves/ribbons/grids/caustics spanning 0..w and 0..h edge-to-edge)' : 'STANDALONE 3D VOLUMETRIC ICON (draw physically centered around cx, cy sized ~0.65*S to 1.35*S, NO diamond/rhombus plate, NO background card, NO ground drop-shadow)'}
-- Visual Style: ${style} | Color Palette Mode: ${colorMode}
-- Kinetic Dynamics (${motionDynamics}): ${motionDirectives}
-${colorStyleDirective}
+  const systemPrompt = `Principal 60 FPS Canvas 2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never declare canvas/ctx/w/h/cx/cy/S/G).
 
-STRICT CODE RULES (CRITICAL — ZERO SYNTAX ERRORS):
-1. Do NOT output HTML, <canvas>, <script>, resize(), requestAnimationFrame, markdown code fences, or declarations of canvas/ctx/w/h/cx/cy/S.
-2. Output RAW JavaScript containing function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (plus any pure helper functions if needed, avoiding any redeclaration of canvas/ctx/w/h/cx/cy/S).
-3. Paint complete rich Canvas 2D geometry (createLinearGradient, beginPath, roundRect/arc/ellipse/bezierCurveTo, fill, 1.5px highlight bevel stroke, multi-part internal articulation, clipped 45-deg diagonal gleam). Ensure positive radii (Math.max(1, r)) and valid numeric coordinates so nothing throws or paints blank.`;
+BUILT-IN HELPERS G (CENTERED coords x,y -> ultra-compact & zero shape defects):
+- G.grad(c1,c2,c3,x0,y0,x1,y1) -> 45-deg volumetric fill
+- G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col)
+- G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,sides,rot,fill,rim) | G.star(cx,cy,ro,ri,spikes,rot,fill,rim)
+- G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S) -> masked diagonal specular gleam
+
+SPEC:
+- Topic: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
+- ${geometryGuide}
+- Motion (${motionDynamics}): ${motionDirectives} plus secondary delayed sub-part motion & G.sheen diagonal gleam.
+- ${colorStyleDirective}`;
 
   const config: any = {
-    temperature: 0.25,
-    maxOutputTokens: 3200,
+    temperature: 0.2,
+    maxOutputTokens: 2600,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -1907,36 +2047,41 @@ async function generateAnimationBatchDirect(
   const isBackground = type === 'bg';
 
   const motionDirectives = {
-    bounce: 'elastic squash-and-stretch spring',
-    orbital: '3D pseudo-isometric multi-axis rotation with depth scaling',
-    morph: 'fluid harmonic bezierCurveTo morphing',
-    cyber: 'cybernetic stepped motion, crisp laser scan sweep & pulsing LEDs',
-    mechanical: 'articulated beveled chassis & pistons without gears',
-    flow: 'harmonic floating Math.sin(t*2.4)*(S*0.045) with secondary inertia',
-  }[motionDynamics] || 'harmonic 60 FPS 3D floating';
+    bounce: 'squash-and-stretch elastic spring',
+    orbital: '3D pseudo-isometric rotation with depth scale',
+    morph: 'fluid harmonic curve morphing',
+    cyber: 'stepped cybernetic laser scan & pulsing LEDs',
+    mechanical: 'articulated beveled chassis & pistons (zero gears)',
+    flow: 'smooth harmonic floating + secondary inertia',
+  }[motionDynamics] || 'harmonic 60 FPS floating';
 
   const colorStyleDirective = isGreenScreen
-    ? 'GREEN SCREEN (#00ff00 ALREADY BEHIND): NEVER call ctx.fillRect(0,0,w,h) or clearRect; ctx.shadowBlur=0; use ONLY vibrant non-green high-contrast colors (#FFD700, #00E5FF, #9333EA, #F43F5E, #F1F5F9, #F97316).'
+    ? 'GREEN SCREEN (#00ff00 cleared): NEVER call fillRect(0,0,w,h)/clearRect; shadowBlur=0; use ONLY vibrant NON-GREEN high-contrast colors (#FFD700, #00E5FF, #9333EA, #F43F5E, #F8FAFC, #F97316, #1E293B).'
     : neonGlow
-    ? 'DARK BG (#080c14 behind) + NEON GLOW: ctx.shadowBlur=12 only on glowing LED accents (reset to 0 after).'
-    : 'CRISP FLAT VECTOR (#080c14 behind): ctx.shadowBlur=0.';
+    ? 'DARK BG (#080c14 cleared) + NEON GLOW: shadowBlur=10 ONLY on bright LEDs (reset 0).'
+    : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0.';
 
-  const batchPrompt = `You are a Principal 60 FPS HTML5 Canvas 2D Motion Graphics Engineer.
-Write ${prompts.length} completely independent animations separated ONLY by exact markers:
+  const geometryGuide = isBackground
+    ? 'FULL-FRAME BG (0..w, 0..h): Smooth edge-to-edge overlapping ribbons/waves/grids spanning -0.1*w..1.1*w.'
+    : '3D ICON: Wrap in ctx.save(); ctx.translate(cx, cy + bobY); ctx.scale(sx, sy); ... ctx.restore(). Unit R = S*0.72 centered at (0,0). Weld 3-5 unmistakable, symmetric, proportional sub-parts inside [-R,+R] (NO detached parts, NO diamond/rhombus plate, NO background card, NO ground shadow, NO gears/particles).';
+
+  const batchPrompt = `Principal 60 FPS Canvas 2D Motion Designer. Write ${prompts.length} independent RAW JS animations separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
 
-SPECIFICATIONS:
-- Mode: ${isBackground ? 'FULL-FRAME BACKGROUND (draw across 0..w, 0..h edge-to-edge)' : 'STANDALONE 3D ICON (draw centered around cx, cy, size ~0.7*S..1.35*S, NO diamond/rhombus card, NO ground drop-shadow)'}
-- Style: ${style} | Palette: ${colorMode} | Motion: ${motionDynamics} (${motionDirectives})
-- ${colorStyleDirective}
-- RULES: Output RAW JS ONLY (no markdown \`\`\`, no HTML/canvas/resize/rAF, do NOT declare canvas/ctx/w/h/cx/cy/S). Paint rich layered Canvas 2D shapes (createLinearGradient, beginPath, roundRect/arc/bezierCurveTo, fill, 1.5px highlight stroke, clipped diagonal sheen). Use positive radii Math.max(1, r).
+BUILT-IN HELPERS G (CENTERED x,y -> compact, zero geometry defects):
+G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,n,rot,fill,rim) | G.star(cx,cy,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S)
+
+SPEC: ${geometryGuide}
+Style: ${style} | Palette: ${colorMode} | Motion: ${motionDynamics} (${motionDirectives}) + G.sheen gleam.
+${colorStyleDirective}
+NO markdown fences/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 
 TOPICS:
-${prompts.map((p, idx) => `// ===ANIM_${idx}=== Topic: "${p}"`).join('\n')}`;
+${prompts.map((p, idx) => `// ===ANIM_${idx}=== "${p}"`).join('\n')}`;
 
   const config: any = {
-    temperature: 0.25,
-    maxOutputTokens: Math.min(6200, Math.max(3000, prompts.length * 2900)),
+    temperature: 0.2,
+    maxOutputTokens: Math.min(4800, Math.max(2600, prompts.length * 2200)),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -2472,17 +2617,18 @@ async function generateImageToMotionDirect(
   const ai = new GoogleGenAI({ apiKey: cleanKey });
 
   const visionPrompt = `Master Canvas 2D Motion Graphics & Computer Vision Engineer.
-Analisis GAMBAR REFERENSI (proporsi, bevel, palet HEX asli, komponen internal) lalu rekonstruksi menjadi animasi 60 FPS akurat.
-Mode Warna: ${colorMode} | Dinamika: ${motionDynamics} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00, STRICT ZERO SHADOWBLUR, warna objek non-hijau kontras tinggi)' : 'BG Gelap (#080c14)'}.
-${customInstructions ? `Instruksi Tambahan: ${customInstructions}` : ''}
-ATURAN: 1) Gambar ulang semua sub-komponen dengan Canvas 2D presisi (beginPath, roundRect, bezierCurveTo, arc, createLinearGradient, fill, stroke). DILARANG simplifikasi polos, ZERO gerigi kecuali asli ada, ZERO glass bubble. 2) Gerak: floating harmonis, gimbal tilt halus, squash-and-stretch, artikulasi sub-komponen fase tertunda, specular sheen diagonal di-clip siluet bodi.
-Outputkan HANYA blok metadata + fungsi JS:
+Analisis GAMBAR REFERENSI (proporsi, palet HEX, sub-bagian) lalu rekonstruksi ke 60 FPS JS murni berpusat di (0,0) dalam ctx.save(); ctx.translate(cx,cy+bobY); ctx.scale(sx,sy); ... ctx.restore() skala R = S*0.72.
+Mode: ${colorMode} | Dinamika: ${motionDynamics} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 sudah bersih, JANGAN fillRect(0,0,w,h), shadowBlur=0, warna kontras non-hijau)' : 'BG Gelap (#080c14)'}.
+${customInstructions ? `Instruksi: ${customInstructions}` : ''}
+HELPER G TERSEDIA (hemat token & presisi): G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,n,rot,fill,rim) | G.star(cx,cy,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S)
+ATURAN: Sambungkan semua sub-bagian rapi di [-R,+R], ZERO simplifikasi polos, ZERO gerigi liar, ZERO glass bubble.
+Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: 3200,
+    maxOutputTokens: 2800,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
