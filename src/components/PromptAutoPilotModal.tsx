@@ -185,8 +185,8 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                   </div>
                 </div>
 
-                {/* Row 2: Mode Warna, Jml Prompt, Toggles & Linear Motion Indicator */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1 border-t border-gray-800/60 items-center">
+                {/* Row 2: Mode Warna, Jml Prompt & Toggles */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-gray-800/60 items-center">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">
                       <i className="fa-solid fa-palette text-[9px]"></i>
@@ -203,25 +203,6 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                       <option value="monochrome">Monochrome Slate (B&W)</option>
                       <option value="pastel">Pastel Aesthetic</option>
                       <option value="luxury">Luxury Gold & Obsidian</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-cyan-400 uppercase flex items-center gap-1">
-                      <i className="fa-solid fa-person-running text-[9px]"></i>
-                      <span>Dinamika Gerak</span>
-                    </label>
-                    <select
-                      value={acc.motionDynamics || 'flow'}
-                      onChange={(e) => onUpdateAccount(index, { motionDynamics: e.target.value as MotionDynamics })}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
-                    >
-                      <option value="flow">Flow & 3D Floating (Halus & Elegan)</option>
-                      <option value="bounce">Bounce & Spring Elastic (Membal Berbobot)</option>
-                      <option value="orbital">3D Orbital & Gyroscope (Rotasi Z-Depth)</option>
-                      <option value="morph">Kinetic Morphing (Transisi Organik)</option>
-                      <option value="cyber">Cyber Step & HUD Telemetry</option>
-                      <option value="mechanical">Mechanical Articulated (Presisi Tanpa Gir)</option>
                     </select>
                   </div>
 

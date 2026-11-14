@@ -110,8 +110,9 @@ const quarantinedKeys = new Set<string>(); // 401/403 dead/suspended keys - neve
 const keyModelCooldowns = new Map<string, number>(); // `${key}::${model}` -> timestamp until cooldown ends
 const keyModelStrikeCount = new Map<string, number>(); // consecutive 429 strikes for adaptive escalation
 const keyModelDailyExhausted = new Map<string, number>(); // `${key}::${model}` -> timestamp when RPD cooldown ends
-const keyLastUsedAt = new Map<string, number>(); // LRU spacing so every key gets maximum rest
-const modelGlobalCooldowns = new Map<string, number>(); // Burst guard if 3+ keys hit 429 on same model within 10s (shared GCP project)
+const keyLastUsedAt = new Map<string, number>(); // global LRU spacing
+const keyModelLastUsedAt = new Map<string, number>(); // per-key+model reuse gap tracking
+const modelGlobalCooldowns = new Map<string, number>(); // Burst guard if 3+ keys hit 429 on same model within 10s
 const recentModelQuotaHits = new Map<string, number[]>(); // Timestamps of recent 429 hits per model
 const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
 
@@ -121,6 +122,7 @@ export function resetKeyHealthPool(): void {
   keyModelStrikeCount.clear();
   keyModelDailyExhausted.clear();
   keyLastUsedAt.clear();
+  keyModelLastUsedAt.clear();
   modelGlobalCooldowns.clear();
   recentModelQuotaHits.clear();
   unsupportedClientModels.clear();
@@ -209,11 +211,12 @@ function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any =
     const parsed = parseRetryDelayMs(errOrDurationMs);
     const strikes = (keyModelStrikeCount.get(pair) || 0) + 1;
     keyModelStrikeCount.set(pair, strikes);
+    const profile = getModelExecutionProfile(model);
     if (parsed) {
-      durationMs = parsed;
+      durationMs = Math.max(parsed, profile.cooldownStepsMs[0]);
     } else {
-      // Adaptive escalation: 28s -> 48s -> 70s
-      durationMs = strikes === 1 ? 28000 : strikes === 2 ? 48000 : 70000;
+      // Model-tier adaptive escalation (lite warms up quickly, flagship/pro rest longer)
+      durationMs = profile.cooldownStepsMs[Math.min(strikes - 1, profile.cooldownStepsMs.length - 1)];
     }
 
     // Shared-project / RPM burst detector: if >= 3 keys hit 429 on this model within 10s, cool the whole model briefly
@@ -221,7 +224,7 @@ function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any =
     hits.push(now);
     recentModelQuotaHits.set(model, hits);
     if (hits.length >= 3) {
-      modelGlobalCooldowns.set(model, now + Math.min(durationMs, 24000));
+      modelGlobalCooldowns.set(model, now + Math.min(durationMs, profile.postQuotaRecoveryMs));
     }
   }
   keyModelCooldowns.set(pair, now + durationMs);
@@ -256,6 +259,8 @@ export interface ModelExecutionProfile {
   pacingSingleKeyMs: number;
   minKeyReuseGapMs: number;
   retryDelaysMs: [number, number, number];
+  cooldownStepsMs: [number, number, number];
+  postQuotaRecoveryMs: number;
   timeoutMs: number;
 }
 
@@ -264,55 +269,65 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
   if (m.includes('3.1-pro') || m.includes('4-')) {
     return {
       tier: 'pro_rigging',
-      pacingManyKeysMs: 3200,
-      pacingFewKeysMs: 5200,
-      pacingSingleKeyMs: 7800,
-      minKeyReuseGapMs: 9000,
-      retryDelaysMs: [2800, 5500, 8500],
+      pacingManyKeysMs: 3800,
+      pacingFewKeysMs: 6200,
+      pacingSingleKeyMs: 9500,
+      minKeyReuseGapMs: 12000,
+      retryDelaysMs: [3200, 6200, 9500],
+      cooldownStepsMs: [45000, 75000, 110000],
+      postQuotaRecoveryMs: 26000,
       timeoutMs: 38000,
     };
   }
   if (m.includes('3.8') || m.includes('3.6')) {
     return {
       tier: 'flagship_flash',
-      pacingManyKeysMs: 2000,
-      pacingFewKeysMs: 3600,
-      pacingSingleKeyMs: 5600,
-      minKeyReuseGapMs: 6500,
-      retryDelaysMs: [2000, 4200, 6500],
+      pacingManyKeysMs: 2600,
+      pacingFewKeysMs: 4400,
+      pacingSingleKeyMs: 7000,
+      minKeyReuseGapMs: 7500,
+      retryDelaysMs: [2400, 4800, 7500],
+      cooldownStepsMs: [36000, 62000, 90000],
+      postQuotaRecoveryMs: 22000,
       timeoutMs: 32000,
     };
   }
   if (m.includes('2.5-flash-lite') || m.includes('3.1-flash-lite')) {
     return {
       tier: 'ultra_lite',
-      pacingManyKeysMs: 700,
-      pacingFewKeysMs: 1600,
-      pacingSingleKeyMs: 2800,
-      minKeyReuseGapMs: 2500,
-      retryDelaysMs: [800, 1800, 3000],
+      pacingManyKeysMs: 900,
+      pacingFewKeysMs: 2000,
+      pacingSingleKeyMs: 3400,
+      minKeyReuseGapMs: 3200,
+      retryDelaysMs: [1000, 2200, 3800],
+      cooldownStepsMs: [18000, 34000, 55000],
+      postQuotaRecoveryMs: 12000,
       timeoutMs: 18000,
     };
   }
   if (m.includes('3.5-flash-lite')) {
     return {
       tier: 'smart_lite',
-      pacingManyKeysMs: 1000,
-      pacingFewKeysMs: 2200,
-      pacingSingleKeyMs: 3800,
-      minKeyReuseGapMs: 3500,
-      retryDelaysMs: [1200, 2500, 4000],
+      pacingManyKeysMs: 1300,
+      pacingFewKeysMs: 2600,
+      pacingSingleKeyMs: 4400,
+      minKeyReuseGapMs: 4200,
+      retryDelaysMs: [1400, 2800, 4600],
+      cooldownStepsMs: [24000, 44000, 68000],
+      postQuotaRecoveryMs: 15000,
       timeoutMs: 22000,
     };
   }
   // gemini-2.5-flash / gemini-flash-latest
   return {
     tier: 'balanced_flash',
-    pacingManyKeysMs: 1400,
-    pacingFewKeysMs: 2800,
-    pacingSingleKeyMs: 4600,
-    minKeyReuseGapMs: 4500,
-    retryDelaysMs: [1500, 3000, 5000],
+    pacingManyKeysMs: 1800,
+    pacingFewKeysMs: 3400,
+    pacingSingleKeyMs: 5600,
+    minKeyReuseGapMs: 5500,
+    retryDelaysMs: [1800, 3600, 5800],
+    cooldownStepsMs: [30000, 52000, 78000],
+    postQuotaRecoveryMs: 18000,
     timeoutMs: 24000,
   };
 }
@@ -322,6 +337,10 @@ export function getAdaptiveModelPacingDelay(model: string | undefined, keyCount:
   if (keyCount >= 5) return profile.pacingManyKeysMs;
   if (keyCount >= 2) return profile.pacingFewKeysMs;
   return profile.pacingSingleKeyMs;
+}
+
+export function getModelCooldownRecoveryMs(model?: string): number {
+  return getModelExecutionProfile(model).postQuotaRecoveryMs;
 }
 
 async function withModelTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
@@ -407,6 +426,7 @@ export function getBestHealthyKey(apiKeys: string[], model?: string): string | u
 
   const targetModel = model ? sanitizeModel(model) : '';
   const now = Date.now();
+  const gapMs = targetModel ? getModelExecutionProfile(targetModel).minKeyReuseGapMs : 0;
 
   if (targetModel) {
     const globalUntil = modelGlobalCooldowns.get(targetModel);
@@ -421,21 +441,58 @@ export function getBestHealthyKey(apiKeys: string[], model?: string): string | u
   });
 
   if (healthy.length > 0) {
-    // Pick the key that has rested the longest (LRU) for natural rate-limit protection
-    let best = healthy[0];
-    let oldestTs = keyLastUsedAt.get(best) || 0;
-    for (let i = 1; i < healthy.length; i++) {
-      const ts = keyLastUsedAt.get(healthy[i]) || 0;
+    // Prefer keys that already cleared the per-model minimum reuse gap to prevent RPM spikes
+    const rested = targetModel
+      ? healthy.filter((k) => now - (keyModelLastUsedAt.get(`${k}::${targetModel}`) || 0) >= gapMs)
+      : healthy;
+    const pool = rested.length > 0 ? rested : healthy;
+
+    let best = pool[0];
+    let oldestTs = targetModel
+      ? (keyModelLastUsedAt.get(`${best}::${targetModel}`) || keyLastUsedAt.get(best) || 0)
+      : (keyLastUsedAt.get(best) || 0);
+    for (let i = 1; i < pool.length; i++) {
+      const candidate = pool[i];
+      const ts = targetModel
+        ? (keyModelLastUsedAt.get(`${candidate}::${targetModel}`) || keyLastUsedAt.get(candidate) || 0)
+        : (keyLastUsedAt.get(candidate) || 0);
       if (ts < oldestTs) {
         oldestTs = ts;
-        best = healthy[i];
+        best = candidate;
       }
     }
     keyLastUsedAt.set(best, now);
+    if (targetModel) {
+      keyModelLastUsedAt.set(`${best}::${targetModel}`, now);
+    }
     return best;
   }
 
   return undefined;
+}
+
+export async function waitForKeyReuseGapIfNeeded(apiKeys: string[], model?: string): Promise<number> {
+  const uniqueKeys = getCleanUniqueKeys(apiKeys);
+  if (uniqueKeys.length === 0) return 0;
+  const targetModel = sanitizeModel(model || 'gemini-3.8-flash');
+  const gapMs = getModelExecutionProfile(targetModel).minKeyReuseGapMs;
+  const now = Date.now();
+
+  const healthy = uniqueKeys.filter((k) => !quarantinedKeys.has(k) && !isKeyModelInCooldown(k, targetModel));
+  if (healthy.length === 0) return 0;
+
+  let oldestUsed = Infinity;
+  for (const k of healthy) {
+    const last = keyModelLastUsedAt.get(`${k}::${targetModel}`) || 0;
+    if (now - last >= gapMs) return 0; // At least one key is already fully rested
+    if (last < oldestUsed) oldestUsed = last;
+  }
+
+  const remaining = Math.min(gapMs, Math.max(0, gapMs - (now - oldestUsed)));
+  if (remaining > 50) {
+    await new Promise((r) => setTimeout(r, remaining));
+  }
+  return remaining;
 }
 
 export function getCostOptimizedThinkingConfig(
@@ -599,25 +656,26 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
     (function(){
       var _arc = ctx.arc.bind(ctx);
       ctx.arc = function(x, y, r, sa, ea, ccw) {
-        return _arc(x, y, Math.max(0.1, Math.abs(r || 0)), sa, ea, !!ccw);
+        return _arc(isFinite(x)?x:0, isFinite(y)?y:0, Math.max(0.1, Math.abs(isFinite(r)?r:0)), isFinite(sa)?sa:0, isFinite(ea)?ea:Math.PI*2, !!ccw);
       };
       if (ctx.ellipse) {
         var _ell = ctx.ellipse.bind(ctx);
         ctx.ellipse = function(x, y, rx, ry, rot, sa, ea, ccw) {
-          return _ell(x, y, Math.max(0.1, Math.abs(rx || 0)), Math.max(0.1, Math.abs(ry || 0)), rot || 0, sa, ea, !!ccw);
+          return _ell(isFinite(x)?x:0, isFinite(y)?y:0, Math.max(0.1, Math.abs(isFinite(rx)?rx:0)), Math.max(0.1, Math.abs(isFinite(ry)?ry:0)), isFinite(rot)?rot:0, isFinite(sa)?sa:0, isFinite(ea)?ea:Math.PI*2, !!ccw);
         };
       }
       if (ctx.roundRect) {
         var _rr = ctx.roundRect.bind(ctx);
         ctx.roundRect = function(x, y, rw, rh, rad) {
-          var aw = Math.abs(rw || 0), ah = Math.abs(rh || 0);
+          var aw = Math.abs(isFinite(rw)?rw:0), ah = Math.abs(isFinite(rh)?rh:0);
           var rx = rw < 0 ? x + rw : x, ry = rh < 0 ? y + rh : y;
-          var sr = Array.isArray(rad) ? rad.map(function(v){ return Math.max(0, v || 0); }) : Math.max(0, rad || 0);
-          return _rr(rx, ry, aw, ah, sr);
+          var sr = Array.isArray(rad) ? rad.map(function(v){ return Math.max(0, isFinite(v)?v:0); }) : Math.max(0, isFinite(rad)?rad:0);
+          return _rr(isFinite(rx)?rx:0, isFinite(ry)?ry:0, aw, ah, sr);
         };
       }
     })();
     var G = {
+      _n: function(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : (d || 0); },
       grad: function(c1, c2, c3, x0, y0, x1, y1) {
         var gx0 = x0, gy0 = y0, gx1 = x1, gy1 = y1, mid = c3;
         if (typeof c3 === 'number') { gx0 = c3; gy0 = x0; gx1 = y0; gy1 = x1; mid = null; }
@@ -633,62 +691,99 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         return g;
       },
       box: function(x, y, bw, bh, r, fill, rim, lw) {
-        bw = Math.max(1, Math.abs(bw || 1)); bh = Math.max(1, Math.abs(bh || 1));
-        var rr = Math.min(Math.max(0, r || 0), bw * 0.49, bh * 0.49);
+        x = G._n(x); y = G._n(y);
+        bw = Math.max(1, Math.abs(G._n(bw, 1))); bh = Math.max(1, Math.abs(G._n(bh, 1)));
+        var rr = Math.min(Math.max(0, G._n(r, 0)), bw * 0.49, bh * 0.49);
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, rr);
         else ctx.rect(x - bw / 2, y - bh / 2, bw, bh);
         if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+      },
+      capsule: function(x, y, bw, bh, fill, rim, lw) {
+        bw = Math.max(1, Math.abs(G._n(bw, 1))); bh = Math.max(1, Math.abs(G._n(bh, 1)));
+        G.box(x, y, bw, bh, Math.min(bw, bh) * 0.5, fill, rim, lw);
       },
       disc: function(x, y, r, fill, rim, lw) {
-        r = Math.max(0.5, Math.abs(r || 1));
+        x = G._n(x); y = G._n(y); r = Math.max(0.5, Math.abs(G._n(r, 1)));
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
         if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+      },
+      oval: function(x, y, rx, ry, rot, fill, rim, lw) {
+        if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = 0; }
+        x = G._n(x); y = G._n(y);
+        rx = Math.max(0.5, Math.abs(G._n(rx, 1))); ry = Math.max(0.5, Math.abs(G._n(ry, rx)));
+        ctx.beginPath();
+        if (ctx.ellipse) ctx.ellipse(x, y, rx, ry, G._n(rot, 0), 0, Math.PI * 2);
+        else ctx.arc(x, y, (rx + ry) * 0.5, 0, Math.PI * 2);
+        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ring: function(x, y, r, thick, a0, a1, col) {
-        r = Math.max(0.5, Math.abs(r || 1));
-        ctx.beginPath(); ctx.arc(x, y, r, a0 != null ? a0 : 0, a1 != null ? a1 : Math.PI * 2);
-        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(thick || 2)); ctx.stroke();
+        x = G._n(x); y = G._n(y); r = Math.max(0.5, Math.abs(G._n(r, 1)));
+        ctx.beginPath(); ctx.arc(x, y, r, a0 != null ? G._n(a0) : 0, a1 != null ? G._n(a1, Math.PI * 2) : Math.PI * 2);
+        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 2))); ctx.stroke();
       },
       poly: function(pts, fill, rim, lw, close) {
         if (!pts || pts.length < 2) return;
-        ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-        for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+        ctx.beginPath(); ctx.moveTo(G._n(pts[0][0]), G._n(pts[0][1]));
+        for (var i = 1; i < pts.length; i++) ctx.lineTo(G._n(pts[i][0]), G._n(pts[i][1]));
         if (close !== false) ctx.closePath();
         if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, lw || 1.5); ctx.stroke(); }
+        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ngon: function(x, y, r, n, rot, fill, rim, lw) {
         if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = -Math.PI / 2; }
-        r = Math.max(1, Math.abs(r || 1)); n = Math.max(3, Math.floor(n || 6));
+        x = G._n(x); y = G._n(y); r = Math.max(1, Math.abs(G._n(r, 1))); n = Math.max(3, Math.floor(G._n(n, 6)));
         var a0 = (typeof rot === 'number' && isFinite(rot)) ? rot : -Math.PI / 2, pts = [];
         for (var i = 0; i < n; i++) { var a = a0 + (i * Math.PI * 2) / n; pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); }
         G.poly(pts, fill, rim, lw, true);
       },
       star: function(x, y, ro, ri, n, rot, fill, rim, lw) {
         if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = -Math.PI / 2; }
-        ro = Math.max(1, Math.abs(ro || 1)); ri = Math.max(0.5, Math.abs(ri || ro * 0.45)); n = Math.max(3, Math.floor(n || 5));
+        x = G._n(x); y = G._n(y); ro = Math.max(1, Math.abs(G._n(ro, 1))); ri = Math.max(0.5, Math.abs(G._n(ri, ro * 0.45))); n = Math.max(3, Math.floor(G._n(n, 5)));
         var a0 = (typeof rot === 'number' && isFinite(rot)) ? rot : -Math.PI / 2, pts = [];
         for (var i = 0; i < n * 2; i++) { var rr = i % 2 === 0 ? ro : ri; var a = a0 + (i * Math.PI) / n; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); }
         G.poly(pts, fill, rim, lw, true);
       },
       pill: function(x1, y1, x2, y2, thick, col) {
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(thick || 4)); ctx.lineCap = 'round'; ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(G._n(x1), G._n(y1)); ctx.lineTo(G._n(x2), G._n(y2));
+        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 4))); ctx.lineCap = 'round'; ctx.stroke();
+      },
+      part: function(a1, a2, a3, a4, a5, a6) {
+        var fn, tx, ty, rot, sx, sy;
+        if (typeof a1 === 'function') { fn = a1; tx = a2; ty = a3; rot = a4; sx = a5; sy = a6; }
+        else { tx = a1; ty = a2; rot = a3; sx = a4; sy = a5; fn = a6; }
+        if (typeof fn !== 'function') return;
+        ctx.save();
+        try {
+          ctx.translate(G._n(tx, 0), G._n(ty, 0));
+          if (rot) ctx.rotate(G._n(rot, 0));
+          if (sx != null || sy != null) {
+            var vsx = G._n(sx, 1);
+            ctx.scale(vsx, sy != null ? G._n(sy, vsx) : vsx);
+          }
+          fn();
+        } finally {
+          ctx.restore();
+        }
       },
       sheen: function(clipFn, t, sc) {
         if (typeof clipFn !== 'function') return;
-        var sp = Math.max(50, sc || S);
-        var sx = ((((t * 0.45) % 1.8) - 0.4) * 2 - 1) * sp;
-        ctx.save(); ctx.beginPath(); clipFn(); ctx.clip();
-        var sg = ctx.createLinearGradient(sx - sp * 0.3, -sp * 0.7, sx + sp * 0.3, sp * 0.7);
-        sg.addColorStop(0, 'rgba(255,255,255,0)');
-        sg.addColorStop(0.5, 'rgba(255,255,255,0.28)');
-        sg.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = sg; ctx.fillRect(-sp * 2, -sp * 2, sp * 4, sp * 4);
-        ctx.restore();
+        var sp = Math.max(50, G._n(sc, S));
+        var sx = ((((G._n(t, 0) * 0.45) % 1.8) - 0.4) * 2 - 1) * sp;
+        ctx.save();
+        try {
+          ctx.beginPath(); clipFn(); ctx.clip();
+          var sg = ctx.createLinearGradient(sx - sp * 0.3, -sp * 0.7, sx + sp * 0.3, sp * 0.7);
+          sg.addColorStop(0, 'rgba(255,255,255,0)');
+          sg.addColorStop(0.5, 'rgba(255,255,255,0.28)');
+          sg.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = sg; ctx.fillRect(-sp * 2, -sp * 2, sp * 4, sp * 4);
+        } finally {
+          ctx.restore();
+        }
       }
     };
 `;
@@ -1053,19 +1148,21 @@ export function verifyCanvasAnimationHtml(
       return { ok: false, reason: `Runtime error saat inisialisasi: ${capturedRenderError}` };
     }
 
+    let frame1Data: Uint8ClampedArray | null = null;
     if (typeof rafCallback === 'function') {
-      // Test two distinct time offsets so animation loop doesn't crash on frame 1 or frame N
+      // Test two distinct time offsets so animation loop runs cleanly AND actually animates
       (rafCallback as (t: number) => void)(350);
       if (capturedRenderError) {
         return { ok: false, reason: `Runtime error frame #1: ${capturedRenderError}` };
       }
+      frame1Data = new Uint8ClampedArray(offCtx.getImageData(0, 0, offscreen.width, offscreen.height).data);
       (rafCallback as (t: number) => void)(1250);
       if (capturedRenderError) {
         return { ok: false, reason: `Runtime error frame #2: ${capturedRenderError}` };
       }
     }
 
-    // Count pixels visibly distinct from target background (#00ff00 vs #080c14) + check geometric bounding box
+    // Count pixels visibly distinct from target background (#00ff00 vs #080c14) + check geometric bounding box & centroid
     const rw = offscreen.width;
     const rh = offscreen.height;
     const imgData = offCtx.getImageData(0, 0, rw, rh).data;
@@ -1076,6 +1173,7 @@ export function verifyCanvasAnimationHtml(
     let visiblePixels = 0;
     let nonZeroAlphaPixels = 0;
     let minX = rw, maxX = -1, minY = rh, maxY = -1;
+    let sumX = 0, sumY = 0;
 
     for (let py = 0; py < rh; py++) {
       for (let px = 0; px < rw; px++) {
@@ -1085,6 +1183,8 @@ export function verifyCanvasAnimationHtml(
         const dist = Math.abs(imgData[i] - bgR) + Math.abs(imgData[i + 1] - bgG) + Math.abs(imgData[i + 2] - bgB);
         if (dist > 36) {
           visiblePixels++;
+          sumX += px;
+          sumY += py;
           if (px < minX) minX = px;
           if (px > maxX) maxX = px;
           if (py < minY) minY = py;
@@ -1118,6 +1218,44 @@ export function verifyCanvasAnimationHtml(
           ok: false,
           visiblePixels,
           reason: `Bentuk ikon terlalu kecil/cacat (${bboxW}x${bboxH}px)`,
+        };
+      }
+      if (bboxW >= rw - 2 && bboxH >= rh - 2) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Bentuk ikon meluber/terpotong penuh di tepi canvas (${bboxW}x${bboxH}px)`,
+        };
+      }
+      const meanX = sumX / visiblePixels;
+      const meanY = sumY / visiblePixels;
+      if (meanX < rw * 0.16 || meanX > rw * 0.84 || meanY < rh * 0.12 || meanY > rh * 0.88) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Posisi ikon melenceng keluar area tengah (${Math.round(meanX)},${Math.round(meanY)})`,
+        };
+      }
+    }
+
+    // Verify motion liveness between t=350ms and t=1250ms (reject frozen/static frames)
+    if (frame1Data && frame1Data.length === imgData.length) {
+      let changedSamples = 0;
+      for (let py = 0; py < rh; py += 4) {
+        for (let px = 0; px < rw; px += 4) {
+          const i = (py * rw + px) * 4;
+          const delta =
+            Math.abs(imgData[i] - frame1Data[i]) +
+            Math.abs(imgData[i + 1] - frame1Data[i + 1]) +
+            Math.abs(imgData[i + 2] - frame1Data[i + 2]);
+          if (delta > 24) changedSamples++;
+        }
+      }
+      if (changedSamples < 10) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Animasi statis/tidak bergerak antar frame (${changedSamples} sampel berubah)`,
         };
       }
     }
@@ -1802,13 +1940,13 @@ async function generatePromptBatchDirect(
 
   const promptContent = type === 'bg'
     ? `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompts in English (Seed: ${seed}).
-RULES: Edge-to-edge ribbons/waves/grids/silk caustics; NO centered icons/logos, NO particles/dots, NO white flares; 3-tier depth; seamless harmonic loop. ${categoryLine}Style: ${style}, Color: ${colorMode}, Motion: ${motionDynamics}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} concise strings.`
-    : `Motion Director. Generate ${batchCount} unique standalone 3D VOLUMETRIC ICON motion prompts in English (Seed: ${seed}).
-RULES: Physical standalone 3D icon with chiaroscuro 45-deg lighting, 1.5px bevel highlight rail, elastic 60 FPS spring motion & internal articulation; ZERO rhombus/diamond/shield plates, ZERO background cards, ZERO gears/cogs, ZERO particles. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Motion: ${motionDynamics}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} concise strings.`;
+RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings.`
+    : `Motion Director. Generate ${batchCount} unique standalone 3D ICON motion prompts in English (Seed: ${seed}).
+RULES: Clean sculpted 3D icon built from 3-4 welded proportional parts, 45-deg chiaroscuro, 1.5px bevel rim; choose motion naturally matching the specific icon; ZERO rhombus/plate/card/gears/particles/floor-shadow. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings.`;
 
   const config: any = {
     temperature: 0.9,
-    maxOutputTokens: batchCount === 1 ? 180 : Math.min(1800, Math.max(300, batchCount * 90)),
+    maxOutputTokens: batchCount === 1 ? 120 : Math.min(1100, Math.max(220, batchCount * 65)),
     responseMimeType: 'application/json',
     responseSchema: {
       type: Type.ARRAY,
@@ -2019,6 +2157,79 @@ export async function generatePromptsViaGemini(
   return collectedPrompts;
 }
 
+// Derives physics-matched Canvas motion criteria directly from each prompt's subject
+export function resolvePromptMotionPlan(
+  promptTopic: string,
+  type: AnimationType,
+  _style?: string,
+  overrideMode?: string
+): { label: string; codeHint: string } {
+  if (type === 'bg') {
+    return {
+      label: 'full-frame harmonic wave',
+      codeHint: 'seamless cosine ribbon drift & depth phase shift across 0..w, 0..h',
+    };
+  }
+  const topic = (promptTopic || '').toLowerCase();
+  if (/\b(bell|megaphone|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
+    return {
+      label: 'acoustic ring swing',
+      codeHint: 'tilt=Math.sin(t*4)*0.12 on main body + delayed clapper/wave arc pulse',
+    };
+  }
+  if (/\b(chart|graph|bar|candlestick|rocket|growth|arrow|market|profit|coin|stack)\b/.test(topic)) {
+    return {
+      label: 'ascending elastic lift',
+      codeHint: 'staggered bar/thrust phase Math.sin(t*2.6-i*0.5) + subtle float bob',
+    };
+  }
+  if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope)\b/.test(topic)) {
+    return {
+      label: 'cardiac lub-dub pulse',
+      codeHint: 'scale=1+0.07*Math.pow(Math.max(0,Math.sin(t*3.2)),4) + smooth bob',
+    };
+  }
+  if (/\b(lock|padlock|vault|shield|key|fingerprint|biometric|security|firewall|safe)\b/.test(topic)) {
+    return {
+      label: 'precision locking recoil',
+      codeHint: 'internal shackle/dial/scan line cycle + crisp squash spring bounce',
+    };
+  }
+  if (/\b(cart|truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery)\b/.test(topic)) {
+    return {
+      label: 'kinetic transport suspension',
+      codeHint: 'chassis suspension bob Math.sin(t*3.5)*S*0.025 + spinning wheels/rotors',
+    };
+  }
+  if (/\b(atom|orbit|planet|globe|radar|clock|compass|satellite|astrolabe)\b/.test(topic)) {
+    return {
+      label: 'orbital & axis precession',
+      codeHint: 'rotating inner rings/orbits around anchored center core + gentle tilt',
+    };
+  }
+  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope|lightbulb)\b/.test(topic)) {
+    return {
+      label: 'smart telemetry pulse',
+      codeHint: 'gimbal tilt Math.sin(t*1.9)*0.07 + pulsing nodes/iris/aperture gleam',
+    };
+  }
+  if (overrideMode && overrideMode !== 'auto') {
+    const legacy: Record<string, string> = {
+      bounce: 'const sq=1+0.1*Math.cos(t*3), sx=1/Math.sqrt(sq), sy=sq',
+      orbital: 'sx=0.88+0.12*Math.cos(t*2), rotY=Math.sin(t*2)*0.15',
+      morph: 'pulse=1+0.06*Math.sin(t*2.6), sx=pulse, sy=2-pulse',
+      cyber: 'scan=(t*0.8)%1, step pulse',
+      mechanical: 'tilt=Math.sin(t*2.2)*0.08, articulated sub-parts',
+      flow: 'bobY=Math.sin(t*2.4)*(S*0.04), tilt=Math.sin(t*1.8)*0.05',
+    };
+    if (legacy[overrideMode]) return { label: overrideMode, codeHint: legacy[overrideMode] };
+  }
+  return {
+    label: 'harmonic elastic float',
+    codeHint: 'bobY=Math.sin(t*2.4)*S*0.04, tilt=Math.sin(t*1.8)*0.05 + secondary sub-part lag',
+  };
+}
+
 // Single-shot Direct Browser Google GenAI SDK animation generator (lean drawFrame output + offscreen pixel validator)
 async function generateAnimationDirect(
   apiKey: string,
@@ -2031,7 +2242,7 @@ async function generateAnimationDirect(
   total: number,
   isGreenScreen?: boolean,
   colorMode: ColorMode = 'gradient',
-  motionDynamics: MotionDynamics = 'flow',
+  motionDynamics: MotionDynamics = 'auto',
   neonGlow: boolean = true,
   highPrecision: boolean = false
 ): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
@@ -2042,43 +2253,28 @@ async function generateAnimationDirect(
 
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
-
-  const motionDirectives = {
-    bounce: 'const sq=1+0.11*Math.cos(t*3), sx=1/Math.sqrt(sq), sy=sq;',
-    orbital: 'const rotY=Math.sin(t*2)*0.16, sx=0.88+0.12*Math.cos(t*2), sy=1;',
-    morph: 'const pulse=1+0.06*Math.sin(t*2.6), sx=pulse, sy=2-pulse;',
-    cyber: 'const scan=(t*0.8)%1, sx=1, sy=1;',
-    mechanical: 'const tilt=Math.sin(t*2.2)*0.08, sx=1, sy=1;',
-    flow: 'const bobY=Math.sin(t*2.4)*(S*0.045), tilt=Math.sin(t*1.8)*0.05, sx=1, sy=1;'
-  }[motionDynamics] || 'const bobY=Math.sin(t*2.4)*(S*0.045), tilt=Math.sin(t*1.8)*0.05, sx=1, sy=1;';
+  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics);
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 already cleared): NEVER call fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; use ONLY vibrant NON-GREEN high-contrast fills (#FFD700, #00E5FF, #9333EA, #F43F5E, #F8FAFC, #F97316, #1E293B).`
+    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).`
     : neonGlow
-    ? `DARK BG (#080c14 cleared) + NEON GLOW: NEVER fillRect(0,0,w,h) for icons; use ctx.shadowBlur=10 ONLY on bright accents (reset shadowBlur=0).`
-    : `CRISP FLAT VECTOR (#080c14 cleared): Sharp clean geometry, ctx.shadowBlur=0.`;
+    ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on accents (reset 0).`
+    : `CRISP VECTOR (#080c14 cleared): shadowBlur=0.`;
 
   const geometryGuide = isBackground
-    ? `FULL-FRAME BG (0..w, 0..h): Draw edge-to-edge overlapping smooth wave ribbons/perspective grid/silk bands spanning -0.1*w..1.1*w seamlessly using smooth cosine curves & G.grad.`
-    : `PERFECT 3D ICON ANATOMY: Wrap inside ctx.save(); ctx.translate(cx, cy + (Math.sin(t*2.4)*S*0.04)); ctx.scale(sx, sy); ... ctx.restore(). Use unit R = S*0.72 centered at (0,0). Weld 3-5 clean, symmetric, unmistakable sub-parts anchored strictly to R ratios (-0.65*R..+0.65*R) so nothing floats detached or misaligned. NO diamond/rhombus plate, NO background card, NO ground drop-shadow, NO random gears/particles.`;
+    ? `FULL-FRAME BG (0..w,0..h): Draw 3-4 layered smooth cosine ribbons/perspective grids spanning -0.1*w..1.1*w with G.grad.`
+    : `SIMPLE PERFECT 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.68. Build 3-4 clean, symmetric, welded G.* primitives strictly inside [-0.65*R,+0.65*R]; wrap each moving sub-part with G.part(...) so nothing drifts or detaches. NO rhombus/plate, NO card, NO floor shadow, NO gears/particles.`;
 
-  const systemPrompt = `Principal 60 FPS Canvas 2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never declare canvas/ctx/w/h/cx/cy/S/G).
-
-BUILT-IN HELPERS G (CENTERED coords x,y -> ultra-compact & zero shape defects):
-- G.grad(c1,c2,c3,x0,y0,x1,y1) -> 45-deg volumetric fill
-- G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col)
-- G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,sides,rot,fill,rim) | G.star(cx,cy,ro,ri,spikes,rot,fill,rim)
-- G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S) -> masked diagonal specular gleam
-
-SPEC:
-- Topic: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
+  const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
+SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
-- Motion (${motionDynamics}): ${motionDirectives} plus secondary delayed sub-part motion & G.sheen diagonal gleam.
+- Motion (${motionPlan.label}): ${motionPlan.codeHint} + G.sheen diagonal gleam.
 - ${colorStyleDirective}`;
 
   const config: any = {
     temperature: 0.2,
-    maxOutputTokens: 2600,
+    maxOutputTokens: 1500,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -2203,42 +2399,33 @@ async function generateAnimationBatchDirect(
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
 
-  const motionDirectives = {
-    bounce: 'squash-and-stretch elastic spring',
-    orbital: '3D pseudo-isometric rotation with depth scale',
-    morph: 'fluid harmonic curve morphing',
-    cyber: 'stepped cybernetic laser scan & pulsing LEDs',
-    mechanical: 'articulated beveled chassis & pistons (zero gears)',
-    flow: 'smooth harmonic floating + secondary inertia',
-  }[motionDynamics] || 'harmonic 60 FPS floating';
-
   const colorStyleDirective = isGreenScreen
-    ? 'GREEN SCREEN (#00ff00 cleared): NEVER call fillRect(0,0,w,h)/clearRect; shadowBlur=0; use ONLY vibrant NON-GREEN high-contrast colors (#FFD700, #00E5FF, #9333EA, #F43F5E, #F8FAFC, #F97316, #1E293B).'
+    ? 'GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).'
     : neonGlow
-    ? 'DARK BG (#080c14 cleared) + NEON GLOW: shadowBlur=10 ONLY on bright LEDs (reset 0).'
+    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright LEDs (reset 0).'
     : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0.';
 
   const geometryGuide = isBackground
-    ? 'FULL-FRAME BG (0..w, 0..h): Smooth edge-to-edge overlapping ribbons/waves/grids spanning -0.1*w..1.1*w.'
-    : '3D ICON: Wrap in ctx.save(); ctx.translate(cx, cy + bobY); ctx.scale(sx, sy); ... ctx.restore(). Unit R = S*0.72 centered at (0,0). Weld 3-5 unmistakable, symmetric, proportional sub-parts inside [-R,+R] (NO detached parts, NO diamond/rhombus plate, NO background card, NO ground shadow, NO gears/particles).';
+    ? 'FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w.'
+    : 'SIMPLE PERFECT 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn). Unit R=S*0.68. Weld 3-4 clean symmetric G.* primitives inside [-0.65*R,+0.65*R]; isolate moving sub-parts via G.part. NO rhombus/plate/card/gears/particles/floor-shadow.';
 
-  const batchPrompt = `Principal 60 FPS Canvas 2D Motion Designer. Write ${prompts.length} independent RAW JS animations separated ONLY by:
+  const topicLines = prompts.map((p, idx) => {
+    const plan = resolvePromptMotionPlan(p, type, style, motionDynamics);
+    return `// ===ANIM_${idx}=== "${p}" [Motion: ${plan.label} -> ${plan.codeHint}]`;
+  }).join('\n');
+
+  const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} independent RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-
-BUILT-IN HELPERS G (CENTERED x,y -> compact, zero geometry defects):
-G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,n,rot,fill,rim) | G.star(cx,cy,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S)
-
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
 SPEC: ${geometryGuide}
-Style: ${style} | Palette: ${colorMode} | Motion: ${motionDynamics} (${motionDirectives}) + G.sheen gleam.
-${colorStyleDirective}
-NO markdown fences/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
-
+Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective} | Add G.sheen.
+NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
-${prompts.map((p, idx) => `// ===ANIM_${idx}=== "${p}"`).join('\n')}`;
+${topicLines}`;
 
   const config: any = {
     temperature: 0.2,
-    maxOutputTokens: Math.min(4800, Math.max(2600, prompts.length * 2200)),
+    maxOutputTokens: Math.min(2800, Math.max(1500, prompts.length * 1400)),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -2372,6 +2559,7 @@ export async function generateSingleAnimationCode(
 
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
+        await waitForKeyReuseGapIfNeeded(uniqueClientKeys, activeModel);
         try {
           const result = await generateAnimationDirect(
             selectedKey,
@@ -2635,6 +2823,7 @@ export async function generateBatchAnimationCodes(
 
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
+        await waitForKeyReuseGapIfNeeded(uniqueClientKeys, activeModel);
         try {
           batchItems = await generateAnimationBatchDirect(
             selectedKey,
@@ -2840,19 +3029,19 @@ async function generateImageToMotionDirect(
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   const ai = new GoogleGenAI({ apiKey: cleanKey });
 
-  const visionPrompt = `Master Canvas 2D Motion Graphics & Computer Vision Engineer.
-Analisis GAMBAR REFERENSI (proporsi, palet HEX, sub-bagian) lalu rekonstruksi ke 60 FPS JS murni berpusat di (0,0) dalam ctx.save(); ctx.translate(cx,cy+bobY); ctx.scale(sx,sy); ... ctx.restore() skala R = S*0.72.
-Mode: ${colorMode} | Dinamika: ${motionDynamics} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 sudah bersih, JANGAN fillRect(0,0,w,h), shadowBlur=0, warna kontras non-hijau)' : 'BG Gelap (#080c14)'}.
+  const visionPrompt = `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.68.
+Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, jarum/grafik naik, jantung berdenyut, atau floating harmonis + G.sheen).
+Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, warna non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPER G TERSEDIA (hemat token & presisi): G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(cx,cy,bw,bh,r,fill,rim,lw) | G.disc(cx,cy,r,fill,rim,lw) | G.ring(cx,cy,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(cx,cy,r,n,rot,fill,rim) | G.star(cx,cy,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.sheen(clipFn,t,S)
-ATURAN: Sambungkan semua sub-bagian rapi di [-R,+R], ZERO simplifikasi polos, ZERO gerigi liar, ZERO glass bubble.
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
+ATURAN: 3-4 sub-bagian rapi tersambung di [-0.65*R,+0.65*R], ZERO gerigi liar, ZERO glass bubble.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: 2800,
+    maxOutputTokens: 1900,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -3028,6 +3217,7 @@ export async function generateImageToMotion(
 
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
+        await waitForKeyReuseGapIfNeeded(uniqueClientKeys, activeModel);
         try {
           const i2mResult = await generateImageToMotionDirect(
             selectedKey,

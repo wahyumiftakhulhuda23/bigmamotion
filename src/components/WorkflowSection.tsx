@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { AnimationType, VisualStyle, ColorMode, MotionDynamics, NotepadBatch } from '../types';
+import { AnimationType, VisualStyle, ColorMode, NotepadBatch } from '../types';
 import { getCategoriesForType, findCategoryById } from '../constants/categories';
 
 interface WorkflowSectionProps {
@@ -11,8 +11,6 @@ interface WorkflowSectionProps {
   onSelectStyle: (style: VisualStyle) => void;
   colorMode?: ColorMode;
   onSelectColorMode?: (mode: ColorMode) => void;
-  motionDynamics?: MotionDynamics;
-  onSelectMotionDynamics?: (dynamics: MotionDynamics) => void;
   neonGlow?: boolean;
   onToggleNeonGlow?: (val: boolean) => void;
   promptCount: number;
@@ -46,8 +44,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onSelectStyle,
   colorMode = 'gradient',
   onSelectColorMode,
-  motionDynamics = 'flow',
-  onSelectMotionDynamics,
   neonGlow = true,
   onToggleNeonGlow,
   promptCount,

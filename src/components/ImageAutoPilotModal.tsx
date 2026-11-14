@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ImageToMotionAutoPilotAccount,
   ReferenceImageUpload,
-  MotionDynamics,
   ColorMode,
 } from '../types';
 
@@ -116,7 +115,7 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
     const newAcc: ImageToMotionAutoPilotAccount = {
       id: 'acc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       name: trimmed,
-      motionDynamics: 'flow',
+      motionDynamics: 'auto',
       colorMode: 'gradient',
       neonGlow: true,
       isGreenScreen: false,
@@ -602,30 +601,8 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                       )}
                     </div>
 
-                    {/* Per-Account Visual & Motion Options (Customizable per account) */}
-                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-sky-400 uppercase flex items-center gap-1">
-                          <i className="fa-solid fa-person-running text-[9px]"></i>
-                          <span>Fisika Gerak</span>
-                        </label>
-                        <select
-                          value={acc.motionDynamics || 'flow'}
-                          onChange={(e) =>
-                            handleUpdateAccount(acc.id, {
-                              motionDynamics: e.target.value as MotionDynamics,
-                            })
-                          }
-                          className="w-full bg-slate-950 border border-gray-700 rounded-lg p-1.5 text-xs text-gray-200 focus:border-amber-400 focus:outline-none cursor-pointer"
-                        >
-                          <option value="flow">Flow & Wave</option>
-                          <option value="bounce">Elastic Bounce</option>
-                          <option value="orbital">3D Orbital</option>
-                          <option value="morph">Kinetic Morph</option>
-                          <option value="cyber">Cyber Step</option>
-                          <option value="mechanical">Mechanical</option>
-                        </select>
-                      </div>
+                    {/* Per-Account Visual Options (Motion automatically matched per image subject) */}
+                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
 
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">

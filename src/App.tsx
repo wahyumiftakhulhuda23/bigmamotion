@@ -9,7 +9,6 @@ import {
   NicheCategory,
   VisualStyle,
   ColorMode,
-  MotionDynamics,
   ImageToMotionItem,
   ImageToMotionProject,
   NotepadBatch,
@@ -25,6 +24,8 @@ import {
   getEarliestCooldownWaitMs,
   buildModelFallbackChain,
   getAdaptiveModelPacingDelay,
+  getModelCooldownRecoveryMs,
+  getModelExecutionProfile,
   AllKeysExhaustedError,
   resetKeyHealthPool,
 } from './services/geminiService';
@@ -177,7 +178,6 @@ export default function App() {
   const [nicheCategory, setNicheCategory] = useState<NicheCategory>('business_finance');
   const [visualStyle, setVisualStyle] = useState<VisualStyle>('3d_crest');
   const [colorMode, setColorMode] = useState<ColorMode>('gradient');
-  const [motionDynamics, setMotionDynamics] = useState<MotionDynamics>('flow');
   const [neonGlow, setNeonGlow] = useState<boolean>(true);
   const [promptCount, setPromptCount] = useState<number>(3);
   const [isGreenScreen, setIsGreenScreen] = useState<boolean>(false);
@@ -493,7 +493,7 @@ export default function App() {
         keywordLines,
         isGreenScreen,
         colorMode,
-        motionDynamics,
+        'auto',
         neonGlow,
         (singlePrompt, index, total) => {
           setGeneratedPrompts((prev) => {
@@ -567,12 +567,13 @@ export default function App() {
     setFailedPrompts([]);
     const total = generatedPrompts.length;
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
+    const modelProfile = getModelExecutionProfile(selectedModel);
     const BATCH_ANIM_SIZE = 2;
     addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM • MODE HEMAT BATCH 2-IN-1) ==========`, 'info');
     if (apiKeys.length <= 1) {
-      addLog(`[Mode Hemat Token + Pacing ${selectedModel}] 2 animasi/request + jeda ${(pacingDelay / 1000).toFixed(1)}s per batch.`, 'cyan');
+      addLog(`[Mode Hemat Token + Pacing ${selectedModel}] 2 animasi/request + jeda ${(pacingDelay / 1000).toFixed(1)}s/batch (jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
     } else {
-      addLog(`[Rotasi ${apiKeys.length} API Key + Pacing ${selectedModel}] Batch 2-in-1 (jeda ${(pacingDelay / 1000).toFixed(1)}s/batch).`, 'cyan');
+      addLog(`[Rotasi ${apiKeys.length} API Key + Pacing ${selectedModel}] Batch 2-in-1 (jeda ${(pacingDelay / 1000).toFixed(1)}s/batch, jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
     }
 
     let currentAnimList = [...animations];
@@ -602,7 +603,7 @@ export default function App() {
         {
           isGreenScreen,
           colorMode,
-          motionDynamics,
+          motionDynamics: 'auto',
           neonGlow,
           onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
         }
@@ -625,7 +626,7 @@ export default function App() {
             {
               isGreenScreen,
               colorMode,
-              motionDynamics,
+              motionDynamics: 'auto',
               neonGlow,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
@@ -676,9 +677,9 @@ export default function App() {
       }
 
       if (endNum < total) {
-        const extraBreath = hadExhausted ? 18000 : 0;
+        const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
         if (extraBreath > 0) {
-          addLog(`⏸️ [Adaptive Backoff] Jeda pemulihan 18s sebelum batch berikutnya agar kuota 429 tidak beruntun...`, 'warn');
+          addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Jeda pemulihan ${Math.round(extraBreath / 1000)}s sebelum batch berikutnya agar kuota 429 tidak beruntun...`, 'warn');
         }
         await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
@@ -744,7 +745,7 @@ export default function App() {
         {
           isGreenScreen,
           colorMode,
-          motionDynamics,
+          motionDynamics: 'auto',
           neonGlow,
           onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
         }
@@ -767,7 +768,7 @@ export default function App() {
             {
               isGreenScreen,
               colorMode,
-              motionDynamics,
+              motionDynamics: 'auto',
               neonGlow,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
@@ -808,7 +809,7 @@ export default function App() {
       }
 
       if (endNum < total) {
-        const extraBreath = hadExhausted ? 18000 : 0;
+        const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
         await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
     }
@@ -852,7 +853,7 @@ export default function App() {
         3,
         isGreenScreen,
         colorMode,
-        motionDynamics,
+        'auto',
         neonGlow
       );
 
@@ -963,7 +964,7 @@ export default function App() {
           mimeType: img.mimeType || 'image/png',
           status: 'pending',
           progress: 0,
-          motionDynamics: acc.motionDynamics || 'flow',
+          motionDynamics: 'auto',
           colorMode: acc.colorMode || 'gradient',
           neonGlow: acc.neonGlow ?? true,
           isGreenScreen: acc.isGreenScreen ?? false,
@@ -1096,7 +1097,7 @@ export default function App() {
           {
             isGreenScreen,
             colorMode,
-            motionDynamics,
+            motionDynamics: 'auto',
             neonGlow,
             onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
           }
@@ -1119,7 +1120,7 @@ export default function App() {
               {
                 isGreenScreen,
                 colorMode,
-                motionDynamics,
+                motionDynamics: 'auto',
                 neonGlow,
                 onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
               }
@@ -1164,7 +1165,7 @@ export default function App() {
         }
 
         if (completedOverall < totalPromptsOverall) {
-          const extraBreath = hadExhausted ? 18000 : 0;
+          const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
           await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
       }
@@ -1217,7 +1218,8 @@ export default function App() {
     const newFailedItems: FailedAutoPilotItem[] = [];
     const BATCH_ANIM_SIZE = 2;
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
-    addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda antar batch disetel ke ${(pacingDelay / 1000).toFixed(1)}s agar thinking model stabil tanpa retry beruntun.`, 'cyan');
+    const modelProfile = getModelExecutionProfile(selectedModel);
+    addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda batch ${(pacingDelay / 1000).toFixed(1)}s • Jeda antar key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s • Cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s/${(modelProfile.cooldownStepsMs[1] / 1000).toFixed(0)}s agar kuota irit & bebas retry beruntun.`, 'cyan');
     let stopAllForQuota = false;
 
     for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
@@ -1243,7 +1245,7 @@ export default function App() {
             undefined,
             acc.isGreenScreen ?? false,
             acc.colorMode ?? 'gradient',
-            acc.motionDynamics ?? 'flow',
+            'auto',
             acc.neonGlow ?? true,
             (singlePrompt, index, total) => {
               if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
@@ -1264,7 +1266,7 @@ export default function App() {
             style: acc.style,
             isGreenScreen: acc.isGreenScreen ?? false,
             colorMode: acc.colorMode ?? 'gradient',
-            motionDynamics: acc.motionDynamics ?? 'flow',
+            motionDynamics: 'auto',
             neonGlow: acc.neonGlow ?? true,
             error: e.message || 'Gagal menghasilkan prompt',
           });
@@ -1290,7 +1292,7 @@ export default function App() {
           {
             isGreenScreen: acc.isGreenScreen ?? false,
             colorMode: acc.colorMode ?? 'gradient',
-            motionDynamics: acc.motionDynamics ?? 'flow',
+            motionDynamics: 'auto',
             neonGlow: acc.neonGlow ?? true,
             onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
           }
@@ -1314,7 +1316,7 @@ export default function App() {
               {
                 isGreenScreen: acc.isGreenScreen ?? false,
                 colorMode: acc.colorMode ?? 'gradient',
-                motionDynamics: acc.motionDynamics ?? 'flow',
+                motionDynamics: 'auto',
                 neonGlow: acc.neonGlow ?? true,
                 onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
               }
@@ -1348,7 +1350,7 @@ export default function App() {
               style: acc.style,
               isGreenScreen: acc.isGreenScreen ?? false,
               colorMode: acc.colorMode ?? 'gradient',
-              motionDynamics: acc.motionDynamics ?? 'flow',
+              motionDynamics: 'auto',
               neonGlow: acc.neonGlow ?? true,
               error: res.error || 'Gagal merender animasi',
             });
@@ -1375,7 +1377,7 @@ export default function App() {
               style: acc.style,
               isGreenScreen: acc.isGreenScreen ?? false,
               colorMode: acc.colorMode ?? 'gradient',
-              motionDynamics: acc.motionDynamics ?? 'flow',
+              motionDynamics: 'auto',
               neonGlow: acc.neonGlow ?? true,
               error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
             });
@@ -1387,9 +1389,9 @@ export default function App() {
         }
 
         if (endNum < prompts.length) {
-          const extraBreath = stillExhausted ? 18000 : 0;
+          const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
           if (extraBreath > 0) {
-            addLog(`⏸️ [Adaptive Backoff] Memberi jeda pemulihan 18s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
+            addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Memberi jeda pemulihan ${Math.round(extraBreath / 1000)}s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
           }
           await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
@@ -1453,7 +1455,7 @@ export default function App() {
           3,
           item.isGreenScreen ?? false,
           item.colorMode ?? 'gradient',
-          item.motionDynamics ?? 'flow',
+          'auto',
           item.neonGlow ?? true
         );
 
@@ -1846,8 +1848,6 @@ export default function App() {
                 onSelectStyle={setVisualStyle}
                 colorMode={colorMode}
                 onSelectColorMode={setColorMode}
-                motionDynamics={motionDynamics}
-                onSelectMotionDynamics={setMotionDynamics}
                 neonGlow={neonGlow}
                 onToggleNeonGlow={setNeonGlow}
                 promptCount={promptCount}
@@ -2089,7 +2089,7 @@ export default function App() {
               3,
               item.isGreenScreen ?? false,
               item.colorMode ?? colorMode,
-              item.motionDynamics ?? motionDynamics,
+              'auto',
               item.neonGlow ?? neonGlow
             );
             if (anim) {

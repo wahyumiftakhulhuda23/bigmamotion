@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   ImageToMotionItem,
   ImageToMotionAutoPilotAccount,
-  MotionDynamics,
   ColorMode,
   AnimationItem,
   GeminiModel,
@@ -77,8 +76,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [autoPilotStatus, setAutoPilotStatus] = useState<AutoPilotProgressState | null>(null);
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null);
 
-  // Global settings for newly uploaded batch
-  const [batchMotionDynamics, setBatchMotionDynamics] = useState<MotionDynamics>('flow');
+  // Global settings for newly uploaded batch (motion is derived automatically from each image subject)
   const [batchColorMode, setBatchColorMode] = useState<ColorMode>('gradient');
   const [batchNeonGlow, setBatchNeonGlow] = useState<boolean>(true);
   const [batchGreenScreen, setBatchGreenScreen] = useState<boolean>(false);
@@ -236,7 +234,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [batchMotionDynamics, batchColorMode, batchNeonGlow, batchGreenScreen, batchCustomInstructions, currentAccountName]);
+  }, [batchColorMode, batchNeonGlow, batchGreenScreen, batchCustomInstructions, currentAccountName]);
 
   // Read files and convert to ImageToMotion items
   const processFiles = (files: FileList | File[]) => {
@@ -269,7 +267,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           mimeType: file.type || 'image/png',
           status: 'pending',
           progress: 0,
-          motionDynamics: batchMotionDynamics,
+          motionDynamics: 'auto',
           colorMode: batchColorMode,
           neonGlow: batchNeonGlow,
           isGreenScreen: batchGreenScreen,
@@ -908,24 +906,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {/* Motion Dynamics */}
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-semibold block">Motion Dynamics</label>
-              <select
-                value={batchMotionDynamics}
-                onChange={(e) => setBatchMotionDynamics(e.target.value as MotionDynamics)}
-                className="w-full bg-slate-900 text-gray-200 border border-gray-700 text-[11px] rounded-lg px-2 py-1 font-medium focus:ring-1 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="flow">🌊 Organic Flow</option>
-                <option value="bounce">⚡ Elastic Bounce</option>
-                <option value="orbital">🪐 3D Orbital</option>
-                <option value="morph">✨ Kinetic Morph</option>
-                <option value="cyber">🤖 Cyber Matrix</option>
-                <option value="mechanical">⚙️ Mechanical</option>
-              </select>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {/* Color Mode */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Palet Warna</label>
@@ -1388,9 +1369,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                       {/* Row 2: Compact Meta Tags & Status */}
                       <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
                         <span className="text-gray-400 font-mono text-[9px]">{item.fileSize}</span>
-                        <span className="px-1 py-0.2 rounded bg-slate-800 text-amber-300 font-semibold capitalize text-[9px]">
-                          {item.motionDynamics}
-                        </span>
                         {item.isGreenScreen && (
                           <span className="px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40 text-[8px] font-bold" title="Green Screen">
                             GS
@@ -1665,7 +1643,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             {/* Bottom Actions */}
             <div className="flex justify-between items-center pt-3 border-t border-gray-800 shrink-0">
               <span className="text-[11px] text-gray-400">
-                Mode: <strong className="text-amber-300 capitalize">{comparisonItem.motionDynamics}</strong> • Warna: <strong className="text-amber-300 capitalize">{comparisonItem.colorMode}</strong>
+                Gerak: <strong className="text-amber-300">Auto (Sesuai Subjek)</strong> • Warna: <strong className="text-amber-300 capitalize">{comparisonItem.colorMode}</strong>
               </span>
 
               <div className="flex items-center gap-2">
@@ -1740,7 +1718,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                     {analysisModalItem.shapeAnalysis?.objectName || analysisModalItem.detectedSubject || 'Objek Teranalisis'}
                   </div>
                   <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-400 flex-wrap">
-                    <span>Dinamika: <strong className="text-amber-300 capitalize">{analysisModalItem.motionDynamics}</strong></span>
+                    <span>Gerak: <strong className="text-amber-300">Auto (Sesuai Subjek)</strong></span>
                     <span>•</span>
                     <span>Warna: <strong className="text-amber-300 capitalize">{analysisModalItem.colorMode}</strong></span>
                     <span>•</span>

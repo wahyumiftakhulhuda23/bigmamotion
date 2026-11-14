@@ -54,6 +54,7 @@ export type ColorMode =
   | 'luxury';
 
 export type MotionDynamics = 
+  | 'auto'
   | 'flow' 
   | 'bounce' 
   | 'orbital' 
