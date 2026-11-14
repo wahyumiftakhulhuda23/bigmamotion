@@ -380,6 +380,11 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         if (fill) { ctx.fillStyle = fill; ctx.fill(); }
         if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
+      bar: function(x, yBase, bw, bh, r, fill, rim, lw) {
+        x = G._n(x); yBase = G._n(yBase);
+        bw = Math.max(1, Math.abs(G._n(bw, 1))); bh = Math.max(1, Math.abs(G._n(bh, 1)));
+        G.box(x, yBase - bh * 0.5, bw, bh, r, fill, rim, lw);
+      },
       capsule: function(x, y, bw, bh, fill, rim, lw) {
         bw = Math.max(1, Math.abs(G._n(bw, 1))); bh = Math.max(1, Math.abs(G._n(bh, 1)));
         G.box(x, y, bw, bh, Math.min(bw, bh) * 0.5, fill, rim, lw);
@@ -431,6 +436,16 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.beginPath(); ctx.moveTo(G._n(x1), G._n(y1)); ctx.lineTo(G._n(x2), G._n(y2));
         ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 4))); ctx.lineCap = 'round'; ctx.stroke();
       },
+      arrow: function(x1, y1, x2, y2, thick, headLen, col) {
+        x1 = G._n(x1); y1 = G._n(y1); x2 = G._n(x2); y2 = G._n(y2);
+        var dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy);
+        if (len < 2) return;
+        var ux = dx / len, uy = dy / len, hl = Math.min(len * 0.55, Math.max(6, Math.abs(G._n(headLen, 14))));
+        var sw = Math.max(1.5, Math.abs(G._n(thick, 4))), sx2 = x2 - ux * hl * 0.72, sy2 = y2 - uy * hl * 0.72;
+        G.pill(x1, y1, sx2, sy2, sw, col || '#ffffff');
+        var px = -uy * hl * 0.55, py = ux * hl * 0.55, bx = x2 - ux * hl, by = y2 - uy * hl;
+        G.poly([[x2, y2], [bx + px, by + py], [bx - px, by - py]], col || '#ffffff', null, 0, true);
+      },
       part: function(a1, a2, a3, a4, a5, a6) {
         var fn, tx, ty, rot, sx, sy;
         if (typeof a1 === 'function') { fn = a1; tx = a2; ty = a3; rot = a4; sx = a5; sy = a6; }
@@ -449,21 +464,8 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
           ctx.restore();
         }
       },
-      sheen: function(clipFn, t, sc) {
-        if (typeof clipFn !== 'function') return;
-        var sp = Math.max(50, G._n(sc, S));
-        var sx = ((((G._n(t, 0) * 0.45) % 1.8) - 0.4) * 2 - 1) * sp;
-        ctx.save();
-        try {
-          ctx.beginPath(); clipFn(); ctx.clip();
-          var sg = ctx.createLinearGradient(sx - sp * 0.3, -sp * 0.7, sx + sp * 0.3, sp * 0.7);
-          sg.addColorStop(0, 'rgba(255,255,255,0)');
-          sg.addColorStop(0.5, 'rgba(255,255,255,0.28)');
-          sg.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = sg; ctx.fillRect(-sp * 2, -sp * 2, sp * 4, sp * 4);
-        } finally {
-          ctx.restore();
-        }
+      sheen: function() {
+        // Disabled intentionally to prevent translucent floating rectangle/chroma-key halo leaks
       }
     };
 `;
@@ -1249,34 +1251,91 @@ export function resolveServerPromptMotionPlan(
   promptTopic: string,
   type: string,
   overrideMode?: string
-): { label: string; codeHint: string } {
+): { label: string; anatomyHint: string; codeHint: string } {
   if (type === 'bg') {
     return {
       label: 'full-frame harmonic wave',
+      anatomyHint: '3-4 smooth full-width layered cosine ribbons or perspective grid planes spanning -0.1*w..1.1*w across 0..h.',
       codeHint: 'seamless cosine ribbon drift & depth phase shift across 0..w, 0..h',
     };
   }
   const topic = (promptTopic || '').toLowerCase();
+  if (/\b(trophy|medal|award|achievement|cup|winner|crown)\b/.test(topic)) {
+    return {
+      label: 'celebratory crest lift',
+      anatomyHint: 'Welded vertical stack at x=0: plinth G.box(0,0.42*R,0.50*R,0.11*R,0.03*R), stem G.box(0,0.28*R,0.14*R,0.20*R,0.02*R), chalice G.poly([[-0.30*R,-0.32*R],[0.30*R,-0.32*R],[0.17*R,0.19*R],[-0.17*R,0.19*R]]), side handles G.ring at (±0.27*R,-0.10*R), centered G.star(0,-0.08*R,0.12*R,0.055*R,5).',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.04*R, rot=Math.sin(t*1.8)*0.04 + pulsing centered star emblem inside cup',
+    };
+  }
+  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume|wallet)\b/.test(topic)) {
+    return {
+      label: 'executive hinged float',
+      anatomyHint: 'Wide horizontal body G.box(0,0.06*R,1.04*R,0.68*R,0.09*R), welded top handle G.ring(0,-0.28*R,0.16*R,0.06*R,Math.PI,Math.PI*2), overlapping lid G.box(0,-0.08*R,1.06*R,0.28*R,0.07*R), centered clasp G.box(0,0.06*R,0.16*R,0.14*R,0.03*R).',
+      codeHint: 'upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp breath scaleY=1+0.04*Math.sin(t*3)',
+    };
+  }
+  if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
+    return {
+      label: 'diagonal strike & ripple',
+      anatomyHint: '3 concentric centered discs/rings at (0,0) with radii 0.54*R, 0.36*R, 0.17*R + 1 crisp diagonal G.arrow(0.52*R,-0.52*R, 0.03*R,-0.03*R, 0.055*R, 0.14*R) entering from top-right to bullseye center (NO vertical full-height needle).',
+      codeHint: 'bullseye pulse scale=1+0.04*Math.sin(t*3.2) + diagonal arrow strike offset along (1,-1) locking at (0,0) + expanding outer impact ring',
+    };
+  }
+  if (/\b(dashboard|analytics|chart|graph|report|metric|kpi|profit|growth|candlestick)\b/.test(topic)) {
+    return {
+      label: 'ascending elastic lift',
+      anatomyHint: 'Upright tablet card G.box(0,0,1.06*R,0.74*R,0.09*R) — NEVER spin! Inside left: 3 vertical G.bar(x, 0.22*R, 0.11*R, h, 0.03*R) anchored at yBase=0.22*R; inside right: G.disc(0.24*R,-0.02*R,0.17*R) or rising trend G.arrow.',
+      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 (NEVER rotate >4deg!) + staggered G.bar height waves strictly inside frame',
+    };
+  }
+  if (/\b(building|skyscraper|tower|headquarters|architecture)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
+    return {
+      label: 'architectural plinth glow',
+      anatomyHint: 'Centered base plinth G.box(0,0.44*R,0.98*R,0.10*R,0.03*R), tall central tower G.box(-0.08*R,0.02*R,0.48*R,0.84*R,0.04*R), welded side wing G.box(0.24*R,0.14*R,0.26*R,0.60*R,0.04*R), roof crown G.box(-0.08*R,-0.43*R,0.28*R,0.07*R,0.02*R); all window G.box MUST stay strictly inside tower x=[-0.26*R..0.10*R].',
+      codeHint: 'upright micro-sway rot=Math.sin(t*1.4)*0.025 (NEVER tilt >3deg) + staggered lit window rows pulsing smoothly inside tower walls',
+    };
+  }
   if (/\b(bell|megaphone|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
-    return { label: 'acoustic ring swing', codeHint: 'tilt=Math.sin(t*4)*0.12 on main body + delayed clapper/wave arc pulse' };
+    return {
+      label: 'acoustic ring swing',
+      anatomyHint: 'Top loop G.ring(0,-0.42*R,0.08*R), flared dome G.poly + bottom rim G.capsule(0,0.24*R,0.66*R,0.10*R), tucked clapper G.disc(cxOff,0.32*R,0.09*R), symmetric outer sound arcs G.ring at ±0.45*R.',
+      codeHint: 'pendulum pivot G.part(0,-0.36*R,Math.sin(t*4)*0.11,1,1,fn) + delayed clapper sway & expanding soundwave arc alpha',
+    };
   }
-  if (/\b(chart|graph|bar|candlestick|rocket|growth|arrow|market|profit|coin|stack)\b/.test(topic)) {
-    return { label: 'ascending elastic lift', codeHint: 'staggered bar/thrust phase Math.sin(t*2.6-i*0.5) + subtle float bob' };
-  }
-  if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope)\b/.test(topic)) {
-    return { label: 'cardiac lub-dub pulse', codeHint: 'scale=1+0.07*Math.pow(Math.max(0,Math.sin(t*3.2)),4) + smooth bob' };
+  if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope|health)\b/.test(topic)) {
+    return {
+      label: 'cardiac lub-dub pulse',
+      anatomyHint: 'Unified medical emblem centered at (0,0): symmetric heart (2 welded G.disc + lower triangle G.poly) or rounded cross/capsule with crisp centered ECG G.poly(...,false) strictly inside.',
+      codeHint: 'double-beat lub-dub scale=1+0.08*(Math.pow(Math.max(0,Math.sin(t*3.4)),4)+0.5*Math.pow(Math.max(0,Math.sin(t*3.4-0.5)),4)) + smooth bob',
+    };
   }
   if (/\b(lock|padlock|vault|shield|key|fingerprint|biometric|security|firewall|safe)\b/.test(topic)) {
-    return { label: 'precision locking recoil', codeHint: 'internal shackle/dial/scan line cycle + crisp squash spring bounce' };
+    return {
+      label: 'precision locking recoil',
+      anatomyHint: 'Unified shield G.poly or padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) welded to top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) + centered keyhole/check inside body.',
+      codeHint: 'upright hover + shackle snap yOff=-Math.abs(Math.sin(t*2.6))*0.05*R + inner keyhole/check pulse (NEVER spin 360deg!)',
+    };
   }
-  if (/\b(cart|truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery)\b/.test(topic)) {
-    return { label: 'kinetic transport suspension', codeHint: 'chassis suspension bob Math.sin(t*3.5)*S*0.025 + spinning wheels/rotors' };
+  if (/\b(cart|truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery|rocket)\b/.test(topic)) {
+    return {
+      label: 'kinetic transport suspension',
+      anatomyHint: 'Cohesive vehicle/rocket chassis at (0,0) with wheels/fins/thrusters overlapping main hull by >= 0.04*R — zero detached wheels or boxes.',
+      codeHint: 'chassis suspension bobY=Math.sin(t*3.6)*0.03*R + synchronized spinning wheels/rotors G.part(wx,wy,t*5,1,1,fn) at exact wheel sockets',
+    };
   }
-  if (/\b(atom|orbit|planet|globe|radar|clock|compass|satellite|astrolabe)\b/.test(topic)) {
-    return { label: 'orbital & axis precession', codeHint: 'rotating inner rings/orbits around anchored center core + gentle tilt' };
+  if (/\b(atom|orbit|planet|globe|radar|clock|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
+    return {
+      label: 'orbital & axis precession',
+      anatomyHint: 'Centered core G.disc(0,0,0.18*R) surrounded symmetrically by concentric/tilted G.ring orbits or gear teeth anchored at (0,0).',
+      codeHint: 'smooth continuous rotation rot=t*1.4 around (0,0) + orbiting node G.disc along exact ring radius',
+    };
   }
-  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope|lightbulb)\b/.test(topic)) {
-    return { label: 'smart telemetry pulse', codeHint: 'gimbal tilt Math.sin(t*1.9)*0.07 + pulsing nodes/iris/aperture gleam' };
+  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope|lightbulb|idea|puzzle|handshake|email|chat|message)\b/.test(topic)) {
+    return {
+      label: 'smart telemetry pulse',
+      anatomyHint: 'Unified centered tech/comm housing inside [-0.54*R,+0.54*R]; all pins, flaps, filaments, or network nodes physically overlap housing by >= 0.04*R.',
+      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node/aperture/flap harmonic pulse',
+    };
   }
   if (overrideMode && overrideMode !== 'auto') {
     const legacy: Record<string, string> = {
@@ -1287,11 +1346,18 @@ export function resolveServerPromptMotionPlan(
       mechanical: 'tilt=Math.sin(t*2.2)*0.08, articulated sub-parts',
       flow: 'bobY=Math.sin(t*2.4)*(S*0.04), tilt=Math.sin(t*1.8)*0.05',
     };
-    if (legacy[overrideMode]) return { label: overrideMode, codeHint: legacy[overrideMode] };
+    if (legacy[overrideMode]) {
+      return {
+        label: overrideMode,
+        anatomyHint: 'Unified centered emblem inside [-0.54*R,+0.54*R] with all sub-parts welded cleanly (overlap >= 0.04*R).',
+        codeHint: legacy[overrideMode],
+      };
+    }
   }
   return {
     label: 'harmonic elastic float',
-    codeHint: 'bobY=Math.sin(t*2.4)*S*0.04, tilt=Math.sin(t*1.8)*0.05 + secondary sub-part lag',
+    anatomyHint: 'One unified recognizable silhouette centered at (0,0) inside [-0.54*R,+0.54*R]; every sub-part MUST overlap main body by >= 0.04*R (zero floating shapes).',
+    codeHint: 'upright bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + crisp secondary sub-part harmonic pulse',
   };
 }
 
@@ -1326,20 +1392,20 @@ export async function handleGenerateAnimationLogic(body: any) {
   const motionPlan = resolveServerPromptMotionPlan(promptTopic, type, motionDynamics);
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).`
+    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO translucent boxes!); ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).`
     : (neonGlow
-        ? "DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on accents (reset 0)."
+        ? "DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0)."
         : "CRISP VECTOR (#080c14 cleared): shadowBlur=0.");
 
   const geometryGuide = isBackground
-    ? `FULL-FRAME BG (0..w,0..h): Draw 3-4 layered smooth cosine ribbons/perspective grids spanning -0.1*w..1.1*w with G.grad.`
-    : `SIMPLE PERFECT 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.68. Build 3-4 clean, symmetric, welded G.* primitives strictly inside [-0.65*R,+0.65*R]; wrap each moving sub-part with G.part(...) so nothing drifts or detaches. NO rhombus/plate, NO card, NO floor shadow, NO gears/particles.`;
+    ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
+    : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. CENTER-ORIGIN RULE: G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; G.bar(x,yBase,...) grows upward from yBase. ANATOMY: ${motionPlan.anatomyHint} STRICTLY zero detached floating pieces, zero translucent overlay boxes, zero rhombus/card/gears/floor-shadow.`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
-- Motion (${motionPlan.label}): ${motionPlan.codeHint} + G.sheen diagonal gleam.
+- Motion (${motionPlan.label}): ${motionPlan.codeHint}.
 - ${colorStyleDirective}`;
 
   const { response } = await generateContentWithFallback(
@@ -1348,7 +1414,7 @@ SPEC: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode}
     (currentModel) => {
       const animConfig: any = {
         temperature: 0.2,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 1750,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -1447,23 +1513,23 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
   const isBackground = type === 'bg';
 
   const colorStyleDirective = isGreenScreen
-    ? "GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B)."
+    ? "GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO translucent boxes!); ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B)."
     : (neonGlow ? "DARK BG (#080c14 cleared): shadowBlur=8 on bright LEDs (reset 0)." : "CRISP VECTOR (#080c14 cleared): shadowBlur=0.");
 
   const geometryGuide = isBackground
     ? "FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w."
-    : "SIMPLE PERFECT 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn). Unit R=S*0.68. Weld 3-4 clean symmetric G.* primitives inside [-0.65*R,+0.65*R]; isolate moving sub-parts via G.part. NO rhombus/plate/card/gears/particles/floor-shadow.";
+    : "WELDED 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; G.bar(x,yBase,...) grows upward from yBase. Weld all sub-parts strictly inside [-0.62*R,+0.62*R] (overlap >= 0.04*R). ZERO detached floating diamonds/bars/rectangles, ZERO translucent ghost boxes, ZERO rhombus/card/gears/floor-shadow.";
 
   const topicLines = promptList.map((p, idx) => {
     const plan = resolveServerPromptMotionPlan(p, type, motionDynamics);
-    return `// ===ANIM_${idx}=== "${p}" [Motion: ${plan.label} -> ${plan.codeHint}]`;
+    return `// ===ANIM_${idx}=== "${p}" [Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint}]`;
   }).join('\n');
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${promptList.length} independent RAW JS functions separated ONLY by:
 ${promptList.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
-Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective} | Add G.sheen.
+Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;
@@ -1474,7 +1540,7 @@ ${topicLines}`;
     (currentModel) => {
       const cfg: any = {
         temperature: 0.2,
-        maxOutputTokens: Math.min(2800, Math.max(1500, promptList.length * 1400)),
+        maxOutputTokens: Math.min(3400, Math.max(1750, promptList.length * 1700)),
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) cfg.thinkingConfig = smartThinking;
@@ -1535,18 +1601,18 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const motionPlan = resolveServerPromptMotionPlan(promptTopic, type, motionDynamics);
 
   const colorStyleDirective = isGreenScreen
-    ? "- GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h); shadowBlur=0; NON-GREEN contrast colors."
+    ? "- GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h); shadowBlur=0; globalAlpha=1 (NO translucent boxes!); NON-GREEN contrast colors."
     : (neonGlow
         ? "- DARK BG (#080c14): shadowBlur=8 on accents (reset 0)."
         : "- CRISP VECTOR (#080c14): shadowBlur=0.");
 
   const geometryGuide = isBackground
-    ? "FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w."
-    : "SIMPLE PERFECT 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, fn). Unit R=S*0.68. Weld 3-4 symmetric G.* primitives inside [-0.65*R,+0.65*R]; isolate moving sub-parts with G.part. NO rhombus/plate/card/gears/particles/floor-shadow.";
+    ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
+    : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; G.bar(x,yBase,...) grows upward from yBase. ANATOMY: ${motionPlan.anatomyHint} ZERO detached pieces, ZERO translucent boxes, ZERO rhombus/card/gears/floor-shadow.`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
-SPEC: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} | Motion (${motionPlan.label}): ${motionPlan.codeHint} + G.sheen.
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
+SPEC: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} | Motion (${motionPlan.label}): ${motionPlan.codeHint}.
 ${colorStyleDirective}`;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -1556,7 +1622,7 @@ ${colorStyleDirective}`;
   try {
     const animConfig: any = {
       temperature: 0.2,
-      maxOutputTokens: 1500,
+      maxOutputTokens: 1750,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
     if (smartThinking) {
@@ -1640,12 +1706,12 @@ export async function handleImageToMotionLogic(body: any) {
     const ai = getClient(apiKey);
     const targetModel = sanitizeModel(model);
 
-    const masterMultimodalPrompt = `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.68.
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, jarum/grafik naik, jantung berdenyut, atau floating harmonis + G.sheen).
-Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, warna non-hijau)' : 'BG Gelap (#080c14)'}.
+    const masterMultimodalPrompt = `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.72.
+Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, jarum/grafik naik via G.bar/G.arrow, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat).
+Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1 tanpa kotak transparan, warna kontras non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.part(tx,ty,rot,sx,sy,fn) | G.sheen(clipFn,t,S)
-ATURAN: 3-4 sub-bagian rapi tersambung di [-0.65*R,+0.65*R], ZERO gerigi liar, ZERO glass bubble.
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
+ATURAN: Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH! Setiap sub-bagian wajib menempel/overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian melayang terpisah, ZERO kotak transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
@@ -1656,7 +1722,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
       (currentModel) => {
         const config: any = {
           temperature: 0.15,
-          maxOutputTokens: 1900,
+          maxOutputTokens: 2100,
         };
         const smartThinking = getSmartThinkingConfig(currentModel, 'vision');
         if (smartThinking) config.thinkingConfig = smartThinking;
