@@ -676,6 +676,27 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
     })();
     var G = {
       _n: function(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : (d || 0); },
+      _c: function(c) {
+        if (!c || typeof c !== 'string' || typeof __bigmaGS === 'undefined' || !__bigmaGS) return c;
+        var s = c.trim().toLowerCase();
+        if (s.indexOf('rgba(') === 0 || s.indexOf('rgb(') === 0) {
+          var p = s.slice(s.indexOf('(') + 1).split(',');
+          var rr = parseInt(p[0], 10), gg = parseInt(p[1], 10), bb = parseInt(p[2], 10);
+          if (!isNaN(rr) && !isNaN(gg) && !isNaN(bb)) {
+            if (gg > rr + 45 && gg > bb + 45) return '#00E5FF';
+            return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
+          }
+          return '#38BDF8';
+        }
+        if (s.indexOf('hsla(') === 0) return '#38BDF8';
+        if (s.charAt(0) === '#' && (s.length === 4 || s.length === 7)) {
+          var hx = s.length === 4 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1);
+          var r2 = parseInt(hx.slice(0,2),16), g2 = parseInt(hx.slice(2,4),16), b2 = parseInt(hx.slice(4,6),16);
+          if (!isNaN(r2) && !isNaN(g2) && !isNaN(b2) && g2 > r2 + 45 && g2 > b2 + 45) return '#00E5FF';
+        }
+        if (s === 'green' || s === 'lime' || s === 'limegreen' || s === 'springgreen' || s === 'chartreuse') return '#00E5FF';
+        return c;
+      },
       grad: function(c1, c2, c3, x0, y0, x1, y1) {
         var gx0 = x0, gy0 = y0, gx1 = x1, gy1 = y1, mid = c3;
         if (typeof c3 === 'number') { gx0 = c3; gy0 = x0; gx1 = y0; gy1 = x1; mid = null; }
@@ -685,9 +706,10 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         if (typeof gy1 !== 'number' || !isFinite(gy1)) gy1 = 100;
         if (gx0 === gx1 && gy0 === gy1) { gx1 = gx0 + 1; gy1 = gy0 + 1; }
         var g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
-        g.addColorStop(0, c1 || '#ffffff');
-        if (mid) { g.addColorStop(0.52, c2 || c1 || '#888888'); g.addColorStop(1, mid); }
-        else { g.addColorStop(1, c2 || c1 || '#888888'); }
+        var sc1 = G._c(c1 || '#ffffff'), sc2 = G._c(c2 || c1 || '#888888');
+        g.addColorStop(0, sc1);
+        if (mid) { g.addColorStop(0.52, sc2); g.addColorStop(1, G._c(mid)); }
+        else { g.addColorStop(1, sc2); }
         return g;
       },
       box: function(x, y, bw, bh, r, fill, rim, lw) {
@@ -697,8 +719,8 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, rr);
         else ctx.rect(x - bw / 2, y - bh / 2, bw, bh);
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       bar: function(x, yBase, bw, bh, r, fill, rim, lw) {
         x = G._n(x); yBase = G._n(yBase);
@@ -712,8 +734,8 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
       disc: function(x, y, r, fill, rim, lw) {
         x = G._n(x); y = G._n(y); r = Math.max(0.5, Math.abs(G._n(r, 1)));
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       oval: function(x, y, rx, ry, rot, fill, rim, lw) {
         if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = 0; }
@@ -722,21 +744,21 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.beginPath();
         if (ctx.ellipse) ctx.ellipse(x, y, rx, ry, G._n(rot, 0), 0, Math.PI * 2);
         else ctx.arc(x, y, (rx + ry) * 0.5, 0, Math.PI * 2);
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ring: function(x, y, r, thick, a0, a1, col) {
         x = G._n(x); y = G._n(y); r = Math.max(0.5, Math.abs(G._n(r, 1)));
         ctx.beginPath(); ctx.arc(x, y, r, a0 != null ? G._n(a0) : 0, a1 != null ? G._n(a1, Math.PI * 2) : Math.PI * 2);
-        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 2))); ctx.stroke();
+        ctx.strokeStyle = G._c(col || '#ffffff'); ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 2))); ctx.stroke();
       },
       poly: function(pts, fill, rim, lw, close) {
         if (!pts || pts.length < 2) return;
         ctx.beginPath(); ctx.moveTo(G._n(pts[0][0]), G._n(pts[0][1]));
         for (var i = 1; i < pts.length; i++) ctx.lineTo(G._n(pts[i][0]), G._n(pts[i][1]));
         if (close !== false) ctx.closePath();
-        if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-        if (rim) { ctx.strokeStyle = rim; ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ngon: function(x, y, r, n, rot, fill, rim, lw) {
         if (typeof rot === 'string' || (rot && typeof rot === 'object')) { lw = rim; rim = fill; fill = rot; rot = -Math.PI / 2; }
@@ -754,7 +776,7 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
       },
       pill: function(x1, y1, x2, y2, thick, col) {
         ctx.beginPath(); ctx.moveTo(G._n(x1), G._n(y1)); ctx.lineTo(G._n(x2), G._n(y2));
-        ctx.strokeStyle = col || '#ffffff'; ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 4))); ctx.lineCap = 'round'; ctx.stroke();
+        ctx.strokeStyle = G._c(col || '#ffffff'); ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 4))); ctx.lineCap = 'round'; ctx.stroke();
       },
       arrow: function(x1, y1, x2, y2, thick, headLen, col) {
         x1 = G._n(x1); y1 = G._n(y1); x2 = G._n(x2); y2 = G._n(y2);
@@ -778,7 +800,7 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.moveTo(x - s * 0.42, y + s * 0.04);
         ctx.lineTo(x - s * 0.08, y + s * 0.38);
         ctx.lineTo(x + s * 0.48, y - s * 0.32);
-        ctx.strokeStyle = col || '#ffffff';
+        ctx.strokeStyle = G._c(col || '#ffffff');
         ctx.lineWidth = Math.max(1.5, Math.abs(G._n(thick, s * 0.22)));
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -792,7 +814,7 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.moveTo(x, y);
         ctx.arc(x, y, Math.max(1, r - 1), sa, sa + sw);
         ctx.closePath();
-        ctx.fillStyle = sliceCol || '#f43f5e';
+        ctx.fillStyle = G._c(sliceCol || '#f43f5e');
         ctx.fill();
       },
       rays: function(x, y, rIn, rOut, n, rot, thick, col) {
@@ -803,6 +825,26 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
           var a = a0 + (i * Math.PI * 2) / cnt;
           G.pill(x + Math.cos(a) * ri, y + Math.sin(a) * ri, x + Math.cos(a) * ro, y + Math.sin(a) * ro, thick || 3, col || '#ffd700');
         }
+      },
+      handshake: function(x, y, s, colL, colR, handCol, cuffCol, rimCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(18, Math.abs(G._n(s, 72)));
+        var lw = Math.max(1.5, s * 0.035), rim = rimCol || '#0f172a', cuff = cuffCol || '#f8fafc', palm = handCol || '#f59e0b';
+        G.part(x, y, -0.40, 1, 1, function() {
+          G.box(-s * 0.56, s * 0.04, s * 0.58, s * 0.30, s * 0.06, colL || '#0284c7', rim, lw);
+          G.box(-s * 0.28, s * 0.04, s * 0.13, s * 0.32, s * 0.03, cuff, rim, lw);
+        });
+        G.part(x, y, 0.40, 1, 1, function() {
+          G.box(s * 0.56, s * 0.04, s * 0.58, s * 0.30, s * 0.06, colR || '#4f46e5', rim, lw);
+          G.box(s * 0.28, s * 0.04, s * 0.13, s * 0.32, s * 0.03, cuff, rim, lw);
+        });
+        G.oval(x + s * 0.05, y + s * 0.02, s * 0.24, s * 0.17, 0.35, palm, rim, lw);
+        G.oval(x - s * 0.05, y - s * 0.01, s * 0.24, s * 0.17, -0.35, palm, rim, lw);
+        G.capsule(x - s * 0.02, y - s * 0.14, s * 0.22, s * 0.10, palm, rim, lw);
+        G.part(x + s * 0.02, y + s * 0.09, -0.52, 1, 1, function() {
+          G.capsule(-s * 0.09, 0, s * 0.08, s * 0.19, palm, rim, lw);
+          G.capsule(0, s * 0.01, s * 0.08, s * 0.20, palm, rim, lw);
+          G.capsule(s * 0.09, 0, s * 0.08, s * 0.18, palm, rim, lw);
+        });
       },
       part: function(a1, a2, a3, a4, a5, a6) {
         var fn, tx, ty, rot, sx, sy;
@@ -856,8 +898,20 @@ export function wrapCanvasCodeToHtml(
   const hasAnimate = /(?:^|\n)[ \t]*(?:function\s+animate\s*\(|(?:const|let|var)\s+animate\s*=)/i.test(jsBody);
 
   const greenShadowLock = isGreenScreen
-    ? `try { Object.defineProperty(ctx, 'shadowBlur', { set: function(){}, get: function(){ return 0; }, configurable: true }); } catch(e) {}`
-    : '';
+    ? `var __bigmaGS = true;
+    try { Object.defineProperty(ctx, 'shadowBlur', { set: function(){}, get: function(){ return 0; }, configurable: true }); } catch(e) {}
+    try {
+      var __gsAlpha = 1;
+      var __origAlphaDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'globalAlpha') : null;
+      if (__origAlphaDesc && __origAlphaDesc.set) {
+        Object.defineProperty(ctx, 'globalAlpha', {
+          set: function(v){ __gsAlpha = (typeof v === 'number' && isFinite(v)) ? Math.max(0.92, Math.min(1, v)) : 1; __origAlphaDesc.set.call(ctx, __gsAlpha); },
+          get: function(){ return __gsAlpha; },
+          configurable: true
+        });
+      }
+    } catch(e) {}`
+    : `var __bigmaGS = false;`;
 
   const runnerScript = detectedDrawFn
     ? `${jsBody}
@@ -948,7 +1002,7 @@ ${jsBody}
     var ctx = canvas.getContext('2d');
     ${greenShadowLock}
     ${STUDIO_GEOMETRY_ENGINE_JS}
-    var w = 800, h = 600, cx = 400, cy = 300, S = 264, dpr = 1;
+    var w = 800, h = 600, cx = 400, cy = 300, S = 324, dpr = 1;
     function __bigmaResize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
       w = window.innerWidth || document.documentElement.clientWidth || 800;
@@ -959,7 +1013,7 @@ ${jsBody}
       canvas.style.height = h + 'px';
       cx = w / 2;
       cy = h / 2;
-      S = Math.min(w, h) * 0.44;
+      S = Math.min(w, h) * 0.54;
     }
     var resize = __bigmaResize;
     window.addEventListener('resize', __bigmaResize);
@@ -1208,7 +1262,7 @@ export function verifyCanvasAnimationHtml(
       }
     }
 
-    // Count pixels visibly distinct from target background (#00ff00 vs #080c14) + check geometric bounding box & centroid
+    // Count pixels visibly distinct from target background (#00ff00 vs #080c14) across ALL 3 sampled timestamps
     const rw = offscreen.width;
     const rh = offscreen.height;
     const imgData = offCtx.getImageData(0, 0, rw, rh).data;
@@ -1216,71 +1270,91 @@ export function verifyCanvasAnimationHtml(
     const bgG = isGreenScreen ? 255 : 12;
     const bgB = isGreenScreen ? 0 : 20;
 
-    let visiblePixels = 0;
-    let nonZeroAlphaPixels = 0;
-    let minX = rw, maxX = -1, minY = rh, maxY = -1;
-    let sumX = 0, sumY = 0;
-
-    for (let py = 0; py < rh; py++) {
-      for (let px = 0; px < rw; px++) {
-        const i = (py * rw + px) * 4;
-        const a = imgData[i + 3];
-        if (a > 10) nonZeroAlphaPixels++;
-        const dist = Math.abs(imgData[i] - bgR) + Math.abs(imgData[i + 1] - bgG) + Math.abs(imgData[i + 2] - bgB);
-        if (dist > 36) {
-          visiblePixels++;
-          sumX += px;
-          sumY += py;
-          if (px < minX) minX = px;
-          if (px > maxX) maxX = px;
-          if (py < minY) minY = py;
-          if (py > maxY) maxY = py;
+    const inspectFrameData = (data: Uint8ClampedArray) => {
+      let visiblePixels = 0;
+      let nonZeroAlphaPixels = 0;
+      let minX = rw, maxX = -1, minY = rh, maxY = -1;
+      let sumX = 0, sumY = 0;
+      for (let py = 0; py < rh; py++) {
+        for (let px = 0; px < rw; px++) {
+          const i = (py * rw + px) * 4;
+          if (data[i + 3] > 10) nonZeroAlphaPixels++;
+          const dist = Math.abs(data[i] - bgR) + Math.abs(data[i + 1] - bgG) + Math.abs(data[i + 2] - bgB);
+          if (dist > 36) {
+            visiblePixels++;
+            sumX += px;
+            sumY += py;
+            if (px < minX) minX = px;
+            if (px > maxX) maxX = px;
+            if (py < minY) minY = py;
+            if (py > maxY) maxY = py;
+          }
         }
       }
-    }
+      return {
+        visiblePixels,
+        nonZeroAlphaPixels,
+        bboxW: maxX >= minX ? maxX - minX + 1 : 0,
+        bboxH: maxY >= minY ? maxY - minY + 1 : 0,
+        meanX: visiblePixels > 0 ? sumX / visiblePixels : rw / 2,
+        meanY: visiblePixels > 0 ? sumY / visiblePixels : rh / 2,
+      };
+    };
 
-    const bboxW = maxX >= minX ? maxX - minX + 1 : 0;
-    const bboxH = maxY >= minY ? maxY - minY + 1 : 0;
+    const m3 = inspectFrameData(imgData);
+    const m1 = frame1Data ? inspectFrameData(frame1Data) : m3;
+    const m2 = frame2Data ? inspectFrameData(frame2Data) : m3;
+    const visiblePixels = m3.visiblePixels;
+    const minVis = Math.min(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
+    const maxVis = Math.max(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
 
-    if (nonZeroAlphaPixels === 0 || visiblePixels < (type === 'bg' ? 350 : 180)) {
+    if (m3.nonZeroAlphaPixels === 0 || minVis < (type === 'bg' ? 350 : 180)) {
       return {
         ok: false,
         visiblePixels,
-        reason: `Canvas blank/terlalu kecil (${visiblePixels} pixel terlihat${isGreenScreen ? ' pada Green Screen' : ''})`,
+        reason: `Canvas blank/berkedip hilang (${minVis} pixel terlihat${isGreenScreen ? ' pada Green Screen' : ''})`,
+      };
+    }
+
+    if (type !== 'bg' && maxVis > 0 && minVis < maxVis * 0.45) {
+      return {
+        ok: false,
+        visiblePixels,
+        reason: `Bagian ikon berkedip menghilang antar frame (${minVis} vs ${maxVis} px)`,
       };
     }
 
     if (type === 'bg') {
-      if (bboxW < 140 || bboxH < 70) {
+      if (m3.bboxW < 140 || m3.bboxH < 70) {
         return {
           ok: false,
           visiblePixels,
-          reason: `Background tidak full-frame (${bboxW}x${bboxH}px dari 320x180)`,
+          reason: `Background tidak full-frame (${m3.bboxW}x${m3.bboxH}px dari 320x180)`,
         };
       }
     } else {
-      if (Math.max(bboxW, bboxH) < 34 || Math.min(bboxW, bboxH) < 14) {
-        return {
-          ok: false,
-          visiblePixels,
-          reason: `Bentuk ikon terlalu kecil/cacat (${bboxW}x${bboxH}px)`,
-        };
-      }
-      if (bboxW >= rw * 0.90 || bboxH >= rh * 0.90) {
-        return {
-          ok: false,
-          visiblePixels,
-          reason: `Bentuk ikon meluber/terpotong penuh di tepi canvas (${bboxW}x${bboxH}px)`,
-        };
-      }
-      const meanX = sumX / visiblePixels;
-      const meanY = sumY / visiblePixels;
-      if (meanX < rw * 0.20 || meanX > rw * 0.80 || meanY < rh * 0.14 || meanY > rh * 0.86) {
-        return {
-          ok: false,
-          visiblePixels,
-          reason: `Posisi ikon melenceng keluar area tengah (${Math.round(meanX)},${Math.round(meanY)})`,
-        };
+      for (const fm of [m1, m2, m3]) {
+        if (Math.max(fm.bboxW, fm.bboxH) < 34 || Math.min(fm.bboxW, fm.bboxH) < 14) {
+          return {
+            ok: false,
+            visiblePixels,
+            reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px)`,
+          };
+        }
+        if (fm.bboxW >= rw * 0.92 || fm.bboxH >= rh * 0.92) {
+          return {
+            ok: false,
+            visiblePixels,
+            reason: `Bentuk ikon meluber/terpotong penuh di tepi canvas (${fm.bboxW}x${fm.bboxH}px)`,
+          };
+        }
+        if (fm.meanX < rw * 0.20 || fm.meanX > rw * 0.80 || fm.meanY < rh * 0.14 || fm.meanY > rh * 0.86) {
+          return {
+            ok: false,
+            visiblePixels,
+            reason: `Posisi ikon melenceng keluar area tengah (${Math.round(fm.meanX)},${Math.round(fm.meanY)})`,
+          };
+        }
       }
     }
 
@@ -2227,6 +2301,27 @@ export function resolvePromptMotionPlan(
     };
   }
   const topic = (promptTopic || '').toLowerCase();
+  if (/\b(meeting\s+table|conference\s+table|boardroom|roundtable|conference\s+room)\b/.test(topic)) {
+    return {
+      label: 'conference table ensemble',
+      anatomyHint: 'PAINTER ORDER (TOP-DOWN / 3-4 VIEW CONFERENCE TABLE): draw 4 docked executive seats FIRST around edges G.person(0,-0.34*R,0.22*R,c1,h1,rim), G.person(0,0.34*R,0.22*R,c1,h1,rim), G.person(-0.46*R,0,0.22*R,c2,h2,rim), G.person(0.46*R,0,0.22*R,c2,h2,rim); THEN draw centered conference table G.box(0,0.02*R,0.74*R,0.40*R,0.14*R,tableCol,rim,2.5) cleanly overlapping chair edges; LAST on top: miniature agenda tablet G.box(0,0.02*R,0.24*R,0.14*R,0.03*R). ZERO detached orbiting squares!',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + subtle synchronized chair breath ±0.02*R staying docked to table & gentle center tablet highlight',
+    };
+  }
+  if (/\b(office\s+desk|desk|workstation|workspace|cubicle|study\s+table)\b/.test(topic)) {
+    return {
+      label: 'organized desk workstation',
+      anatomyHint: 'UPRIGHT FRONT OFFICE DESK (PAINTER ORDER): (1) left/right desk leg pedestals G.box(-0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) & G.box(0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) with tidy drawer handles; (2) wide desk top G.box(0,0.06*R,1.02*R,0.10*R,0.03*R); (3) monitor stand G.box(0,-0.03*R,0.10*R,0.12*R,0.02*R) + crisp monitor G.box(0,-0.22*R,0.52*R,0.34*R,0.04*R) with dark screen & 2 mini G.bar sitting FLUSH on desk; (4) neat mug G.box(0.37*R,-0.05*R,0.11*R,0.12*R,0.03*R) & steady lamp G.pill(-0.37*R,0.01*R,-0.40*R,-0.18*R,0.035*R) + G.disc(-0.36*R,-0.20*R,0.08*R,"#FFD700") (NEVER blink lamp or tint green!).',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + smooth telemetry bar motion inside monitor screen (keep lamp 100% steady gold!)',
+    };
+  }
+  if (/\b(handshake|deal|agreement)\b/.test(topic)) {
+    return {
+      label: 'executive handshake clasp',
+      anatomyHint: 'Use G.handshake(0, 0.05*R, 0.58*R, "#0284C7", "#4F46E5", "#F59E0B", "#F8FAFC", "#1E293B") as the unified central silhouette + optional crisp top check emblem G.disc(0,-0.32*R,0.12*R,"#38BDF8") with G.check(0,-0.32*R,0.07*R,3,"#FFFFFF"). NEVER draw horizontal capsule bandages, swirl balls, or noisy outer tick circles!',
+      codeHint: 'upright confident clasp float bobY=Math.sin(t*2.5)*0.035*R, rot=Math.sin(t*1.7)*0.035 + subtle badge scale=1+0.07*Math.sin(t*3.0)',
+    };
+  }
   if (/\b(medal|ribbon|badge|certificate)\b/.test(topic)) {
     return {
       label: 'suspended medal gleam',
@@ -2248,10 +2343,10 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 + smooth badge pulse scale=1+0.12*Math.sin(t*3.4) (ALWAYS visible, NEVER blink-hide)',
     };
   }
-  if (/\b(negotiation|handshake|partnership|team|meeting|collaboration|networking)\b/.test(topic)) {
+  if (/\b(negotiation|partnership|team|meeting|collaboration|networking)\b/.test(topic)) {
     return {
       label: 'paired executive agreement',
-      anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly at center by G.capsule(0,0.18*R,0.34*R,0.11*R), plus top emblem G.disc(0,-0.28*R,0.14*R) with G.check(0,-0.28*R,0.08*R) LAST on top (NO bottom shadow line, NO hiding!).',
+      anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly at center by G.handshake(0,0.14*R,0.28*R,col1,col2,"#F59E0B","#F8FAFC",rim), plus top emblem G.disc(0,-0.30*R,0.13*R) with G.check(0,-0.30*R,0.07*R) LAST on top (NO bottom shadow line, NO hiding!).',
       codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth continuous badge pulse scale=1+0.09*Math.sin(t*3) (NEVER use if(sin>0) blink!)',
     };
   }
@@ -2269,6 +2364,27 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R + smooth radial ray length oscillation 0.44*R+0.06*R*Math.sin(t*3.2) & filament pulse',
     };
   }
+  if (/\b(presentation|whiteboard|projector|pitch|slide|training)\b/.test(topic)) {
+    return {
+      label: 'easel chart presentation',
+      anatomyHint: 'PAINTER ORDER: tripod legs G.pill(0,0,-0.24*R,0.44*R,0.045*R) & G.pill(0,0,0.24*R,0.44*R,0.045*R) FIRST; upright easel board G.box(0,-0.08*R,0.92*R,0.62*R,0.06*R); inner chart G.bar at x=[-0.22*R,-0.07*R,0.08*R], yBase=0.14*R, height [0.16*R..0.34*R] + rising trend G.arrow(0.16*R,0.08*R,0.34*R,-0.16*R,0.04*R,0.10*R).',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + staggered G.bar waves & rising G.arrow inside board',
+    };
+  }
+  if (/\b(laptop|computer|desktop|monitor|screen|software|code|web)\b/.test(topic)) {
+    return {
+      label: 'upright display telemetry',
+      anatomyHint: 'PAINTER ORDER: base stand G.box(0,0.34*R,0.36*R,0.08*R,0.03*R) & neck G.box(0,0.22*R,0.14*R,0.18*R,0.02*R) FIRST; widescreen monitor G.box(0,-0.04*R,0.96*R,0.62*R,0.07*R) & inner display G.box(0,-0.04*R,0.82*R,0.46*R,0.04*R); inside screen: 3 G.bar & G.pie cleanly separated.',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + smooth dashboard bars & ring pulse strictly inside monitor screen',
+    };
+  }
+  if (/\b(money|dollar|coin|currency|bank|finance|investment|revenue|payment|cash)\b/.test(topic)) {
+    return {
+      label: 'minted value gleam',
+      anatomyHint: 'PAINTER ORDER: stacked back gold coins G.disc(-0.18*R,-0.06*R,0.30*R,"#F59E0B","#F8FAFC",2) FIRST; front hero coin G.disc(0.08*R,0.06*R,0.36*R,"#FFD700","#F8FAFC",3), inner ring G.ring(0.08*R,0.06*R,0.27*R,0.03*R,0,Math.PI*2,"#B45309"), centered G.star(0.08*R,0.06*R,0.13*R,0.055*R,5,"#FFFFFF") LAST on top.',
+      codeHint: 'upright coin gleam float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + crisp front star crest pulse',
+    };
+  }
   if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume|wallet)\b/.test(topic)) {
     return {
       label: 'executive hinged float',
@@ -2279,8 +2395,8 @@ export function resolvePromptMotionPlan(
   if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
     return {
       label: 'diagonal strike & ripple',
-      anatomyHint: '3 concentric centered discs/rings at (0,0) with radii 0.54*R, 0.36*R, 0.17*R + 1 crisp diagonal G.arrow(0.52*R,-0.52*R, 0.03*R,-0.03*R, 0.055*R, 0.14*R) entering from top-right to bullseye center (NO vertical full-height needle).',
-      codeHint: 'bullseye pulse scale=1+0.04*Math.sin(t*3.2) + diagonal arrow strike offset along (1,-1) locking at (0,0) + expanding outer impact ring',
+      anatomyHint: 'PAINTER ORDER (ALL 3 DISCS ALWAYS 100% OPAQUE & VISIBLE — NEVER fade/hide outer discs or use green!): (1) outer disc G.disc(0,0,0.52*R,"#F43F5E","#F8FAFC",3); (2) middle disc G.disc(0,0,0.34*R,"#F8FAFC"); (3) center disc G.disc(0,0,0.16*R,"#F43F5E"); (4) bullseye dot G.disc(0,0,0.07*R,"#FFD700"); (5) LAST ON TOP: inward dart G.arrow(0.50*R+d,-0.50*R-d, 0.03*R+d*0.1,-0.03*R-d*0.1, 0.05*R, 0.14*R, "#F8FAFC") where arrowhead TIP ALWAYS points INWARD toward (0,0)!',
+      codeHint: 'bullseye pulse scale=1+0.04*Math.sin(t*3.0) + inward dart strike d=Math.pow(Math.max(0,Math.sin(t*2.2)),2)*0.12*R along top-right diagonal (NEVER reverse arrow outward, NEVER blink/fade rings!)',
     };
   }
   if (/\b(dashboard|analytics|chart|graph|report|metric|kpi|profit|growth|candlestick)\b/.test(topic)) {
@@ -2293,8 +2409,8 @@ export function resolvePromptMotionPlan(
   if (/\b(building|skyscraper|tower|headquarters|architecture)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
     return {
       label: 'architectural plinth glow',
-      anatomyHint: 'Centered base plinth G.box(0,0.44*R,0.98*R,0.10*R,0.03*R), tall central tower G.box(-0.08*R,0.02*R,0.48*R,0.84*R,0.04*R), welded side wing G.box(0.24*R,0.14*R,0.26*R,0.60*R,0.04*R), roof crown G.box(-0.08*R,-0.43*R,0.28*R,0.07*R,0.02*R); all window G.box MUST stay strictly inside tower x=[-0.26*R..0.10*R].',
-      codeHint: 'upright micro-sway rot=Math.sin(t*1.4)*0.025 (NEVER tilt >3deg) + staggered lit window rows pulsing smoothly inside tower walls',
+      anatomyHint: 'PAINTER ORDER: (1) roof spire G.pill(-0.08*R,-0.46*R,-0.08*R,-0.56*R,0.035*R) & crown G.box(-0.08*R,-0.41*R,0.26*R,0.08*R,0.02*R); (2) main tower G.box(-0.08*R,0.02*R,0.48*R,0.82*R,0.04*R) & side wing G.box(0.24*R,0.14*R,0.26*R,0.58*R,0.04*R); (3) plinth G.box(0,0.44*R,0.96*R,0.09*R,0.03*R); (4) FULL-HEIGHT WINDOW GRID: draw 3 cols x 4 rows G.box(x,y,0.09*R,0.10*R,0.02*R) at x=[-0.21*R,-0.08*R,0.05*R], y=[-0.28*R,-0.12*R,0.04*R,0.20*R], lobby door G.box(-0.08*R,0.34*R,0.14*R,0.14*R,0.03*R), plus 2x3 wing windows x=[0.19*R,0.29*R], y=[-0.04*R,0.10*R,0.24*R] (NEVER pack thin lines at bottom!).',
+      codeHint: 'upright architectural poise bobY=Math.sin(t*1.8)*0.02*R, rot=Math.sin(t*1.2)*0.02 + warm gold/cyan floor-by-floor illumination wave sweeping upward across ALL 4 upper window rows',
     };
   }
   if (/\b(puzzle|connect|link)\b/.test(topic)) {
@@ -2304,11 +2420,25 @@ export function resolvePromptMotionPlan(
       codeHint: 'gentle x micro-slide ±0.03*R staying overlapped over center tab + upright float bobY=Math.sin(t*2.2)*0.03*R',
     };
   }
-  if (/\b(clock|deadline|timer|calendar|schedule|time)\b/.test(topic)) {
+  if (/\b(calendar|event|schedule)\b/.test(topic)) {
+    return {
+      label: 'structured grid calendar',
+      anatomyHint: 'PAINTER ORDER: top rings G.pill(-0.22*R,-0.40*R,-0.22*R,-0.26*R,0.05*R) & G.pill(0.22*R,-0.40*R,0.22*R,-0.26*R,0.05*R); body G.box(0,0.05*R,0.88*R,0.74*R,0.08*R); header strip G.box(0,-0.20*R,0.88*R,0.20*R,0.04*R); crisp 3x2 date squares G.box inside body.',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + smooth active date cell scale/color highlight',
+    };
+  }
+  if (/\b(clock|deadline|timer|time)\b/.test(topic)) {
     return {
       label: 'precision dial sweep',
       anatomyHint: 'Centered bezel G.disc(0,0,0.48*R) + inner face G.disc(0,0,0.38*R) + hour/minute hands G.pill(0,0,hx,hy) & G.pill(0,0,mx,my) anchored at (0,0) + center cap G.disc(0,0,0.055*R) LAST on top.',
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + sweeping minute hand angle=t*2.0 & hour hand angle=t*0.35 anchored at (0,0)',
+    };
+  }
+  if (/\b(search|magnifying|inspect|audit|find|research)\b/.test(topic)) {
+    return {
+      label: 'optical lens sweep',
+      anatomyHint: 'PAINTER ORDER: solid handle G.pill(0.18*R,0.18*R,0.46*R,0.46*R,0.10*R,"#1E293B") FIRST; opaque inner lens G.disc(-0.08*R,-0.08*R,0.30*R,"#0F172A","#38BDF8",0.07*R) with mini rising G.bar inside lens.',
+      codeHint: 'smooth circular scan offset dx=Math.cos(t*2)*0.04*R, dy=Math.sin(t*2)*0.04*R + inner chart bar wave',
     };
   }
   if (/\b(bell|megaphone|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
@@ -2413,7 +2543,7 @@ async function generateAnimationDirect(
     : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint}.
@@ -2563,7 +2693,7 @@ async function generateAnimationBatchDirect(
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} independent RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
@@ -3180,7 +3310,7 @@ async function generateImageToMotionDirect(
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
 Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
 ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua sub-bagian wajib menempel/overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian melayang terpisah, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
