@@ -357,8 +357,14 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         };
       }
     })();
+    var __bigmaT = 0;
     var G = {
       _n: function(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : (d || 0); },
+      _t: function(t) { return (typeof t === 'number' && isFinite(t)) ? t : (typeof __bigmaT === 'number' ? __bigmaT : 0); },
+      _rt: function(rimCol, t, defRim) {
+        if (typeof rimCol === 'number') return { r: defRim || '#f8fafc', t: G._t(rimCol) };
+        return { r: rimCol || defRim || '#f8fafc', t: G._t(t) };
+      },
       _c: function(c) {
         if (!c || typeof c !== 'string' || typeof __bigmaGS === 'undefined' || !__bigmaGS) return c;
         var s = c.trim().toLowerCase();
@@ -595,6 +601,257 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         ctx.restore();
         G.ring(x, y, r, lw * 1.15, 0, Math.PI * 2, rCol);
       },
+      uiLayout: function(x, y, s, frameCol, headerCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var fc = frameCol || '#1e293b', hc = headerCol || '#4f46e5', ac = accentCol || '#00e5ff';
+        G.box(x, y, s * 1.02, s * 0.78, s * 0.10, fc, rim, lw);
+        G.box(x, y - s * 0.27, s * 0.98, s * 0.17, s * 0.06, hc, rim, lw * 0.8);
+        G.disc(x - s * 0.37, y - s * 0.27, s * 0.035, '#f43f5e', null, 0);
+        G.disc(x - s * 0.27, y - s * 0.27, s * 0.035, '#ffd700', null, 0);
+        G.disc(x - s * 0.17, y - s * 0.27, s * 0.035, ac, null, 0);
+        G.box(x - s * 0.29, y + s * 0.09, s * 0.30, s * 0.44, s * 0.05, '#0f172a', rim, lw * 0.7);
+        var navY = y - s * 0.03 + Math.sin(tt * 2.4) * s * 0.09;
+        G.pill(x - s * 0.38, y - s * 0.03, x - s * 0.20, y - s * 0.03, s * 0.042, '#475569');
+        G.pill(x - s * 0.38, y + s * 0.09, x - s * 0.20, y + s * 0.09, s * 0.042, '#475569');
+        G.pill(x - s * 0.38, y + s * 0.21, x - s * 0.20, y + s * 0.21, s * 0.042, '#475569');
+        G.pill(x - s * 0.38, navY, x - s * 0.20, navY, s * 0.048, ac);
+        var heroDy = Math.sin(tt * 2.6) * s * 0.025;
+        G.box(x + s * 0.16, y - s * 0.02 + heroDy, s * 0.50, s * 0.21, s * 0.05, ac, rim, lw * 0.75);
+        G.pill(x - s * 0.01, y - s * 0.02 + heroDy, x + s * 0.28, y - s * 0.02 + heroDy, s * 0.042, '#ffffff');
+        G.box(x + s * 0.03, y + s * 0.21, s * 0.22, s * 0.18, s * 0.04, '#38bdf8', rim, lw * 0.7);
+        G.box(x + s * 0.29, y + s * 0.21, s * 0.22, s * 0.18, s * 0.04, '#ffd700', rim, lw * 0.7);
+      },
+      checklist: function(x, y, s, boardCol, clipCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var bc = boardCol || '#1e293b', cc = clipCol || '#f59e0b', ac = accentCol || '#00e5ff';
+        G.box(x, y + s * 0.04, s * 0.80, s * 0.94, s * 0.10, bc, rim, lw);
+        G.box(x, y + s * 0.06, s * 0.66, s * 0.76, s * 0.06, '#f8fafc', '#0f172a', lw * 0.65);
+        G.box(x, y - s * 0.42, s * 0.34, s * 0.13, s * 0.04, cc, rim, lw);
+        var ys = [y - s * 0.14, y + s * 0.07, y + s * 0.28];
+        var cols = [ac, '#4f46e5', '#f97316'];
+        for (var i = 0; i < 3; i++) {
+          var p = 0.5 + 0.5 * Math.sin(tt * 2.8 - i * 1.1);
+          G.box(x - s * 0.18, ys[i], s * 0.12, s * 0.12, s * 0.03, cols[i], '#0f172a', lw * 0.55);
+          G.check(x - s * 0.18, ys[i], s * (0.065 + 0.02 * p), s * 0.024, '#ffffff');
+          G.pill(x - s * 0.05, ys[i], x + s * (0.10 + 0.13 * p), ys[i], s * 0.055, cols[i]);
+        }
+      },
+      rocket: function(x, y, s, hullCol, wingCol, flameCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var hc = hullCol || '#f8fafc', wc = wingCol || '#4f46e5', fc = flameCol || '#f97316';
+        var fl = 0.5 + 0.5 * Math.sin(tt * 9.0);
+        G.poly([[x - s * 0.11, y + s * 0.26], [x + s * 0.11, y + s * 0.26], [x, y + s * (0.44 + 0.10 * fl)]], fc, '#ffd700', lw * 0.7, true);
+        G.poly([[x - s * 0.055, y + s * 0.26], [x + s * 0.055, y + s * 0.26], [x, y + s * (0.35 + 0.06 * fl)]], '#ffd700', null, 0, true);
+        G.poly([[x - s * 0.16, y + s * 0.02], [x - s * 0.36, y + s * 0.26], [x - s * 0.14, y + s * 0.24]], wc, rim, lw, true);
+        G.poly([[x + s * 0.16, y + s * 0.02], [x + s * 0.36, y + s * 0.26], [x + s * 0.14, y + s * 0.24]], wc, rim, lw, true);
+        G.box(x, y + s * 0.25, s * 0.22, s * 0.08, s * 0.02, '#1e293b', rim, lw * 0.8);
+        G.capsule(x, y - s * 0.03, s * 0.36, s * 0.62, hc, '#0f172a', lw);
+        G.poly([[x - s * 0.16, y - s * 0.18], [x + s * 0.16, y - s * 0.18], [x, y - s * 0.46]], '#f43f5e', rim, lw, true);
+        G.disc(x, y - s * 0.03, s * 0.095, '#00e5ff', '#0f172a', lw);
+      },
+      lightbulb: function(x, y, s, bulbCol, rayCol, baseCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var bc = bulbCol || '#ffd700', rc = rayCol || '#00e5ff', bsc = baseCol || '#1e293b';
+        var rOut = s * (0.44 + 0.06 * Math.sin(tt * 3.4));
+        G.rays(x, y - s * 0.09, s * 0.34, rOut, 7, -Math.PI / 2 + Math.sin(tt * 1.4) * 0.08, s * 0.042, rc);
+        G.capsule(x, y + s * 0.39, s * 0.15, s * 0.075, bsc, rim, lw * 0.9);
+        G.box(x, y + s * 0.28, s * 0.25, s * 0.15, s * 0.04, '#475569', rim, lw);
+        G.box(x, y + s * 0.14, s * 0.25, s * 0.13, s * 0.03, bc, rim, lw);
+        G.disc(x, y - s * 0.09, s * 0.29, bc, rim, lw);
+        G.poly([[x - s * 0.09, y + s * 0.02], [x - s * 0.04, y - s * 0.11], [x, y - s * 0.03], [x + s * 0.04, y - s * 0.11], [x + s * 0.09, y + s * 0.02]], null, '#ffffff', lw * 1.15, false);
+      },
+      chart: function(x, y, s, cardCol, bar1Col, bar2Col, arrowCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var cc = cardCol || '#1e293b', b1 = bar1Col || '#38bdf8', b2 = bar2Col || '#4f46e5', ac = arrowCol || '#ffd700';
+        G.box(x, y, s * 1.02, s * 0.78, s * 0.10, cc, rim, lw);
+        var yBase = y + s * 0.25;
+        G.pill(x - s * 0.38, yBase + s * 0.02, x + s * 0.38, yBase + s * 0.02, lw, '#94a3b8');
+        var h1 = s * (0.20 + 0.07 * Math.sin(tt * 2.6));
+        var h2 = s * (0.31 + 0.07 * Math.sin(tt * 2.6 - 0.8));
+        var h3 = s * (0.41 + 0.08 * Math.sin(tt * 2.6 - 1.6));
+        G.bar(x - s * 0.24, yBase, s * 0.15, h1, s * 0.03, b1, rim, lw * 0.7);
+        G.bar(x, yBase, s * 0.15, h2, s * 0.03, b2, rim, lw * 0.7);
+        G.bar(x + s * 0.24, yBase, s * 0.15, h3, s * 0.03, '#00e5ff', rim, lw * 0.7);
+        var ay = Math.sin(tt * 2.8) * s * 0.025;
+        G.arrow(x - s * 0.30, y - s * 0.06, x + s * 0.30, y - s * 0.27 + ay, s * 0.042, s * 0.11, ac);
+      },
+      magnifier: function(x, y, s, cardCol, lensCol, handleCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var cc = cardCol || '#1e293b', lc = lensCol || '#00e5ff', hc = handleCol || '#f59e0b', ac = accentCol || '#ffd700';
+        G.box(x - s * 0.06, y, s * 0.78, s * 0.84, s * 0.09, cc, rim, lw);
+        G.pill(x - s * 0.32, y - s * 0.25, x + s * 0.16, y - s * 0.25, s * 0.05, '#475569');
+        G.pill(x - s * 0.32, y - s * 0.10, x + s * 0.08, y - s * 0.10, s * 0.05, '#38bdf8');
+        G.bar(x - s * 0.25, y + s * 0.28, s * 0.10, s * 0.18, s * 0.02, '#4f46e5', null, 0);
+        G.bar(x - s * 0.10, y + s * 0.28, s * 0.10, s * 0.26, s * 0.02, '#38bdf8', null, 0);
+        var ox = Math.cos(tt * 2.1) * s * 0.065, oy = Math.sin(tt * 2.1) * s * 0.065;
+        G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
+        G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.24, '#0f172a', lc, s * 0.055);
+        var bh = s * (0.14 + 0.05 * Math.sin(tt * 3.0));
+        G.bar(x + ox - s * 0.04, y + oy + s * 0.08, s * 0.065, bh * 0.75, s * 0.015, ac, null, 0);
+        G.bar(x + ox + s * 0.08, y + oy + s * 0.08, s * 0.065, bh, s * 0.015, lc, null, 0);
+      },
+      pieChart: function(x, y, s, baseCol, s1Col, s2Col, s3Col, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var r = s * 0.40, c1 = s1Col || '#00e5ff', c2 = s2Col || '#4f46e5', c3 = s3Col || '#f59e0b';
+        G.disc(x, y, r, baseCol || '#1e293b', rim, lw);
+        var angles = [[-Math.PI / 2, 0.75, c1, 0], [0.75, 2.75, c2, 0], [2.75, Math.PI * 1.5, c3, s * (0.04 + 0.035 * Math.sin(tt * 2.6))]];
+        for (var i = 0; i < 3; i++) {
+          var a0 = angles[i][0], a1 = angles[i][1], mid = (a0 + a1) * 0.5, off = angles[i][3];
+          var px = x + Math.cos(mid) * off, py = y + Math.sin(mid) * off;
+          ctx.beginPath(); ctx.moveTo(px, py); ctx.arc(px, py, r * 0.92, a0, a1); ctx.closePath();
+          ctx.fillStyle = G._c(angles[i][2]); ctx.fill();
+          ctx.strokeStyle = G._c(rim); ctx.lineWidth = lw * 0.85; ctx.stroke();
+        }
+        G.disc(x, y, s * 0.13, '#0f172a', rim, lw * 0.85);
+      },
+      gears: function(x, y, s, g1Col, g2Col, coreCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.6, s * 0.03);
+        var drawGear = function(gx, gy, gr, teeth, ang, gCol, cCol) {
+          G.part(gx, gy, ang, 1, 1, function() {
+            for (var i = 0; i < teeth; i++) {
+              var a = (i * Math.PI * 2) / teeth;
+              G.part(0, 0, a, 1, 1, function() { G.box(0, -gr * 0.92, gr * 0.34, gr * 0.34, gr * 0.06, gCol, rim, lw * 0.8); });
+            }
+            G.disc(0, 0, gr * 0.82, gCol, rim, lw);
+            G.disc(0, 0, gr * 0.34, cCol, rim, lw * 0.85);
+          });
+        };
+        var a1 = tt * 1.45;
+        drawGear(x - s * 0.14, y + s * 0.10, s * 0.30, 8, a1, g1Col || '#0284c7', coreCol || '#ffd700');
+        drawGear(x + s * 0.22, y - s * 0.18, s * 0.22, 6, -a1 * 1.33 + 0.4, g2Col || '#4f46e5', '#00e5ff');
+      },
+      userBadge: function(x, y, s, cardCol, personCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var cc = cardCol || '#1e293b', pc = personCol || '#0284c7', ac = accentCol || '#00e5ff';
+        G.box(x, y, s * 1.00, s * 0.74, s * 0.10, cc, rim, lw);
+        G.box(x - s * 0.24, y, s * 0.34, s * 0.48, s * 0.06, '#0f172a', rim, lw * 0.75);
+        G.person(x - s * 0.24, y + s * 0.03, s * 0.30, pc, '#f8fafc', rim);
+        var w1 = s * (0.28 + 0.07 * Math.sin(tt * 2.5));
+        var w2 = s * (0.24 + 0.07 * Math.sin(tt * 2.5 - 0.8));
+        G.pill(x + s * 0.02, y - s * 0.13, x + s * 0.02 + w1, y - s * 0.13, s * 0.055, ac);
+        G.pill(x + s * 0.02, y + s * 0.03, x + s * 0.02 + w2, y + s * 0.03, s * 0.055, '#38bdf8');
+        G.pill(x + s * 0.02, y + s * 0.19, x + s * 0.24, y + s * 0.19, s * 0.055, '#94a3b8');
+        var bs = 1 + 0.10 * Math.sin(tt * 3.0);
+        G.disc(x + s * 0.34, y - s * 0.24, s * 0.13 * bs, '#ffd700', rim, lw * 0.85);
+        G.check(x + s * 0.34, y - s * 0.24, s * 0.11 * bs, s * 0.03, '#0f172a');
+      },
+      typography: function(x, y, s, cardCol, inkCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var cc = cardCol || '#1e293b', ic = inkCol || '#f8fafc', ac = accentCol || '#00e5ff';
+        G.box(x, y, s * 0.90, s * 0.82, s * 0.08, cc, rim, lw);
+        var cx0 = s * 0.45, cy0 = s * 0.41;
+        G.box(x - cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+        G.box(x + cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+        G.box(x - cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+        G.box(x + cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+        G.pill(x - s * 0.20, y + s * 0.16, x, y - s * 0.22, s * 0.075, ic);
+        G.pill(x + s * 0.20, y + s * 0.16, x, y - s * 0.22, s * 0.075, ic);
+        G.pill(x - s * 0.11, y + s * 0.04, x + s * 0.11, y + s * 0.04, s * 0.065, ac);
+        var curX = x - s * 0.24 + (0.5 + 0.5 * Math.sin(tt * 2.2)) * s * 0.48;
+        G.pill(x - s * 0.28, y + s * 0.26, x + s * 0.28, y + s * 0.26, s * 0.032, '#64748b');
+        G.disc(curX, y + s * 0.26, s * 0.065, '#ffd700', rim, lw * 0.7);
+      },
+      briefcase: function(x, y, s, bodyCol, flapCol, claspCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        G.ring(x, y - s * 0.23, s * 0.15, s * 0.06, Math.PI, Math.PI * 2, rim);
+        G.box(x, y + s * 0.07, s * 0.94, s * 0.60, s * 0.09, bodyCol || '#1e293b', rim, lw);
+        var dy = Math.sin(tt * 2.4) * s * 0.022;
+        G.box(x, y - s * 0.06 + dy, s * 0.96, s * 0.27, s * 0.07, flapCol || '#4f46e5', rim, lw);
+        G.box(x, y + s * 0.08 + dy * 0.6, s * 0.16, s * 0.15, s * 0.03, claspCol || '#ffd700', rim, lw * 0.85);
+      },
+      trophy: function(x, y, s, cupCol, baseCol, starCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var cc = cupCol || '#ffd700', bc = baseCol || '#1e293b', sc = starCol || '#ffffff';
+        G.ring(x - s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
+        G.ring(x + s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
+        G.box(x, y + s * 0.40, s * 0.48, s * 0.11, s * 0.03, bc, rim, lw);
+        G.box(x, y + s * 0.26, s * 0.14, s * 0.20, s * 0.02, cc, rim, lw);
+        G.poly([[x - s * 0.28, y - s * 0.33], [x + s * 0.28, y - s * 0.33], [x + s * 0.16, y + s * 0.17], [x - s * 0.16, y + s * 0.17]], cc, rim, lw, true);
+        var st = 1 + 0.12 * Math.sin(tt * 3.2);
+        G.star(x, y - s * 0.10, s * 0.12 * st, s * 0.055 * st, 5, -Math.PI / 2, sc, '#b45309', lw * 0.7);
+      },
+      clock: function(x, y, s, bezelCol, faceCol, handCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        G.disc(x, y, s * 0.46, bezelCol || '#4f46e5', rim, lw);
+        G.disc(x, y, s * 0.36, faceCol || '#f8fafc', '#0f172a', lw * 0.7);
+        var ha = -Math.PI / 2 + tt * 0.55, ma = -Math.PI / 2 + tt * 2.4;
+        G.pill(x, y, x + Math.cos(ha) * s * 0.19, y + Math.sin(ha) * s * 0.19, s * 0.05, handCol || '#1e293b');
+        G.pill(x, y, x + Math.cos(ma) * s * 0.27, y + Math.sin(ma) * s * 0.27, s * 0.038, '#00e5ff');
+        G.disc(x, y, s * 0.055, '#f43f5e', '#0f172a', lw * 0.6);
+      },
+      lock: function(x, y, s, bodyCol, shackleCol, accentCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var lift = Math.abs(Math.sin(tt * 2.3)) * s * 0.05;
+        G.ring(x, y - s * 0.16 - lift, s * 0.20, s * 0.085, Math.PI, Math.PI * 2, shackleCol || '#38bdf8');
+        G.box(x, y + s * 0.12, s * 0.70, s * 0.56, s * 0.10, bodyCol || '#1e293b', rim, lw);
+        var ks = 1 + 0.1 * Math.sin(tt * 3.0);
+        G.disc(x, y + s * 0.09, s * 0.10 * ks, accentCol || '#ffd700', rim, lw * 0.7);
+        G.pill(x, y + s * 0.14, x, y + s * 0.24, s * 0.055, accentCol || '#ffd700');
+      },
+      cloudSync: function(x, y, s, cloudCol, arrowCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var cc = cloudCol || '#38bdf8', ac = arrowCol || '#ffd700';
+        G.disc(x - s * 0.23, y + s * 0.04, s * 0.22, cc, rim, lw);
+        G.disc(x + s * 0.23, y + s * 0.04, s * 0.20, cc, rim, lw);
+        G.disc(x, y - s * 0.09, s * 0.28, cc, rim, lw);
+        G.box(x, y + s * 0.12, s * 0.52, s * 0.24, s * 0.06, cc, null, 0);
+        G.pill(x - s * 0.24, y + s * 0.24, x + s * 0.24, y + s * 0.24, lw, rim);
+        var dy = Math.sin(tt * 2.8) * s * 0.05;
+        G.arrow(x, y + s * 0.18 + dy, x, y - s * 0.12 + dy, s * 0.055, s * 0.13, ac);
+      },
+      robot: function(x, y, s, bodyCol, visorCol, eyeCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var bc = bodyCol || '#1e293b', vc = visorCol || '#0f172a', ec = eyeCol || '#00e5ff';
+        G.pill(x, y - s * 0.28, x, y - s * 0.44, s * 0.045, rim);
+        G.disc(x, y - s * 0.45, s * (0.065 + 0.015 * Math.sin(tt * 3.5)), '#ffd700', rim, lw * 0.7);
+        G.box(x, y + s * 0.03, s * 0.78, s * 0.60, s * 0.16, bc, rim, lw);
+        G.box(x, y - s * 0.01, s * 0.56, s * 0.28, s * 0.09, vc, '#4f46e5', lw * 0.8);
+        var er = s * (0.062 + 0.014 * Math.sin(tt * 3.2));
+        G.disc(x - s * 0.13, y - s * 0.01, er, ec, null, 0);
+        G.disc(x + s * 0.13, y - s * 0.01, er, ec, null, 0);
+        G.capsule(x, y + s * 0.20, s * (0.22 + 0.06 * Math.sin(tt * 3.0)), s * 0.055, '#38bdf8', null, 0);
+      },
+      chip: function(x, y, s, pkgCol, pinCol, coreCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032);
+        var pk = pkgCol || '#1e293b', pn = pinCol || '#38bdf8', cr = coreCol || '#ffd700';
+        var offs = [-s * 0.16, 0, s * 0.16];
+        for (var i = 0; i < 3; i++) {
+          G.pill(x + offs[i], y - s * 0.42, x + offs[i], y - s * 0.26, s * 0.05, pn);
+          G.pill(x + offs[i], y + s * 0.26, x + offs[i], y + s * 0.42, s * 0.05, pn);
+          G.pill(x - s * 0.42, y + offs[i], x - s * 0.26, y + offs[i], s * 0.05, pn);
+          G.pill(x + s * 0.26, y + offs[i], x + s * 0.42, y + offs[i], s * 0.05, pn);
+        }
+        G.box(x, y, s * 0.62, s * 0.62, s * 0.08, pk, rim, lw);
+        G.box(x, y, s * 0.34, s * 0.34, s * 0.05, '#4f46e5', rim, lw * 0.8);
+        G.disc(x, y, s * (0.095 + 0.025 * Math.sin(tt * 3.4)), cr, rim, lw * 0.65);
+      },
+      coinStack: function(x, y, s, coinCol, sideCol, starCol, rimCol, t) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034);
+        var cc = coinCol || '#ffd700', sc = sideCol || '#f59e0b', stc = starCol || '#ffffff';
+        G.disc(x - s * 0.14, y - s * 0.07, s * 0.27, sc, rim, lw * 0.85);
+        G.disc(x + s * 0.07, y + s * 0.05, s * 0.34, cc, rim, lw);
+        G.ring(x + s * 0.07, y + s * 0.05, s * 0.25, s * 0.028, 0, Math.PI * 2, '#b45309');
+        var k = 1 + 0.12 * Math.sin(tt * 3.0);
+        G.star(x + s * 0.07, y + s * 0.05, s * 0.14 * k, s * 0.062 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.7);
+      },
       part: function(a1, a2, a3, a4, a5, a6) {
         var fn, tx, ty, rot, sx, sy;
         if (typeof a1 === 'function') { fn = a1; tx = a2; ty = a3; rot = a4; sx = a5; sy = a6; }
@@ -671,6 +928,7 @@ export function wrapCanvasCodeToHtml(
       __bigmaResize();
     }
     var t = (time || 0) * 0.001;
+    __bigmaT = t;
     try {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
@@ -708,6 +966,7 @@ ${jsBody}
       __bigmaResize();
     }
     var t = (time || 0) * 0.001;
+    __bigmaT = t;
     try {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
@@ -1424,267 +1683,309 @@ export function resolveServerPromptMotionPlan(
   if (/\b(meeting\s+table|conference\s+table|boardroom|roundtable|conference\s+room)\b/.test(topic)) {
     return {
       label: 'conference table ensemble',
-      anatomyHint: 'PAINTER ORDER (TOP-DOWN / 3-4 VIEW CONFERENCE TABLE): draw 4 docked executive seats FIRST around edges G.person(0,-0.34*R,0.22*R,c1,h1,rim), G.person(0,0.34*R,0.22*R,c1,h1,rim), G.person(-0.46*R,0,0.22*R,c2,h2,rim), G.person(0.46*R,0,0.22*R,c2,h2,rim); THEN draw centered conference table G.box(0,0.02*R,0.74*R,0.40*R,0.14*R,tableCol,rim,2.5) cleanly overlapping chair edges; LAST on top: miniature agenda tablet G.box(0,0.02*R,0.24*R,0.14*R,0.03*R). ZERO detached orbiting squares!',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + subtle synchronized chair breath ±0.02*R staying docked to table & gentle center tablet highlight',
+      anatomyHint: 'TOP-DOWN CONFERENCE TABLE: draw 4 docked G.person seats at (0,-0.34*R), (0,0.34*R), (-0.46*R,0), (0.46*R,0) FIRST; THEN centered table G.box(0,0.02*R,0.74*R,0.40*R,0.14*R) overlapping seat edges; LAST center tablet G.box(0,0.02*R,0.24*R,0.14*R,0.03*R).',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + subtle synchronized chair breath ±0.02*R staying docked to table',
     };
   }
   if (/\b(office\s+desk|desk|workstation|workspace|cubicle|study\s+table)\b/.test(topic)) {
     return {
       label: 'organized desk workstation',
-      anatomyHint: 'UPRIGHT FRONT OFFICE DESK (PAINTER ORDER): (1) left/right desk leg pedestals G.box(-0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) & G.box(0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) with tidy drawer handles; (2) wide desk top G.box(0,0.06*R,1.02*R,0.10*R,0.03*R); (3) monitor stand G.box(0,-0.03*R,0.10*R,0.12*R,0.02*R) + crisp monitor G.box(0,-0.22*R,0.52*R,0.34*R,0.04*R) with dark screen & 2 mini G.bar sitting FLUSH on desk; (4) neat mug G.box(0.37*R,-0.05*R,0.11*R,0.12*R,0.03*R) & steady lamp G.pill(-0.37*R,0.01*R,-0.40*R,-0.18*R,0.035*R) + G.disc(-0.36*R,-0.20*R,0.08*R,"#FFD700") (NEVER blink lamp or tint green!).',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + smooth telemetry bar motion inside monitor screen (keep lamp 100% steady gold!)',
+      anatomyHint: 'UPRIGHT OFFICE DESK: desk pedestals G.box(±0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) + wide top G.box(0,0.06*R,1.02*R,0.10*R,0.03*R) + monitor stand & G.chart(0,-0.22*R,0.48*R,"#0F172A","#38BDF8","#00E5FF","#FFD700","#F8FAFC",t) resting flush on top + gold lamp G.disc(-0.36*R,-0.20*R,0.08*R,"#FFD700").',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + chart telemetry inside monitor',
+    };
+  }
+  if (/\b(ui\s*layout|ui|ux|wireframe|interface|app\s*design|landing\s*page|mockup|website|web\s*app)\b/.test(topic)) {
+    return {
+      label: 'interactive UI layout',
+      anatomyHint: 'Call G.uiLayout(0, 0, 1.06*R, frameCol, headerCol, accentCol, "#F8FAFC", t) inside G.part — NEVER draw plain circles/squares!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.025 + internal UI sidebar & card reveal driven by t',
+    };
+  }
+  if (/\b(hiring|recruit\w*|talent|candidate|hr|human\s*resources|interview|onboarding|staffing|resume|cv)\b/.test(topic)) {
+    return {
+      label: 'talent profile verification',
+      anatomyHint: 'Call G.userBadge(0, 0, 1.06*R, cardCol, personCol, accentCol, "#F8FAFC", t) inside G.part — clean HR card with person & verified badge!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + pulsing verification checkmark & animated profile lines',
+    };
+  }
+  if (/\b(productivity|efficiency|checklist|todo|to-do|task\s*management|kanban|sprint|workflow)\b/.test(topic)) {
+    return {
+      label: 'sequential task completion',
+      anatomyHint: 'Call G.checklist(0, 0, 1.04*R, boardCol, clipCol, accentCol, "#F8FAFC", t) inside G.part — NEVER draw plain power discs or sagging corner boxes!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + sequential animated task bars & checkmarks inside clipboard',
+    };
+  }
+  if (/\b(typography|font|lettering|typeface|editorial|copywriting|graphic\s*design|artboard|branding|vector)\b/.test(topic)) {
+    return {
+      label: 'editorial artboard precision',
+      anatomyHint: 'Call G.typography(0, 0, 1.06*R, cardCol, inkCol, accentCol, "#F8FAFC", t) inside G.part — crisp vector artboard & animated guide cursor!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.025 + crisp baseline cursor glide',
+    };
+  }
+  if (/\b(pie\s*chart|pie|donut|market\s*share|allocation|budget\s*breakdown|proportion)\b/.test(topic)) {
+    return {
+      label: 'segmented pie expansion',
+      anatomyHint: 'Call G.pieChart(0, 0, 1.08*R, baseCol, s1Col, s2Col, s3Col, "#F8FAFC", t) inside G.part — bold full-sized animated pie slices!',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.4)*0.03 + active radial pie wedge pop',
+    };
+  }
+  if (/\b(market\s*research|research|survey|discovery|audit|inspect\w*|seo|search|magnifying|investigat\w*)\b/.test(topic)) {
+    return {
+      label: 'optical lens research scan',
+      anatomyHint: 'Call G.magnifier(0, 0, 1.08*R, cardCol, lensCol, handleCol, accentCol, "#F8FAFC", t) inside G.part — sweeping magnifying lens over data card!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.025*R + continuous smooth circular magnifying lens sweep over card',
+    };
+  }
+  if (/\b(entrepreneur\w*|startup|launch|venture|founder|rocket|boost|scaleup|scale-up|accelerate)\b/.test(topic)) {
+    return {
+      label: 'ascendant rocket launch',
+      anatomyHint: 'Call G.rocket(0, 0, 1.06*R, hullCol, wingCol, flameCol, "#F8FAFC", t) inside G.part(cx, cy+bobY, -0.18+rot, 1, 1, fn) — unmistakable rocket!',
+      codeHint: 'dynamic thrust bobY=Math.sin(t*3.2)*0.04*R, slight diagonal flight angle + pulsing exhaust plume',
+    };
+  }
+  if (/\b(opportunity|breakthrough|lightbulb|idea|bulb|innovation|creative|spark|brainstorm|insight|vision)\b/.test(topic)) {
+    return {
+      label: 'radiant idea glow',
+      anatomyHint: 'Call G.lightbulb(0, 0, 1.06*R, bulbCol, rayCol, baseCol, "#F8FAFC", t) inside G.part — NEVER draw G.rays alone without solid glass bulb!',
+      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.5)*0.03 + rhythmic radial ray pulse around glass dome',
     };
   }
   if (/\b(shopping\s*cart|cart|trolley|ecommerce|e-commerce|checkout|retail|marketplace)\b/.test(topic)) {
     return {
       label: 'shopping cart glide',
-      anatomyHint: 'UNMISTAKABLE SHOPPING CART SILHOUETTE: (1) tucked parcel boxes FIRST peeking cleanly inside basket G.box(0.06*R,-0.24*R+bobItem,0.24*R,0.22*R,0.04*R,"#F97316","#F8FAFC",2) & G.box(-0.14*R,-0.20*R,0.20*R,0.18*R,0.04*R,"#38BDF8","#F8FAFC",2); (2) draw G.cart(0,0.06*R,0.92*R,"#0284C7","#FFD700","#F8FAFC") cleanly in front overlapping bottom of parcels so frame, grille, handle & BOTH wheels are 100% crisp. ZERO detached check circles or floating people!',
-      codeHint: 'gentle horizontal roll offsetX=Math.sin(t*2.2)*0.05*R + subtle suspension bobY=Math.abs(Math.sin(t*4.4))*0.025*R + item settle bounce inside basket',
+      anatomyHint: 'Draw 2 tucked parcel boxes G.box(0.06*R,-0.24*R+bobItem,0.24*R,0.22*R,0.04*R,"#F97316","#F8FAFC",2) FIRST, THEN G.cart(0,0.06*R,0.96*R,bodyCol,wheelCol,"#F8FAFC") cleanly in front!',
+      codeHint: 'gentle horizontal glide offsetX=Math.sin(t*2.2)*0.05*R + suspension bounce & parcel settle inside basket',
     };
   }
   if (/\b(procurement|purchase|order|supply\s*chain|inventory|warehouse|logistics|vendor)\b/.test(topic)) {
     return {
       label: 'procurement manifest sync',
-      anatomyHint: 'PAINTER ORDER (PROCUREMENT CARGO & ORDER BOARD): (1) clipboard/crate body G.box(0,0.04*R,0.88*R,0.84*R,0.10*R,"#1E293B","#F8FAFC",2.5); (2) top clip G.box(0,-0.38*R,0.34*R,0.14*R,0.04*R,"#F59E0B","#F8FAFC",2); (3) 3 neat order bars inside clip G.pill(-0.24*R,-0.08*R,0.20*R,-0.08*R,0.06*R,"#38BDF8"), G.pill(-0.24*R,0.10*R,0.14*R,0.10*R,0.06*R,"#00E5FF"), G.pill(-0.24*R,0.28*R,0.06*R,0.28*R,0.06*R,"#A855F7"); (4) welded top-right approval badge G.disc(0.32*R,-0.26*R,0.16*R,"#38BDF8","#F8FAFC",2) with G.check(0.32*R,-0.26*R,0.09*R,3,"#FFFFFF"). NEVER draw flapping diagonal slabs or stray bars!',
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth checklist width pulse & corner check badge pulse',
+      anatomyHint: 'Call G.checklist(0, 0, 1.04*R, "#1E293B", "#F59E0B", "#00E5FF", "#F8FAFC", t) + welded top-right gold star badge G.disc(0.32*R,-0.32*R,0.14*R,"#FFD700","#F8FAFC",2) inside G.part.',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + sequential manifest check animation',
     };
   }
   if (/\b(digital\s*wallet|e-wallet|wallet|purse|mobile\s*pay|fintech)\b/.test(topic)) {
     return {
       label: 'digital wallet card reveal',
-      anatomyHint: 'PAINTER ORDER (DIGITAL WALLET): (1) gleaming payment card peeking behind top edge FIRST: G.box(-0.08*R, -0.22*R + Math.sin(t*2.4)*0.06*R, 0.58*R, 0.34*R, 0.05*R, "#00E5FF", "#F8FAFC", 2); (2) G.wallet(0, 0.08*R, 0.96*R, "#1E293B", "#4F46E5", "#F59E0B", "#F8FAFC") cleanly overlapping lower half of card; (3) bold coin gleam G.disc(0.20*R,0.12*R,0.06*R,"#FFFFFF") pulsing on clasp. NEVER cover wallet with giant static disc!',
-      codeHint: 'upright wallet hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.6)*0.035 + smooth vertical bank card slide ±0.06*R & golden clasp pulse',
+      anatomyHint: 'Draw peeking payment card G.box(-0.08*R, -0.22*R + Math.sin(t*2.4)*0.06*R, 0.58*R, 0.34*R, 0.05*R, "#00E5FF", "#F8FAFC", 2) FIRST, THEN G.wallet(0, 0.08*R, 0.98*R, bodyCol, flapCol, claspCol, "#F8FAFC") overlapping lower half!',
+      codeHint: 'upright wallet hover bobY=Math.sin(t*2.2)*0.03*R + smooth vertical card reveal & golden clasp pulse',
     };
   }
   if (/\b(reputation|trust|credibility|review|rating|endorsement|testimonial|brand\s*image)\b/.test(topic)) {
     return {
       label: 'trust crest radiance',
-      anatomyHint: 'UNMISTAKABLE REPUTATION CREST: centered G.shield(0, 0.02*R, 0.90*R, "#4F46E5", "#F8FAFC", "#1E293B") + pulsing gold center star G.star(0, 0.02*R, 0.22*R*stScale, 0.10*R*stScale, 5, -Math.PI/2, "#FFD700", "#F8FAFC", 2) + 2 compact welded ribbon wings G.box(±0.38*R,-0.02*R,0.18*R,0.10*R,0.03*R,"#00E5FF") overlapping shield edges. NEVER draw inverted teardrop faces!',
-      codeHint: 'upright heraldic float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth centered 5-point star scale pulse 1+0.12*Math.sin(t*3.0)',
+      anatomyHint: 'Call G.shield(0, 0.02*R, 0.96*R, "#4F46E5", "#F8FAFC", "#1E293B") + pulsing centered gold G.star(0, 0.02*R, 0.22*R*st, 0.10*R*st, 5, -Math.PI/2, "#FFD700", "#F8FAFC", 2) LAST on top.',
+      codeHint: 'upright heraldic float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + centered 5-point star pulse',
     };
   }
   if (/\b(global\s*comm\w*|international|worldwide|globe|global|world|earth|continent)\b/.test(topic)) {
     return {
       label: 'orbital global relay',
-      anatomyHint: 'CLEAN GLOBAL NETWORK: (1) centered G.globe(0, 0.02*R, 0.44*R, "#0284C7", "#38BDF8", "#F8FAFC") (NEVER collide a giant envelope across the globe!); (2) tilted orbital signal ring G.oval(0, 0.02*R, 0.54*R, 0.19*R, -0.35, null, "#FFD700", 0.045*R); (3) 2 orbiting satellite signal nodes G.disc along exact ellipse path (Math.cos(a)*0.54*R, Math.sin(a)*0.19*R rotated -0.35) + crisp signal dot at globe pole. ZERO stray floating blobs!',
-      codeHint: 'upright globe hover bobY=Math.sin(t*2.1)*0.025*R + continuous orbiting satellite relay nodes along tilted ellipse & crisp latitude highlight',
+      anatomyHint: 'Call G.globe(0, 0.02*R, 0.44*R, "#0284C7", "#38BDF8", "#F8FAFC") + tilted ring G.oval(0, 0.02*R, 0.56*R, 0.20*R, -0.35, null, "#FFD700", 0.045*R) + 2 orbiting signal nodes G.disc.',
+      codeHint: 'upright globe hover bobY=Math.sin(t*2.1)*0.025*R + continuous orbiting satellite relay nodes along tilted ellipse',
     };
   }
   if (/\b(megaphone|broadcast|announce\w*|marketing|campaign|publicity|loudspeaker)\b/.test(topic)) {
     return {
       label: 'acoustic broadcast wave',
-      anatomyHint: 'PAINTER ORDER (CLEAN MEGAPHONE): (1) centered left-shifted G.megaphone(-0.12*R, 0.02*R, 0.86*R, "#F97316", "#1E293B", "#38BDF8", "#F8FAFC"); (2) 2 thick right-opening acoustic arcs centered at mouth (0.24*R,0) using G.ring(0.24*R, 0, r1, 0.045*R, -0.58, 0.58, "#00E5FF") & G.ring(0.24*R, 0, r2, 0.045*R, -0.58, 0.58, "#FFD700") where r1 in [0.16*R..0.24*R] & r2 in [0.28*R..0.38*R]. NEVER draw any vertical bar cutting through the megaphone cone!',
-      codeHint: 'recoil tilt rot=-0.06+Math.sin(t*3.4)*0.06 + bobY=Math.sin(t*2.6)*0.03*R + smooth expanding thick soundwave arcs outside front mouth',
+      anatomyHint: 'Call G.megaphone(-0.12*R, 0.02*R, 0.90*R, "#F97316", "#1E293B", "#38BDF8", "#F8FAFC") + 2 right-opening G.ring(0.24*R, 0, r1/r2, 0.045*R, -0.58, 0.58, col). NEVER bisect cone vertically!',
+      codeHint: 'recoil tilt rot=-0.05+Math.sin(t*3.2)*0.05 + bobY=Math.sin(t*2.5)*0.03*R + expanding acoustic wave arcs',
     };
   }
   if (/\b(handshake|deal|agreement)\b/.test(topic)) {
     return {
       label: 'executive handshake clasp',
-      anatomyHint: 'Use G.handshake(0, 0.05*R, 0.58*R, "#0284C7", "#4F46E5", "#F59E0B", "#F8FAFC", "#1E293B") as the unified central silhouette + optional crisp top check emblem G.disc(0,-0.32*R,0.12*R,"#38BDF8") with G.check(0,-0.32*R,0.07*R,3,"#FFFFFF"). NEVER draw horizontal capsule bandages, swirl balls, or noisy outer tick circles!',
-      codeHint: 'upright confident clasp float bobY=Math.sin(t*2.5)*0.035*R, rot=Math.sin(t*1.7)*0.035 + subtle badge scale=1+0.07*Math.sin(t*3.0)',
+      anatomyHint: 'Call G.handshake(0, 0.04*R, 0.62*R, "#0284C7", "#4F46E5", "#F59E0B", "#F8FAFC", "#1E293B") + crisp top emblem G.disc(0,-0.32*R,0.12*R,"#38BDF8","#F8FAFC",2) with G.check.',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.035 + subtle top check badge pulse',
     };
   }
   if (/\b(medal|ribbon|badge|certificate)\b/.test(topic)) {
     return {
       label: 'suspended medal gleam',
-      anatomyHint: 'PAINTER ORDER (back-to-front): draw V-ribbon straps FIRST behind medal G.poly([[-0.22*R,-0.46*R],[-0.06*R,-0.10*R],[-0.20*R,-0.10*R],[-0.34*R,-0.46*R]]) & right strap, THEN outer medal G.disc(0,0.08*R,0.38*R), inner rim G.ring(0,0.08*R,0.29*R,0.035*R), and centered G.star(0,0.08*R,0.16*R,0.07*R,5) LAST on top (NEVER draw stem/plinth over medal!).',
-      codeHint: 'upright pendulum sway bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.7)*0.055 + pulsing centered star scale=1+0.07*Math.sin(t*3.2)',
+      anatomyHint: 'Draw V-ribbon straps G.poly FIRST behind medal, THEN outer medal G.disc(0,0.08*R,0.38*R), inner rim G.ring(0,0.08*R,0.29*R,0.035*R), and centered G.star(0,0.08*R,0.16*R,0.07*R,5) LAST on top.',
+      codeHint: 'upright pendulum sway bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.7)*0.05 + pulsing centered star',
     };
   }
   if (/\b(trophy|award|achievement|cup|winner|crown)\b/.test(topic)) {
     return {
       label: 'celebratory crest lift',
-      anatomyHint: 'PAINTER ORDER (back-to-front): draw side handles G.ring(±0.26*R,-0.10*R,0.13*R,0.05*R), base plinth G.box(0,0.42*R,0.48*R,0.10*R,0.03*R), and stem G.box(0,0.28*R,0.13*R,0.20*R,0.02*R) FIRST; THEN draw front chalice G.poly([[-0.30*R,-0.32*R],[0.30*R,-0.32*R],[0.17*R,0.19*R],[-0.17*R,0.19*R]]) overlapping stem; and centered G.star(0,-0.08*R,0.12*R,0.055*R,5) LAST on top.',
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.04*R, rot=Math.sin(t*1.7)*0.04 + pulsing centered star emblem inside cup',
+      anatomyHint: 'Call G.trophy(0, 0, 1.06*R, cupCol, baseCol, starCol, "#F8FAFC", t) inside G.part — cohesive trophy & pulsing inner star!',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.035 + pulsing center star emblem',
     };
   }
   if (/\b(chat|conversation|dialogue|messaging|communication|telecom|discussion|comment)\b/.test(topic)) {
     return {
       label: 'speech bubble dialogue pulse',
-      anatomyHint: 'UNIFIED DIALOGUE BUBBLES (PAINTER ORDER): (1) back bubble tail G.poly([[-0.32*R,0.06*R],[-0.44*R,0.22*R],[-0.18*R,0.10*R]],"#4F46E5","#F8FAFC",2) + back bubble G.box(-0.14*R,-0.12*R,0.66*R,0.44*R,0.12*R,"#4F46E5","#F8FAFC",2.5); (2) overlapping front reply bubble tail G.poly([[0.28*R,0.28*R],[0.44*R,0.42*R],[0.14*R,0.30*R]],"#00E5FF","#F8FAFC",2) + front bubble G.box(0.16*R,0.14*R,0.64*R,0.42*R,0.12*R,"#00E5FF","#F8FAFC",2.5); (3) 3 smooth typing dots G.disc inside front bubble at x=[0.01*R,0.16*R,0.31*R] oscillating in Y ±0.03*R.',
-      codeHint: 'upright gentle hover bobY=Math.sin(t*2.2)*0.03*R + slight opposing bubble scale breathe + sequential 3-dot wave inside front speech bubble',
+      anatomyHint: 'Back bubble tail + G.box(-0.14*R,-0.12*R,0.66*R,0.44*R,0.12*R,"#4F46E5","#F8FAFC",2.5); front bubble tail + G.box(0.16*R,0.14*R,0.64*R,0.42*R,0.12*R,"#00E5FF","#F8FAFC",2.5); 3 oscillating typing dots G.disc inside front bubble.',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + sequential 3-dot wave inside front bubble',
     };
   }
   if (/\b(email|mail|envelope|inbox|newsletter|message)\b/.test(topic)) {
     return {
       label: 'envelope & badge float',
-      anatomyHint: 'Envelope body G.box(0,0.05*R,1.02*R,0.68*R,0.08*R), crisp inner V-flap crease G.poly([[-0.48*R,-0.22*R],[0,0.12*R],[0.48*R,-0.22*R]],null,rimCol,0.055*R,false), plus welded top-right badge G.disc(0.40*R,-0.22*R,0.14*R) LAST on top (NEVER slide paper below envelope, NEVER draw briefcase handle!).',
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 + smooth badge pulse scale=1+0.12*Math.sin(t*3.4) (ALWAYS visible, NEVER blink-hide)',
+      anatomyHint: 'Envelope G.box(0,0.05*R,1.02*R,0.68*R,0.08*R), crisp inner V-flap G.poly([[-0.48*R,-0.22*R],[0,0.12*R],[0.48*R,-0.22*R]],null,rimCol,0.055*R,false), welded top-right badge G.disc(0.40*R,-0.22*R,0.14*R) LAST on top.',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 + smooth badge scale pulse',
     };
   }
   if (/\b(negotiation|partnership|team|meeting|collaboration|networking)\b/.test(topic)) {
     return {
       label: 'paired executive agreement',
-      anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly at center by G.handshake(0,0.14*R,0.28*R,col1,col2,"#F59E0B","#F8FAFC",rim), plus top emblem G.disc(0,-0.30*R,0.13*R) with G.check(0,-0.30*R,0.07*R) LAST on top (NO bottom shadow line, NO hiding!).',
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth continuous badge pulse scale=1+0.09*Math.sin(t*3) (NEVER use if(sin>0) blink!)',
+      anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly by G.handshake(0,0.14*R,0.28*R,col1,col2,"#F59E0B","#F8FAFC",rim) + top check emblem.',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth continuous top check badge pulse',
     };
   }
   if (/\b(leadership|executive|leader|manager|ceo|mentor|customer|support|headset|people|person|user|avatar|chair)\b/.test(topic)) {
     return {
       label: 'executive figure poise',
-      anatomyHint: 'Draw podium/seat base G.box(0,0.34*R,0.56*R,0.22*R,0.04*R) FIRST, THEN centered G.person(0,-0.02*R,0.42*R,bodyCol,headCol,rimCol) cleanly resting on base, plus crest G.star(0,-0.44*R,0.10*R,0.045*R,5) cleanly above head (NEVER draw floating triangles or stick-legs!).',
-      codeHint: 'upright dignified float bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.4)*0.03 + smooth crest star pulse scale=1+0.09*Math.sin(t*3)',
-    };
-  }
-  if (/\b(lightbulb|idea|bulb|innovation|creative|spark)\b/.test(topic)) {
-    return {
-      label: 'radiant filament pulse',
-      anatomyHint: 'PAINTER ORDER: screw cap G.box(0,0.30*R,0.24*R,0.16*R,0.04*R) & base tip G.capsule(0,0.40*R,0.14*R,0.06*R) FIRST; solid opaque glass bulb G.disc(0,-0.02*R,0.28*R) + welded neck G.box(0,0.16*R,0.24*R,0.14*R,0.02*R); inner filament G.poly([[-0.08*R,0.06*R],[0,-0.08*R],[0.08*R,0.06*R]],null,col,0.04*R,false); plus 5 clean radial G.rays(0,-0.04*R,0.36*R,0.48*R,5,rot,0.045*R). NO giant half-circle dome, NO confetti squares!',
-      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R + smooth radial ray length oscillation 0.44*R+0.06*R*Math.sin(t*3.2) & filament pulse',
+      anatomyHint: 'Call G.userBadge(0, 0, 1.04*R, "#1E293B", "#0284C7", "#FFD700", "#F8FAFC", t) OR podium G.box + centered G.person(0,-0.02*R,0.44*R) + crest G.star above head.',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.4)*0.03 + crest star pulse',
     };
   }
   if (/\b(presentation|whiteboard|projector|pitch|slide|training)\b/.test(topic)) {
     return {
       label: 'easel chart presentation',
-      anatomyHint: 'PAINTER ORDER: tripod legs G.pill(0,0,-0.24*R,0.44*R,0.045*R) & G.pill(0,0,0.24*R,0.44*R,0.045*R) FIRST; upright easel board G.box(0,-0.08*R,0.92*R,0.62*R,0.06*R); inner chart G.bar at x=[-0.22*R,-0.07*R,0.08*R], yBase=0.14*R, height [0.16*R..0.34*R] + rising trend G.arrow(0.16*R,0.08*R,0.34*R,-0.16*R,0.04*R,0.10*R).',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + staggered G.bar waves & rising G.arrow inside board',
+      anatomyHint: 'Tripod legs FIRST behind board, THEN call G.chart(0, -0.06*R, 0.96*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t) as the easel screen!',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + animated easel bars & upward arrow',
     };
   }
   if (/\b(laptop|computer|desktop|monitor|screen|software|code|web)\b/.test(topic)) {
     return {
       label: 'upright display telemetry',
-      anatomyHint: 'PAINTER ORDER: base stand G.box(0,0.34*R,0.36*R,0.08*R,0.03*R) & neck G.box(0,0.22*R,0.14*R,0.18*R,0.02*R) FIRST; widescreen monitor G.box(0,-0.04*R,0.96*R,0.62*R,0.07*R) & inner display G.box(0,-0.04*R,0.82*R,0.46*R,0.04*R); inside screen: 3 G.bar & G.pie cleanly separated.',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + smooth dashboard bars & ring pulse strictly inside monitor screen',
+      anatomyHint: 'Monitor stand base FIRST behind screen, THEN call G.uiLayout(0, -0.06*R, 0.98*R, frameCol, headerCol, accentCol, "#F8FAFC", t) as the widescreen monitor!',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + internal UI card animation',
     };
   }
-  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement)\b/.test(topic)) {
+  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement|money|dollar|coin|currency|bank|finance|investment|cash)\b/.test(topic)) {
     return {
-      label: 'bidirectional cash flow',
-      anatomyHint: 'ALL shapes MUST stay inside G.part(cx,cy+bobY,...) within [-0.52*R,+0.52*R] (ZERO stray coins near corner (0,0)! ZERO dark backdrop disc!): (1) stacked back coin G.disc(0,0.06*R,0.28*R,"#F59E0B","#F8FAFC",2) FIRST; (2) front hero coin G.disc(0,0.02*R,0.26*R,"#FFD700","#F8FAFC",2.5) + G.star(0,0.02*R,0.12*R,0.055*R,5,-Math.PI/2,"#FFFFFF","#B45309",1.5); (3) top flow G.arrow(-0.34*R+flowX,-0.34*R,0.34*R+flowX,-0.34*R,0.05*R,0.13*R,"#00E5FF"); (4) bottom return G.arrow(0.34*R-flowX,0.38*R,-0.34*R-flowX,0.38*R,0.05*R,0.13*R,"#38BDF8").',
-      codeHint: 'upright coin float bobY=Math.sin(t*2.2)*0.025*R + smooth horizontal reciprocating transfer arrows flowX=Math.sin(t*2.6)*0.08*R STRICTLY inside [-0.52*R,+0.52*R] (NEVER draw extra discs outside G.part!)',
+      label: 'minted cash flow',
+      anatomyHint: 'Call G.coinStack(0, 0.04*R, 0.98*R, "#FFD700", "#F59E0B", "#FFFFFF", "#F8FAFC", t) + crisp flow arrows G.arrow(-0.34*R+fx,-0.36*R,0.34*R+fx,-0.36*R,0.05*R,0.12*R,"#00E5FF") inside G.part.',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth arrow transfer motion & coin star pulse',
     };
   }
-  if (/\b(money|dollar|coin|currency|bank|finance|investment|cash)\b/.test(topic)) {
-    return {
-      label: 'minted value gleam',
-      anatomyHint: 'ALL shapes inside G.part(cx,cy+bobY,...) within [-0.52*R,+0.52*R] (ZERO stray corner coins! ZERO dark backdrop disc!): stacked back gold coin G.disc(-0.16*R,-0.06*R,0.29*R,"#F59E0B","#F8FAFC",2) FIRST; front hero coin G.disc(0.08*R,0.06*R,0.35*R,"#FFD700","#F8FAFC",3), inner ring G.ring(0.08*R,0.06*R,0.26*R,0.03*R,0,Math.PI*2,"#B45309"), centered G.star(0.08*R,0.06*R,0.14*R,0.06*R,5,-Math.PI/2,"#FFFFFF","#B45309",2) LAST on top.',
-      codeHint: 'upright coin gleam float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + crisp front star crest pulse inside centered hero coin',
-    };
-  }
-  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume)\b/.test(topic)) {
+  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice)\b/.test(topic)) {
     return {
       label: 'executive hinged float',
-      anatomyHint: 'ZERO circular dark/colored backdrop disc or drop-shadow behind briefcase! Wide horizontal body G.box(0,0.08*R,1.02*R,0.64*R,0.09*R), welded top handle G.ring(0,-0.24*R,0.15*R,0.06*R,Math.PI,Math.PI*2), overlapping lid G.box(0,-0.06*R,1.04*R,0.28*R,0.07*R), centered gold clasp G.box(0,0.08*R,0.16*R,0.14*R,0.03*R) LAST on top.',
-      codeHint: 'WHOLE briefcase upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp articulation inside body (NO sliding/tilting diagonal slabs!)',
+      anatomyHint: 'Call G.briefcase(0, 0, 1.06*R, bodyCol, flapCol, claspCol, "#F8FAFC", t) inside G.part — ZERO dark backdrop disc!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.035 + lid clasp articulation',
     };
   }
   if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
     return {
       label: 'diagonal strike & ripple',
-      anatomyHint: 'PAINTER ORDER (ALL 3 DISCS ALWAYS 100% OPAQUE & VISIBLE — NEVER fade/hide outer discs or use green!): (1) outer disc G.disc(0,0,0.52*R,"#F43F5E","#F8FAFC",3); (2) middle disc G.disc(0,0,0.34*R,"#F8FAFC"); (3) center disc G.disc(0,0,0.16*R,"#F43F5E"); (4) bullseye dot G.disc(0,0,0.07*R,"#FFD700"); (5) LAST ON TOP: inward dart G.arrow(0.50*R+d,-0.50*R-d, 0.03*R+d*0.1,-0.03*R-d*0.1, 0.05*R, 0.14*R, "#F8FAFC") where arrowhead TIP ALWAYS points INWARD toward (0,0)!',
-      codeHint: 'bullseye pulse scale=1+0.04*Math.sin(t*3.0) + inward dart strike d=Math.pow(Math.max(0,Math.sin(t*2.2)),2)*0.12*R along top-right diagonal (NEVER reverse arrow outward, NEVER blink/fade rings!)',
+      anatomyHint: 'Opaque discs G.disc(0,0,0.52*R,"#F43F5E","#F8FAFC",3), G.disc(0,0,0.34*R,"#F8FAFC"), G.disc(0,0,0.16*R,"#F43F5E"), G.disc(0,0,0.07*R,"#FFD700") + inward G.arrow(0.50*R+d,-0.50*R-d,0.03*R+d*0.1,-0.03*R-d*0.1,0.05*R,0.14*R,"#F8FAFC") pointing INWARD!',
+      codeHint: 'bullseye scale=1+0.04*Math.sin(t*3.0) + inward diagonal dart strike',
     };
   }
-  if (/\b(dashboard|analytics|chart|graph|report|metric|kpi|profit|growth|candlestick)\b/.test(topic)) {
+  if (/\b(analytics|dashboard|chart|graph|report|metric|kpi|profit|growth|candlestick|statistics|market\s*analysis)\b/.test(topic)) {
     return {
       label: 'ascending elastic lift',
-      anatomyHint: 'Upright tablet card G.box(0,0,1.08*R,0.74*R,0.09*R) — NEVER spin! STRICT SEPARATED ZONES: left 3 G.bar at x=-0.34*R, -0.19*R, -0.04*R with yBase=0.22*R, bw=0.10*R, height ALWAYS in [0.16*R..0.44*R] (NEVER shrink below 0.16*R!); right side G.pie(0.27*R,0,0.17*R,-Math.PI/2,sweep,sliceCol,trackCol) cleanly clear of bars.',
-      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 (NEVER >4deg!) + staggered G.bar height (0.28+0.12*Math.sin(t*2.6-i*0.8))*R & G.pie sweep 2.2+0.9*Math.sin(t*2.2)',
+      anatomyHint: 'Call G.chart(0, 0, 1.06*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t) inside G.part — bold full-width animated chart card!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 + live rising bars & trend arrow',
     };
   }
-  if (/\b(building|skyscraper|tower|headquarters|architecture)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
+  if (/\b(building|skyscraper|tower|headquarters|architecture|real\s*estate)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
     return {
       label: 'architectural plinth glow',
-      anatomyHint: 'PAINTER ORDER: (1) roof spire G.pill(-0.08*R,-0.46*R,-0.08*R,-0.56*R,0.035*R) & crown G.box(-0.08*R,-0.41*R,0.26*R,0.08*R,0.02*R); (2) main tower G.box(-0.08*R,0.02*R,0.48*R,0.82*R,0.04*R) & side wing G.box(0.24*R,0.14*R,0.26*R,0.58*R,0.04*R); (3) plinth G.box(0,0.44*R,0.96*R,0.09*R,0.03*R); (4) FULL-HEIGHT WINDOW GRID: draw 3 cols x 4 rows G.box(x,y,0.09*R,0.10*R,0.02*R) at x=[-0.21*R,-0.08*R,0.05*R], y=[-0.28*R,-0.12*R,0.04*R,0.20*R], lobby door G.box(-0.08*R,0.34*R,0.14*R,0.14*R,0.03*R), plus 2x3 wing windows x=[0.19*R,0.29*R], y=[-0.04*R,0.10*R,0.24*R] (NEVER pack thin lines at bottom!).',
-      codeHint: 'upright architectural poise bobY=Math.sin(t*1.8)*0.02*R, rot=Math.sin(t*1.2)*0.02 + warm gold/cyan floor-by-floor illumination wave sweeping upward across ALL 4 upper window rows',
+      anatomyHint: 'Spire + crown + main tower G.box(-0.08*R,0.02*R,0.48*R,0.82*R,0.04*R) + side wing G.box(0.24*R,0.14*R,0.26*R,0.58*R,0.04*R) + plinth + 3x4 illuminated window grid G.box across full tower height.',
+      codeHint: 'upright float bobY=Math.sin(t*1.8)*0.02*R + upward window illumination wave',
     };
   }
-  if (/\b(puzzle|connect|link)\b/.test(topic)) {
+  if (/\b(puzzle|connect|link|integration)\b/.test(topic)) {
     return {
       label: 'interlocked precision fit',
-      anatomyHint: '2 solid blocks G.box(-0.19*R,0,0.40*R,0.40*R,0.06*R) & G.box(0.19*R,0,0.40*R,0.40*R,0.06*R) interlocked over centered tab G.disc(0,0,0.11*R) LAST on top.',
-      codeHint: 'gentle x micro-slide ±0.03*R staying overlapped over center tab + upright float bobY=Math.sin(t*2.2)*0.03*R',
+      anatomyHint: '2 solid blocks G.box(-0.19*R,0,0.42*R,0.42*R,0.06*R) & G.box(0.19*R,0,0.42*R,0.42*R,0.06*R) interlocked over centered tab G.disc(0,0,0.12*R) LAST on top.',
+      codeHint: 'gentle x micro-slide ±0.03*R staying overlapped + upright float bobY=Math.sin(t*2.2)*0.03*R',
     };
   }
   if (/\b(calendar|event|schedule)\b/.test(topic)) {
     return {
       label: 'structured grid calendar',
-      anatomyHint: 'PAINTER ORDER: top rings G.pill(-0.22*R,-0.40*R,-0.22*R,-0.26*R,0.05*R) & G.pill(0.22*R,-0.40*R,0.22*R,-0.26*R,0.05*R); body G.box(0,0.05*R,0.88*R,0.74*R,0.08*R); header strip G.box(0,-0.20*R,0.88*R,0.20*R,0.04*R); crisp 3x2 date squares G.box inside body.',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + smooth active date cell scale/color highlight',
+      anatomyHint: 'Top rings + body G.box(0,0.05*R,0.88*R,0.74*R,0.08*R) + header strip + crisp 3x2 date squares G.box inside body.',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + active date cell highlight',
     };
   }
   if (/\b(clock|deadline|timer|time)\b/.test(topic)) {
     return {
       label: 'precision dial sweep',
-      anatomyHint: 'Centered bezel G.disc(0,0,0.48*R) + inner face G.disc(0,0,0.38*R) + hour/minute hands G.pill(0,0,hx,hy) & G.pill(0,0,mx,my) anchored at (0,0) + center cap G.disc(0,0,0.055*R) LAST on top.',
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + sweeping minute hand angle=t*2.0 & hour hand angle=t*0.35 anchored at (0,0)',
-    };
-  }
-  if (/\b(search|magnifying|inspect|audit|find|research)\b/.test(topic)) {
-    return {
-      label: 'optical lens sweep',
-      anatomyHint: 'PAINTER ORDER: solid handle G.pill(0.14*R,0.14*R,0.44*R,0.44*R,0.11*R,"#1E293B") FIRST; thick lens rim & opaque inner glass G.disc(-0.08*R,-0.08*R,0.32*R,"#0F172A","#38BDF8",0.07*R); STRICTLY INSIDE THE GLASS AT (-0.08*R,-0.08*R): 2 mini rising G.bar with yBase=0.04*R (max height 0.22*R) or G.check(-0.08*R,-0.08*R,0.16*R,0.05*R,"#00E5FF"). NEVER drop pills or bars below the bottom edge of the lens!',
-      codeHint: 'smooth circular scan offset dx=Math.cos(t*2)*0.045*R, dy=Math.sin(t*2)*0.045*R + gentle inner chart pulse strictly inside glass bounds',
+      anatomyHint: 'Call G.clock(0, 0, 1.06*R, bezelCol, faceCol, handCol, "#F8FAFC", t) inside G.part — clean ticking hands anchored at center!',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + sweeping clock hands',
     };
   }
   if (/\b(bell|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
     return {
       label: 'acoustic ring swing',
-      anatomyHint: 'Top loop G.ring(0,-0.42*R,0.08*R), flared dome G.poly + bottom rim G.capsule(0,0.24*R,0.66*R,0.10*R), tucked clapper G.disc(cxOff,0.32*R,0.09*R), symmetric outer sound arcs G.ring at ±0.45*R.',
-      codeHint: 'pendulum pivot G.part(0,-0.36*R,Math.sin(t*4)*0.11,1,1,fn) + delayed clapper sway & expanding soundwave arc sweep',
+      anatomyHint: 'Top loop + flared bell dome G.poly + bottom rim G.capsule + clapper G.disc + symmetric outer sound arcs G.ring at ±0.45*R.',
+      codeHint: 'pendulum swing + delayed clapper sway & expanding soundwave arc sweep',
     };
   }
   if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope|health)\b/.test(topic)) {
     return {
       label: 'cardiac lub-dub pulse',
-      anatomyHint: 'Unified medical emblem centered at (0,0): symmetric heart (2 welded G.disc + lower triangle G.poly) or rounded cross/capsule with crisp centered ECG G.poly(...,false) strictly inside.',
-      codeHint: 'double-beat lub-dub scale=1+0.08*(Math.pow(Math.max(0,Math.sin(t*3.4)),4)+0.5*Math.pow(Math.max(0,Math.sin(t*3.4-0.5)),4)) + smooth bob',
+      anatomyHint: 'Unified medical emblem centered at (0,0) scaled >= 0.90*R: symmetric heart (2 welded G.disc + lower G.poly) or rounded cross with crisp ECG line inside.',
+      codeHint: 'double-beat lub-dub scale pulse + smooth bobY',
     };
   }
   if (/\b(shield|protection|firewall|cybersecurity|antivirus)\b/.test(topic)) {
     return {
       label: 'shield defense gleam',
-      anatomyHint: 'Clean symmetrical G.shield(0, 0.02*R, 0.90*R, "#0284C7", "#F8FAFC", "#1E293B") + centered G.check(0, 0.02*R, 0.24*R*chkScale, 0.065*R, "#00E5FF") LAST on top. ZERO dark backdrop plates!',
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth check emblem pulse scale=1+0.12*Math.sin(t*3.0)',
+      anatomyHint: 'Call G.shield(0, 0.02*R, 0.98*R, "#0284C7", "#F8FAFC", "#1E293B") + centered pulsing G.check(0, 0.02*R, 0.24*R*chkScale, 0.065*R, "#00E5FF") LAST on top.',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + smooth check emblem pulse',
     };
   }
   if (/\b(lock|padlock|vault|key|fingerprint|biometric|security|safe)\b/.test(topic)) {
     return {
       label: 'precision locking recoil',
-      anatomyHint: 'PAINTER ORDER: top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) FIRST behind body; padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) on top + centered keyhole/G.check inside body LAST.',
-      codeHint: 'upright hover + shackle snap yOff=-Math.abs(Math.sin(t*2.6))*0.05*R + inner keyhole/check pulse (NEVER spin 360deg!)',
+      anatomyHint: 'Call G.lock(0, 0, 1.06*R, bodyCol, shackleCol, accentCol, "#F8FAFC", t) inside G.part — crisp articulated shackle & keyhole!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + smooth vertical shackle lock recoil',
     };
   }
-  if (/\b(truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery|rocket)\b/.test(topic)) {
+  if (/\b(truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery)\b/.test(topic)) {
     return {
       label: 'kinetic transport suspension',
-      anatomyHint: 'Cohesive vehicle/rocket chassis at (0,0) with wheels/fins/thrusters overlapping main hull by >= 0.04*R — zero detached wheels or boxes.',
-      codeHint: 'chassis suspension bobY=Math.sin(t*3.6)*0.03*R + synchronized spinning wheels/rotors G.part(wx,wy,t*5,1,1,fn) at exact wheel sockets',
+      anatomyHint: 'Cohesive vehicle chassis inside [-0.54*R,+0.54*R] with wheels overlapping body by >= 0.04*R — zero detached wheels!',
+      codeHint: 'chassis suspension bobY=Math.sin(t*3.2)*0.03*R + spinning wheels at exact wheel sockets',
     };
   }
-  if (/\b(atom|orbit|planet|radar|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
+  if (/\b(gear|settings|cog|automation|operations|engineering|system|process)\b/.test(topic)) {
+    return {
+      label: 'meshed cog rotation',
+      anatomyHint: 'Call G.gears(0, 0, 1.06*R, g1Col, g2Col, coreCol, "#F8FAFC", t) inside G.part — dual interlocked rotating gears!',
+      codeHint: 'upright float bobY=Math.sin(t*2.0)*0.025*R + counter-rotating meshed cogwheels',
+    };
+  }
+  if (/\b(atom|orbit|planet|radar|compass|satellite|astrolabe)\b/.test(topic)) {
     return {
       label: 'orbital & axis precession',
-      anatomyHint: 'ZERO circular dark backdrop plate behind icon! Centered bright core G.disc(0,0,0.18*R) surrounded symmetrically by bold concentric/tilted G.ring orbits (thick >= 0.04*R) or chunky gear spokes anchored cleanly at (0,0).',
-      codeHint: 'smooth continuous rotation rot=t*1.4 around (0,0) + orbiting bright node G.disc along exact ring radius (keep ring stroke >= 0.04*R)',
+      anatomyHint: 'Centered core G.disc(0,0,0.20*R) + bold tilted G.oval/G.ring orbits (radius >= 0.42*R, thick >= 0.04*R) + orbiting nodes G.disc along exact path.',
+      codeHint: 'smooth continuous rotation + orbiting bright nodes along tilted rings',
     };
   }
   if (/\b(chip|cpu|processor|circuit|microchip|semiconductor|hardware)\b/.test(topic)) {
     return {
       label: 'silicon pulse grid',
-      anatomyHint: 'ZERO dark backdrop circle! Square CPU package G.box(0,0,0.62*R,0.62*R,0.08*R,"#1E293B","#38BDF8",2.5) + 3 bold pins per side G.pill overlapping package edge by 0.04*R + glowing inner die G.box(0,0,0.34*R,0.34*R,0.05*R,"#4F46E5","#F8FAFC",2) + pulsing gold core G.disc(0,0,0.10*R,"#FFD700").',
-      codeHint: 'upright tech float bobY=Math.sin(t*2.2)*0.03*R + inner die & gold node pulse + staggered pin glow',
+      anatomyHint: 'Call G.chip(0, 0, 1.06*R, pkgCol, pinCol, coreCol, "#F8FAFC", t) inside G.part — crisp square processor with welded pins & pulsing core!',
+      codeHint: 'upright tech float bobY=Math.sin(t*2.2)*0.03*R + pulsing silicon core',
     };
   }
-  if (/\b(robot|bot|chatbot|assistant|ai|neural|automation)\b/.test(topic)) {
+  if (/\b(robot|bot|chatbot|assistant|ai|neural)\b/.test(topic)) {
     return {
       label: 'intelligent bot nod',
-      anatomyHint: 'ZERO wheeled cannon blobs! Cute clean AI bot head: top antenna stem G.pill(0,-0.32*R,0,-0.46*R,0.04*R,"#F8FAFC") + tip G.disc(0,-0.48*R,0.065*R,"#FFD700") FIRST; rounded bot housing G.box(0,0.02*R,0.78*R,0.62*R,0.18*R,"#1E293B","#38BDF8",2.5); inner dark visor G.box(0,-0.02*R,0.58*R,0.30*R,0.10*R,"#0F172A","#4F46E5",1.5); 2 crisp symmetric glowing eyes G.disc(-0.14*R,-0.02*R,0.065*R,"#00E5FF") & G.disc(0.14*R,-0.02*R,0.065*R,"#00E5FF") + bottom speech bar G.capsule(0,0.20*R,0.24*R,0.05*R,"#38BDF8").',
-      codeHint: 'friendly hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.045 + smooth eye pulse & top antenna beacon pulse',
+      anatomyHint: 'Call G.robot(0, 0, 1.06*R, bodyCol, visorCol, eyeCol, "#F8FAFC", t) inside G.part — friendly clean AI robot head!',
+      codeHint: 'friendly hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + eye & beacon pulse',
     };
   }
   if (/\b(cloud|saas|storage|backup|sync|server)\b/.test(topic)) {
     return {
       label: 'cloud sync lift',
-      anatomyHint: 'Clean solid cloud built from 3 overlapping G.disc(-0.24*R,0.04*R,0.24*R), G.disc(0,-0.08*R,0.30*R), G.disc(0.24*R,0.04*R,0.22*R) + flat bottom bridge G.box(0,0.14*R,0.52*R,0.26*R,0.06*R) + crisp centered upward sync G.arrow(0,0.22*R,0,-0.06*R+dy,0.055*R,0.14*R,"#FFD700") LAST on top.',
-      codeHint: 'upright cloud float bobY=Math.sin(t*2.1)*0.03*R + smooth vertical arrow sync motion inside cloud center',
+      anatomyHint: 'Call G.cloudSync(0, 0, 1.06*R, cloudCol, arrowCol, "#F8FAFC", t) inside G.part — solid cloud & smooth animated sync arrow!',
+      codeHint: 'upright cloud float bobY=Math.sin(t*2.1)*0.03*R + smooth vertical arrow sync motion',
     };
   }
   if (/\b(brain|network|camera|eye|microscope)\b/.test(topic)) {
     return {
       label: 'smart telemetry pulse',
-      anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R] (ZERO dark backdrop disc!); all pins, lenses, or network nodes physically overlap housing by >= 0.04*R.',
-      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node/aperture harmonic pulse',
+      anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R] scaled >= 0.90*R (ZERO dark backdrop disc!); all pins/nodes overlap housing >= 0.04*R.',
+      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node pulse',
     };
   }
   if (overrideMode && overrideMode !== 'auto') {
@@ -1699,15 +2000,15 @@ export function resolveServerPromptMotionPlan(
     if (legacy[overrideMode]) {
       return {
         label: overrideMode,
-        anatomyHint: 'Unified centered emblem inside [-0.54*R,+0.54*R] with all sub-parts welded cleanly (overlap >= 0.04*R).',
+        anatomyHint: 'Framed centered vector emblem (s=1.04*R) or matching G hero helper inside G.part — NEVER draw tiny dots <0.5*R or bare rays!',
         codeHint: legacy[overrideMode],
       };
     }
   }
   return {
     label: 'harmonic elastic float',
-    anatomyHint: 'One unified recognizable silhouette centered at (0,0) inside [-0.54*R,+0.54*R] (ZERO dark backdrop disc!); every sub-part MUST overlap main body by >= 0.04*R (zero floating shapes).',
-    codeHint: 'upright bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + crisp secondary sub-part harmonic pulse',
+    anatomyHint: 'Pick the closest G hero helper (G.uiLayout / G.chart / G.checklist / G.rocket / G.lightbulb / G.briefcase / G.gears) at size s=1.05*R, OR build a bold framed emblem G.box(0,0,0.96*R,0.74*R,0.10*R) + crisp inner animated icon. NEVER draw small dots <0.6*R, bare G.rays, or stacked snowman circles!',
+    codeHint: 'upright bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.035 + internal t-driven sub-part pulse',
   };
 }
 
@@ -1749,10 +2050,10 @@ export async function handleGenerateAnimationLogic(body: any) {
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
-    : `WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
+    : `CONCISE HERO ICON (10-20 lines, <=320 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). PREFER G.<hero>(0,0,1.05*R,...,t) for crisp silhouette + tasteful accent! NEVER draw tiny dots <0.5*R, bare G.rays alone, or backdrop plates. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t) | G.checklist(x,y,s,bd,cl,ac,rim,t) | G.rocket(x,y,s,hu,wi,fl,rim,t) | G.lightbulb(x,y,s,bu,ra,ba,rim,t) | G.chart(x,y,s,cd,b1,b2,ar,rim,t) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t) | G.gears(x,y,s,g1,g2,co,rim,t) | G.userBadge(x,y,s,cd,pe,ac,rim,t) | G.typography(x,y,s,cd,in,ac,rim,t) | G.briefcase(x,y,s,bd,fl,cl,rim,t) | G.trophy(x,y,s,cu,ba,st,rim,t) | G.clock(x,y,s,be,fa,ha,rim,t) | G.lock(x,y,s,bd,sh,ac,rim,t) | G.cloudSync(x,y,s,cl,ar,rim,t) | G.robot(x,y,s,bd,vi,ey,rim,t) | G.chip(x,y,s,pk,pn,co,rim,t) | G.coinStack(x,y,s,co,si,st,rim,t) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint}.
@@ -1763,8 +2064,8 @@ SPEC: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode}
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.2,
-        maxOutputTokens: 1250,
+        temperature: 0.18,
+        maxOutputTokens: 950,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -1869,16 +2170,16 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
 
   const geometryGuide = isBackground
     ? "FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w."
-    : "WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) Weld inside [-0.62*R,+0.62*R] (overlap >=0.04*R), NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R.";
+    : "CONCISE HERO ICON (10-20 lines each, <=300 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). PREFER matching G.<hero>(0,0,1.05*R,...,t) for crisp silhouette! NEVER draw tiny dots <0.5*R, bare G.rays alone, or backdrop plates.";
 
   const topicLines = promptList.map((p, idx) => {
     const plan = resolveServerPromptMotionPlan(p, type, motionDynamics);
     return `// ===ANIM_${idx}=== "${p}" [Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint}]`;
   }).join('\n');
 
-  const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${promptList.length} independent RAW JS functions separated ONLY by:
+  const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${promptList.length} concise RAW JS functions separated ONLY by:
 ${promptList.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t) | G.checklist(x,y,s,bd,cl,ac,rim,t) | G.rocket(x,y,s,hu,wi,fl,rim,t) | G.lightbulb(x,y,s,bu,ra,ba,rim,t) | G.chart(x,y,s,cd,b1,b2,ar,rim,t) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t) | G.gears(x,y,s,g1,g2,co,rim,t) | G.userBadge(x,y,s,cd,pe,ac,rim,t) | G.typography(x,y,s,cd,in,ac,rim,t) | G.briefcase(x,y,s,bd,fl,cl,rim,t) | G.trophy(x,y,s,cu,ba,st,rim,t) | G.clock(x,y,s,be,fa,ha,rim,t) | G.lock(x,y,s,bd,sh,ac,rim,t) | G.cloudSync(x,y,s,cl,ar,rim,t) | G.robot(x,y,s,bd,vi,ey,rim,t) | G.chip(x,y,s,pk,pn,co,rim,t) | G.coinStack(x,y,s,co,si,st,rim,t) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
@@ -1890,8 +2191,8 @@ ${topicLines}`;
     targetModel,
     (currentModel) => {
       const cfg: any = {
-        temperature: 0.2,
-        maxOutputTokens: Math.min(2350, Math.max(1250, promptList.length * 1150)),
+        temperature: 0.18,
+        maxOutputTokens: Math.min(1850, Math.max(950, promptList.length * 850)),
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) cfg.thinkingConfig = smartThinking;
@@ -1905,7 +2206,7 @@ ${topicLines}`;
   const results = promptList.map((promptTopic, idx) => {
     const rawCode = codeItems[idx] || '';
     const html = rawCode ? extractHTMLFromMarkdown(rawCode, isGreenScreen) : '';
-    const valid = /ctx\.(fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo)\s*\(/i.test(html);
+    const valid = /\b(?:G\.\w+|ctx\.(?:fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo))\s*\(/i.test(rawCode);
     if (!html || !valid) return null;
     return {
       id: 'anim_' + Date.now() + '_' + idx + Math.random().toString(36).substring(7),
@@ -1960,10 +2261,10 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
-    : `WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
+    : `CONCISE HERO ICON (10-20 lines, <=320 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). PREFER G.<hero>(0,0,1.05*R,...,t) for crisp silhouette! NEVER draw tiny dots <0.5*R, bare G.rays alone, or backdrop plates. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t) | G.checklist(x,y,s,bd,cl,ac,rim,t) | G.rocket(x,y,s,hu,wi,fl,rim,t) | G.lightbulb(x,y,s,bu,ra,ba,rim,t) | G.chart(x,y,s,cd,b1,b2,ar,rim,t) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t) | G.gears(x,y,s,g1,g2,co,rim,t) | G.userBadge(x,y,s,cd,pe,ac,rim,t) | G.typography(x,y,s,cd,in,ac,rim,t) | G.briefcase(x,y,s,bd,fl,cl,rim,t) | G.trophy(x,y,s,cu,ba,st,rim,t) | G.clock(x,y,s,be,fa,ha,rim,t) | G.lock(x,y,s,bd,sh,ac,rim,t) | G.cloudSync(x,y,s,cl,ar,rim,t) | G.robot(x,y,s,bd,vi,ey,rim,t) | G.chip(x,y,s,pk,pn,co,rim,t) | G.coinStack(x,y,s,co,si,st,rim,t) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} | Motion (${motionPlan.label}): ${motionPlan.codeHint}.
 ${colorStyleDirective}`;
 
@@ -1973,8 +2274,8 @@ ${colorStyleDirective}`;
 
   try {
     const animConfig: any = {
-      temperature: 0.2,
-      maxOutputTokens: 1250,
+      temperature: 0.18,
+      maxOutputTokens: 950,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
     if (smartThinking) {
