@@ -1260,7 +1260,7 @@ export default function App() {
           newFailedItems.push({
             id: 'fail_p_' + Date.now() + '_' + i,
             accountName: acc.name,
-            prompt: `(Generate Prompts: ${acc.type} - ${acc.subCategory})`,
+            prompt: `(Auto Prompt: ${acc.promptCount} animasi ${acc.type} - ${acc.subCategory})`,
             type: acc.type,
             subCategory: acc.subCategory,
             style: acc.style,
@@ -1268,8 +1268,54 @@ export default function App() {
             colorMode: acc.colorMode ?? 'gradient',
             motionDynamics: 'auto',
             neonGlow: acc.neonGlow ?? true,
+            isAutoPromptPending: true,
+            promptCount: acc.promptCount,
             error: e.message || 'Gagal menghasilkan prompt',
           });
+          const isQuotaFail = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
+          if (isQuotaFail) {
+            for (let k = i + 1; k < accountsToRun.length; k++) {
+              const nextAcc = accountsToRun[k];
+              const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
+              if (hasNextCustom) {
+                nextAcc.customPrompts!.forEach((np, nIdx) => {
+                  newFailedItems.push({
+                    id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
+                    accountName: nextAcc.name,
+                    prompt: np,
+                    type: nextAcc.type,
+                    subCategory: nextAcc.subCategory,
+                    style: nextAcc.style,
+                    isGreenScreen: nextAcc.isGreenScreen ?? false,
+                    colorMode: nextAcc.colorMode ?? 'gradient',
+                    motionDynamics: 'auto',
+                    neonGlow: nextAcc.neonGlow ?? true,
+                    error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                  });
+                });
+              } else {
+                newFailedItems.push({
+                  id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
+                  accountName: nextAcc.name,
+                  prompt: `(Auto Prompt: ${nextAcc.promptCount} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
+                  type: nextAcc.type,
+                  subCategory: nextAcc.subCategory,
+                  style: nextAcc.style,
+                  isGreenScreen: nextAcc.isGreenScreen ?? false,
+                  colorMode: nextAcc.colorMode ?? 'gradient',
+                  motionDynamics: 'auto',
+                  neonGlow: nextAcc.neonGlow ?? true,
+                  isAutoPromptPending: true,
+                  promptCount: nextAcc.promptCount,
+                  error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                });
+              }
+            }
+            addLog(`⏸️ [${acc.name}] Kuota penuh saat generate prompt — seluruh ${accountsToRun.length - i} akun tersisa diamankan ke fitur Coba Ulang!`, 'warn');
+            handleModelQuotaExceeded(selectedModel);
+            stopAllForQuota = true;
+            break;
+          }
           continue;
         }
       }
@@ -1382,7 +1428,54 @@ export default function App() {
               error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
             });
           });
-          addLog(`⏸️ [${acc.name}] Menghentikan antrean secara aman agar ${remainingPrompts.length} prompt sisa tidak terbakar error 429 beruntun. Kemungkinan besar kuota harian (RPD) atau kuota Project Google Cloud bersama dari 9 key telah penuh.`, 'warn');
+
+          let savedSubsequentAccounts = 0;
+          let savedSubsequentPrompts = 0;
+          for (let k = i + 1; k < accountsToRun.length; k++) {
+            const nextAcc = accountsToRun[k];
+            savedSubsequentAccounts++;
+            const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
+            if (hasNextCustom) {
+              savedSubsequentPrompts += nextAcc.customPrompts!.length;
+              nextAcc.customPrompts!.forEach((np, nIdx) => {
+                newFailedItems.push({
+                  id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
+                  accountName: nextAcc.name,
+                  prompt: np,
+                  type: nextAcc.type,
+                  subCategory: nextAcc.subCategory,
+                  style: nextAcc.style,
+                  isGreenScreen: nextAcc.isGreenScreen ?? false,
+                  colorMode: nextAcc.colorMode ?? 'gradient',
+                  motionDynamics: 'auto',
+                  neonGlow: nextAcc.neonGlow ?? true,
+                  error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                });
+              });
+            } else {
+              savedSubsequentPrompts += nextAcc.promptCount || 0;
+              newFailedItems.push({
+                id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
+                accountName: nextAcc.name,
+                prompt: `(Auto Prompt: ${nextAcc.promptCount} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
+                type: nextAcc.type,
+                subCategory: nextAcc.subCategory,
+                style: nextAcc.style,
+                isGreenScreen: nextAcc.isGreenScreen ?? false,
+                colorMode: nextAcc.colorMode ?? 'gradient',
+                motionDynamics: 'auto',
+                neonGlow: nextAcc.neonGlow ?? true,
+                isAutoPromptPending: true,
+                promptCount: nextAcc.promptCount,
+                error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+              });
+            }
+          }
+
+          const extraAccMsg = savedSubsequentAccounts > 0
+            ? ` + ${savedSubsequentPrompts} antrean dari ${savedSubsequentAccounts} akun berikutnya`
+            : '';
+          addLog(`⏸️ [${acc.name}] Menghentikan antrean secara aman: ${remainingPrompts.length} prompt sisa [${acc.name}]${extraAccMsg} seluruhnya diamankan ke Coba Ulang agar tidak terbakar error 429 beruntun.`, 'warn');
           handleModelQuotaExceeded(selectedModel);
           stopAllForQuota = true;
           break;
@@ -1411,7 +1504,7 @@ export default function App() {
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
   };
 
-  // Re-try failed animations from Auto Pilot sequentially (grouped in pairs per account/settings)
+  // Re-try failed animations from Auto Pilot sequentially (expands pending auto-prompts + runs 2-in-1 hemat batching)
   const handleRetryFailedAutoPilot = async () => {
     const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
     if (!hasValidKey) {
@@ -1428,63 +1521,185 @@ export default function App() {
 
     setIsAutoPilotRunning(true);
     const itemsToRetry = [...failedAutoPilotItems];
-    const total = itemsToRetry.length;
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     addLog('═══════════════════════════════════════════════════════════════', 'warn');
-    addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Mencoba ulang ${total} animasi dengan mode hemat & pemulihan cooldown...`, 'warn');
-    showToast(`🔄 Mencoba ulang ${total} animasi Auto Pilot yang gagal...`, 'info');
+    addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Memproses ${itemsToRetry.length} item gagal/tertunda dengan mode hemat batch 2-in-1...`, 'warn');
+    showToast(`🔄 Mencoba ulang ${itemsToRetry.length} item Auto Pilot yang gagal/tertunda...`, 'info');
 
     let currentAnimList = [...animations];
     const remainingFailed: FailedAutoPilotItem[] = [];
+    const expandedItems: FailedAutoPilotItem[] = [];
+    let quotaStoppedInExpansion = false;
 
-    for (let i = 0; i < total; i++) {
-      const item = itemsToRetry[i];
-      addLog(`⚡ [Coba Ulang Auto Pilot #${i + 1}/${total} - ${item.accountName}] Memproses "${item.prompt.substring(0, 30)}..."`, 'info');
-
+    for (let idx = 0; idx < itemsToRetry.length; idx++) {
+      const it = itemsToRetry[idx];
+      const isPendingAuto = it.isAutoPromptPending || it.prompt.startsWith('(Auto Prompt:') || it.prompt.startsWith('(Generate Prompts:');
+      if (!isPendingAuto) {
+        expandedItems.push(it);
+        continue;
+      }
+      const targetPromptCount = it.promptCount || 5;
+      addLog(`⚡ [${it.accountName}] Membuat ${targetPromptCount} Auto Prompt sebelum render batch...`, 'info');
       try {
-        const anim = await generateSingleAnimationCode(
+        const genPrompts = await generatePromptsViaGemini(
           apiKeys,
           selectedModel,
-          item.prompt,
-          item.type,
-          item.subCategory,
-          item.style,
-          i + 1,
-          total,
-          (attempt, max, msg) => addLog(`[Retry ${attempt}/${max}] ${msg}`, 'warn'),
-          3,
-          item.isGreenScreen ?? false,
-          item.colorMode ?? 'gradient',
+          it.type,
+          it.subCategory,
+          it.style,
+          targetPromptCount,
+          undefined,
+          it.isGreenScreen ?? false,
+          it.colorMode ?? 'gradient',
           'auto',
-          item.neonGlow ?? true
+          it.neonGlow ?? true
         );
-
-        if (anim) {
-          const newAnimItem: AnimationItem = {
-            ...anim,
-            account: item.accountName,
-            createdAt: Date.now(),
-          };
-          currentAnimList = [newAnimItem, ...currentAnimList];
-          saveAnimationsToStorage(currentAnimList);
-          addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi selesai & disimpan ke Galeri!`, 'success');
-        }
-
-        if (i < total - 1) {
-          await new Promise((res) => setTimeout(res, Math.max(800, Math.round(pacingDelay * 0.6))));
-        }
+        genPrompts.forEach((gp, gpIdx) => {
+          expandedItems.push({
+            id: 'retry_exp_' + Date.now() + '_' + idx + '_' + gpIdx + '_' + Math.random().toString(36).substring(7),
+            accountName: it.accountName,
+            prompt: gp,
+            type: it.type,
+            subCategory: it.subCategory,
+            style: it.style,
+            isGreenScreen: it.isGreenScreen ?? false,
+            colorMode: it.colorMode ?? 'gradient',
+            motionDynamics: 'auto',
+            neonGlow: it.neonGlow ?? true,
+            error: 'Siap dirender dari antrean Auto Prompt',
+          });
+        });
       } catch (e: any) {
-        if (e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted) {
-          remainingFailed.push(...itemsToRetry.slice(i));
+        const isQuota = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
+        if (isQuota) {
+          addLog(`⏸️ [${it.accountName}] Kuota masih penuh saat expand Auto Prompt — semua antrean tersisa tetap disimpan aman.`, 'warn');
+          remainingFailed.push(...itemsToRetry.slice(idx));
           handleModelQuotaExceeded(selectedModel);
+          quotaStoppedInExpansion = true;
           break;
         }
-        addLog(`❌ [Masih Kendala] [${item.accountName}]: ${e.message}`, 'error');
-        remainingFailed.push({ ...item, error: e.message || 'Masih kendala saat dicoba ulang' });
-        await new Promise((res) => setTimeout(res, 1000));
+        remainingFailed.push({ ...it, error: e.message || 'Gagal expand Auto Prompt' });
       }
     }
 
+    if (!quotaStoppedInExpansion && expandedItems.length > 0) {
+      const BATCH_ANIM_SIZE = 2;
+      const chunks: FailedAutoPilotItem[][] = [];
+      for (const item of expandedItems) {
+        const last = chunks[chunks.length - 1];
+        const canMerge =
+          last &&
+          last.length < BATCH_ANIM_SIZE &&
+          last[0].accountName === item.accountName &&
+          last[0].type === item.type &&
+          last[0].subCategory === item.subCategory &&
+          last[0].style === item.style &&
+          !!last[0].isGreenScreen === !!item.isGreenScreen &&
+          (last[0].colorMode ?? 'gradient') === (item.colorMode ?? 'gradient') &&
+          (last[0].neonGlow ?? true) === (item.neonGlow ?? true);
+        if (canMerge) {
+          last.push(item);
+        } else {
+          chunks.push([item]);
+        }
+      }
+
+      let processedCount = 0;
+      let consecutiveExhaustedBatches = 0;
+      for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
+        const chunk = chunks[cIdx];
+        const lead = chunk[0];
+        addLog(`🎬 [Coba Ulang #${processedCount + 1}${chunk.length > 1 ? `–#${processedCount + chunk.length}` : ''}/${expandedItems.length} - ${lead.accountName}] Render "${lead.prompt.substring(0, 35)}..."`, 'info');
+
+        let results = await generateBatchAnimationCodes(
+          apiKeys,
+          selectedModel,
+          chunk.map((c) => c.prompt),
+          lead.type,
+          lead.subCategory,
+          lead.style,
+          processedCount + 1,
+          expandedItems.length,
+          {
+            isGreenScreen: lead.isGreenScreen ?? false,
+            colorMode: lead.colorMode ?? 'gradient',
+            motionDynamics: 'auto',
+            neonGlow: lead.neonGlow ?? true,
+            onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+          }
+        );
+
+        if (results.every((r) => r.exhausted)) {
+          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
+          if (waitMs > 0 && waitMs <= 68000) {
+            addLog(`⏳ [${lead.accountName}] Menunggu pemulihan cooldown ${Math.ceil(waitMs / 1000)}s sebelum lanjut...`, 'warn');
+            await new Promise((res) => setTimeout(res, waitMs));
+            results = await generateBatchAnimationCodes(
+              apiKeys,
+              selectedModel,
+              chunk.map((c) => c.prompt),
+              lead.type,
+              lead.subCategory,
+              lead.style,
+              processedCount + 1,
+              expandedItems.length,
+              {
+                isGreenScreen: lead.isGreenScreen ?? false,
+                colorMode: lead.colorMode ?? 'gradient',
+                motionDynamics: 'auto',
+                neonGlow: lead.neonGlow ?? true,
+                onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+              }
+            );
+          }
+        }
+
+        let hadSuccess = false;
+        let stillExhausted = false;
+        for (let rIdx = 0; rIdx < chunk.length; rIdx++) {
+          const item = chunk[rIdx];
+          const res = results[rIdx];
+          if (res?.anim) {
+            hadSuccess = true;
+            const newAnimItem: AnimationItem = {
+              ...res.anim,
+              account: item.accountName,
+              createdAt: Date.now(),
+            };
+            currentAnimList = [newAnimItem, ...currentAnimList];
+            saveAnimationsToStorage(currentAnimList);
+            addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi selesai & disimpan ke Galeri!`, 'success');
+          } else {
+            if (res?.exhausted) stillExhausted = true;
+            addLog(`⚠️ [Masih Kendala] [${item.accountName}]: ${res?.error || 'Gagal saat dicoba ulang'}`, 'warn');
+            remainingFailed.push({ ...item, error: res?.error || 'Masih kendala saat dicoba ulang' });
+          }
+        }
+        processedCount += chunk.length;
+
+        if (hadSuccess) {
+          consecutiveExhaustedBatches = 0;
+        } else if (stillExhausted) {
+          consecutiveExhaustedBatches++;
+        }
+
+        const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+        if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
+          const unretried = chunks.slice(cIdx + 1).flat();
+          remainingFailed.push(...unretried);
+          addLog(`⏸️ Kuota penuh saat coba ulang — ${unretried.length} item tersisa dari semua akun tetap disimpan aman.`, 'warn');
+          handleModelQuotaExceeded(selectedModel);
+          break;
+        }
+
+        if (cIdx < chunks.length - 1) {
+          const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
+          await new Promise((res) => setTimeout(res, Math.max(800, Math.round(pacingDelay * 0.7)) + extraBreath));
+        }
+      }
+    }
+
+    setAnimations(currentAnimList);
     setFailedAutoPilotItems(remainingFailed);
     setIsAutoPilotRunning(false);
 
@@ -1492,7 +1707,7 @@ export default function App() {
       showToast('🎉 Semua animasi gagal Auto Pilot berhasil diperbaiki!', 'success');
       addLog('🏁 [SELESAI COBA ULANG] Seluruh animasi gagal Auto Pilot telah berhasil diperbaiki!', 'success');
     } else {
-      showToast(`Tersisa ${remainingFailed.length} animasi Auto Pilot yang masih kendala.`, 'warn');
+      showToast(`Tersisa ${remainingFailed.length} item Auto Pilot yang masih kendala/tertunda.`, 'warn');
     }
   };
 
@@ -2076,6 +2291,40 @@ export default function App() {
         onRetrySingleManualPrompt={handleRetrySinglePrompt}
         onRetrySingleAutoPilotItem={async (item) => {
           try {
+            const isPendingAuto = item.isAutoPromptPending || item.prompt.startsWith('(Auto Prompt:') || item.prompt.startsWith('(Generate Prompts:');
+            if (isPendingAuto) {
+              const targetCount = item.promptCount || 5;
+              const genPrompts = await generatePromptsViaGemini(
+                apiKeys,
+                selectedModel,
+                item.type || currentType,
+                item.subCategory || nicheCategory,
+                item.style || visualStyle,
+                targetCount,
+                undefined,
+                item.isGreenScreen ?? false,
+                item.colorMode ?? colorMode,
+                'auto',
+                item.neonGlow ?? neonGlow
+              );
+              const expanded: FailedAutoPilotItem[] = genPrompts.map((gp, gIdx) => ({
+                id: 'single_exp_' + Date.now() + '_' + gIdx + '_' + Math.random().toString(36).substring(7),
+                accountName: item.accountName,
+                prompt: gp,
+                type: item.type || currentType,
+                subCategory: item.subCategory || nicheCategory,
+                style: item.style || visualStyle,
+                isGreenScreen: item.isGreenScreen ?? false,
+                colorMode: item.colorMode ?? colorMode,
+                motionDynamics: 'auto',
+                neonGlow: item.neonGlow ?? neonGlow,
+                error: 'Auto Prompt siap dirender',
+              }));
+              setFailedAutoPilotItems((prev) => prev.flatMap((f) => (f.id === item.id ? expanded : [f])));
+              showToast(`${expanded.length} prompt untuk [${item.accountName}] berhasil dibuat! Klik "Ulangi Semua" untuk merender batch.`, 'success');
+              addLog(`✅ [${item.accountName}] ${expanded.length} Auto Prompt siap dirender dari daftar Coba Ulang.`, 'success');
+              return;
+            }
             const anim = await generateSingleAnimationCode(
               apiKeys,
               selectedModel,

@@ -302,7 +302,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [1000, 2200, 3800],
       cooldownStepsMs: [18000, 34000, 55000],
       postQuotaRecoveryMs: 12000,
-      timeoutMs: 18000,
+      timeoutMs: 24000,
     };
   }
   if (m.includes('3.5-flash-lite')) {
@@ -315,7 +315,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [1400, 2800, 4600],
       cooldownStepsMs: [24000, 44000, 68000],
       postQuotaRecoveryMs: 15000,
-      timeoutMs: 22000,
+      timeoutMs: 26000,
     };
   }
   // gemini-2.5-flash / gemini-flash-latest
@@ -1273,8 +1273,11 @@ export function verifyCanvasAnimationHtml(
     const inspectFrameData = (data: Uint8ClampedArray) => {
       let visiblePixels = 0;
       let nonZeroAlphaPixels = 0;
+      let borderPixels = 0;
       let minX = rw, maxX = -1, minY = rh, maxY = -1;
       let sumX = 0, sumY = 0;
+      const borderX = Math.max(2, Math.floor(rw * 0.04));
+      const borderY = Math.max(2, Math.floor(rh * 0.04));
       for (let py = 0; py < rh; py++) {
         for (let px = 0; px < rw; px++) {
           const i = (py * rw + px) * 4;
@@ -1288,12 +1291,16 @@ export function verifyCanvasAnimationHtml(
             if (px > maxX) maxX = px;
             if (py < minY) minY = py;
             if (py > maxY) maxY = py;
+            if (px < borderX || px >= rw - borderX || py < borderY || py >= rh - borderY) {
+              borderPixels++;
+            }
           }
         }
       }
       return {
         visiblePixels,
         nonZeroAlphaPixels,
+        borderPixels,
         bboxW: maxX >= minX ? maxX - minX + 1 : 0,
         bboxH: maxY >= minY ? maxY - minY + 1 : 0,
         meanX: visiblePixels > 0 ? sumX / visiblePixels : rw / 2,
@@ -1339,6 +1346,13 @@ export function verifyCanvasAnimationHtml(
             ok: false,
             visiblePixels,
             reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px)`,
+          };
+        }
+        if (fm.borderPixels > 8) {
+          return {
+            ok: false,
+            visiblePixels,
+            reason: `Komponen melenceng/terpotong di tepi canvas (${fm.borderPixels} px pinggir) — pastikan seluruh bentuk di dalam G.part(cx,cy,...)`,
           };
         }
         if (fm.bboxW >= rw * 0.92 || fm.bboxH >= rh * 0.92) {
@@ -2378,18 +2392,25 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + smooth dashboard bars & ring pulse strictly inside monitor screen',
     };
   }
-  if (/\b(money|dollar|coin|currency|bank|finance|investment|revenue|payment|cash)\b/.test(topic)) {
+  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement)\b/.test(topic)) {
+    return {
+      label: 'bidirectional cash flow',
+      anatomyHint: 'ALL shapes MUST stay inside G.part(cx,cy+bobY,...) within [-0.52*R,+0.52*R] (ZERO stray coins near corner (0,0)! ZERO dark backdrop disc!): (1) stacked back coin G.disc(0,0.06*R,0.28*R,"#F59E0B","#F8FAFC",2) FIRST; (2) front hero coin G.disc(0,0.02*R,0.26*R,"#FFD700","#F8FAFC",2.5) + G.star(0,0.02*R,0.12*R,0.055*R,5,-Math.PI/2,"#FFFFFF","#B45309",1.5); (3) top flow G.arrow(-0.34*R+flowX,-0.34*R,0.34*R+flowX,-0.34*R,0.05*R,0.13*R,"#00E5FF"); (4) bottom return G.arrow(0.34*R-flowX,0.38*R,-0.34*R-flowX,0.38*R,0.05*R,0.13*R,"#38BDF8").',
+      codeHint: 'upright coin float bobY=Math.sin(t*2.2)*0.025*R + smooth horizontal reciprocating transfer arrows flowX=Math.sin(t*2.6)*0.08*R STRICTLY inside [-0.52*R,+0.52*R] (NEVER draw extra discs outside G.part!)',
+    };
+  }
+  if (/\b(money|dollar|coin|currency|bank|finance|investment|cash)\b/.test(topic)) {
     return {
       label: 'minted value gleam',
-      anatomyHint: 'PAINTER ORDER: stacked back gold coins G.disc(-0.18*R,-0.06*R,0.30*R,"#F59E0B","#F8FAFC",2) FIRST; front hero coin G.disc(0.08*R,0.06*R,0.36*R,"#FFD700","#F8FAFC",3), inner ring G.ring(0.08*R,0.06*R,0.27*R,0.03*R,0,Math.PI*2,"#B45309"), centered G.star(0.08*R,0.06*R,0.13*R,0.055*R,5,"#FFFFFF") LAST on top.',
-      codeHint: 'upright coin gleam float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + crisp front star crest pulse',
+      anatomyHint: 'ALL shapes inside G.part(cx,cy+bobY,...) within [-0.52*R,+0.52*R] (ZERO stray corner coins! ZERO dark backdrop disc!): stacked back gold coin G.disc(-0.16*R,-0.06*R,0.29*R,"#F59E0B","#F8FAFC",2) FIRST; front hero coin G.disc(0.08*R,0.06*R,0.35*R,"#FFD700","#F8FAFC",3), inner ring G.ring(0.08*R,0.06*R,0.26*R,0.03*R,0,Math.PI*2,"#B45309"), centered G.star(0.08*R,0.06*R,0.14*R,0.06*R,5,-Math.PI/2,"#FFFFFF","#B45309",2) LAST on top.',
+      codeHint: 'upright coin gleam float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + crisp front star crest pulse inside centered hero coin',
     };
   }
   if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume|wallet)\b/.test(topic)) {
     return {
       label: 'executive hinged float',
-      anatomyHint: 'Wide horizontal body G.box(0,0.06*R,1.04*R,0.68*R,0.09*R), welded top handle G.ring(0,-0.28*R,0.16*R,0.06*R,Math.PI,Math.PI*2), overlapping lid G.box(0,-0.08*R,1.06*R,0.28*R,0.07*R), centered clasp G.box(0,0.06*R,0.16*R,0.14*R,0.03*R).',
-      codeHint: 'upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp breath scaleY=1+0.04*Math.sin(t*3)',
+      anatomyHint: 'ZERO circular dark/colored backdrop disc or drop-shadow behind briefcase! Wide horizontal body G.box(0,0.08*R,1.02*R,0.64*R,0.09*R), welded top handle G.ring(0,-0.24*R,0.15*R,0.06*R,Math.PI,Math.PI*2), overlapping lid G.box(0,-0.06*R,1.04*R,0.28*R,0.07*R), centered gold clasp G.box(0,0.08*R,0.16*R,0.14*R,0.03*R) LAST on top.',
+      codeHint: 'WHOLE briefcase upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp articulation & corner accent stripe inside body (NO sliding small cards behind handle!)',
     };
   }
   if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
@@ -2540,7 +2561,7 @@ async function generateAnimationDirect(
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
-    : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
+    : `WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
@@ -2684,7 +2705,7 @@ async function generateAnimationBatchDirect(
 
   const geometryGuide = isBackground
     ? 'FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w.'
-    : 'WELDED 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) Weld inside [-0.62*R,+0.62*R] (overlap >=0.04*R); (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R.';
+    : 'WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) Weld inside [-0.62*R,+0.62*R] (overlap >=0.04*R), NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R.';
 
   const topicLines = prompts.map((p, idx) => {
     const plan = resolvePromptMotionPlan(p, type, style, motionDynamics);
@@ -3311,7 +3332,7 @@ Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, gr
 Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
-ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua sub-bagian wajib menempel/overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian melayang terpisah, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian di pojok luar G.part, ZERO piringan lingkaran latar/bayangan gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;

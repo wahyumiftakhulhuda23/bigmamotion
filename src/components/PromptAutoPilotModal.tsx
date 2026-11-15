@@ -13,6 +13,8 @@ export interface FailedAutoPilotItem {
   colorMode?: ColorMode;
   motionDynamics?: MotionDynamics;
   neonGlow?: boolean;
+  isAutoPromptPending?: boolean;
+  promptCount?: number;
   error: string;
 }
 
@@ -401,6 +403,19 @@ export const PromptAutoPilotModal: React.FC<PromptAutoPilotModalProps> = ({
                   <span>Ulangi {failedItems.length} Animasi Gagal</span>
                 </button>
               )}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(
+                failedItems.reduce<Record<string, number>>((accMap, item) => {
+                  const key = item.accountName || 'Tanpa Akun';
+                  accMap[key] = (accMap[key] || 0) + (item.isAutoPromptPending ? Math.max(1, item.promptCount || 1) : 1);
+                  return accMap;
+                }, {})
+              ).map(([accName, count]) => (
+                <span key={accName} className="px-2 py-0.5 rounded bg-black/50 border border-rose-500/30 text-[10px] font-bold text-amber-300">
+                  {accName}: {count}
+                </span>
+              ))}
             </div>
             <div className="max-h-24 overflow-y-auto space-y-1 pr-1 text-[11px] text-gray-300">
               {failedItems.map((fi, fIdx) => (
