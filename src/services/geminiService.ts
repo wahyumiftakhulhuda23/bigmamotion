@@ -766,6 +766,44 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         var px = -uy * hl * 0.55, py = ux * hl * 0.55, bx = x2 - ux * hl, by = y2 - uy * hl;
         G.poly([[x2, y2], [bx + px, by + py], [bx - px, by - py]], col || '#ffffff', null, 0, true);
       },
+      person: function(x, y, s, bodyCol, headCol, rimCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(12, Math.abs(G._n(s, 40)));
+        var lw = Math.max(1.2, s * 0.05);
+        G.box(x, y + s * 0.34, s * 0.92, s * 0.56, s * 0.28, bodyCol || '#1e293b', rimCol || null, lw);
+        G.disc(x, y - s * 0.24, s * 0.27, headCol || bodyCol || '#38bdf8', rimCol || null, lw);
+      },
+      check: function(x, y, s, thick, col) {
+        x = G._n(x); y = G._n(y); s = Math.max(6, Math.abs(G._n(s, 14)));
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.42, y + s * 0.04);
+        ctx.lineTo(x - s * 0.08, y + s * 0.38);
+        ctx.lineTo(x + s * 0.48, y - s * 0.32);
+        ctx.strokeStyle = col || '#ffffff';
+        ctx.lineWidth = Math.max(1.5, Math.abs(G._n(thick, s * 0.22)));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      },
+      pie: function(x, y, r, a0, sweep, sliceCol, baseCol, rimCol) {
+        x = G._n(x); y = G._n(y); r = Math.max(2, Math.abs(G._n(r, 16)));
+        G.disc(x, y, r, baseCol || '#334155', rimCol || '#ffffff', Math.max(1, r * 0.08));
+        var sa = G._n(a0, -Math.PI / 2), sw = Math.max(0.25, Math.min(Math.PI * 1.92, Math.abs(G._n(sweep, Math.PI * 0.7))));
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, Math.max(1, r - 1), sa, sa + sw);
+        ctx.closePath();
+        ctx.fillStyle = sliceCol || '#f43f5e';
+        ctx.fill();
+      },
+      rays: function(x, y, rIn, rOut, n, rot, thick, col) {
+        x = G._n(x); y = G._n(y);
+        var ri = Math.max(1, Math.abs(G._n(rIn, 12))), ro = Math.max(ri + 2, Math.abs(G._n(rOut, 22)));
+        var cnt = Math.max(3, Math.floor(G._n(n, 6))), a0 = G._n(rot, -Math.PI / 2);
+        for (var i = 0; i < cnt; i++) {
+          var a = a0 + (i * Math.PI * 2) / cnt;
+          G.pill(x + Math.cos(a) * ri, y + Math.sin(a) * ri, x + Math.cos(a) * ro, y + Math.sin(a) * ro, thick || 3, col || '#ffd700');
+        }
+      },
       part: function(a1, a2, a3, a4, a5, a6) {
         var fn, tx, ty, rot, sx, sy;
         if (typeof a1 === 'function') { fn = a1; tx = a2; ty = a3; rot = a4; sx = a5; sy = a6; }
@@ -2189,11 +2227,46 @@ export function resolvePromptMotionPlan(
     };
   }
   const topic = (promptTopic || '').toLowerCase();
-  if (/\b(trophy|medal|award|achievement|cup|winner|crown)\b/.test(topic)) {
+  if (/\b(medal|ribbon|badge|certificate)\b/.test(topic)) {
+    return {
+      label: 'suspended medal gleam',
+      anatomyHint: 'PAINTER ORDER (back-to-front): draw V-ribbon straps FIRST behind medal G.poly([[-0.22*R,-0.46*R],[-0.06*R,-0.10*R],[-0.20*R,-0.10*R],[-0.34*R,-0.46*R]]) & right strap, THEN outer medal G.disc(0,0.08*R,0.38*R), inner rim G.ring(0,0.08*R,0.29*R,0.035*R), and centered G.star(0,0.08*R,0.16*R,0.07*R,5) LAST on top (NEVER draw stem/plinth over medal!).',
+      codeHint: 'upright pendulum sway bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.7)*0.055 + pulsing centered star scale=1+0.07*Math.sin(t*3.2)',
+    };
+  }
+  if (/\b(trophy|award|achievement|cup|winner|crown)\b/.test(topic)) {
     return {
       label: 'celebratory crest lift',
-      anatomyHint: 'Welded vertical stack at x=0: plinth G.box(0,0.42*R,0.50*R,0.11*R,0.03*R), stem G.box(0,0.28*R,0.14*R,0.20*R,0.02*R), chalice G.poly([[-0.30*R,-0.32*R],[0.30*R,-0.32*R],[0.17*R,0.19*R],[-0.17*R,0.19*R]]), side handles G.ring at (±0.27*R,-0.10*R), centered G.star(0,-0.08*R,0.12*R,0.055*R,5).',
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.04*R, rot=Math.sin(t*1.8)*0.04 + pulsing centered star emblem inside cup',
+      anatomyHint: 'PAINTER ORDER (back-to-front): draw side handles G.ring(±0.26*R,-0.10*R,0.13*R,0.05*R), base plinth G.box(0,0.42*R,0.48*R,0.10*R,0.03*R), and stem G.box(0,0.28*R,0.13*R,0.20*R,0.02*R) FIRST; THEN draw front chalice G.poly([[-0.30*R,-0.32*R],[0.30*R,-0.32*R],[0.17*R,0.19*R],[-0.17*R,0.19*R]]) overlapping stem; and centered G.star(0,-0.08*R,0.12*R,0.055*R,5) LAST on top.',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.04*R, rot=Math.sin(t*1.7)*0.04 + pulsing centered star emblem inside cup',
+    };
+  }
+  if (/\b(email|mail|envelope|inbox|newsletter|message|chat|comment|communication)\b/.test(topic)) {
+    return {
+      label: 'envelope & badge float',
+      anatomyHint: 'Envelope body G.box(0,0.05*R,1.02*R,0.68*R,0.08*R), crisp inner V-flap crease G.poly([[-0.48*R,-0.22*R],[0,0.12*R],[0.48*R,-0.22*R]],null,rimCol,0.055*R,false), plus welded top-right badge G.disc(0.40*R,-0.22*R,0.14*R) LAST on top (NEVER slide paper below envelope, NEVER draw briefcase handle!).',
+      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 + smooth badge pulse scale=1+0.12*Math.sin(t*3.4) (ALWAYS visible, NEVER blink-hide)',
+    };
+  }
+  if (/\b(negotiation|handshake|partnership|team|meeting|collaboration|networking)\b/.test(topic)) {
+    return {
+      label: 'paired executive agreement',
+      anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly at center by G.capsule(0,0.18*R,0.34*R,0.11*R), plus top emblem G.disc(0,-0.28*R,0.14*R) with G.check(0,-0.28*R,0.08*R) LAST on top (NO bottom shadow line, NO hiding!).',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth continuous badge pulse scale=1+0.09*Math.sin(t*3) (NEVER use if(sin>0) blink!)',
+    };
+  }
+  if (/\b(leadership|executive|leader|manager|ceo|mentor|customer|support|headset|people|person|user|avatar|chair)\b/.test(topic)) {
+    return {
+      label: 'executive figure poise',
+      anatomyHint: 'Draw podium/seat base G.box(0,0.34*R,0.56*R,0.22*R,0.04*R) FIRST, THEN centered G.person(0,-0.02*R,0.42*R,bodyCol,headCol,rimCol) cleanly resting on base, plus crest G.star(0,-0.44*R,0.10*R,0.045*R,5) cleanly above head (NEVER draw floating triangles or stick-legs!).',
+      codeHint: 'upright dignified float bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.4)*0.03 + smooth crest star pulse scale=1+0.09*Math.sin(t*3)',
+    };
+  }
+  if (/\b(lightbulb|idea|bulb|innovation|creative|spark)\b/.test(topic)) {
+    return {
+      label: 'radiant filament pulse',
+      anatomyHint: 'PAINTER ORDER: screw cap G.box(0,0.30*R,0.24*R,0.16*R,0.04*R) & base tip G.capsule(0,0.40*R,0.14*R,0.06*R) FIRST; solid opaque glass bulb G.disc(0,-0.02*R,0.28*R) + welded neck G.box(0,0.16*R,0.24*R,0.14*R,0.02*R); inner filament G.poly([[-0.08*R,0.06*R],[0,-0.08*R],[0.08*R,0.06*R]],null,col,0.04*R,false); plus 5 clean radial G.rays(0,-0.04*R,0.36*R,0.48*R,5,rot,0.045*R). NO giant half-circle dome, NO confetti squares!',
+      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R + smooth radial ray length oscillation 0.44*R+0.06*R*Math.sin(t*3.2) & filament pulse',
     };
   }
   if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume|wallet)\b/.test(topic)) {
@@ -2213,8 +2286,8 @@ export function resolvePromptMotionPlan(
   if (/\b(dashboard|analytics|chart|graph|report|metric|kpi|profit|growth|candlestick)\b/.test(topic)) {
     return {
       label: 'ascending elastic lift',
-      anatomyHint: 'Upright tablet card G.box(0,0,1.06*R,0.74*R,0.09*R) — NEVER spin! Inside left: 3 vertical G.bar(x, 0.22*R, 0.11*R, h, 0.03*R) anchored at yBase=0.22*R; inside right: G.disc(0.24*R,-0.02*R,0.17*R) or rising trend G.arrow.',
-      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 (NEVER rotate >4deg!) + staggered G.bar height waves strictly inside frame',
+      anatomyHint: 'Upright tablet card G.box(0,0,1.08*R,0.74*R,0.09*R) — NEVER spin! STRICT SEPARATED ZONES: left 3 G.bar at x=-0.34*R, -0.19*R, -0.04*R with yBase=0.22*R, bw=0.10*R, height ALWAYS in [0.16*R..0.44*R] (NEVER shrink below 0.16*R!); right side G.pie(0.27*R,0,0.17*R,-Math.PI/2,sweep,sliceCol,trackCol) cleanly clear of bars.',
+      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 (NEVER >4deg!) + staggered G.bar height (0.28+0.12*Math.sin(t*2.6-i*0.8))*R & G.pie sweep 2.2+0.9*Math.sin(t*2.2)',
     };
   }
   if (/\b(building|skyscraper|tower|headquarters|architecture)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
@@ -2224,11 +2297,25 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright micro-sway rot=Math.sin(t*1.4)*0.025 (NEVER tilt >3deg) + staggered lit window rows pulsing smoothly inside tower walls',
     };
   }
+  if (/\b(puzzle|connect|link)\b/.test(topic)) {
+    return {
+      label: 'interlocked precision fit',
+      anatomyHint: '2 solid blocks G.box(-0.19*R,0,0.40*R,0.40*R,0.06*R) & G.box(0.19*R,0,0.40*R,0.40*R,0.06*R) interlocked over centered tab G.disc(0,0,0.11*R) LAST on top.',
+      codeHint: 'gentle x micro-slide ±0.03*R staying overlapped over center tab + upright float bobY=Math.sin(t*2.2)*0.03*R',
+    };
+  }
+  if (/\b(clock|deadline|timer|calendar|schedule|time)\b/.test(topic)) {
+    return {
+      label: 'precision dial sweep',
+      anatomyHint: 'Centered bezel G.disc(0,0,0.48*R) + inner face G.disc(0,0,0.38*R) + hour/minute hands G.pill(0,0,hx,hy) & G.pill(0,0,mx,my) anchored at (0,0) + center cap G.disc(0,0,0.055*R) LAST on top.',
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + sweeping minute hand angle=t*2.0 & hour hand angle=t*0.35 anchored at (0,0)',
+    };
+  }
   if (/\b(bell|megaphone|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
     return {
       label: 'acoustic ring swing',
       anatomyHint: 'Top loop G.ring(0,-0.42*R,0.08*R), flared dome G.poly + bottom rim G.capsule(0,0.24*R,0.66*R,0.10*R), tucked clapper G.disc(cxOff,0.32*R,0.09*R), symmetric outer sound arcs G.ring at ±0.45*R.',
-      codeHint: 'pendulum pivot G.part(0,-0.36*R,Math.sin(t*4)*0.11,1,1,fn) + delayed clapper sway & expanding soundwave arc alpha',
+      codeHint: 'pendulum pivot G.part(0,-0.36*R,Math.sin(t*4)*0.11,1,1,fn) + delayed clapper sway & expanding soundwave arc sweep',
     };
   }
   if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope|health)\b/.test(topic)) {
@@ -2241,7 +2328,7 @@ export function resolvePromptMotionPlan(
   if (/\b(lock|padlock|vault|shield|key|fingerprint|biometric|security|firewall|safe)\b/.test(topic)) {
     return {
       label: 'precision locking recoil',
-      anatomyHint: 'Unified shield G.poly or padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) welded to top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) + centered keyhole/check inside body.',
+      anatomyHint: 'PAINTER ORDER: top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) FIRST behind body; unified shield G.poly or padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) on top + centered keyhole/G.check inside body LAST.',
       codeHint: 'upright hover + shackle snap yOff=-Math.abs(Math.sin(t*2.6))*0.05*R + inner keyhole/check pulse (NEVER spin 360deg!)',
     };
   }
@@ -2252,18 +2339,18 @@ export function resolvePromptMotionPlan(
       codeHint: 'chassis suspension bobY=Math.sin(t*3.6)*0.03*R + synchronized spinning wheels/rotors G.part(wx,wy,t*5,1,1,fn) at exact wheel sockets',
     };
   }
-  if (/\b(atom|orbit|planet|globe|radar|clock|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
+  if (/\b(atom|orbit|planet|globe|radar|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
     return {
       label: 'orbital & axis precession',
       anatomyHint: 'Centered core G.disc(0,0,0.18*R) surrounded symmetrically by concentric/tilted G.ring orbits or gear teeth anchored at (0,0).',
       codeHint: 'smooth continuous rotation rot=t*1.4 around (0,0) + orbiting node G.disc along exact ring radius',
     };
   }
-  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope|lightbulb|idea|puzzle|handshake|email|chat|message)\b/.test(topic)) {
+  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope)\b/.test(topic)) {
     return {
       label: 'smart telemetry pulse',
-      anatomyHint: 'Unified centered tech/comm housing inside [-0.54*R,+0.54*R]; all pins, flaps, filaments, or network nodes physically overlap housing by >= 0.04*R.',
-      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node/aperture/flap harmonic pulse',
+      anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R]; all pins, lenses, or network nodes physically overlap housing by >= 0.04*R.',
+      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node/aperture harmonic pulse',
     };
   }
   if (overrideMode && overrideMode !== 'auto') {
@@ -2316,17 +2403,17 @@ async function generateAnimationDirect(
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics);
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO translucent boxes!); ONLY high-contrast NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).`
+    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).`
     : neonGlow
     ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0).`
     : `CRISP VECTOR (#080c14 cleared): shadowBlur=0.`;
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
-    : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. CENTER-ORIGIN RULE: G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; G.bar(x,yBase,...) grows upward from yBase. ANATOMY: ${motionPlan.anatomyHint} STRICTLY zero detached floating pieces, zero translucent overlay boxes, zero rhombus/card/gears/floor-shadow.`;
+    : `WELDED 3D ICON: Center via G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint}.
@@ -2460,14 +2547,14 @@ async function generateAnimationBatchDirect(
   const isBackground = type === 'bg';
 
   const colorStyleDirective = isGreenScreen
-    ? 'GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO translucent boxes!); ONLY vibrant NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).'
+    ? 'GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).'
     : neonGlow
     ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright LEDs (reset 0).'
     : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0.';
 
   const geometryGuide = isBackground
     ? 'FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w.'
-    : 'WELDED 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; G.bar(x,yBase,...) grows upward from yBase. Weld all sub-parts strictly inside [-0.62*R,+0.62*R] (overlap >= 0.04*R). ZERO detached floating diamonds/bars/rectangles, ZERO translucent ghost boxes, ZERO rhombus/card/gears/floor-shadow.';
+    : 'WELDED 3D ICON: Center with G.part(cx, cy+bobY, rot, sx, sy, fn), R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) Weld inside [-0.62*R,+0.62*R] (overlap >=0.04*R); (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R.';
 
   const topicLines = prompts.map((p, idx) => {
     const plan = resolvePromptMotionPlan(p, type, style, motionDynamics);
@@ -2476,7 +2563,7 @@ async function generateAnimationBatchDirect(
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} independent RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
@@ -3090,11 +3177,11 @@ async function generateImageToMotionDirect(
   const ai = new GoogleGenAI({ apiKey: cleanKey });
 
   const visionPrompt = `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.72.
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, jarum/grafik naik via G.bar/G.arrow, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat).
-Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1 tanpa kotak transparan, warna kontras non-hijau)' : 'BG Gelap (#080c14)'}.
+Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
+Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.part(tx,ty,rot,sx,sy,fn)
-ATURAN: Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH! Setiap sub-bagian wajib menempel/overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian melayang terpisah, ZERO kotak transparan, ZERO gerigi liar.
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.part(tx,ty,rot,sx,sy,fn)
+ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua sub-bagian wajib menempel/overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian melayang terpisah, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
