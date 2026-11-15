@@ -6,7 +6,9 @@ interface ModelRotationModalProps {
   currentModel: GeminiModel;
   keyCount: number;
   failedCount?: number;
+  failedManualCount?: number;
   onConfirmSwitch: (newModel: GeminiModel) => void;
+  onConfirmSwitchAndRetry?: (newModel: GeminiModel) => void;
   onOpenApiSettings: () => void;
   onClose: () => void;
 }
@@ -16,7 +18,9 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   currentModel,
   keyCount,
   failedCount = 0,
+  failedManualCount = 0,
   onConfirmSwitch,
+  onConfirmSwitchAndRetry,
   onOpenApiSettings,
   onClose,
 }) => {
@@ -80,7 +84,7 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
         <p className="text-xs text-gray-300 leading-relaxed mb-4 bg-slate-950/60 p-3.5 rounded-xl border border-gray-800">
           Google memberlakukan kuota limit pemanggilan (RPM/TPM) per-model. Seluruh API Key yang tersimpan saat ini telah mencapai batas kuota pada <strong className="text-amber-300">{currentLabel}</strong>.
           <br /><br />
-          <span className="text-emerald-300 font-semibold">Solusi Otomatis:</span> Alihkan ke model alternatif di bawah lalu klik <strong className="text-white">{failedCount > 0 ? `"Ulangi ${failedCount} Animasi Gagal"` : '"Ulangi yang Gagal"'}</strong> agar hanya prompt yang belum selesai yang dilanjutkan. Jika Auto Pilot dijalankan ulang, prompt yang sudah ada di Galeri otomatis dilewati agar tidak dobel &amp; hemat kuota.
+          <span className="text-emerald-300 font-semibold">Solusi Otomatis:</span> Alihkan ke model alternatif di bawah lalu lanjutkan {(failedCount + failedManualCount) > 0 ? <strong className="text-white">{failedCount + failedManualCount} item gagal/tertunda</strong> : 'antrean'} agar hanya prompt yang belum selesai yang diproses. Seluruh prompt yang sudah berhasil di akun sebelumnya otomatis terkunci aman &amp; tidak akan diulang.
         </p>
 
         {/* Model Options */}
@@ -295,30 +299,50 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-col sm:flex-row items-center gap-2.5 pt-2">
-          <button
-            onClick={() => onConfirmSwitch(selectedTarget)}
-            className="w-full sm:flex-1 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-500/25 active:scale-95 transition cursor-pointer flex items-center justify-center gap-2"
-          >
-            <i className="fa-solid fa-rotate text-sm"></i>
-            <span>Beralih ke {getModelName(selectedTarget)}</span>
-          </button>
+        <div className="flex flex-col gap-2 pt-2">
+          {onConfirmSwitchAndRetry && (failedCount + failedManualCount) > 0 && (
+            <button
+              onClick={() => onConfirmSwitchAndRetry(selectedTarget)}
+              className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/25 active:scale-95 transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <i className="fa-solid fa-play text-xs"></i>
+              <span>Beralih ke {getModelName(selectedTarget)} &amp; Lanjutkan {failedCount + failedManualCount} Item Gagal</span>
+            </button>
+          )}
 
-          <button
-            onClick={onOpenApiSettings}
-            className="w-full sm:w-auto py-2.5 px-3.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs border border-gray-700 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
-            title="Buka Pengaturan untuk menambahkan API Key baru"
-          >
-            <i className="fa-solid fa-key text-amber-400 text-xs"></i>
-            <span>Tambah Key</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            <button
+              onClick={() => onConfirmSwitch(selectedTarget)}
+              className={`w-full sm:flex-1 py-2.5 px-4 rounded-xl font-black text-xs active:scale-95 transition cursor-pointer flex items-center justify-center gap-2 ${
+                onConfirmSwitchAndRetry && (failedCount + failedManualCount) > 0
+                  ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40'
+                  : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 shadow-lg shadow-amber-500/25'
+              }`}
+            >
+              <i className="fa-solid fa-rotate text-sm"></i>
+              <span>
+                {onConfirmSwitchAndRetry && (failedCount + failedManualCount) > 0
+                  ? `Beralih ke ${getModelName(selectedTarget)} Saja`
+                  : `Beralih ke ${getModelName(selectedTarget)}`}
+              </span>
+            </button>
 
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto py-2.5 px-3 rounded-xl bg-slate-950/80 hover:bg-slate-900 text-gray-400 hover:text-gray-200 text-xs font-semibold border border-gray-800 transition cursor-pointer"
-          >
-            Batal
-          </button>
+            <button
+              onClick={onOpenApiSettings}
+              className="w-full sm:w-auto py-2.5 px-3.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs border border-gray-700 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
+              title="Buka Pengaturan untuk menambahkan API Key baru"
+            >
+              <i className="fa-solid fa-key text-amber-400 text-xs"></i>
+              <span>Tambah Key</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="w-full sm:w-auto py-2.5 px-3 rounded-xl bg-slate-950/80 hover:bg-slate-900 text-gray-400 hover:text-gray-200 text-xs font-semibold border border-gray-800 transition cursor-pointer"
+            >
+              Batal
+            </button>
+          </div>
         </div>
       </div>
     </div>

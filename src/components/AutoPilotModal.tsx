@@ -1,6 +1,7 @@
 import React from 'react';
-import { AutoPilotAccount, AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
+import { AnimationItem, AutoPilotAccount, AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
 import { getCategoriesForType, getDefaultCategoryForType, findCategoryById } from '../constants/categories';
+import { CompletedLedger, getAccountCompletedCount, normalizePromptKey } from '../utils/autoPilotLedger';
 
 export interface FailedAutoPilotItem {
   id: string;
@@ -30,6 +31,9 @@ interface AutoPilotModalProps {
   failedItems?: FailedAutoPilotItem[];
   onRetryFailedItems?: () => void;
   onRetrySingleFailedItem?: (item: FailedAutoPilotItem) => void;
+  animations?: AnimationItem[];
+  completedLedger?: CompletedLedger;
+  onResetAccountProgress?: (accountName: string) => void;
 }
 
 export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
@@ -44,6 +48,9 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
   failedItems = [],
   onRetryFailedItems,
   onRetrySingleFailedItem,
+  animations = [],
+  completedLedger = {},
+  onResetAccountProgress,
 }) => {
   const [selectedTargetAccount, setSelectedTargetAccount] = React.useState<string>('ALL');
 
@@ -101,7 +108,22 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                 </button>
               </div>
             ) : (
-              accounts.map((acc, index) => (
+              accounts.map((acc, index) => {
+                const isCustom = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
+                const uniqueCustomCount = isCustom
+                  ? new Set(acc.customPrompts!.map((p) => normalizePromptKey(p)).filter(Boolean)).size
+                  : acc.promptCount || 0;
+                const doneCount = Math.min(
+                  uniqueCustomCount,
+                  getAccountCompletedCount(
+                    completedLedger,
+                    animations,
+                    acc.name,
+                    isCustom ? acc.customPrompts : undefined
+                  )
+                );
+                const remainingCount = Math.max(0, uniqueCustomCount - doneCount);
+                return (
                 <div
                   key={acc.id || index}
                   className="glass-card rounded-xl border border-gray-800 p-4 space-y-3 relative bg-gray-900/40"
@@ -114,6 +136,29 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                   >
                     <i className="fa-solid fa-trash"></i>
                   </button>
+
+                  {doneCount > 0 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pr-8 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-[11px]">
+                      <div className="flex items-center gap-2">
+                        <i className="fa-solid fa-shield-check text-emerald-400"></i>
+                        <span className="font-bold text-emerald-300">
+                          {remainingCount === 0
+                            ? `✅ ${doneCount}/${uniqueCustomCount} Selesai (Dilewati otomatis saat Auto Pilot)`
+                            : `✅ ${doneCount}/${uniqueCustomCount} Sudah Selesai • ⏳ ${remainingCount} Tersisa`}
+                        </span>
+                      </div>
+                      {onResetAccountProgress && !isAutoPilotRunning && (
+                        <button
+                          type="button"
+                          onClick={() => onResetAccountProgress(acc.name)}
+                          className="px-2 py-0.5 rounded bg-slate-900 hover:bg-rose-950/70 text-gray-400 hover:text-rose-300 border border-gray-700 hover:border-rose-500/40 text-[10px] font-semibold transition cursor-pointer"
+                          title="Reset riwayat selesai akun ini jika ingin render ulang dari awal"
+                        >
+                          Reset Riwayat
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                 {/* Row 1: Nama Akun, Tipe Animasi, Kategori Microstock & Gaya Visual */}
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pr-8">
@@ -383,7 +428,8 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                   )}
                 </div>
               </div>
-            )))}
+              );
+            }))}
           </div>
         </div>
 
