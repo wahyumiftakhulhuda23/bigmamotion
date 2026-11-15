@@ -115,6 +115,7 @@ const keyModelLastUsedAt = new Map<string, number>(); // per-key+model reuse gap
 const modelGlobalCooldowns = new Map<string, number>(); // Burst guard if 3+ keys hit 429 on same model within 10s
 const recentModelQuotaHits = new Map<string, number[]>(); // Timestamps of recent 429 hits per model
 const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
+const unsupportedThinkingModels = new Set<string>(); // models where thinkingConfig threw invalid_argument
 
 export function resetKeyHealthPool(): void {
   quarantinedKeys.clear();
@@ -126,6 +127,7 @@ export function resetKeyHealthPool(): void {
   modelGlobalCooldowns.clear();
   recentModelQuotaHits.clear();
   unsupportedClientModels.clear();
+  unsupportedThinkingModels.clear();
 }
 
 export function unquarantineKey(rawKey: string): void {
@@ -276,7 +278,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [3200, 6200, 9500],
       cooldownStepsMs: [45000, 75000, 110000],
       postQuotaRecoveryMs: 26000,
-      timeoutMs: 38000,
+      timeoutMs: 46000,
     };
   }
   if (m.includes('3.8') || m.includes('3.6')) {
@@ -289,7 +291,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [2400, 4800, 7500],
       cooldownStepsMs: [36000, 62000, 90000],
       postQuotaRecoveryMs: 22000,
-      timeoutMs: 32000,
+      timeoutMs: 40000,
     };
   }
   if (m.includes('2.5-flash-lite') || m.includes('3.1-flash-lite')) {
@@ -302,7 +304,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [1000, 2200, 3800],
       cooldownStepsMs: [18000, 34000, 55000],
       postQuotaRecoveryMs: 12000,
-      timeoutMs: 24000,
+      timeoutMs: 30000,
     };
   }
   if (m.includes('3.5-flash-lite')) {
@@ -315,7 +317,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
       retryDelaysMs: [1400, 2800, 4600],
       cooldownStepsMs: [24000, 44000, 68000],
       postQuotaRecoveryMs: 15000,
-      timeoutMs: 26000,
+      timeoutMs: 32000,
     };
   }
   // gemini-2.5-flash / gemini-flash-latest
@@ -328,7 +330,7 @@ export function getModelExecutionProfile(model?: string): ModelExecutionProfile 
     retryDelaysMs: [1800, 3600, 5800],
     cooldownStepsMs: [30000, 52000, 78000],
     postQuotaRecoveryMs: 18000,
-    timeoutMs: 24000,
+    timeoutMs: 32000,
   };
 }
 
@@ -501,6 +503,7 @@ export function getCostOptimizedThinkingConfig(
   highPrecision: boolean = false
 ): any {
   const m = (targetModel || '').toLowerCase();
+  if (unsupportedThinkingModels.has(m)) return undefined;
   if (m.includes('2.5')) {
     return { thinkingBudget: purpose === 'vision' || highPrecision ? 256 : 0 };
   }
@@ -845,6 +848,72 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
           G.capsule(0, s * 0.01, s * 0.08, s * 0.20, palm, rim, lw);
           G.capsule(s * 0.09, 0, s * 0.08, s * 0.18, palm, rim, lw);
         });
+      },
+      shield: function(x, y, s, fillCol, rimCol, innerCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(18, Math.abs(G._n(s, 72)));
+        var lw = Math.max(1.5, s * 0.045), rim = rimCol || '#f8fafc', w2 = s * 0.44, hTop = s * 0.48, hBot = s * 0.54;
+        ctx.beginPath();
+        ctx.moveTo(x, y - hTop);
+        ctx.lineTo(x + w2, y - hTop * 0.68);
+        ctx.quadraticCurveTo(x + w2, y + hBot * 0.35, x, y + hBot);
+        ctx.quadraticCurveTo(x - w2, y + hBot * 0.35, x - w2, y - hTop * 0.68);
+        ctx.closePath();
+        ctx.fillStyle = G._c(fillCol || '#4f46e5');
+        ctx.fill();
+        ctx.strokeStyle = G._c(rim);
+        ctx.lineWidth = lw;
+        ctx.stroke();
+        if (innerCol) {
+          G.shield(x, y, s * 0.72, innerCol, null, null);
+        }
+      },
+      cart: function(x, y, s, bodyCol, wheelCol, rimCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
+        var lw = Math.max(2, s * 0.055), rim = rimCol || '#f8fafc', bCol = bodyCol || '#0284c7', wCol = wheelCol || '#ffd700';
+        ctx.beginPath();
+        ctx.moveTo(x - s * 0.56, y - s * 0.36);
+        ctx.lineTo(x - s * 0.38, y - s * 0.36);
+        ctx.lineTo(x - s * 0.24, y + s * 0.24);
+        ctx.lineTo(x + s * 0.40, y + s * 0.24);
+        ctx.strokeStyle = G._c(rim);
+        ctx.lineWidth = lw * 1.15;
+        ctx.stroke();
+        G.poly([[x - s * 0.35, y - s * 0.24], [x + s * 0.48, y - s * 0.24], [x + s * 0.36, y + s * 0.14], [x - s * 0.26, y + s * 0.14]], bCol, rim, lw, true);
+        G.pill(x - s * 0.14, y - s * 0.14, x - s * 0.10, y + s * 0.05, lw * 0.85, rim);
+        G.pill(x + s * 0.06, y - s * 0.14, x + s * 0.05, y + s * 0.05, lw * 0.85, rim);
+        G.pill(x + s * 0.26, y - s * 0.14, x + s * 0.21, y + s * 0.05, lw * 0.85, rim);
+        G.disc(x - s * 0.18, y + s * 0.34, s * 0.10, wCol, rim, lw * 0.9);
+        G.disc(x + s * 0.30, y + s * 0.34, s * 0.10, wCol, rim, lw * 0.9);
+      },
+      megaphone: function(x, y, s, coneCol, handleCol, accentCol, rimCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(22, Math.abs(G._n(s, 72)));
+        var lw = Math.max(1.8, s * 0.045), rim = rimCol || '#f8fafc';
+        G.poly([[x - s * 0.26, y + s * 0.08], [x - s * 0.10, y + s * 0.08], [x - s * 0.16, y + s * 0.44], [x - s * 0.30, y + s * 0.44]], handleCol || '#1e293b', rim, lw, true);
+        G.box(x - s * 0.36, y - s * 0.02, s * 0.14, s * 0.22, s * 0.05, accentCol || '#38bdf8', rim, lw);
+        G.poly([[x - s * 0.30, y - s * 0.14], [x + s * 0.34, y - s * 0.38], [x + s * 0.34, y + s * 0.34], [x - s * 0.30, y + s * 0.10]], coneCol || '#f97316', rim, lw, true);
+        G.capsule(x + s * 0.35, y - s * 0.02, s * 0.10, s * 0.74, accentCol || '#ffd700', rim, lw);
+      },
+      wallet: function(x, y, s, bodyCol, flapCol, claspCol, rimCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(22, Math.abs(G._n(s, 76)));
+        var lw = Math.max(1.8, s * 0.042), rim = rimCol || '#f8fafc';
+        G.box(x, y, s * 0.94, s * 0.64, s * 0.12, bodyCol || '#1e293b', rim, lw);
+        G.box(x - s * 0.02, y - s * 0.10, s * 0.88, s * 0.28, s * 0.08, flapCol || '#4f46e5', rim, lw * 0.8);
+        G.box(x + s * 0.26, y + s * 0.04, s * 0.36, s * 0.22, s * 0.07, claspCol || '#f59e0b', rim, lw);
+        G.disc(x + s * 0.20, y + s * 0.04, s * 0.055, '#ffffff', rim, lw * 0.65);
+      },
+      globe: function(x, y, r, sphereCol, lineCol, rimCol) {
+        x = G._n(x); y = G._n(y); r = Math.max(10, Math.abs(G._n(r, 34)));
+        var lw = Math.max(1.5, r * 0.085), lCol = lineCol || '#38bdf8', rCol = rimCol || '#f8fafc';
+        G.disc(x, y, r, sphereCol || '#0284c7', null, 0);
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.clip();
+        G.pill(x - r, y, x + r, y, lw, lCol);
+        G.pill(x - r, y - r * 0.44, x + r, y - r * 0.44, lw * 0.85, lCol);
+        G.pill(x - r, y + r * 0.44, x + r, y + r * 0.44, lw * 0.85, lCol);
+        G.pill(x, y - r, x, y + r, lw, lCol);
+        G.oval(x, y, r * 0.48, r, 0, null, lCol, lw);
+        ctx.restore();
+        G.ring(x, y, r, lw * 1.15, 0, Math.PI * 2, rCol);
       },
       part: function(a1, a2, a3, a4, a5, a6) {
         var fn, tx, ty, rot, sx, sy;
@@ -1394,7 +1463,8 @@ export function verifyCanvasAnimationHtml(
         }
       }
       const maxChanged = Math.max(changed13, changed12);
-      if (maxChanged < 14) {
+      const minMotionSamples = type === 'bg' ? 14 : 26;
+      if (maxChanged < minMotionSamples) {
         return {
           ok: false,
           visiblePixels,
@@ -2109,6 +2179,7 @@ RULES: Clean sculpted 3D icon built from 3-4 welded proportional parts, 45-deg c
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
+      unsupportedThinkingModels.add(targetModel.toLowerCase());
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
       response = await ai.models.generateContent({
@@ -2329,6 +2400,48 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + smooth telemetry bar motion inside monitor screen (keep lamp 100% steady gold!)',
     };
   }
+  if (/\b(shopping\s*cart|cart|trolley|ecommerce|e-commerce|checkout|retail|marketplace)\b/.test(topic)) {
+    return {
+      label: 'shopping cart glide',
+      anatomyHint: 'UNMISTAKABLE SHOPPING CART SILHOUETTE: (1) tucked parcel boxes FIRST peeking cleanly inside basket G.box(0.06*R,-0.24*R+bobItem,0.24*R,0.22*R,0.04*R,"#F97316","#F8FAFC",2) & G.box(-0.14*R,-0.20*R,0.20*R,0.18*R,0.04*R,"#38BDF8","#F8FAFC",2); (2) draw G.cart(0,0.06*R,0.92*R,"#0284C7","#FFD700","#F8FAFC") cleanly in front overlapping bottom of parcels so frame, grille, handle & BOTH wheels are 100% crisp. ZERO detached check circles or floating people!',
+      codeHint: 'gentle horizontal roll offsetX=Math.sin(t*2.2)*0.05*R + subtle suspension bobY=Math.abs(Math.sin(t*4.4))*0.025*R + item settle bounce inside basket',
+    };
+  }
+  if (/\b(procurement|purchase|order|supply\s*chain|inventory|warehouse|logistics|vendor)\b/.test(topic)) {
+    return {
+      label: 'procurement manifest sync',
+      anatomyHint: 'PAINTER ORDER (PROCUREMENT CARGO & ORDER BOARD): (1) clipboard/crate body G.box(0,0.04*R,0.88*R,0.84*R,0.10*R,"#1E293B","#F8FAFC",2.5); (2) top clip G.box(0,-0.38*R,0.34*R,0.14*R,0.04*R,"#F59E0B","#F8FAFC",2); (3) 3 neat order bars inside clip G.pill(-0.24*R,-0.08*R,0.20*R,-0.08*R,0.06*R,"#38BDF8"), G.pill(-0.24*R,0.10*R,0.14*R,0.10*R,0.06*R,"#00E5FF"), G.pill(-0.24*R,0.28*R,0.06*R,0.28*R,0.06*R,"#A855F7"); (4) welded top-right approval badge G.disc(0.32*R,-0.26*R,0.16*R,"#38BDF8","#F8FAFC",2) with G.check(0.32*R,-0.26*R,0.09*R,3,"#FFFFFF"). NEVER draw flapping diagonal slabs or stray bars!',
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth checklist width pulse & corner check badge pulse',
+    };
+  }
+  if (/\b(digital\s*wallet|e-wallet|wallet|purse|mobile\s*pay|fintech)\b/.test(topic)) {
+    return {
+      label: 'digital wallet card reveal',
+      anatomyHint: 'PAINTER ORDER (DIGITAL WALLET): (1) gleaming payment card peeking behind top edge FIRST: G.box(-0.08*R, -0.22*R + Math.sin(t*2.4)*0.06*R, 0.58*R, 0.34*R, 0.05*R, "#00E5FF", "#F8FAFC", 2); (2) G.wallet(0, 0.08*R, 0.96*R, "#1E293B", "#4F46E5", "#F59E0B", "#F8FAFC") cleanly overlapping lower half of card; (3) bold coin gleam G.disc(0.20*R,0.12*R,0.06*R,"#FFFFFF") pulsing on clasp. NEVER cover wallet with giant static disc!',
+      codeHint: 'upright wallet hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.6)*0.035 + smooth vertical bank card slide ±0.06*R & golden clasp pulse',
+    };
+  }
+  if (/\b(reputation|trust|credibility|review|rating|endorsement|testimonial|brand\s*image)\b/.test(topic)) {
+    return {
+      label: 'trust crest radiance',
+      anatomyHint: 'UNMISTAKABLE REPUTATION CREST: centered G.shield(0, 0.02*R, 0.90*R, "#4F46E5", "#F8FAFC", "#1E293B") + pulsing gold center star G.star(0, 0.02*R, 0.22*R*stScale, 0.10*R*stScale, 5, -Math.PI/2, "#FFD700", "#F8FAFC", 2) + 2 compact welded ribbon wings G.box(±0.38*R,-0.02*R,0.18*R,0.10*R,0.03*R,"#00E5FF") overlapping shield edges. NEVER draw inverted teardrop faces!',
+      codeHint: 'upright heraldic float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth centered 5-point star scale pulse 1+0.12*Math.sin(t*3.0)',
+    };
+  }
+  if (/\b(global\s*comm\w*|international|worldwide|globe|global|world|earth|continent)\b/.test(topic)) {
+    return {
+      label: 'orbital global relay',
+      anatomyHint: 'CLEAN GLOBAL NETWORK: (1) centered G.globe(0, 0.02*R, 0.44*R, "#0284C7", "#38BDF8", "#F8FAFC") (NEVER collide a giant envelope across the globe!); (2) tilted orbital signal ring G.oval(0, 0.02*R, 0.54*R, 0.19*R, -0.35, null, "#FFD700", 0.045*R); (3) 2 orbiting satellite signal nodes G.disc along exact ellipse path (Math.cos(a)*0.54*R, Math.sin(a)*0.19*R rotated -0.35) + crisp signal dot at globe pole. ZERO stray floating blobs!',
+      codeHint: 'upright globe hover bobY=Math.sin(t*2.1)*0.025*R + continuous orbiting satellite relay nodes along tilted ellipse & crisp latitude highlight',
+    };
+  }
+  if (/\b(megaphone|broadcast|announce\w*|marketing|campaign|publicity|loudspeaker)\b/.test(topic)) {
+    return {
+      label: 'acoustic broadcast wave',
+      anatomyHint: 'PAINTER ORDER (CLEAN MEGAPHONE): (1) centered left-shifted G.megaphone(-0.12*R, 0.02*R, 0.86*R, "#F97316", "#1E293B", "#38BDF8", "#F8FAFC"); (2) 2 thick right-opening acoustic arcs centered at mouth (0.24*R,0) using G.ring(0.24*R, 0, r1, 0.045*R, -0.58, 0.58, "#00E5FF") & G.ring(0.24*R, 0, r2, 0.045*R, -0.58, 0.58, "#FFD700") where r1 in [0.16*R..0.24*R] & r2 in [0.28*R..0.38*R]. NEVER draw any vertical bar cutting through the megaphone cone!',
+      codeHint: 'recoil tilt rot=-0.06+Math.sin(t*3.4)*0.06 + bobY=Math.sin(t*2.6)*0.03*R + smooth expanding thick soundwave arcs outside front mouth',
+    };
+  }
   if (/\b(handshake|deal|agreement)\b/.test(topic)) {
     return {
       label: 'executive handshake clasp',
@@ -2350,7 +2463,14 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright float bobY=Math.sin(t*2.4)*0.04*R, rot=Math.sin(t*1.7)*0.04 + pulsing centered star emblem inside cup',
     };
   }
-  if (/\b(email|mail|envelope|inbox|newsletter|message|chat|comment|communication)\b/.test(topic)) {
+  if (/\b(chat|conversation|dialogue|messaging|communication|telecom|discussion|comment)\b/.test(topic)) {
+    return {
+      label: 'speech bubble dialogue pulse',
+      anatomyHint: 'UNIFIED DIALOGUE BUBBLES (PAINTER ORDER): (1) back bubble tail G.poly([[-0.32*R,0.06*R],[-0.44*R,0.22*R],[-0.18*R,0.10*R]],"#4F46E5","#F8FAFC",2) + back bubble G.box(-0.14*R,-0.12*R,0.66*R,0.44*R,0.12*R,"#4F46E5","#F8FAFC",2.5); (2) overlapping front reply bubble tail G.poly([[0.28*R,0.28*R],[0.44*R,0.42*R],[0.14*R,0.30*R]],"#00E5FF","#F8FAFC",2) + front bubble G.box(0.16*R,0.14*R,0.64*R,0.42*R,0.12*R,"#00E5FF","#F8FAFC",2.5); (3) 3 smooth typing dots G.disc inside front bubble at x=[0.01*R,0.16*R,0.31*R] oscillating in Y ±0.03*R.',
+      codeHint: 'upright gentle hover bobY=Math.sin(t*2.2)*0.03*R + slight opposing bubble scale breathe + sequential 3-dot wave inside front speech bubble',
+    };
+  }
+  if (/\b(email|mail|envelope|inbox|newsletter|message)\b/.test(topic)) {
     return {
       label: 'envelope & badge float',
       anatomyHint: 'Envelope body G.box(0,0.05*R,1.02*R,0.68*R,0.08*R), crisp inner V-flap crease G.poly([[-0.48*R,-0.22*R],[0,0.12*R],[0.48*R,-0.22*R]],null,rimCol,0.055*R,false), plus welded top-right badge G.disc(0.40*R,-0.22*R,0.14*R) LAST on top (NEVER slide paper below envelope, NEVER draw briefcase handle!).',
@@ -2406,11 +2526,11 @@ export function resolvePromptMotionPlan(
       codeHint: 'upright coin gleam float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + crisp front star crest pulse inside centered hero coin',
     };
   }
-  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume|wallet)\b/.test(topic)) {
+  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice|resume)\b/.test(topic)) {
     return {
       label: 'executive hinged float',
       anatomyHint: 'ZERO circular dark/colored backdrop disc or drop-shadow behind briefcase! Wide horizontal body G.box(0,0.08*R,1.02*R,0.64*R,0.09*R), welded top handle G.ring(0,-0.24*R,0.15*R,0.06*R,Math.PI,Math.PI*2), overlapping lid G.box(0,-0.06*R,1.04*R,0.28*R,0.07*R), centered gold clasp G.box(0,0.08*R,0.16*R,0.14*R,0.03*R) LAST on top.',
-      codeHint: 'WHOLE briefcase upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp articulation & corner accent stripe inside body (NO sliding small cards behind handle!)',
+      codeHint: 'WHOLE briefcase upright hover bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + gentle lid/clasp articulation inside body (NO sliding/tilting diagonal slabs!)',
     };
   }
   if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
@@ -2458,11 +2578,11 @@ export function resolvePromptMotionPlan(
   if (/\b(search|magnifying|inspect|audit|find|research)\b/.test(topic)) {
     return {
       label: 'optical lens sweep',
-      anatomyHint: 'PAINTER ORDER: solid handle G.pill(0.18*R,0.18*R,0.46*R,0.46*R,0.10*R,"#1E293B") FIRST; opaque inner lens G.disc(-0.08*R,-0.08*R,0.30*R,"#0F172A","#38BDF8",0.07*R) with mini rising G.bar inside lens.',
-      codeHint: 'smooth circular scan offset dx=Math.cos(t*2)*0.04*R, dy=Math.sin(t*2)*0.04*R + inner chart bar wave',
+      anatomyHint: 'PAINTER ORDER: solid handle G.pill(0.14*R,0.14*R,0.44*R,0.44*R,0.11*R,"#1E293B") FIRST; thick lens rim & opaque inner glass G.disc(-0.08*R,-0.08*R,0.32*R,"#0F172A","#38BDF8",0.07*R); STRICTLY INSIDE THE GLASS AT (-0.08*R,-0.08*R): 2 mini rising G.bar with yBase=0.04*R (max height 0.22*R) or G.check(-0.08*R,-0.08*R,0.16*R,0.05*R,"#00E5FF"). NEVER drop pills or bars below the bottom edge of the lens!',
+      codeHint: 'smooth circular scan offset dx=Math.cos(t*2)*0.045*R, dy=Math.sin(t*2)*0.045*R + gentle inner chart pulse strictly inside glass bounds',
     };
   }
-  if (/\b(bell|megaphone|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
+  if (/\b(bell|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
     return {
       label: 'acoustic ring swing',
       anatomyHint: 'Top loop G.ring(0,-0.42*R,0.08*R), flared dome G.poly + bottom rim G.capsule(0,0.24*R,0.66*R,0.10*R), tucked clapper G.disc(cxOff,0.32*R,0.09*R), symmetric outer sound arcs G.ring at ±0.45*R.',
@@ -2476,31 +2596,59 @@ export function resolvePromptMotionPlan(
       codeHint: 'double-beat lub-dub scale=1+0.08*(Math.pow(Math.max(0,Math.sin(t*3.4)),4)+0.5*Math.pow(Math.max(0,Math.sin(t*3.4-0.5)),4)) + smooth bob',
     };
   }
-  if (/\b(lock|padlock|vault|shield|key|fingerprint|biometric|security|firewall|safe)\b/.test(topic)) {
+  if (/\b(shield|protection|firewall|cybersecurity|antivirus)\b/.test(topic)) {
+    return {
+      label: 'shield defense gleam',
+      anatomyHint: 'Clean symmetrical G.shield(0, 0.02*R, 0.90*R, "#0284C7", "#F8FAFC", "#1E293B") + centered G.check(0, 0.02*R, 0.24*R*chkScale, 0.065*R, "#00E5FF") LAST on top. ZERO dark backdrop plates!',
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + smooth check emblem pulse scale=1+0.12*Math.sin(t*3.0)',
+    };
+  }
+  if (/\b(lock|padlock|vault|key|fingerprint|biometric|security|safe)\b/.test(topic)) {
     return {
       label: 'precision locking recoil',
-      anatomyHint: 'PAINTER ORDER: top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) FIRST behind body; unified shield G.poly or padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) on top + centered keyhole/G.check inside body LAST.',
+      anatomyHint: 'PAINTER ORDER: top shackle G.ring(0,-0.16*R,0.21*R,0.09*R,Math.PI,Math.PI*2) FIRST behind body; padlock body G.box(0,0.12*R,0.70*R,0.58*R,0.10*R) on top + centered keyhole/G.check inside body LAST.',
       codeHint: 'upright hover + shackle snap yOff=-Math.abs(Math.sin(t*2.6))*0.05*R + inner keyhole/check pulse (NEVER spin 360deg!)',
     };
   }
-  if (/\b(cart|truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery|rocket)\b/.test(topic)) {
+  if (/\b(truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery|rocket)\b/.test(topic)) {
     return {
       label: 'kinetic transport suspension',
       anatomyHint: 'Cohesive vehicle/rocket chassis at (0,0) with wheels/fins/thrusters overlapping main hull by >= 0.04*R — zero detached wheels or boxes.',
       codeHint: 'chassis suspension bobY=Math.sin(t*3.6)*0.03*R + synchronized spinning wheels/rotors G.part(wx,wy,t*5,1,1,fn) at exact wheel sockets',
     };
   }
-  if (/\b(atom|orbit|planet|globe|radar|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
+  if (/\b(atom|orbit|planet|radar|compass|satellite|astrolabe|gear|settings|cog)\b/.test(topic)) {
     return {
       label: 'orbital & axis precession',
-      anatomyHint: 'Centered core G.disc(0,0,0.18*R) surrounded symmetrically by concentric/tilted G.ring orbits or gear teeth anchored at (0,0).',
-      codeHint: 'smooth continuous rotation rot=t*1.4 around (0,0) + orbiting node G.disc along exact ring radius',
+      anatomyHint: 'ZERO circular dark backdrop plate behind icon! Centered bright core G.disc(0,0,0.18*R) surrounded symmetrically by bold concentric/tilted G.ring orbits (thick >= 0.04*R) or chunky gear spokes anchored cleanly at (0,0).',
+      codeHint: 'smooth continuous rotation rot=t*1.4 around (0,0) + orbiting bright node G.disc along exact ring radius (keep ring stroke >= 0.04*R)',
     };
   }
-  if (/\b(brain|chip|cpu|ai|server|network|cloud|robot|camera|eye|microscope)\b/.test(topic)) {
+  if (/\b(chip|cpu|processor|circuit|microchip|semiconductor|hardware)\b/.test(topic)) {
+    return {
+      label: 'silicon pulse grid',
+      anatomyHint: 'ZERO dark backdrop circle! Square CPU package G.box(0,0,0.62*R,0.62*R,0.08*R,"#1E293B","#38BDF8",2.5) + 3 bold pins per side G.pill overlapping package edge by 0.04*R + glowing inner die G.box(0,0,0.34*R,0.34*R,0.05*R,"#4F46E5","#F8FAFC",2) + pulsing gold core G.disc(0,0,0.10*R,"#FFD700").',
+      codeHint: 'upright tech float bobY=Math.sin(t*2.2)*0.03*R + inner die & gold node pulse + staggered pin glow',
+    };
+  }
+  if (/\b(robot|bot|chatbot|assistant|ai|neural|automation)\b/.test(topic)) {
+    return {
+      label: 'intelligent bot nod',
+      anatomyHint: 'ZERO wheeled cannon blobs! Cute clean AI bot head: top antenna stem G.pill(0,-0.32*R,0,-0.46*R,0.04*R,"#F8FAFC") + tip G.disc(0,-0.48*R,0.065*R,"#FFD700") FIRST; rounded bot housing G.box(0,0.02*R,0.78*R,0.62*R,0.18*R,"#1E293B","#38BDF8",2.5); inner dark visor G.box(0,-0.02*R,0.58*R,0.30*R,0.10*R,"#0F172A","#4F46E5",1.5); 2 crisp symmetric glowing eyes G.disc(-0.14*R,-0.02*R,0.065*R,"#00E5FF") & G.disc(0.14*R,-0.02*R,0.065*R,"#00E5FF") + bottom speech bar G.capsule(0,0.20*R,0.24*R,0.05*R,"#38BDF8").',
+      codeHint: 'friendly hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.045 + smooth eye pulse & top antenna beacon pulse',
+    };
+  }
+  if (/\b(cloud|saas|storage|backup|sync|server)\b/.test(topic)) {
+    return {
+      label: 'cloud sync lift',
+      anatomyHint: 'Clean solid cloud built from 3 overlapping G.disc(-0.24*R,0.04*R,0.24*R), G.disc(0,-0.08*R,0.30*R), G.disc(0.24*R,0.04*R,0.22*R) + flat bottom bridge G.box(0,0.14*R,0.52*R,0.26*R,0.06*R) + crisp centered upward sync G.arrow(0,0.22*R,0,-0.06*R+dy,0.055*R,0.14*R,"#FFD700") LAST on top.',
+      codeHint: 'upright cloud float bobY=Math.sin(t*2.1)*0.03*R + smooth vertical arrow sync motion inside cloud center',
+    };
+  }
+  if (/\b(brain|network|camera|eye|microscope)\b/.test(topic)) {
     return {
       label: 'smart telemetry pulse',
-      anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R]; all pins, lenses, or network nodes physically overlap housing by >= 0.04*R.',
+      anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R] (ZERO dark backdrop disc!); all pins, lenses, or network nodes physically overlap housing by >= 0.04*R.',
       codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node/aperture harmonic pulse',
     };
   }
@@ -2523,7 +2671,7 @@ export function resolvePromptMotionPlan(
   }
   return {
     label: 'harmonic elastic float',
-    anatomyHint: 'One unified recognizable silhouette centered at (0,0) inside [-0.54*R,+0.54*R]; every sub-part MUST overlap main body by >= 0.04*R (zero floating shapes).',
+    anatomyHint: 'One unified recognizable silhouette centered at (0,0) inside [-0.54*R,+0.54*R] (ZERO dark backdrop disc!); every sub-part MUST overlap main body by >= 0.04*R (zero floating shapes).',
     codeHint: 'upright bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 (NEVER spin 360deg!) + crisp secondary sub-part harmonic pulse',
   };
 }
@@ -2543,7 +2691,7 @@ async function generateAnimationDirect(
   motionDynamics: MotionDynamics = 'auto',
   neonGlow: boolean = true,
   highPrecision: boolean = false
-): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
+): Promise<{ id: string; title: string; prompt?: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const cleanKey = extractCleanApiKey(apiKey);
   if (!cleanKey || !cleanKey.startsWith('AIza')) {
     throw new Error('NETWORK_OR_NO_CLIENT_KEY');
@@ -2564,7 +2712,7 @@ async function generateAnimationDirect(
     : `WELDED 3D ICON: ALL shapes MUST execute inside G.part(cx, cy+bobY, rot, sx, sy, function(){ ... }). Set R=S*0.72. RULES: (1) G.box/G.disc/G.oval (x,y) ARE CENTER COORDS; (2) PAINTER ORDER: back parts first -> main body -> front emblems LAST; (3) NEVER draw stray corner shapes outside G.part or circular backdrop plates/drop-shadows behind icons; (4) NEVER blink-hide (if(sin>0)), NEVER shrink bars <0.14*R. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode}
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint}.
@@ -2572,7 +2720,7 @@ SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode
 
   const config: any = {
     temperature: 0.2,
-    maxOutputTokens: 1750,
+    maxOutputTokens: 1250,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -2594,6 +2742,7 @@ SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
+      unsupportedThinkingModels.add(targetModel.toLowerCase());
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
       response = await withModelTimeout(
@@ -2620,6 +2769,7 @@ SPEC: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode
   return {
     id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
     title: `${promptTopic.substring(0, 35)}... (${index}/${total})`,
+    prompt: promptTopic,
     type,
     style,
     subCategory,
@@ -2688,7 +2838,7 @@ async function generateAnimationBatchDirect(
   colorMode: ColorMode = 'gradient',
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
-): Promise<Array<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean } | null>> {
+): Promise<Array<{ id: string; title: string; prompt?: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean } | null>> {
   const cleanKey = extractCleanApiKey(apiKey);
   if (!cleanKey || !cleanKey.startsWith('AIza')) {
     throw new Error('NETWORK_OR_NO_CLIENT_KEY');
@@ -2714,7 +2864,7 @@ async function generateAnimationBatchDirect(
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} independent RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
@@ -2723,13 +2873,13 @@ ${topicLines}`;
 
   const config: any = {
     temperature: 0.2,
-    maxOutputTokens: Math.min(3400, Math.max(1750, prompts.length * 1700)),
+    maxOutputTokens: Math.min(2350, Math.max(1250, prompts.length * 1150)),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
 
   const profile = getModelExecutionProfile(targetModel);
-  const batchTimeoutMs = Math.min(46000, profile.timeoutMs + 8000);
+  const batchTimeoutMs = Math.min(48000, profile.timeoutMs + 8000);
   let response: any;
   try {
     response = await withModelTimeout(
@@ -2744,6 +2894,7 @@ ${topicLines}`;
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
+      unsupportedThinkingModels.add(targetModel.toLowerCase());
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
       response = await withModelTimeout(
@@ -2775,6 +2926,7 @@ ${topicLines}`;
     return {
       id: 'anim_' + Date.now() + '_' + idx + Math.random().toString(36).substring(7),
       title: `${promptTopic.substring(0, 35)}... (${idx + 1}/${prompts.length})`,
+      prompt: promptTopic,
       type,
       style,
       subCategory,
@@ -2803,7 +2955,7 @@ export async function generateSingleAnimationCode(
   colorMode: ColorMode = 'gradient',
   motionDynamics: MotionDynamics = 'flow',
   neonGlow: boolean = true
-): Promise<{ id: string; title: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
+): Promise<{ id: string; title: string; prompt?: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const uniqueClientKeys = getCleanUniqueKeys(apiKeys);
   const hasClientKeys = uniqueClientKeys.length > 0;
 
@@ -2973,6 +3125,7 @@ export async function generateSingleAnimationCode(
       if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
       return {
         ...data,
+        prompt: data.prompt || promptTopic,
         html: healedHtml,
         isGreenScreen,
         colorMode,
@@ -3085,7 +3238,7 @@ export async function generateBatchAnimationCodes(
   let batchHitQuota = false;
   let modelCursor = 0;
 
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  for (let attempt = 1; attempt <= 2; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
 
@@ -3119,11 +3272,15 @@ export async function generateBatchAnimationCodes(
       }
     }
 
+    let ranClientDirect = false;
+    let partialItems: Array<any | null> = new Array(prompts.length).fill(null);
+
     try {
       if (selectedKey && selectedKey.startsWith('AIza')) {
+        ranClientDirect = true;
         await waitForKeyReuseGapIfNeeded(uniqueClientKeys, activeModel);
         try {
-          batchItems = await generateAnimationBatchDirect(
+          partialItems = await generateAnimationBatchDirect(
             selectedKey,
             activeModel,
             prompts,
@@ -3135,11 +3292,17 @@ export async function generateBatchAnimationCodes(
             motionDynamics,
             neonGlow
           );
-          batchSuccess = batchItems.some(Boolean);
-          if (batchSuccess) {
+          for (let k = 0; k < prompts.length; k++) {
+            if (!batchItems[k] && partialItems[k]) batchItems[k] = partialItems[k];
+          }
+          batchSuccess = batchItems.every(Boolean);
+          if (batchItems.some(Boolean)) {
             recordKeyModelSuccess(selectedKey, activeModel);
             break;
           }
+          // All slots failed verification on direct call -> DO NOT fall through to server route with the same request!
+          modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+          continue;
         } catch (clientErr: any) {
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
@@ -3149,8 +3312,7 @@ export async function generateBatchAnimationCodes(
           if (classified.isQuota) {
             batchHitQuota = true;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
-            // If primary model hit 3x burst 429 or attempt >= 2, move cleanly to fallback model
-            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
+            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 1) {
               modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             }
             if (attempt >= 2 && !waitedOnce) {
@@ -3171,7 +3333,6 @@ export async function generateBatchAnimationCodes(
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             continue;
           }
-          // On transient server/timeout errors (e.g. 500/503/Timeout on flagship 3.8-flash), wait model delay & rotate
           if (classified.isNetworkError || /timeout|500|502|503|504|unavailable|overloaded/i.test(classified.message)) {
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             const transientPause = getModelExecutionProfile(activeModel).retryDelaysMs[attempt - 1] || 1800;
@@ -3181,43 +3342,46 @@ export async function generateBatchAnimationCodes(
           if (classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             break;
           }
+          ranClientDirect = false;
         }
       }
 
-      // Server proxy fallback only if no client key or network block
-      const res = await fetch('/api/gemini/generate-animation-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey: selectedKey,
-          model: activeModel,
-          prompts,
-          type,
-          subCategory,
-          style,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data?.items)) {
-          batchItems = data.items.map((it: any) => {
-            if (!it || !it.html) return null;
-            const healed = extractHTML(it.html, isGreenScreen);
-            const check = verifyCanvasAnimationHtml(healed, !!isGreenScreen, type);
-            if (!check.ok) {
-              console.warn('[Server Batch Item Rejected]:', check.reason);
-              return null;
+      // Server proxy fallback ONLY if no client AIza key or direct browser network blocked
+      if (!ranClientDirect) {
+        const res = await fetch('/api/gemini/generate-animation-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            apiKey: selectedKey,
+            model: activeModel,
+            prompts,
+            type,
+            subCategory,
+            style,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.items)) {
+            batchItems = data.items.map((it: any) => {
+              if (!it || !it.html) return null;
+              const healed = extractHTML(it.html, isGreenScreen);
+              const check = verifyCanvasAnimationHtml(healed, !!isGreenScreen, type);
+              if (!check.ok) {
+                console.warn('[Server Batch Item Rejected]:', check.reason);
+                return null;
+              }
+              return { ...it, html: healed };
+            });
+            batchSuccess = batchItems.some(Boolean);
+            if (batchSuccess) {
+              if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
+              break;
             }
-            return { ...it, html: healed };
-          });
-          batchSuccess = batchItems.some(Boolean);
-          if (batchSuccess) {
-            if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
-            break;
           }
         }
       }
@@ -3232,8 +3396,8 @@ export async function generateBatchAnimationCodes(
     }
   }
 
-  // ANTI-AVALANCHE GUARD: If the entire batch failed due to 429 quota, NEVER fan out into 2x3 = 6 more 429 calls!
-  if (!batchSuccess && batchHitQuota) {
+  // ANTI-AVALANCHE GUARD: If the entire batch failed due to 429 quota, NEVER fan out into extra 429 calls!
+  if (!batchItems.some(Boolean) && batchHitQuota) {
     return prompts.map((p) => ({
       prompt: p,
       error: 'Batas kuota 429 tercapai — menahan antrean untuk pemulihan kuota.',
@@ -3241,12 +3405,13 @@ export async function generateBatchAnimationCodes(
     }));
   }
 
-  // Build final output, filling ONLY missing/rejected slots via single-item verified regeneration
+  // Build final output, filling ONLY missing/rejected slots via 1-retry single-item verified regeneration
   const finalOut: Array<{ prompt: string; anim?: any; error?: string; exhausted?: boolean }> = [];
   for (let i = 0; i < prompts.length; i++) {
     const item = batchItems[i];
     if (item && item.html) {
       item.title = `${prompts[i].substring(0, 35)}... (${startIndex + i}/${totalOverall})`;
+      item.prompt = item.prompt || prompts[i];
       finalOut.push({ prompt: prompts[i], anim: item });
     } else {
       try {
@@ -3260,7 +3425,7 @@ export async function generateBatchAnimationCodes(
           startIndex + i,
           totalOverall,
           undefined,
-          2,
+          1,
           isGreenScreen,
           colorMode,
           motionDynamics,
@@ -3331,7 +3496,7 @@ async function generateImageToMotionDirect(
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
 Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,bodyCol,headCol,rimCol) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sweep,sliceCol,baseCol,rimCol) | G.rays(x,y,rIn,rOut,n,rot,thick,col) | G.handshake(x,y,s,colL,colR,handCol,cuffCol,rimCol) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.part(tx,ty,rot,sx,sy,fn)
 ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian di pojok luar G.part, ZERO piringan lingkaran latar/bayangan gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
@@ -3339,13 +3504,13 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: 2100,
+    maxOutputTokens: 1650,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
 
   const visionProfile = getModelExecutionProfile(targetModel);
-  const visionTimeoutMs = Math.min(45000, visionProfile.timeoutMs + 6000);
+  const visionTimeoutMs = Math.min(48000, visionProfile.timeoutMs + 6000);
   let response: any;
   try {
     response = await withModelTimeout(
@@ -3368,6 +3533,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
   } catch (err: any) {
     const classified = classifyGeminiError(err);
     if (classified.isConfigIssue && config.thinkingConfig) {
+      unsupportedThinkingModels.add(targetModel.toLowerCase());
       const safeConfig = { ...config };
       delete safeConfig.thinkingConfig;
       response = await withModelTimeout(
@@ -3687,6 +3853,7 @@ export async function generateMotionPromptFromImage(
           });
         } catch (err: any) {
           if (classifyGeminiError(err).isConfigIssue && config.thinkingConfig) {
+            unsupportedThinkingModels.add(targetModel.toLowerCase());
             const safeConfig = { ...config };
             delete safeConfig.thinkingConfig;
             resp = await ai.models.generateContent({

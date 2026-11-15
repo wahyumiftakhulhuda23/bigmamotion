@@ -65,6 +65,7 @@ export type MotionDynamics =
 export interface AnimationItem {
   id: string;
   title: string;
+  prompt?: string;
   type: AnimationType;
   style: string;
   subCategory?: string;

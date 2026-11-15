@@ -5,6 +5,7 @@ interface ModelRotationModalProps {
   isOpen: boolean;
   currentModel: GeminiModel;
   keyCount: number;
+  failedCount?: number;
   onConfirmSwitch: (newModel: GeminiModel) => void;
   onOpenApiSettings: () => void;
   onClose: () => void;
@@ -14,6 +15,7 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   isOpen,
   currentModel,
   keyCount,
+  failedCount = 0,
   onConfirmSwitch,
   onOpenApiSettings,
   onClose,
@@ -78,7 +80,7 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
         <p className="text-xs text-gray-300 leading-relaxed mb-4 bg-slate-950/60 p-3.5 rounded-xl border border-gray-800">
           Google memberlakukan kuota limit pemanggilan (RPM/TPM) per-model. Seluruh API Key yang tersimpan saat ini telah mencapai batas kuota pada <strong className="text-amber-300">{currentLabel}</strong>.
           <br /><br />
-          <span className="text-emerald-300 font-semibold">Solusi Otomatis:</span> Alihkan ke model alternatif di bawah untuk melanjutkan generasi animasi tanpa jeda. Seluruh model telah disetel dengan standar estetika tinggi, rigging presisi, dan visual 60 FPS yang setara dengan 3.1 Pro!
+          <span className="text-emerald-300 font-semibold">Solusi Otomatis:</span> Alihkan ke model alternatif di bawah lalu klik <strong className="text-white">{failedCount > 0 ? `"Ulangi ${failedCount} Animasi Gagal"` : '"Ulangi yang Gagal"'}</strong> agar hanya prompt yang belum selesai yang dilanjutkan. Jika Auto Pilot dijalankan ulang, prompt yang sudah ada di Galeri otomatis dilewati agar tidak dobel &amp; hemat kuota.
         </p>
 
         {/* Model Options */}

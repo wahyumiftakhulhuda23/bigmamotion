@@ -428,12 +428,51 @@ export default function App() {
     setLogs((prev) => [...prev, { id: Math.random().toString(36).substring(2, 9), text, type, timestamp }]);
   }, []);
 
+  const normalizePromptKey = (text?: string): string =>
+    String(text || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+  const isPromptAlreadyRendered = (
+    animList: AnimationItem[],
+    accountName: string,
+    promptText: string
+  ): boolean => {
+    const normPrompt = normalizePromptKey(promptText);
+    if (!normPrompt) return false;
+    const normAcc = (accountName || '').trim().toLowerCase();
+    return animList.some((a) => {
+      if ((a.account || '').trim().toLowerCase() !== normAcc) return false;
+      if (a.prompt && normalizePromptKey(a.prompt) === normPrompt) return true;
+      return false;
+    });
+  };
+
+  const deduplicateFailedItems = (items: FailedAutoPilotItem[]): FailedAutoPilotItem[] => {
+    const seen = new Set<string>();
+    const out: FailedAutoPilotItem[] = [];
+    for (const it of items) {
+      const accKey = (it.accountName || '').trim().toLowerCase();
+      const promptKey = normalizePromptKey(it.prompt);
+      const key = it.isAutoPromptPending ? `${accKey}::AUTO::${it.id}` : `${accKey}::${promptKey}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(it);
+      }
+    }
+    return out;
+  };
+
   const saveAnimationsToStorage = (newAnims: AnimationItem[]) => {
     setAnimations(newAnims);
-    try {
-      localStorage.setItem(STORAGE_ANIMATIONS, JSON.stringify(newAnims.slice(0, 100)));
-    } catch (e) {
-      console.error('Failed to save animations', e);
+    const caps = [350, 220, 120, 60];
+    for (const cap of caps) {
+      try {
+        localStorage.setItem(STORAGE_ANIMATIONS, JSON.stringify(newAnims.slice(0, cap)));
+        return;
+      } catch (e) {
+        if (cap === caps[caps.length - 1]) {
+          console.error('Failed to save animations', e);
+        }
+      }
     }
   };
 
@@ -642,6 +681,7 @@ export default function App() {
           hadSuccessInBatch = true;
           const newAnimItem: AnimationItem = {
             ...res.anim,
+            prompt: res.anim.prompt || res.prompt,
             isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
             account: 'Manual',
             createdAt: Date.now(),
@@ -784,6 +824,7 @@ export default function App() {
           hadSuccess = true;
           const newAnimItem: AnimationItem = {
             ...res.anim,
+            prompt: res.anim.prompt || res.prompt,
             isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
             account: 'Manual Retry',
             createdAt: Date.now(),
@@ -860,6 +901,7 @@ export default function App() {
       if (anim) {
         const newAnimItem: AnimationItem = {
           ...anim,
+          prompt: anim.prompt || promptText,
           isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
           account: 'Manual Retry',
           createdAt: Date.now(),
@@ -1136,6 +1178,7 @@ export default function App() {
             hadSuccess = true;
             const newAnimItem: AnimationItem = {
               ...res.anim,
+              prompt: res.anim.prompt || res.prompt,
               isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
               account: batch.name,
               createdAt: Date.now(),
@@ -1229,8 +1272,25 @@ export default function App() {
       const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
 
       if (hasCustomPrompts) {
-        prompts = acc.customPrompts!;
-        addLog(`📂 [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Menggunakan ${prompts.length} prompt dari file TXT / input manual...`, 'cyan');
+        const seenAccPrompts = new Set<string>();
+        const uniqueCustom = acc.customPrompts!.filter((p) => {
+          const nk = normalizePromptKey(p);
+          if (!nk || seenAccPrompts.has(nk)) return false;
+          seenAccPrompts.add(nk);
+          return true;
+        });
+        prompts = uniqueCustom.filter((p) => !isPromptAlreadyRendered(currentAnimList, acc.name, p));
+        const skippedExisting = uniqueCustom.length - prompts.length;
+        addLog(
+          `📂 [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Total ${uniqueCustom.length} prompt unik${
+            skippedExisting > 0 ? ` (${skippedExisting} sudah selesai di Galeri -> dilewati otomatis, sisa ${prompts.length})` : ''
+          }...`,
+          'cyan'
+        );
+        if (prompts.length === 0) {
+          addLog(`✅ [${acc.name}] Seluruh prompt sudah berhasil ada di Galeri — langsung lanjut akun berikutnya.`, 'success');
+          continue;
+        }
       } else {
         addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${acc.promptCount} prompt...`, 'info');
 
@@ -1378,6 +1438,7 @@ export default function App() {
             hadSuccessInBatch = true;
             const newAnimItem: AnimationItem = {
               ...res.anim,
+              prompt: res.anim.prompt || res.prompt,
               account: acc.name,
               createdAt: Date.now(),
             };
@@ -1436,8 +1497,9 @@ export default function App() {
             savedSubsequentAccounts++;
             const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
             if (hasNextCustom) {
-              savedSubsequentPrompts += nextAcc.customPrompts!.length;
-              nextAcc.customPrompts!.forEach((np, nIdx) => {
+              const pendingNext = nextAcc.customPrompts!.filter((np) => !isPromptAlreadyRendered(currentAnimList, nextAcc.name, np));
+              savedSubsequentPrompts += pendingNext.length;
+              pendingNext.forEach((np, nIdx) => {
                 newFailedItems.push({
                   id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
                   accountName: nextAcc.name,
@@ -1491,10 +1553,23 @@ export default function App() {
       }
     }
 
-    if (newFailedItems.length > 0) {
-      setFailedAutoPilotItems((prev) => [...newFailedItems, ...prev]);
-      showToast(`Auto Pilot selesai dengan ${newFailedItems.length} item tersimpan di "Ulangi Animasi Gagal".`, 'warn');
-      addLog(`⚠️ [AUTO PILOT SELESAI] Terdapat ${newFailedItems.length} animasi tersimpan di fitur Coba Ulang.`, 'warn');
+    const ranAccountNames = new Set(accountsToRun.map((a) => (a.name || '').trim().toLowerCase()));
+    const dedupedNewFailed = deduplicateFailedItems(
+      newFailedItems.filter((it) => it.isAutoPromptPending || !isPromptAlreadyRendered(currentAnimList, it.accountName, it.prompt))
+    );
+    setFailedAutoPilotItems((prev) => {
+      // Purge stale queued items for accounts just re-run cleanly in this pass, and remove any already rendered
+      const preservedOther = prev.filter(
+        (old) =>
+          !ranAccountNames.has((old.accountName || '').trim().toLowerCase()) &&
+          (old.isAutoPromptPending || !isPromptAlreadyRendered(currentAnimList, old.accountName, old.prompt))
+      );
+      return deduplicateFailedItems([...dedupedNewFailed, ...preservedOther]);
+    });
+
+    if (dedupedNewFailed.length > 0) {
+      showToast(`Auto Pilot selesai dengan ${dedupedNewFailed.length} item tersimpan di "Ulangi Animasi Gagal".`, 'warn');
+      addLog(`⚠️ [AUTO PILOT SELESAI] Terdapat ${dedupedNewFailed.length} animasi unik yang belum selesai & tersimpan di fitur Coba Ulang.`, 'warn');
     } else {
       showToast(`🏆 Auto Pilot [${accLabel}] Selesai dengan sempurna!`, 'success');
       addLog(`🏆 [AUTO PILOT SELESAI] Seluruh animasi [${accLabel}] berhasil diproses!`, 'success');
@@ -1520,13 +1595,27 @@ export default function App() {
     }
 
     setIsAutoPilotRunning(true);
-    const itemsToRetry = [...failedAutoPilotItems];
+    let currentAnimList = [...animations];
+    const dedupedRaw = deduplicateFailedItems(failedAutoPilotItems);
+    const itemsToRetry = dedupedRaw.filter((it) => {
+      const isPending = it.isAutoPromptPending || it.prompt.startsWith('(Auto Prompt:') || it.prompt.startsWith('(Generate Prompts:');
+      return isPending || !isPromptAlreadyRendered(currentAnimList, it.accountName, it.prompt);
+    });
+    const skippedAlreadyDone = dedupedRaw.length - itemsToRetry.length;
+    if (skippedAlreadyDone > 0) {
+      addLog(`⏩ [Coba Ulang Hemat] Melewati ${skippedAlreadyDone} prompt duplikat / sudah ada di Galeri.`, 'cyan');
+    }
+    if (itemsToRetry.length === 0) {
+      setFailedAutoPilotItems([]);
+      setIsAutoPilotRunning(false);
+      showToast('🎉 Seluruh item di daftar Coba Ulang sudah selesai ada di Galeri!', 'success');
+      return;
+    }
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     addLog('═══════════════════════════════════════════════════════════════', 'warn');
-    addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Memproses ${itemsToRetry.length} item gagal/tertunda dengan mode hemat batch 2-in-1...`, 'warn');
+    addLog(`🔄 [ULANGI AUTO PILOT GAGAL] Memproses ${itemsToRetry.length} item unik yang belum selesai dengan mode hemat batch 2-in-1...`, 'warn');
     showToast(`🔄 Mencoba ulang ${itemsToRetry.length} item Auto Pilot yang gagal/tertunda...`, 'info');
 
-    let currentAnimList = [...animations];
     const remainingFailed: FailedAutoPilotItem[] = [];
     const expandedItems: FailedAutoPilotItem[] = [];
     let quotaStoppedInExpansion = false;
@@ -1663,6 +1752,7 @@ export default function App() {
             hadSuccess = true;
             const newAnimItem: AnimationItem = {
               ...res.anim,
+              prompt: res.anim.prompt || item.prompt,
               account: item.accountName,
               createdAt: Date.now(),
             };
@@ -1699,15 +1789,18 @@ export default function App() {
       }
     }
 
-    setAnimations(currentAnimList);
-    setFailedAutoPilotItems(remainingFailed);
+    const finalRemainingFailed = deduplicateFailedItems(
+      remainingFailed.filter((it) => it.isAutoPromptPending || !isPromptAlreadyRendered(currentAnimList, it.accountName, it.prompt))
+    );
+    saveAnimationsToStorage(currentAnimList);
+    setFailedAutoPilotItems(finalRemainingFailed);
     setIsAutoPilotRunning(false);
 
-    if (remainingFailed.length === 0) {
+    if (finalRemainingFailed.length === 0) {
       showToast('🎉 Semua animasi gagal Auto Pilot berhasil diperbaiki!', 'success');
       addLog('🏁 [SELESAI COBA ULANG] Seluruh animasi gagal Auto Pilot telah berhasil diperbaiki!', 'success');
     } else {
-      showToast(`Tersisa ${remainingFailed.length} item Auto Pilot yang masih kendala/tertunda.`, 'warn');
+      showToast(`Tersisa ${finalRemainingFailed.length} item Auto Pilot yang masih kendala/tertunda.`, 'warn');
     }
   };
 
@@ -2215,6 +2308,7 @@ export default function App() {
         isOpen={isModelRotationModalOpen}
         currentModel={selectedModel}
         keyCount={apiKeys.length}
+        failedCount={failedAutoPilotItems.length}
         onConfirmSwitch={handleConfirmModelSwitch}
         onOpenApiSettings={() => {
           setIsModelRotationModalOpen(false);
@@ -2344,12 +2438,12 @@ export default function App() {
             if (anim) {
               const newAnimItem: AnimationItem = {
                 ...anim,
+                prompt: anim.prompt || item.prompt,
                 account: item.accountName,
                 createdAt: Date.now(),
               };
               const updated = [newAnimItem, ...animations];
               saveAnimationsToStorage(updated);
-              setAnimations(updated);
               setFailedAutoPilotItems((prev) => prev.filter((f) => f.id !== item.id));
               showToast(`Animasi [${item.accountName}] berhasil diperbaiki!`, 'success');
               addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi tersimpan ke Galeri!`, 'success');
