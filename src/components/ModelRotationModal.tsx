@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GeminiModel } from '../types';
 
 interface ModelRotationModalProps {
@@ -44,15 +44,21 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   };
 
   const getRecommendedModel = (curr: GeminiModel): GeminiModel => {
-    if (curr === 'gemini-3.8-flash') return 'gemini-3.6-flash';
-    if (curr === 'gemini-3.6-flash') return 'gemini-3.5-flash-lite';
-    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.8-flash';
-    if (curr === 'gemini-3.5-flash-lite') return 'gemini-3.8-flash';
-    if (curr === 'gemini-3.1-flash-lite') return 'gemini-3.8-flash';
-    return 'gemini-3.8-flash';
+    if (curr === 'gemini-3.8-flash' || curr === 'gemini-3.6-flash') return 'gemini-3.5-flash-lite';
+    if (curr === 'gemini-3.5-flash-lite') return 'gemini-3.1-flash-lite';
+    if (curr === 'gemini-3.1-flash-lite') return 'gemini-2.5-flash';
+    if (curr === 'gemini-2.5-flash') return 'gemini-3.8-flash';
+    if (curr === 'gemini-3.1-pro-preview') return 'gemini-3.5-flash-lite';
+    return 'gemini-3.5-flash-lite';
   };
 
   const [selectedTarget, setSelectedTarget] = useState<GeminiModel>(() => getRecommendedModel(currentModel));
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedTarget(getRecommendedModel(currentModel));
+    }
+  }, [isOpen, currentModel]);
 
   if (!isOpen) return null;
 
@@ -150,11 +156,11 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.6 Flash</span>
                   <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[9px] font-black uppercase">
-                    Pintar & Elegan
+                    Berbagi Jalur 3.8
                   </span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Model modern dengan daya analisa tinggi & hasil animasi presisi kompleks.
+                  Model modern berkapasitas tinggi (berbagi kuota jalur 3.8 Flash — jika 3.8 limit, disarankan pilih 3.5 Flash Lite / 3.1 Flash Lite).
                 </p>
               </div>
             </div>

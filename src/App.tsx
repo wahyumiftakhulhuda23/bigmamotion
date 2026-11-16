@@ -28,6 +28,7 @@ import {
   getModelExecutionProfile,
   AllKeysExhaustedError,
   resetKeyHealthPool,
+  resetKeyHealthForModelSwitch,
 } from './services/geminiService';
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
@@ -313,7 +314,7 @@ export default function App() {
   const handleConfirmModelSwitch = (newModel: GeminiModel) => {
     setSelectedModel(newModel);
     saveStoredModel(newModel);
-    resetKeyHealthPool();
+    resetKeyHealthForModelSwitch(newModel);
     setIsModelRotationModalOpen(false);
     const activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, animationsRef.current);
     completedLedgerRef.current = activeLedger;
@@ -329,7 +330,7 @@ export default function App() {
   const handleConfirmModelSwitchAndRetry = (newModel: GeminiModel) => {
     setSelectedModel(newModel);
     saveStoredModel(newModel);
-    resetKeyHealthPool();
+    resetKeyHealthForModelSwitch(newModel);
     setIsModelRotationModalOpen(false);
     const activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, animationsRef.current);
     completedLedgerRef.current = activeLedger;
@@ -1351,47 +1352,88 @@ export default function App() {
             addLog(`✅ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Target ${acc.promptCount} animasi sudah terpenuhi (${alreadyDoneAi} selesai) — langsung lanjut akun berikutnya.`, 'success');
             continue;
           }
-          addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${remainingTarget} prompt${alreadyDoneAi > 0 ? ` (${alreadyDoneAi} sudah selesai sebelumnya)` : ''}...`, 'info');
 
-          try {
-            const rawGen = await generatePromptsViaGemini(
-              apiKeys,
-              selectedModel,
-              acc.type,
-              acc.subCategory,
-              acc.style,
-              remainingTarget,
-              undefined,
-              acc.isGreenScreen ?? false,
-              acc.colorMode ?? 'gradient',
-              'auto',
-              acc.neonGlow ?? true,
-              (singlePrompt, index, total) => {
-                if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
-                  addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
-                }
-              }
+          const pendingConcreteForAcc = filterPendingFailedItems(
+            failedAutoPilotItemsRef.current,
+            activeLedger,
+            currentAnimList
+          ).filter(
+            (it) =>
+              normalizeAccountKey(it.accountName) === normalizeAccountKey(acc.name) &&
+              !(it.isAutoPromptPending || it.prompt.startsWith('(Auto Prompt:') || it.prompt.startsWith('(Generate Prompts:'))
+          );
+          const reusedConcrete = pendingConcreteForAcc.slice(0, remainingTarget).map((it) => it.prompt);
+          const needFreshCount = Math.max(0, remainingTarget - reusedConcrete.length);
+          if (reusedConcrete.length > 0) {
+            addLog(
+              `♻️ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Melanjutkan ${reusedConcrete.length} prompt tertunda/gagal sebelumnya${needFreshCount > 0 ? ` + generate ${needFreshCount} prompt baru` : ''}...`,
+              'cyan'
             );
-            prompts = rawGen.filter((gp) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, gp));
-            addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt unik. Memulai render hemat batch 2-in-1...`, 'success');
-            await new Promise((res) => setTimeout(res, 400));
-          } catch (e: any) {
-            addLog(`❌ [${acc.name}] Gagal generate prompt: ${e.message}`, 'error');
-            newFailedItems.push({
-              id: 'fail_p_' + Date.now() + '_' + i,
-              accountName: acc.name,
-              prompt: `(Auto Prompt: ${remainingTarget} animasi ${acc.type} - ${acc.subCategory})`,
-              type: acc.type,
-              subCategory: acc.subCategory,
-              style: acc.style,
-              isGreenScreen: acc.isGreenScreen ?? false,
-              colorMode: acc.colorMode ?? 'gradient',
-              motionDynamics: 'auto',
-              neonGlow: acc.neonGlow ?? true,
-              isAutoPromptPending: true,
-              promptCount: remainingTarget,
-              error: e.message || 'Gagal menghasilkan prompt',
-            });
+          }
+
+          if (needFreshCount === 0) {
+            prompts = reusedConcrete;
+          } else {
+            addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${needFreshCount} prompt${alreadyDoneAi > 0 ? ` (${alreadyDoneAi} sudah selesai sebelumnya)` : ''}...`, 'info');
+
+            try {
+              const rawGen = await generatePromptsViaGemini(
+                apiKeys,
+                selectedModel,
+                acc.type,
+                acc.subCategory,
+                acc.style,
+                needFreshCount,
+                undefined,
+                acc.isGreenScreen ?? false,
+                acc.colorMode ?? 'gradient',
+                'auto',
+                acc.neonGlow ?? true,
+                (singlePrompt, index, total) => {
+                  if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
+                    addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
+                  }
+                }
+              );
+              const reusedSet = new Set(reusedConcrete.map((p) => normalizePromptKey(p)));
+              const freshFiltered = rawGen.filter(
+                (gp) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, gp) && !reusedSet.has(normalizePromptKey(gp))
+              );
+              prompts = [...reusedConcrete, ...freshFiltered];
+              addLog(`✅ [${acc.name}] Berhasil menyiapkan ${prompts.length} prompt unik. Memulai render hemat batch 2-in-1...`, 'success');
+              await new Promise((res) => setTimeout(res, 400));
+            } catch (e: any) {
+              addLog(`❌ [${acc.name}] Gagal generate prompt: ${e.message}`, 'error');
+              reusedConcrete.forEach((rp, rIdx) => {
+                newFailedItems.push({
+                  id: 'fail_reused_' + Date.now() + '_' + i + '_' + rIdx,
+                  accountName: acc.name,
+                  prompt: rp,
+                  type: acc.type,
+                  subCategory: acc.subCategory,
+                  style: acc.style,
+                  isGreenScreen: acc.isGreenScreen ?? false,
+                  colorMode: acc.colorMode ?? 'gradient',
+                  motionDynamics: 'auto',
+                  neonGlow: acc.neonGlow ?? true,
+                  error: 'Tertunda karena kuota penuh saat melengkapi prompt baru — siap dicoba ulang',
+                });
+              });
+              newFailedItems.push({
+                id: 'fail_p_' + Date.now() + '_' + i,
+                accountName: acc.name,
+                prompt: `(Auto Prompt: ${needFreshCount} animasi ${acc.type} - ${acc.subCategory})`,
+                type: acc.type,
+                subCategory: acc.subCategory,
+                style: acc.style,
+                isGreenScreen: acc.isGreenScreen ?? false,
+                colorMode: acc.colorMode ?? 'gradient',
+                motionDynamics: 'auto',
+                neonGlow: acc.neonGlow ?? true,
+                isAutoPromptPending: true,
+                promptCount: needFreshCount,
+                error: e.message || 'Gagal menghasilkan prompt',
+              });
             const isQuotaFail = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
             if (isQuotaFail) {
               for (let k = i + 1; k < accountsToRun.length; k++) {
@@ -1449,6 +1491,7 @@ export default function App() {
             }
             continue;
           }
+          }
         }
 
         let consecutiveExhaustedBatches = 0;
@@ -1475,6 +1518,7 @@ export default function App() {
               colorMode: acc.colorMode ?? 'gradient',
               motionDynamics: 'auto',
               neonGlow: acc.neonGlow ?? true,
+              variationOffset: j * 3 + i * 11,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -1498,6 +1542,7 @@ export default function App() {
                   colorMode: acc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: acc.neonGlow ?? true,
+                  variationOffset: j * 3 + i * 11 + 19,
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
               );
@@ -1856,6 +1901,7 @@ export default function App() {
               colorMode: lead.colorMode ?? 'gradient',
               motionDynamics: 'auto',
               neonGlow: lead.neonGlow ?? true,
+              variationOffset: cIdx * 5 + 31,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -1879,6 +1925,7 @@ export default function App() {
                   colorMode: lead.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: lead.neonGlow ?? true,
+                  variationOffset: cIdx * 5 + 47,
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
               );

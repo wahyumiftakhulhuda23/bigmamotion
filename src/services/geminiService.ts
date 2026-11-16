@@ -130,6 +130,22 @@ export function resetKeyHealthPool(): void {
   unsupportedThinkingModels.clear();
 }
 
+export function resetKeyHealthForModelSwitch(newModel?: string): void {
+  const target = sanitizeModel(newModel || 'gemini-3.8-flash');
+  modelGlobalCooldowns.delete(target);
+  recentModelQuotaHits.delete(target);
+  unsupportedClientModels.delete(target);
+  for (const pair of Array.from(keyModelCooldowns.keys())) {
+    if (pair.endsWith(`::${target}`)) keyModelCooldowns.delete(pair);
+  }
+  for (const pair of Array.from(keyModelStrikeCount.keys())) {
+    if (pair.endsWith(`::${target}`)) keyModelStrikeCount.delete(pair);
+  }
+  for (const pair of Array.from(keyModelDailyExhausted.keys())) {
+    if (pair.endsWith(`::${target}`)) keyModelDailyExhausted.delete(pair);
+  }
+}
+
 export function unquarantineKey(rawKey: string): void {
   const k = extractCleanApiKey(rawKey);
   if (k) quarantinedKeys.delete(k);
@@ -684,7 +700,7 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
       _t: function(t) { return (typeof t === 'number' && isFinite(t)) ? t : (typeof __bigmaT === 'number' ? __bigmaT : 0); },
       _v: function(v) {
         var n = (typeof v === 'number' && isFinite(v)) ? v : (typeof __bigmaV === 'number' && isFinite(__bigmaV) ? __bigmaV : 0);
-        return Math.abs(Math.floor(n)) % 4;
+        return Math.abs(Math.floor(n)) % 6;
       },
       _rt: function(rimCol, t, defRim) {
         if (typeof rimCol === 'number') return { r: defRim || '#f8fafc', t: G._t(rimCol) };
@@ -930,38 +946,66 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var fc = frameCol || '#1e293b', hc = headerCol || '#4f46e5', ac = accentCol || '#00e5ff';
-        G.box(x, y, s * 1.02, s * 0.78, s * 0.10, fc, rim, lw);
-        G.box(x, y - s * 0.27, s * 0.98, s * 0.17, s * 0.06, hc, rim, lw * 0.8);
-        G.disc(x - s * 0.37, y - s * 0.27, s * 0.035, '#f43f5e', null, 0);
-        G.disc(x - s * 0.27, y - s * 0.27, s * 0.035, '#ffd700', null, 0);
-        G.disc(x - s * 0.17, y - s * 0.27, s * 0.035, ac, null, 0);
         if (vv === 1) {
-          G.box(x + s * 0.29, y + s * 0.09, s * 0.30, s * 0.44, s * 0.05, '#0f172a', rim, lw * 0.7);
-          var rNav = y - s * 0.03 + Math.sin(tt * 2.4) * s * 0.09;
-          G.pill(x + s * 0.20, y - s * 0.03, x + s * 0.38, y - s * 0.03, s * 0.042, '#475569');
-          G.pill(x + s * 0.20, y + s * 0.09, x + s * 0.38, y + s * 0.09, s * 0.042, '#475569');
-          G.pill(x + s * 0.20, y + s * 0.21, x + s * 0.38, y + s * 0.21, s * 0.042, '#475569');
-          G.pill(x + s * 0.20, rNav, x + s * 0.38, rNav, s * 0.048, ac);
+          // Sleek vertical portrait smartphone UI mockup
+          G.box(x, y, s * 0.56, s * 0.94, s * 0.11, fc, rim, lw);
+          G.box(x, y, s * 0.46, s * 0.78, s * 0.07, '#0f172a', hc, lw * 0.65);
+          G.capsule(x, y - s * 0.41, s * 0.16, s * 0.038, '#475569', null, 0);
           var cDy = Math.sin(tt * 2.5) * s * 0.025;
-          G.box(x - s * 0.16, y - s * 0.02 + cDy, s * 0.48, s * 0.21, s * 0.05, ac, rim, lw * 0.75);
-          G.box(x - s * 0.28, y + s * 0.21, s * 0.22, s * 0.18, s * 0.04, '#38bdf8', rim, lw * 0.7);
-          G.box(x - s * 0.03, y + s * 0.21, s * 0.22, s * 0.18, s * 0.04, '#ffd700', rim, lw * 0.7);
+          G.box(x, y - s * 0.20 + cDy, s * 0.36, s * 0.22, s * 0.05, hc, rim, lw * 0.75);
+          G.box(x - s * 0.09, y + s * 0.05, s * 0.17, s * 0.17, s * 0.04, ac, rim, lw * 0.65);
+          G.box(x + s * 0.09, y + s * 0.05, s * 0.17, s * 0.17, s * 0.04, '#ffd700', rim, lw * 0.65);
+          G.capsule(x, y + s * 0.26, s * 0.36, s * 0.09, '#1e293b', ac, lw * 0.65);
+          G.disc(x - s * 0.10 + (0.5 + 0.5 * Math.sin(tt * 2.4)) * s * 0.20, y + s * 0.26, s * 0.032, '#ffd700', null, 0);
         } else if (vv === 2) {
-          var k1 = s * (0.02 * Math.sin(tt * 2.4)), k2 = s * (0.02 * Math.sin(tt * 2.4 + 1.4));
-          G.box(x - s * 0.23, y - s * 0.02 + k1, s * 0.42, s * 0.20, s * 0.05, ac, rim, lw * 0.75);
-          G.box(x + s * 0.23, y - s * 0.02 + k2, s * 0.42, s * 0.20, s * 0.05, '#ffd700', rim, lw * 0.75);
-          G.box(x, y + s * 0.22, s * 0.88, s * 0.20, s * 0.05, '#0f172a', rim, lw * 0.75);
-          var sw = s * (0.30 + 0.14 * Math.sin(tt * 2.5));
-          G.pill(x - s * 0.34, y + s * 0.22, x - s * 0.34 + sw, y + s * 0.22, s * 0.06, '#38bdf8');
+          // Dual overlapping cascading app windows
+          var wOff = Math.sin(tt * 2.2) * s * 0.025;
+          G.box(x - s * 0.11, y - s * 0.11 - wOff, s * 0.78, s * 0.60, s * 0.08, hc, rim, lw);
+          G.box(x - s * 0.11, y - s * 0.32 - wOff, s * 0.74, s * 0.13, s * 0.04, fc, null, 0);
+          G.box(x + s * 0.11, y + s * 0.10 + wOff, s * 0.78, s * 0.60, s * 0.08, fc, rim, lw);
+          G.box(x + s * 0.11, y - s * 0.11 + wOff, s * 0.74, s * 0.13, s * 0.04, ac, null, 0);
+          G.box(x + s * 0.01, y + s * 0.08 + wOff, s * 0.40, s * 0.22, s * 0.04, hc, rim, lw * 0.7);
+          G.box(x + s * 0.31, y + s * 0.08 + wOff, s * 0.16, s * 0.22, s * 0.04, '#ffd700', rim, lw * 0.7);
+          var sw2 = s * (0.28 + 0.12 * Math.sin(tt * 2.6));
+          G.pill(x - s * 0.16, y + s * 0.28 + wOff, x - s * 0.16 + sw2, y + s * 0.28 + wOff, s * 0.055, ac);
         } else if (vv === 3) {
-          var xs3 = [x - s * 0.30, x, x + s * 0.30], cols3 = [ac, '#38bdf8', '#ffd700'];
+          // Frameless floating 3-card dashboard trio (NO outer frame box!)
+          var xs3 = [x - s * 0.33, x, x + s * 0.33], hs3 = [s * 0.56, s * 0.74, s * 0.62], cols3 = [ac, hc, '#ffd700'];
           for (var c3 = 0; c3 < 3; c3++) {
-            var cy3 = y + s * 0.09 + Math.sin(tt * 2.6 - c3 * 0.9) * s * 0.03;
-            G.box(xs3[c3], cy3, s * 0.25, s * 0.42, s * 0.05, '#0f172a', cols3[c3], lw * 0.85);
-            G.box(xs3[c3], cy3 - s * 0.08, s * 0.16, s * 0.12, s * 0.03, cols3[c3], null, 0);
-            G.pill(xs3[c3] - s * 0.07, cy3 + s * 0.10, xs3[c3] + s * 0.07, cy3 + s * 0.10, s * 0.035, '#94a3b8');
+            var cy3 = y + Math.sin(tt * 2.5 - c3 * 1.0) * s * 0.045;
+            G.box(xs3[c3], cy3, s * 0.28, hs3[c3], s * 0.06, fc, cols3[c3], lw);
+            G.box(xs3[c3], cy3 - hs3[c3] * 0.22, s * 0.19, s * 0.15, s * 0.035, cols3[c3], rim, lw * 0.6);
+            G.pill(xs3[c3] - s * 0.07, cy3 + s * 0.07, xs3[c3] + s * 0.07, cy3 + s * 0.07, s * 0.04, '#f8fafc');
+            G.pill(xs3[c3] - s * 0.07, cy3 + s * 0.17, xs3[c3] + s * 0.04, cy3 + s * 0.17, s * 0.035, '#94a3b8');
           }
+        } else if (vv === 4) {
+          // Landscape pro tablet bezel + side home dot + radial dial + sliders
+          G.box(x, y, s * 0.98, s * 0.68, s * 0.11, fc, rim, lw);
+          G.box(x - s * 0.03, y, s * 0.78, s * 0.54, s * 0.06, '#0f172a', hc, lw * 0.7);
+          G.disc(x + s * 0.42, y, s * 0.042, ac, rim, lw * 0.5);
+          G.disc(x - s * 0.21, y, s * 0.16, '#1e293b', ac, lw * 0.75);
+          G.ring(x - s * 0.21, y, s * 0.11, s * 0.038, -Math.PI / 2, -Math.PI / 2 + Math.PI * (1.2 + 0.45 * Math.sin(tt * 2.4)), '#ffd700');
+          G.box(x + s * 0.14, y - s * 0.12, s * 0.30, s * 0.14, s * 0.04, hc, rim, lw * 0.65);
+          G.pill(x, y + s * 0.06, x + s * (0.14 + 0.12 * Math.sin(tt * 2.6)), y + s * 0.06, s * 0.045, ac);
+          G.pill(x, y + s * 0.17, x + s * 0.26, y + s * 0.17, s * 0.045, '#ffd700');
+        } else if (vv === 5) {
+          // Frameless asymmetric split-panel UI + floating top ribbon banner
+          var dy5 = Math.sin(tt * 2.3) * s * 0.03;
+          G.capsule(x, y - s * 0.31 + dy5, s * 0.88, s * 0.18, hc, rim, lw);
+          G.disc(x - s * 0.31, y - s * 0.31 + dy5, s * 0.048, '#ffd700', null, 0);
+          G.pill(x - s * 0.18, y - s * 0.31 + dy5, x + s * 0.28, y - s * 0.31 + dy5, s * 0.05, '#f8fafc');
+          G.box(x - s * 0.24, y + s * 0.10, s * 0.42, s * 0.52, s * 0.08, fc, ac, lw);
+          G.star(x - s * 0.24, y + s * 0.04, s * 0.11, s * 0.05, 5, -Math.PI / 2, '#ffd700', rim, lw * 0.6);
+          G.pill(x - s * 0.35, y + s * 0.23, x - s * 0.13, y + s * 0.23, s * 0.04, '#f8fafc');
+          G.box(x + s * 0.24, y - s * 0.01 - dy5 * 0.6, s * 0.42, s * 0.24, s * 0.06, ac, rim, lw);
+          G.box(x + s * 0.24, y + s * 0.26 + dy5 * 0.6, s * 0.42, s * 0.20, s * 0.06, fc, '#ffd700', lw);
         } else {
+          // Desktop browser window with left sidebar + hero banner + dual sub-cards
+          G.box(x, y, s * 1.02, s * 0.78, s * 0.10, fc, rim, lw);
+          G.box(x, y - s * 0.27, s * 0.98, s * 0.17, s * 0.06, hc, rim, lw * 0.8);
+          G.disc(x - s * 0.37, y - s * 0.27, s * 0.035, '#f43f5e', null, 0);
+          G.disc(x - s * 0.27, y - s * 0.27, s * 0.035, '#ffd700', null, 0);
+          G.disc(x - s * 0.17, y - s * 0.27, s * 0.035, ac, null, 0);
           G.box(x - s * 0.29, y + s * 0.09, s * 0.30, s * 0.44, s * 0.05, '#0f172a', rim, lw * 0.7);
           var navY = y - s * 0.03 + Math.sin(tt * 2.4) * s * 0.09;
           G.pill(x - s * 0.38, y - s * 0.03, x - s * 0.20, y - s * 0.03, s * 0.042, '#475569');
@@ -979,38 +1023,60 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var fc = frameCol || '#1e293b', tc = tileCol || '#4f46e5', ac = accCol || '#00e5ff';
-        G.box(x, y + s * 0.38, s * 0.42, s * 0.10, s * 0.04, fc, rim, lw * 0.85);
-        G.box(x, y + s * 0.31, s * 0.14, s * 0.12, s * 0.02, '#475569', rim, lw * 0.75);
-        G.box(x, y - s * 0.03, s * 1.04, s * 0.70, s * 0.09, fc, rim, lw);
-        G.box(x, y - s * 0.03, s * 0.92, s * 0.56, s * 0.06, '#0f172a', '#334155', lw * 0.65);
-        G.disc(x, y - s * 0.34, s * 0.035, '#38bdf8', '#0f172a', lw * 0.5);
         if (vv === 1) {
-          G.box(x - s * 0.13, y - s * 0.03, s * 0.54, s * 0.44, s * 0.05, tc, rim, lw * 0.7);
-          G.person(x - s * 0.13, y, s * 0.34, '#38bdf8', '#f8fafc', rim);
-          var pipY = y - s * 0.12 + Math.sin(tt * 2.3) * s * 0.025;
-          G.box(x + s * 0.28, pipY, s * 0.24, s * 0.22, s * 0.04, ac, rim, lw * 0.7);
-          G.person(x + s * 0.28, pipY + s * 0.02, s * 0.17, '#1e293b', '#f8fafc', null);
-          for (var b1 = 0; b1 < 3; b1++) {
-            var bh1 = s * (0.06 + 0.05 * Math.abs(Math.sin(tt * 4.2 + b1 * 0.9)));
-            G.bar(x + s * (0.20 + b1 * 0.08), y + s * 0.20, s * 0.045, bh1, s * 0.02, '#ffd700', null, 0);
-          }
+          // Vertical mobile smartphone video call + floating PIP speaker
+          G.box(x, y, s * 0.56, s * 0.94, s * 0.11, fc, rim, lw);
+          G.box(x, y - s * 0.02, s * 0.46, s * 0.74, s * 0.07, tc, rim, lw * 0.7);
+          G.person(x - s * 0.04, y + s * 0.04, s * 0.34, ac, '#f8fafc', rim);
+          var pipY = y - s * 0.20 + Math.sin(tt * 2.4) * s * 0.025;
+          G.box(x + s * 0.13, pipY, s * 0.20, s * 0.20, s * 0.04, '#0f172a', '#ffd700', lw * 0.75);
+          G.person(x + s * 0.13, pipY + s * 0.02, s * 0.15, '#f97316', '#f8fafc', null);
+          G.disc(x, y + s * 0.39, s * 0.05, '#f43f5e', rim, lw * 0.6);
         } else if (vv === 2) {
-          var qx = [-s * 0.21, s * 0.21, -s * 0.21, s * 0.21], qy = [-s * 0.16, -s * 0.16, s * 0.09, s * 0.09];
+          // Frameless floating 2x2 participant tile grid (NO monitor/stand!)
+          var qx = [-s * 0.24, s * 0.24, -s * 0.24, s * 0.24], qy = [-s * 0.21, -s * 0.21, s * 0.21, s * 0.21];
           var qcols = [tc, ac, '#f97316', '#38bdf8'];
           for (var q = 0; q < 4; q++) {
             var act = Math.sin(tt * 2.5 - q * 1.5) > 0.3;
-            G.box(x + qx[q], y + qy[q], s * 0.38, s * 0.22, s * 0.04, '#1e293b', act ? '#ffd700' : rim, act ? lw : lw * 0.65);
-            G.person(x + qx[q], y + qy[q] + s * 0.02, s * 0.17, qcols[q], '#f8fafc', null);
+            G.box(x + qx[q], y + qy[q], s * 0.42, s * 0.36, s * 0.07, fc, act ? '#ffd700' : rim, act ? lw * 1.15 : lw * 0.8);
+            G.person(x + qx[q], y + qy[q] + s * 0.02, s * 0.25, qcols[q], '#f8fafc', null);
           }
         } else if (vv === 3) {
-          G.box(x, y - s * 0.06, s * 0.82, s * 0.38, s * 0.05, tc, rim, lw * 0.7);
-          G.person(x - s * 0.22, y - s * 0.04, s * 0.26, '#38bdf8', '#f8fafc', rim);
-          G.person(x + s * 0.22, y - s * 0.04, s * 0.26, ac, '#f8fafc', rim);
-          G.box(x, y + s * 0.19, s * 0.62, s * 0.09, s * 0.04, '#1e293b', rim, lw * 0.6);
-          G.disc(x - s * 0.14, y + s * 0.19, s * 0.032, '#f43f5e', null, 0);
-          G.disc(x, y + s * 0.19, s * (0.03 + 0.01 * Math.sin(tt * 3.5)), '#ffd700', null, 0);
-          G.disc(x + s * 0.14, y + s * 0.19, s * 0.032, ac, null, 0);
+          // Open laptop webcam conference call
+          G.box(x, y - s * 0.09, s * 0.88, s * 0.58, s * 0.07, fc, rim, lw);
+          G.box(x, y - s * 0.09, s * 0.76, s * 0.45, s * 0.04, '#0f172a', tc, lw * 0.7);
+          G.person(x - s * 0.18, y - s * 0.08, s * 0.28, '#38bdf8', '#f8fafc', rim);
+          G.person(x + s * 0.18, y - s * 0.08, s * 0.28, ac, '#f8fafc', rim);
+          G.disc(x, y - s * 0.34, s * 0.032, '#ffd700', null, 0);
+          G.poly([[x - s * 0.44, y + s * 0.20], [x + s * 0.44, y + s * 0.20], [x + s * 0.53, y + s * 0.34], [x - s * 0.53, y + s * 0.34]], '#334155', rim, lw, true);
+          G.capsule(x, y + s * 0.27, s * 0.24, s * 0.055, ac, null, 0);
+        } else if (vv === 4) {
+          // Circular webcam ring medallion + floating control dock
+          G.ring(x, y - s * 0.06, s * 0.40, s * 0.045, tt * 0.8, tt * 0.8 + Math.PI * 1.45, '#ffd700');
+          G.disc(x, y - s * 0.06, s * 0.33, fc, rim, lw);
+          G.disc(x, y - s * 0.06, s * 0.27, tc, ac, lw * 0.7);
+          G.person(x, y - s * 0.04, s * 0.32, ac, '#f8fafc', rim);
+          G.capsule(x, y + s * 0.36, s * 0.62, s * 0.13, '#0f172a', rim, lw * 0.85);
+          G.disc(x - s * 0.18, y + s * 0.36, s * 0.04, '#f43f5e', null, 0);
+          G.disc(x, y + s * 0.36, s * 0.04, '#ffd700', null, 0);
+          G.disc(x + s * 0.18, y + s * 0.36, s * 0.04, ac, null, 0);
+        } else if (vv === 5) {
+          // Asymmetric stage: large main presenter left + 2 stacked caller cards right
+          G.box(x - s * 0.16, y - s * 0.04, s * 0.62, s * 0.66, s * 0.08, fc, rim, lw);
+          G.box(x - s * 0.16, y - s * 0.04, s * 0.50, s * 0.52, s * 0.05, tc, ac, lw * 0.7);
+          G.person(x - s * 0.16, y - s * 0.01, s * 0.38, ac, '#f8fafc', rim);
+          var cDy5 = Math.sin(tt * 2.4) * s * 0.02;
+          G.box(x + s * 0.32, y - s * 0.21 + cDy5, s * 0.28, s * 0.30, s * 0.06, fc, '#ffd700', lw * 0.85);
+          G.person(x + s * 0.32, y - s * 0.19 + cDy5, s * 0.20, '#38bdf8', '#f8fafc', null);
+          G.box(x + s * 0.32, y + s * 0.14 - cDy5, s * 0.28, s * 0.30, s * 0.06, fc, rim, lw * 0.85);
+          G.person(x + s * 0.32, y + s * 0.16 - cDy5, s * 0.20, '#f97316', '#f8fafc', null);
         } else {
+          // Classic widescreen desktop monitor + stand + 2 side-by-side tiles
+          G.box(x, y + s * 0.38, s * 0.42, s * 0.10, s * 0.04, fc, rim, lw * 0.85);
+          G.box(x, y + s * 0.31, s * 0.14, s * 0.12, s * 0.02, '#475569', rim, lw * 0.75);
+          G.box(x, y - s * 0.03, s * 1.04, s * 0.70, s * 0.09, fc, rim, lw);
+          G.box(x, y - s * 0.03, s * 0.92, s * 0.56, s * 0.06, '#0f172a', '#334155', lw * 0.65);
+          G.disc(x, y - s * 0.34, s * 0.035, '#38bdf8', '#0f172a', lw * 0.5);
           var p0 = 0.5 + 0.5 * Math.sin(tt * 2.4);
           G.box(x - s * 0.21, y - s * 0.07, s * 0.39, s * 0.34, s * 0.05, tc, p0 > 0.5 ? '#ffd700' : rim, lw * 0.85);
           G.person(x - s * 0.21, y - s * 0.05, s * 0.26, '#38bdf8', '#f8fafc', null);
@@ -1025,29 +1091,62 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var bc = bodyCol || '#1e293b', sc = screenCol || '#0f172a', ac = accCol || '#00e5ff';
-        G.box(x, y - s * 0.08, s * 0.86, s * 0.58, s * 0.07, bc, rim, lw);
-        G.box(x, y - s * 0.08, s * 0.74, s * 0.46, s * 0.04, sc, '#4f46e5', lw * 0.65);
-        G.poly([[x - s * 0.44, y + s * 0.20], [x + s * 0.44, y + s * 0.20], [x + s * 0.54, y + s * 0.34], [x - s * 0.54, y + s * 0.34]], '#334155', rim, lw, true);
-        G.box(x, y + s * 0.29, s * 0.22, s * 0.055, s * 0.02, ac, null, 0);
         if (vv === 1) {
+          // Compact ultrabook with rising growth bar chart & gold trend arrow
+          G.box(x, y - s * 0.08, s * 0.78, s * 0.54, s * 0.07, bc, rim, lw);
+          G.box(x, y - s * 0.08, s * 0.66, s * 0.42, s * 0.04, sc, ac, lw * 0.65);
+          G.poly([[x - s * 0.40, y + s * 0.19], [x + s * 0.40, y + s * 0.19], [x + s * 0.49, y + s * 0.32], [x - s * 0.49, y + s * 0.32]], '#475569', rim, lw, true);
           var bBase = y + s * 0.10;
-          var hA = s * (0.12 + 0.05 * Math.sin(tt * 2.6)), hB = s * (0.19 + 0.06 * Math.sin(tt * 2.6 - 0.8)), hC = s * (0.26 + 0.06 * Math.sin(tt * 2.6 - 1.6));
-          G.bar(x - s * 0.20, bBase, s * 0.11, hA, s * 0.025, '#38bdf8', null, 0);
-          G.bar(x - s * 0.04, bBase, s * 0.11, hB, s * 0.025, '#4f46e5', null, 0);
-          G.bar(x + s * 0.12, bBase, s * 0.11, hC, s * 0.025, ac, null, 0);
-          G.arrow(x - s * 0.22, y - s * 0.10, x + s * 0.24, y - s * 0.22 + Math.sin(tt * 2.6) * s * 0.02, s * 0.032, s * 0.085, '#ffd700');
+          var hA = s * (0.11 + 0.04 * Math.sin(tt * 2.6)), hB = s * (0.18 + 0.05 * Math.sin(tt * 2.6 - 0.8)), hC = s * (0.25 + 0.05 * Math.sin(tt * 2.6 - 1.6));
+          G.bar(x - s * 0.17, bBase, s * 0.10, hA, s * 0.02, '#38bdf8', null, 0);
+          G.bar(x, bBase, s * 0.10, hB, s * 0.02, '#4f46e5', null, 0);
+          G.bar(x + s * 0.17, bBase, s * 0.10, hC, s * 0.02, ac, null, 0);
+          G.arrow(x - s * 0.20, y - s * 0.10, x + s * 0.22, y - s * 0.22 + Math.sin(tt * 2.6) * s * 0.02, s * 0.03, s * 0.08, '#ffd700');
         } else if (vv === 2) {
+          // Pro desktop studio monitor on tall aluminum pedestal stand
+          G.box(x, y + s * 0.38, s * 0.44, s * 0.09, s * 0.03, '#475569', rim, lw * 0.85);
+          G.box(x, y + s * 0.26, s * 0.16, s * 0.22, s * 0.02, '#64748b', rim, lw * 0.75);
+          G.box(x, y - s * 0.08, s * 0.98, s * 0.64, s * 0.08, bc, rim, lw);
+          G.box(x, y - s * 0.08, s * 0.86, s * 0.50, s * 0.04, sc, '#4f46e5', lw * 0.65);
           var dy2 = Math.sin(tt * 2.4) * s * 0.025;
-          G.box(x - s * 0.17, y - s * 0.08 + dy2, s * 0.30, s * 0.30, s * 0.04, '#4f46e5', rim, lw * 0.6);
-          G.box(x + s * 0.17, y - s * 0.14 - dy2, s * 0.30, s * 0.16, s * 0.04, ac, rim, lw * 0.6);
-          G.box(x + s * 0.17, y + s * 0.04, s * 0.30, s * 0.14, s * 0.04, '#ffd700', rim, lw * 0.6);
+          G.box(x - s * 0.19, y - s * 0.08 + dy2, s * 0.34, s * 0.34, s * 0.04, '#4f46e5', rim, lw * 0.6);
+          G.box(x + s * 0.19, y - s * 0.15 - dy2, s * 0.32, s * 0.16, s * 0.04, ac, rim, lw * 0.6);
+          G.box(x + s * 0.19, y + s * 0.04, s * 0.32, s * 0.16, s * 0.04, '#ffd700', rim, lw * 0.6);
         } else if (vv === 3) {
-          G.disc(x - s * 0.17, y - s * 0.08, s * 0.13, '#1e293b', ac, lw * 0.7);
-          G.ring(x - s * 0.17, y - s * 0.08, s * 0.09, s * 0.032, -Math.PI / 2, -Math.PI / 2 + Math.PI * (1.2 + 0.4 * Math.sin(tt * 2.5)), '#ffd700');
-          G.pill(x + s * 0.02, y - s * 0.16, x + s * 0.28, y - s * 0.16, s * 0.045, ac);
-          G.pill(x + s * 0.02, y - s * 0.06, x + s * (0.18 + 0.08 * Math.sin(tt * 2.5)), y - s * 0.06, s * 0.045, '#38bdf8');
-          G.pill(x + s * 0.02, y + s * 0.04, x + s * 0.24, y + s * 0.04, s * 0.045, '#f97316');
+          // Frameless floating UI screen + radial gauge + detached slim wireless keyboard bar
+          G.box(x, y - s * 0.12, s * 0.86, s * 0.58, s * 0.09, bc, rim, lw);
+          G.box(x, y - s * 0.12, s * 0.74, s * 0.46, s * 0.05, sc, ac, lw * 0.7);
+          G.disc(x - s * 0.17, y - s * 0.12, s * 0.14, '#1e293b', ac, lw * 0.7);
+          G.ring(x - s * 0.17, y - s * 0.12, s * 0.095, s * 0.032, -Math.PI / 2, -Math.PI / 2 + Math.PI * (1.2 + 0.4 * Math.sin(tt * 2.5)), '#ffd700');
+          G.pill(x + s * 0.02, y - s * 0.20, x + s * 0.28, y - s * 0.20, s * 0.045, ac);
+          G.pill(x + s * 0.02, y - s * 0.10, x + s * (0.18 + 0.08 * Math.sin(tt * 2.5)), y - s * 0.10, s * 0.045, '#38bdf8');
+          G.pill(x + s * 0.02, y, x + s * 0.24, y, s * 0.045, '#f97316');
+          G.capsule(x, y + s * 0.30, s * 0.78, s * 0.11, '#334155', rim, lw * 0.85);
+        } else if (vv === 4) {
+          // Dual-screen workstation (left laptop + docked vertical tablet on right)
+          G.box(x - s * 0.12, y - s * 0.07, s * 0.72, s * 0.52, s * 0.06, bc, rim, lw);
+          G.box(x - s * 0.12, y - s * 0.07, s * 0.60, s * 0.40, s * 0.04, sc, ac, lw * 0.65);
+          G.poly([[x - s * 0.48, y + s * 0.19], [x + s * 0.24, y + s * 0.19], [x + s * 0.32, y + s * 0.31], [x - s * 0.52, y + s * 0.31]], '#334155', rim, lw, true);
+          G.pill(x - s * 0.32, y - s * 0.13, x + s * 0.06, y - s * 0.13, s * 0.05, ac);
+          G.pill(x - s * 0.32, y - s * 0.01, x - s * (0.04 - 0.10 * Math.sin(tt * 2.4)), y - s * 0.01, s * 0.05, '#ffd700');
+          var dy4 = Math.sin(tt * 2.2) * s * 0.03;
+          G.box(x + s * 0.35, y + dy4, s * 0.26, s * 0.56, s * 0.06, bc, '#ffd700', lw);
+          G.disc(x + s * 0.35, y - s * 0.08 + dy4, s * 0.075, ac, '#ffffff', lw * 0.5);
+          G.check(x + s * 0.35, y + s * 0.12 + dy4, s * 0.08, s * 0.025, '#ffd700');
+        } else if (vv === 5) {
+          // Tablet easel with stylus pen & live curve telemetry
+          G.box(x - s * 0.04, y - s * 0.02, s * 0.84, s * 0.62, s * 0.09, bc, rim, lw);
+          G.box(x - s * 0.04, y - s * 0.02, s * 0.72, s * 0.50, s * 0.05, sc, '#4f46e5', lw * 0.65);
+          var wv5 = Math.sin(tt * 2.8) * s * 0.06;
+          G.poly([[x - s * 0.30, y + s * 0.10], [x - s * 0.12, y - s * 0.08 + wv5], [x + s * 0.06, y + s * 0.04 - wv5], [x + s * 0.22, y - s * 0.16]], null, ac, lw * 1.15, false);
+          G.disc(x + s * 0.22, y - s * 0.16, s * 0.05, '#ffd700', rim, lw * 0.6);
+          G.capsule(x + s * 0.38, y + s * 0.04 + Math.sin(tt * 2.4) * s * 0.04, s * 0.09, s * 0.46, '#ffd700', rim, lw * 0.8);
         } else {
+          // Standard wide open laptop + animated checklist rows
+          G.box(x, y - s * 0.08, s * 0.86, s * 0.58, s * 0.07, bc, rim, lw);
+          G.box(x, y - s * 0.08, s * 0.74, s * 0.46, s * 0.04, sc, '#4f46e5', lw * 0.65);
+          G.poly([[x - s * 0.44, y + s * 0.20], [x + s * 0.44, y + s * 0.20], [x + s * 0.54, y + s * 0.34], [x - s * 0.54, y + s * 0.34]], '#334155', rim, lw, true);
+          G.box(x, y + s * 0.29, s * 0.22, s * 0.055, s * 0.02, ac, null, 0);
           var rys = [y - s * 0.19, y - s * 0.08, y + s * 0.03];
           var rCols = [ac, '#ffd700', '#38bdf8'];
           for (var ri = 0; ri < 3; ri++) {
@@ -1061,36 +1160,66 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
         var bc = boardCol || '#1e293b', cc = clipCol || '#f59e0b', ac = accentCol || '#00e5ff';
-        G.box(x, y + s * 0.04, s * 0.80, s * 0.94, s * 0.10, bc, rim, lw);
-        G.box(x, y + s * 0.06, s * 0.66, s * 0.76, s * 0.06, '#f8fafc', '#0f172a', lw * 0.65);
-        G.box(x, y - s * 0.42, s * 0.34, s * 0.13, s * 0.04, cc, rim, lw);
         if (vv === 1) {
-          var ys1 = [y - s * 0.13, y + s * 0.07, y + s * 0.27];
-          var cols1 = ['#4f46e5', ac, '#f43f5e'];
+          // FRAMELESS 3 stacked horizontal floating task pill cards (NO clipboard box!)
+          var ys1 = [y - s * 0.27, y, y + s * 0.27];
+          var cols1 = ['#4f46e5', ac, cc];
           for (var i1 = 0; i1 < 3; i1++) {
             var p1 = 0.5 + 0.5 * Math.sin(tt * 2.6 - i1 * 1.0);
-            G.disc(x - s * 0.18, ys1[i1], s * 0.065, cols1[i1], '#0f172a', lw * 0.55);
-            G.check(x - s * 0.18, ys1[i1], s * (0.06 + 0.018 * p1), s * 0.022, '#ffffff');
-            G.pill(x - s * 0.05, ys1[i1], x + s * (0.12 + 0.12 * p1), ys1[i1], s * 0.05, cols1[i1]);
+            var sx1 = Math.sin(tt * 2.2 - i1 * 0.9) * s * 0.035;
+            G.capsule(x + sx1, ys1[i1], s * 0.88, s * 0.21, bc, cols1[i1], lw);
+            G.disc(x + sx1 - s * 0.29, ys1[i1], s * 0.068, cols1[i1], rim, lw * 0.7);
+            G.check(x + sx1 - s * 0.29, ys1[i1], s * (0.065 + 0.015 * p1), s * 0.024, '#ffffff');
+            G.pill(x + sx1 - s * 0.15, ys1[i1], x + sx1 + s * (0.14 + 0.15 * p1), ys1[i1], s * 0.055, '#f8fafc');
           }
-          G.star(x + s * 0.26, y - s * 0.34, s * 0.11, s * 0.05, 5, -Math.PI / 2, '#ffd700', rim, lw * 0.6);
         } else if (vv === 2) {
-          G.box(x - s * 0.15, y - s * 0.14, s * 0.24, s * 0.10, s * 0.03, '#4f46e5', null, 0);
-          G.box(x + s * 0.15, y - s * 0.14, s * 0.24, s * 0.10, s * 0.03, ac, null, 0);
-          var sl = Math.sin(tt * 2.3) * s * 0.06;
-          G.box(x + sl, y + s * 0.04, s * 0.44, s * 0.14, s * 0.04, '#38bdf8', '#0f172a', lw * 0.6);
-          G.box(x - sl * 0.7, y + s * 0.24, s * 0.44, s * 0.14, s * 0.04, '#ffd700', '#0f172a', lw * 0.6);
+          // Wide 2-column Kanban board frame (NO vertical clipboard!)
+          G.box(x, y, s * 0.96, s * 0.74, s * 0.09, bc, rim, lw);
+          G.box(x - s * 0.22, y - s * 0.22, s * 0.36, s * 0.11, s * 0.035, '#4f46e5', null, 0);
+          G.box(x + s * 0.22, y - s * 0.22, s * 0.36, s * 0.11, s * 0.035, ac, null, 0);
+          var sl = Math.sin(tt * 2.3) * s * 0.05;
+          G.box(x - s * 0.22 + sl * 0.4, y + s * 0.04, s * 0.34, s * 0.22, s * 0.04, '#38bdf8', rim, lw * 0.7);
+          G.box(x + s * 0.22 - sl * 0.4, y - s * 0.01, s * 0.34, s * 0.16, s * 0.04, cc, rim, lw * 0.7);
+          G.box(x + s * 0.22, y + s * 0.20, s * 0.34, s * 0.15, s * 0.04, '#f8fafc', rim, lw * 0.7);
         } else if (vv === 3) {
-          G.disc(x, y - s * 0.12, s * 0.14, '#1e293b', '#0f172a', lw * 0.6);
-          G.ring(x, y - s * 0.12, s * 0.10, s * 0.04, -Math.PI / 2, -Math.PI / 2 + Math.PI * (1.1 + 0.6 * Math.sin(tt * 2.4)), ac);
-          G.check(x, y - s * 0.12, s * 0.09, s * 0.025, '#ffd700');
-          var ys3 = [y + s * 0.13, y + s * 0.28];
+          // Frameless big circular completion dial over 2 progress track bars
+          G.disc(x, y - s * 0.16, s * 0.28, bc, rim, lw);
+          G.ring(x, y - s * 0.16, s * 0.21, s * 0.05, -Math.PI / 2, -Math.PI / 2 + Math.PI * (1.1 + 0.6 * Math.sin(tt * 2.4)), ac);
+          G.check(x, y - s * 0.16, s * 0.17, s * 0.04, cc);
+          var ys3 = [y + s * 0.21, y + s * 0.36];
           for (var i3 = 0; i3 < 2; i3++) {
             var p3 = 0.5 + 0.5 * Math.sin(tt * 2.8 - i3 * 1.1);
-            G.box(x - s * 0.17, ys3[i3], s * 0.10, s * 0.10, s * 0.025, i3 === 0 ? ac : '#4f46e5', '#0f172a', lw * 0.5);
-            G.pill(x - s * 0.05, ys3[i3], x + s * (0.12 + 0.12 * p3), ys3[i3], s * 0.05, '#1e293b');
+            G.capsule(x, ys3[i3], s * 0.78, s * 0.11, bc, rim, lw * 0.8);
+            G.pill(x - s * 0.30, ys3[i3], x + s * (-0.02 + 0.28 * p3), ys3[i3], s * 0.055, i3 === 0 ? ac : cc);
+          }
+        } else if (vv === 4) {
+          // Spiral-bound left-ringed planner notebook + gold star seal
+          G.box(x + s * 0.05, y, s * 0.78, s * 0.90, s * 0.09, bc, rim, lw);
+          G.box(x + s * 0.08, y, s * 0.62, s * 0.74, s * 0.05, '#f8fafc', '#0f172a', lw * 0.65);
+          for (var sp = 0; sp < 4; sp++) {
+            var ry4 = y - s * 0.27 + sp * s * 0.18;
+            G.capsule(x - s * 0.34, ry4, s * 0.14, s * 0.065, cc, rim, lw * 0.65);
+          }
+          G.pill(x - s * 0.12, y - s * 0.14, x + s * 0.24, y - s * 0.14, s * 0.055, '#4f46e5');
+          G.pill(x - s * 0.12, y + s * 0.04, x + s * (0.08 + 0.16 * Math.sin(tt * 2.6)), y + s * 0.04, s * 0.055, ac);
+          G.star(x + s * 0.24, y + s * 0.24, s * 0.12, s * 0.055, 5, -Math.PI / 2, cc, rim, lw * 0.65);
+        } else if (vv === 5) {
+          // Shield-header milestone spine card (connected numbered nodes)
+          G.box(x, y + s * 0.04, s * 0.82, s * 0.88, s * 0.10, bc, rim, lw);
+          G.capsule(x, y - s * 0.38, s * 0.56, s * 0.16, '#4f46e5', rim, lw);
+          G.pill(x - s * 0.18, y - s * 0.16, x - s * 0.18, y + s * 0.28, s * 0.038, '#475569');
+          var my5 = [y - s * 0.16, y + s * 0.06, y + s * 0.28];
+          var mcols5 = [ac, cc, '#f43f5e'];
+          for (var m5 = 0; m5 < 3; m5++) {
+            var pm5 = 0.5 + 0.5 * Math.sin(tt * 2.7 - m5 * 1.1);
+            G.disc(x - s * 0.18, my5[m5], s * 0.068, mcols5[m5], rim, lw * 0.6);
+            G.pill(x - s * 0.03, my5[m5], x + s * (0.14 + 0.12 * pm5), my5[m5], s * 0.05, mcols5[m5]);
           }
         } else {
+          // Classic clipboard + top gold clip + 3 square checkboxes
+          G.box(x, y + s * 0.04, s * 0.80, s * 0.94, s * 0.10, bc, rim, lw);
+          G.box(x, y + s * 0.06, s * 0.66, s * 0.76, s * 0.06, '#f8fafc', '#0f172a', lw * 0.65);
+          G.box(x, y - s * 0.42, s * 0.34, s * 0.13, s * 0.04, cc, rim, lw);
           var ys = [y - s * 0.14, y + s * 0.07, y + s * 0.28];
           var cols = [ac, '#4f46e5', '#f97316'];
           for (var i = 0; i < 3; i++) {
@@ -1106,90 +1235,169 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
         var hc = hullCol || '#f8fafc', wc = wingCol || '#4f46e5', fc = flameCol || '#f97316';
         var fl = 0.5 + 0.5 * Math.sin(tt * 9.0);
-        G.poly([[x - s * 0.11, y + s * 0.26], [x + s * 0.11, y + s * 0.26], [x, y + s * (0.44 + 0.10 * fl)]], fc, '#ffd700', lw * 0.7, true);
-        G.poly([[x - s * 0.055, y + s * 0.26], [x + s * 0.055, y + s * 0.26], [x, y + s * (0.35 + 0.06 * fl)]], '#ffd700', null, 0, true);
-        G.poly([[x - s * 0.16, y + s * 0.02], [x - s * 0.36, y + s * 0.26], [x - s * 0.14, y + s * 0.24]], wc, rim, lw, true);
-        G.poly([[x + s * 0.16, y + s * 0.02], [x + s * 0.36, y + s * 0.26], [x + s * 0.14, y + s * 0.24]], wc, rim, lw, true);
-        G.box(x, y + s * 0.25, s * 0.22, s * 0.08, s * 0.02, '#1e293b', rim, lw * 0.8);
-        G.capsule(x, y - s * 0.03, s * 0.36, s * 0.62, hc, '#0f172a', lw);
-        G.poly([[x - s * 0.16, y - s * 0.18], [x + s * 0.16, y - s * 0.18], [x, y - s * 0.46]], '#f43f5e', rim, lw, true);
-        if (vv === 1) {
-          G.disc(x, y - s * 0.06, s * 0.075, '#00e5ff', '#0f172a', lw * 0.8);
-          G.disc(x, y + s * 0.10, s * 0.065, '#ffd700', '#0f172a', lw * 0.8);
-        } else if (vv === 2) {
-          G.box(x, y - s * 0.10, s * 0.34, s * 0.08, s * 0.02, wc, rim, lw * 0.7);
-          G.star(x, y + s * 0.06, s * 0.095, s * 0.045, 5, -Math.PI / 2, '#ffd700', '#0f172a', lw * 0.7);
-        } else if (vv === 3) {
-          G.box(x, y - s * 0.04, s * 0.22, s * 0.14, s * 0.06, '#00e5ff', '#0f172a', lw * 0.85);
-          G.capsule(x - s * 0.20, y + s * 0.10, s * 0.10, s * 0.26, wc, rim, lw * 0.75);
-          G.capsule(x + s * 0.20, y + s * 0.10, s * 0.10, s * 0.26, wc, rim, lw * 0.75);
+        if (vv === 2) {
+          // Faceted polygon delta space shuttle
+          G.poly([[x - s * 0.15, y + s * 0.24], [x + s * 0.15, y + s * 0.24], [x, y + s * (0.45 + 0.10 * fl)]], fc, '#ffd700', lw * 0.7, true);
+          G.poly([[x, y - s * 0.44], [x + s * 0.38, y + s * 0.24], [x - s * 0.38, y + s * 0.24]], wc, rim, lw, true);
+          G.poly([[x, y - s * 0.42], [x + s * 0.18, y + s * 0.24], [x - s * 0.18, y + s * 0.24]], hc, '#0f172a', lw, true);
+          G.ngon(x, y - s * 0.05, s * 0.10, 4, 0, '#00e5ff', '#0f172a', lw * 0.75);
+          G.box(x, y + s * 0.26, s * 0.24, s * 0.08, s * 0.02, '#1e293b', rim, lw * 0.8);
+        } else if (vv === 4) {
+          // Orbital trajectory rocket + tilted golden orbit ring
+          G.oval(x, y + s * 0.04, s * 0.46, s * 0.18, -0.35, null, '#00e5ff', s * 0.036);
+          G.poly([[x - s * 0.09, y + s * 0.25], [x + s * 0.09, y + s * 0.25], [x, y + s * (0.43 + 0.08 * fl)]], fc, '#ffd700', lw * 0.7, true);
+          G.poly([[x - s * 0.15, y + s * 0.02], [x - s * 0.32, y + s * 0.22], [x - s * 0.12, y + s * 0.22]], wc, rim, lw, true);
+          G.poly([[x + s * 0.15, y + s * 0.02], [x + s * 0.32, y + s * 0.22], [x + s * 0.12, y + s * 0.22]], wc, rim, lw, true);
+          G.capsule(x, y - s * 0.04, s * 0.30, s * 0.56, hc, '#0f172a', lw);
+          G.poly([[x - s * 0.13, y - s * 0.18], [x + s * 0.13, y - s * 0.18], [x, y - s * 0.44]], '#f43f5e', rim, lw, true);
+          G.star(x + s * 0.34, y - s * 0.10, s * 0.08, s * 0.035, 4, tt * 0.8, '#ffd700', null, 0);
+        } else if (vv === 5) {
+          // Layered heavy-stage rocket spire + triple exhaust thrusters
+          G.poly([[x - s * 0.18, y + s * 0.25], [x - s * 0.04, y + s * 0.25], [x - s * 0.11, y + s * (0.42 + 0.08 * fl)]], fc, null, 0, true);
+          G.poly([[x + s * 0.04, y + s * 0.25], [x + s * 0.18, y + s * 0.25], [x + s * 0.11, y + s * (0.42 + 0.08 * fl)]], fc, null, 0, true);
+          G.poly([[x - s * 0.08, y + s * 0.25], [x + s * 0.08, y + s * 0.25], [x, y + s * (0.46 + 0.09 * fl)]], '#ffd700', null, 0, true);
+          G.box(x, y + s * 0.10, s * 0.42, s * 0.30, s * 0.05, wc, rim, lw);
+          G.capsule(x, y - s * 0.10, s * 0.30, s * 0.56, hc, '#0f172a', lw);
+          G.poly([[x - s * 0.13, y - s * 0.22], [x + s * 0.13, y - s * 0.22], [x, y - s * 0.46]], '#ffd700', rim, lw, true);
+          G.star(x, y - s * 0.05, s * 0.09, s * 0.04, 5, -Math.PI / 2, '#00e5ff', '#0f172a', lw * 0.6);
         } else {
-          G.disc(x, y - s * 0.03, s * 0.095, '#00e5ff', '#0f172a', lw);
+          // Tapered capsule + side fins/boosters
+          G.poly([[x - s * 0.11, y + s * 0.26], [x + s * 0.11, y + s * 0.26], [x, y + s * (0.44 + 0.10 * fl)]], fc, '#ffd700', lw * 0.7, true);
+          G.poly([[x - s * 0.055, y + s * 0.26], [x + s * 0.055, y + s * 0.26], [x, y + s * (0.35 + 0.06 * fl)]], '#ffd700', null, 0, true);
+          G.poly([[x - s * 0.16, y + s * 0.02], [x - s * 0.36, y + s * 0.26], [x - s * 0.14, y + s * 0.24]], wc, rim, lw, true);
+          G.poly([[x + s * 0.16, y + s * 0.02], [x + s * 0.36, y + s * 0.26], [x + s * 0.14, y + s * 0.24]], wc, rim, lw, true);
+          G.box(x, y + s * 0.25, s * 0.22, s * 0.08, s * 0.02, '#1e293b', rim, lw * 0.8);
+          G.capsule(x, y - s * 0.03, s * 0.36, s * 0.62, hc, '#0f172a', lw);
+          G.poly([[x - s * 0.16, y - s * 0.18], [x + s * 0.16, y - s * 0.18], [x, y - s * 0.46]], '#f43f5e', rim, lw, true);
+          if (vv === 1) {
+            G.disc(x, y - s * 0.06, s * 0.075, '#00e5ff', '#0f172a', lw * 0.8);
+            G.disc(x, y + s * 0.10, s * 0.065, '#ffd700', '#0f172a', lw * 0.8);
+          } else if (vv === 3) {
+            G.box(x, y - s * 0.04, s * 0.22, s * 0.14, s * 0.06, '#00e5ff', '#0f172a', lw * 0.85);
+            G.capsule(x - s * 0.20, y + s * 0.10, s * 0.10, s * 0.26, wc, rim, lw * 0.75);
+            G.capsule(x + s * 0.20, y + s * 0.10, s * 0.10, s * 0.26, wc, rim, lw * 0.75);
+          } else {
+            G.disc(x, y - s * 0.03, s * 0.095, '#00e5ff', '#0f172a', lw);
+          }
         }
       },
       lightbulb: function(x, y, s, bulbCol, rayCol, baseCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
         var bc = bulbCol || '#ffd700', rc = rayCol || '#00e5ff', bsc = baseCol || '#1e293b';
-        if (vv === 1) {
-          G.ring(x, y - s * 0.09, s * 0.40, s * 0.035, tt * 0.9, tt * 0.9 + Math.PI * 1.4, rc);
-          G.star(x + s * 0.34, y - s * 0.34, s * (0.09 + 0.02 * Math.sin(tt * 3.2)), s * 0.04, 4, 0, '#ffffff', rc, lw * 0.5);
-        } else if (vv === 2) {
-          G.rays(x, y - s * 0.09, s * 0.33, s * (0.46 + 0.05 * Math.sin(tt * 3.8)), 9, -Math.PI / 2 - Math.sin(tt * 1.6) * 0.1, s * 0.036, rc);
-        } else if (vv === 3) {
-          G.ring(x, y - s * 0.09, s * 0.39, s * 0.04, Math.PI * 1.15, Math.PI * 1.85, rc);
-          G.rays(x, y - s * 0.09, s * 0.34, s * (0.45 + 0.04 * Math.cos(tt * 3.2)), 5, -Math.PI / 2, s * 0.048, '#f97316');
+        if (vv === 2) {
+          // Hexagonal geometric prism idea crystal bulb
+          G.rays(x, y - s * 0.09, s * 0.34, s * (0.46 + 0.05 * Math.sin(tt * 3.8)), 8, -Math.PI / 2, s * 0.036, rc);
+          G.capsule(x, y + s * 0.39, s * 0.16, s * 0.075, bsc, rim, lw * 0.9);
+          G.box(x, y + s * 0.27, s * 0.26, s * 0.16, s * 0.04, '#475569', rim, lw);
+          G.ngon(x, y - s * 0.09, s * 0.32, 6, 0, bc, rim, lw);
+          G.ngon(x, y - s * 0.09, s * 0.14, 6, 0, '#ffffff', '#0f172a', lw * 0.65);
+        } else if (vv === 4) {
+          // Innovation gear-powered lightbulb
+          G.rays(x, y - s * 0.09, s * 0.35, s * (0.45 + 0.04 * Math.sin(tt * 3.4)), 6, -Math.PI / 2, s * 0.038, rc);
+          G.capsule(x, y + s * 0.39, s * 0.15, s * 0.075, bsc, rim, lw * 0.9);
+          G.box(x, y + s * 0.28, s * 0.25, s * 0.15, s * 0.04, '#475569', rim, lw);
+          G.box(x, y + s * 0.14, s * 0.25, s * 0.13, s * 0.03, bc, rim, lw);
+          G.disc(x, y - s * 0.09, s * 0.30, bc, rim, lw);
+          G.part(x, y - s * 0.09, tt * 1.5, 1, 1, function() {
+            for (var gi = 0; gi < 6; gi++) {
+              G.part(0, 0, (gi * Math.PI * 2) / 6, 1, 1, function() { G.box(0, -s * 0.14, s * 0.055, s * 0.055, s * 0.01, '#0f172a', null, 0); });
+            }
+            G.disc(0, 0, s * 0.12, '#0f172a', '#ffffff', lw * 0.6);
+            G.disc(0, 0, s * 0.05, rc, null, 0);
+          });
+        } else if (vv === 5) {
+          // Brainstorm beacon with floating side idea nodes & upward rocket filament
+          G.disc(x - s * 0.36, y - s * 0.22 + Math.sin(tt * 2.5) * s * 0.04, s * 0.08, rc, rim, lw * 0.7);
+          G.disc(x + s * 0.36, y - s * 0.22 - Math.sin(tt * 2.5) * s * 0.04, s * 0.08, '#f97316', rim, lw * 0.7);
+          G.capsule(x, y + s * 0.39, s * 0.15, s * 0.075, bsc, rim, lw * 0.9);
+          G.box(x, y + s * 0.28, s * 0.25, s * 0.15, s * 0.04, '#475569', rim, lw);
+          G.box(x, y + s * 0.14, s * 0.25, s * 0.13, s * 0.03, bc, rim, lw);
+          G.disc(x, y - s * 0.09, s * 0.29, bc, rim, lw);
+          G.arrow(x, y + s * 0.04, x, y - s * 0.22 + Math.sin(tt * 3.0) * s * 0.02, s * 0.042, s * 0.10, '#ffffff');
         } else {
-          var rOut = s * (0.44 + 0.06 * Math.sin(tt * 3.4));
-          G.rays(x, y - s * 0.09, s * 0.34, rOut, 7, -Math.PI / 2 + Math.sin(tt * 1.4) * 0.08, s * 0.042, rc);
-        }
-        G.capsule(x, y + s * 0.39, s * 0.15, s * 0.075, bsc, rim, lw * 0.9);
-        G.box(x, y + s * 0.28, s * 0.25, s * 0.15, s * 0.04, '#475569', rim, lw);
-        G.box(x, y + s * 0.14, s * 0.25, s * 0.13, s * 0.03, bc, rim, lw);
-        G.disc(x, y - s * 0.09, s * 0.29, bc, rim, lw);
-        if (vv === 3) {
-          G.poly([[x + s * 0.02, y - s * 0.22], [x - s * 0.07, y - s * 0.07], [x + s * 0.01, y - s * 0.07], [x - s * 0.04, y + s * 0.08], [x + s * 0.09, y - s * 0.10], [x + s * 0.01, y - s * 0.10]], '#ffffff', '#0f172a', lw * 0.6, true);
-        } else if (vv === 1) {
-          G.disc(x, y - s * 0.10, s * (0.11 + 0.02 * Math.sin(tt * 3.4)), '#ffffff', '#f97316', lw * 0.7);
-        } else {
-          G.poly([[x - s * 0.09, y + s * 0.02], [x - s * 0.04, y - s * 0.11], [x, y - s * 0.03], [x + s * 0.04, y - s * 0.11], [x + s * 0.09, y + s * 0.02]], null, '#ffffff', lw * 1.15, false);
+          if (vv === 1) {
+            G.ring(x, y - s * 0.09, s * 0.40, s * 0.035, tt * 0.9, tt * 0.9 + Math.PI * 1.4, rc);
+            G.star(x + s * 0.34, y - s * 0.34, s * (0.09 + 0.02 * Math.sin(tt * 3.2)), s * 0.04, 4, 0, '#ffffff', rc, lw * 0.5);
+          } else if (vv === 3) {
+            G.ring(x, y - s * 0.09, s * 0.39, s * 0.04, Math.PI * 1.15, Math.PI * 1.85, rc);
+            G.rays(x, y - s * 0.09, s * 0.34, s * (0.45 + 0.04 * Math.cos(tt * 3.2)), 5, -Math.PI / 2, s * 0.048, '#f97316');
+          } else {
+            var rOut = s * (0.44 + 0.06 * Math.sin(tt * 3.4));
+            G.rays(x, y - s * 0.09, s * 0.34, rOut, 7, -Math.PI / 2 + Math.sin(tt * 1.4) * 0.08, s * 0.042, rc);
+          }
+          G.capsule(x, y + s * 0.39, s * 0.15, s * 0.075, bsc, rim, lw * 0.9);
+          G.box(x, y + s * 0.28, s * 0.25, s * 0.15, s * 0.04, '#475569', rim, lw);
+          G.box(x, y + s * 0.14, s * 0.25, s * 0.13, s * 0.03, bc, rim, lw);
+          G.disc(x, y - s * 0.09, s * 0.29, bc, rim, lw);
+          if (vv === 3) {
+            G.poly([[x + s * 0.02, y - s * 0.22], [x - s * 0.07, y - s * 0.07], [x + s * 0.01, y - s * 0.07], [x - s * 0.04, y + s * 0.08], [x + s * 0.09, y - s * 0.10], [x + s * 0.01, y - s * 0.10]], '#ffffff', '#0f172a', lw * 0.6, true);
+          } else if (vv === 1) {
+            G.disc(x, y - s * 0.10, s * (0.11 + 0.02 * Math.sin(tt * 3.4)), '#ffffff', '#f97316', lw * 0.7);
+          } else {
+            G.poly([[x - s * 0.09, y + s * 0.02], [x - s * 0.04, y - s * 0.11], [x, y - s * 0.03], [x + s * 0.04, y - s * 0.11], [x + s * 0.09, y + s * 0.02]], null, '#ffffff', lw * 1.15, false);
+          }
         }
       },
       chart: function(x, y, s, cardCol, bar1Col, bar2Col, arrowCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = cardCol || '#1e293b', b1 = bar1Col || '#38bdf8', b2 = bar2Col || '#4f46e5', ac = arrowCol || '#ffd700';
-        G.box(x, y, s * 1.02, s * 0.78, s * 0.10, cc, rim, lw);
-        var yBase = y + s * 0.25;
-        G.pill(x - s * 0.38, yBase + s * 0.02, x + s * 0.38, yBase + s * 0.02, lw, '#94a3b8');
         if (vv === 1) {
-          var xs = [-s * 0.27, -s * 0.09, s * 0.09, s * 0.27];
-          var hs = [0.16, 0.24, 0.33, 0.42];
-          var bcols = [b1, b2, '#00e5ff', ac];
-          var pts = [];
+          // FRAMELESS 4-column bar graph on capsule baseline + glowing trend polyline (NO card box!)
+          var yB1 = y + s * 0.30;
+          G.capsule(x, yB1 + s * 0.04, s * 0.90, s * 0.08, cc, rim, lw * 0.8);
+          var xs = [-s * 0.30, -s * 0.10, s * 0.10, s * 0.30], hs = [0.22, 0.36, 0.48, 0.62];
+          var bcols = [b1, b2, '#00e5ff', ac], pts = [];
           for (var bi = 0; bi < 4; bi++) {
-            var hCur = s * (hs[bi] + 0.06 * Math.sin(tt * 2.5 - bi * 0.7));
-            G.bar(x + xs[bi], yBase, s * 0.11, hCur, s * 0.025, bcols[bi], rim, lw * 0.6);
-            pts.push([x + xs[bi], yBase - hCur - s * 0.05]);
+            var hCur = s * (hs[bi] + 0.07 * Math.sin(tt * 2.5 - bi * 0.7));
+            G.bar(x + xs[bi], yB1, s * 0.14, hCur, s * 0.03, bcols[bi], rim, lw * 0.85);
+            pts.push([x + xs[bi], yB1 - hCur - s * 0.07]);
+            G.disc(x + xs[bi], yB1 - hCur - s * 0.07, s * 0.042, '#ffffff', rim, lw * 0.5);
           }
-          G.poly(pts, null, ac, lw, false);
+          G.poly(pts, null, ac, lw * 1.1, false);
         } else if (vv === 2) {
-          G.pie(x - s * 0.22, y - s * 0.06, s * 0.16, -Math.PI / 2 + tt * 0.6, Math.PI * 1.25, ac, b2, rim);
-          var hb1 = s * (0.26 + 0.07 * Math.sin(tt * 2.6));
-          var hb2 = s * (0.40 + 0.07 * Math.sin(tt * 2.6 - 0.9));
-          G.bar(x + s * 0.09, yBase, s * 0.14, hb1, s * 0.03, b1, rim, lw * 0.7);
-          G.bar(x + s * 0.28, yBase, s * 0.14, hb2, s * 0.03, '#00e5ff', rim, lw * 0.7);
+          // FRAMELESS split analytics: big donut pie left + twin floating bars right (NO card box!)
+          G.pie(x - s * 0.21, y - s * 0.02, s * 0.25, -Math.PI / 2 + tt * 0.7, Math.PI * 1.3, ac, b2, rim);
+          G.disc(x - s * 0.21, y - s * 0.02, s * 0.10, cc, rim, lw * 0.7);
+          var yB2 = y + s * 0.28;
+          G.capsule(x + s * 0.23, yB2 + s * 0.04, s * 0.42, s * 0.07, cc, rim, lw * 0.7);
+          G.bar(x + s * 0.13, yB2, s * 0.14, s * (0.34 + 0.07 * Math.sin(tt * 2.6)), s * 0.03, b1, rim, lw * 0.8);
+          G.bar(x + s * 0.33, yB2, s * 0.14, s * (0.52 + 0.07 * Math.sin(tt * 2.6 - 0.9)), s * 0.03, '#00e5ff', rim, lw * 0.8);
         } else if (vv === 3) {
-          var hA = s * (0.19 + 0.06 * Math.cos(tt * 2.5));
-          var hB = s * (0.31 + 0.07 * Math.cos(tt * 2.5 - 0.9));
-          var hC = s * (0.42 + 0.07 * Math.cos(tt * 2.5 - 1.8));
-          G.bar(x - s * 0.24, yBase, s * 0.15, hA, s * 0.03, b1, rim, lw * 0.7);
-          G.bar(x, yBase, s * 0.15, hB, s * 0.03, ac, rim, lw * 0.7);
-          G.bar(x + s * 0.24, yBase, s * 0.15, hC, s * 0.03, b2, rim, lw * 0.7);
-          G.disc(x - s * 0.24, yBase - hA - s * 0.05, s * 0.04, '#ffffff', rim, lw * 0.5);
-          G.disc(x, yBase - hB - s * 0.05, s * 0.04, '#ffffff', rim, lw * 0.5);
-          G.disc(x + s * 0.24, yBase - hC - s * 0.05, s * 0.04, '#ffffff', rim, lw * 0.5);
+          // Desktop display monitor on pedestal featuring candlestick bars + nodes
+          G.box(x, y + s * 0.37, s * 0.40, s * 0.09, s * 0.03, cc, rim, lw * 0.85);
+          G.box(x, y + s * 0.28, s * 0.14, s * 0.12, s * 0.02, '#475569', rim, lw * 0.75);
+          G.box(x, y - s * 0.05, s * 0.98, s * 0.62, s * 0.08, cc, rim, lw);
+          var cXs = [x - s * 0.26, x, x + s * 0.26];
+          var cYs = [y + s * 0.03, y - s * 0.04, y - s * 0.12];
+          var cCols = [b1, ac, '#00e5ff'];
+          for (var ci = 0; ci < 3; ci++) {
+            var dyc = Math.sin(tt * 2.5 - ci * 0.9) * s * 0.03;
+            G.pill(cXs[ci], cYs[ci] - s * 0.14 + dyc, cXs[ci], cYs[ci] + s * 0.14 + dyc, lw, '#f8fafc');
+            G.box(cXs[ci], cYs[ci] + dyc, s * 0.14, s * 0.18, s * 0.03, cCols[ci], rim, lw * 0.7);
+          }
+        } else if (vv === 4) {
+          // Circular gauge crest housing wrapping 3 rising columns (ROUND outer silhouette!)
+          G.disc(x, y, s * 0.46, cc, rim, lw);
+          G.ring(x, y, s * 0.38, s * 0.045, tt * 0.7, tt * 0.7 + Math.PI * 1.4, ac);
+          var yB4 = y + s * 0.20;
+          G.bar(x - s * 0.16, yB4, s * 0.11, s * (0.18 + 0.05 * Math.sin(tt * 2.6)), s * 0.025, b1, null, 0);
+          G.bar(x, yB4, s * 0.11, s * (0.28 + 0.06 * Math.sin(tt * 2.6 - 0.8)), s * 0.025, b2, null, 0);
+          G.bar(x + s * 0.16, yB4, s * 0.11, s * (0.37 + 0.06 * Math.sin(tt * 2.6 - 1.6)), s * 0.025, '#00e5ff', null, 0);
+        } else if (vv === 5) {
+          // Ascending stepped podium staircase + bold diagonal growth arrow + peak star (NO box!)
+          var yB5 = y + s * 0.32;
+          G.bar(x - s * 0.28, yB5, s * 0.20, s * 0.24, s * 0.04, b1, rim, lw * 0.85);
+          G.bar(x, yB5, s * 0.20, s * 0.40, s * 0.04, b2, rim, lw * 0.85);
+          G.bar(x + s * 0.28, yB5, s * 0.20, s * 0.56, s * 0.04, '#00e5ff', rim, lw * 0.85);
+          G.arrow(x - s * 0.32, y + s * 0.02, x + s * 0.24, y - s * 0.28 + Math.sin(tt * 2.8) * s * 0.025, s * 0.045, s * 0.12, ac);
+          G.star(x + s * 0.28, y - s * 0.35, s * 0.11, s * 0.05, 5, -Math.PI / 2, ac, rim, lw * 0.65);
         } else {
+          // Classic rounded card + 3 bars + upward growth arrow
+          G.box(x, y, s * 1.02, s * 0.78, s * 0.10, cc, rim, lw);
+          var yBase = y + s * 0.25;
+          G.pill(x - s * 0.38, yBase + s * 0.02, x + s * 0.38, yBase + s * 0.02, lw, '#94a3b8');
           var h1 = s * (0.20 + 0.07 * Math.sin(tt * 2.6));
           var h2 = s * (0.31 + 0.07 * Math.sin(tt * 2.6 - 0.8));
           var h3 = s * (0.41 + 0.08 * Math.sin(tt * 2.6 - 1.6));
@@ -1204,28 +1412,55 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = cardCol || '#1e293b', lc = lensCol || '#00e5ff', hc = handleCol || '#f59e0b', ac = accentCol || '#ffd700';
-        G.box(x - s * 0.06, y, s * 0.78, s * 0.84, s * 0.09, cc, rim, lw);
-        G.pill(x - s * 0.32, y - s * 0.25, x + s * 0.16, y - s * 0.25, s * 0.05, '#475569');
-        G.pill(x - s * 0.32, y - s * 0.10, x + s * 0.08, y - s * 0.10, s * 0.05, '#38bdf8');
-        G.bar(x - s * 0.25, y + s * 0.28, s * 0.10, s * 0.18, s * 0.02, '#4f46e5', null, 0);
-        G.bar(x - s * 0.10, y + s * 0.28, s * 0.10, s * 0.26, s * 0.02, '#38bdf8', null, 0);
         var ox = Math.cos(tt * 2.1) * s * 0.065, oy = Math.sin(tt * 2.1) * s * 0.065;
         if (vv === 1) {
+          // Wide landscape report card + bottom-left handle lens + checkmark
+          G.box(x + s * 0.04, y, s * 0.90, s * 0.64, s * 0.09, cc, rim, lw);
+          G.pill(x - s * 0.26, y - s * 0.14, x + s * 0.32, y - s * 0.14, s * 0.05, '#475569');
+          G.pill(x - s * 0.26, y, x + s * 0.28, y, s * 0.05, '#38bdf8');
           ox = Math.sin(tt * 2.0) * s * 0.08; oy = Math.sin(tt * 4.0) * s * 0.04;
           G.pill(x + ox - s * 0.16, y + oy + s * 0.16, x + ox - s * 0.38, y + oy + s * 0.38, s * 0.10, hc);
           G.disc(x + ox, y + oy - s * 0.01, s * 0.24, '#0f172a', lc, s * 0.055);
           G.check(x + ox, y + oy - s * 0.01, s * 0.14, s * 0.036, ac);
         } else if (vv === 2) {
-          G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
-          G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.24, '#0f172a', lc, s * 0.055);
-          G.ring(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.13, s * 0.025, tt * 2.0, tt * 2.0 + Math.PI * 1.4, ac);
-          G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.055, ac, null, 0);
+          // FRAMELESS giant hero magnifying lens inspecting live rising bars inside glass (NO background card!)
+          G.pill(x + ox * 0.5 + s * 0.20, y + oy * 0.5 + s * 0.20, x + ox * 0.5 + s * 0.42, y + oy * 0.5 + s * 0.42, s * 0.12, hc);
+          G.disc(x + ox * 0.5 - s * 0.05, y + oy * 0.5 - s * 0.05, s * 0.35, cc, lc, s * 0.06);
+          G.ring(x + ox * 0.5 - s * 0.05, y + oy * 0.5 - s * 0.05, s * 0.26, s * 0.03, tt * 1.4, tt * 1.4 + Math.PI * 1.2, ac);
+          var yBm = y + oy * 0.5 + s * 0.11;
+          G.bar(x + ox * 0.5 - s * 0.14, yBm, s * 0.08, s * (0.14 + 0.05 * Math.sin(tt * 3.0)), s * 0.02, '#38bdf8', null, 0);
+          G.bar(x + ox * 0.5 - s * 0.03, yBm, s * 0.08, s * (0.22 + 0.05 * Math.sin(tt * 3.0 - 0.8)), s * 0.02, ac, null, 0);
+          G.bar(x + ox * 0.5 + s * 0.08, yBm, s * 0.08, s * (0.18 + 0.05 * Math.sin(tt * 3.0 - 1.6)), s * 0.02, lc, null, 0);
         } else if (vv === 3) {
-          G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
+          // Tabbed file folder behind sweeping star lens
+          G.box(x - s * 0.16, y - s * 0.34, s * 0.38, s * 0.16, s * 0.05, '#4f46e5', rim, lw);
+          G.box(x, y - s * 0.02, s * 0.82, s * 0.66, s * 0.09, cc, rim, lw);
+          G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.39, y + oy + s * 0.39, s * 0.10, hc);
           G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.24, '#0f172a', lc, s * 0.055);
           var ks3 = 1 + 0.12 * Math.sin(tt * 3.0);
           G.star(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.12 * ks3, s * 0.055 * ks3, 5, -Math.PI / 2, ac, rim, lw * 0.5);
+        } else if (vv === 4) {
+          // Concentric radar target scope + orbiting inspection lens
+          G.disc(x - s * 0.05, y - s * 0.03, s * 0.38, cc, rim, lw);
+          G.ring(x - s * 0.05, y - s * 0.03, s * 0.25, s * 0.035, 0, Math.PI * 2, '#4f46e5');
+          G.disc(x - s * 0.05, y - s * 0.03, s * 0.09, ac, null, 0);
+          G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
+          G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.22, '#0f172a', lc, s * 0.055);
+          G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.065, ac, '#ffffff', lw * 0.5);
+        } else if (vv === 5) {
+          // Folded dog-ear contract page + tilted lens zooming into mini pie
+          G.poly([[x - s * 0.40, y - s * 0.40], [x + s * 0.12, y - s * 0.40], [x + s * 0.30, y - s * 0.22], [x + s * 0.30, y + s * 0.38], [x - s * 0.40, y + s * 0.38]], cc, rim, lw, true);
+          G.pill(x - s * 0.28, y - s * 0.22, x + s * 0.04, y - s * 0.22, s * 0.045, '#475569');
+          G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
+          G.disc(x + ox + s * 0.02, y + oy - s * 0.01, s * 0.23, '#0f172a', lc, s * 0.055);
+          G.pie(x + ox + s * 0.02, y + oy - s * 0.01, s * 0.14, -Math.PI / 2 + tt, Math.PI * 1.2, ac, '#4f46e5', rim);
         } else {
+          // Vertical data sheet + sweeping optical magnifying lens
+          G.box(x - s * 0.06, y, s * 0.78, s * 0.84, s * 0.09, cc, rim, lw);
+          G.pill(x - s * 0.32, y - s * 0.25, x + s * 0.16, y - s * 0.25, s * 0.05, '#475569');
+          G.pill(x - s * 0.32, y - s * 0.10, x + s * 0.08, y - s * 0.10, s * 0.05, '#38bdf8');
+          G.bar(x - s * 0.25, y + s * 0.28, s * 0.10, s * 0.18, s * 0.02, '#4f46e5', null, 0);
+          G.bar(x - s * 0.10, y + s * 0.28, s * 0.10, s * 0.26, s * 0.02, '#38bdf8', null, 0);
           G.pill(x + ox + s * 0.16, y + oy + s * 0.16, x + ox + s * 0.40, y + oy + s * 0.40, s * 0.10, hc);
           G.disc(x + ox + s * 0.03, y + oy - s * 0.01, s * 0.24, '#0f172a', lc, s * 0.055);
           var bh = s * (0.14 + 0.05 * Math.sin(tt * 3.0));
@@ -1237,6 +1472,30 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var r = s * 0.40, c1 = s1Col || '#00e5ff', c2 = s2Col || '#4f46e5', c3 = s3Col || '#f59e0b';
+        if (vv === 5) {
+          // Semi-circular speedometer/gauge fan + animated sweeping needle!
+          var gy = y + s * 0.16, gr = s * 0.42;
+          var segs = [[-Math.PI, -Math.PI * 0.65, c1], [-Math.PI * 0.65, -Math.PI * 0.30, c2], [-Math.PI * 0.30, 0, c3]];
+          for (var si = 0; si < segs.length; si++) {
+            ctx.beginPath(); ctx.moveTo(x, gy); ctx.arc(x, gy, gr, segs[si][0], segs[si][1]); ctx.closePath();
+            ctx.fillStyle = G._c(segs[si][2]); ctx.fill();
+            ctx.strokeStyle = G._c(rim); ctx.lineWidth = lw * 0.9; ctx.stroke();
+          }
+          G.disc(x, gy, s * 0.18, baseCol || '#1e293b', rim, lw);
+          var na = -Math.PI * 0.5 + Math.sin(tt * 2.2) * 0.9;
+          G.arrow(x, gy, x + Math.cos(na) * s * 0.34, gy + Math.sin(na) * s * 0.34, s * 0.042, s * 0.10, '#ffffff');
+          G.capsule(x, gy + s * 0.08, s * 0.64, s * 0.11, baseCol || '#1e293b', rim, lw);
+          return;
+        }
+        if (vv === 4) {
+          // Concentric dual-ring radial chart + diamond center
+          G.disc(x, y, s * 0.44, baseCol || '#1e293b', rim, lw);
+          G.ring(x, y, s * 0.36, s * 0.055, tt * 0.8, tt * 0.8 + Math.PI * 1.1, c1);
+          G.ring(x, y, s * 0.25, s * 0.055, -tt * 1.1, -tt * 1.1 + Math.PI * 1.4, c3);
+          G.ring(x, y, s * 0.14, s * 0.05, tt * 1.5, tt * 1.5 + Math.PI * 1.2, c2);
+          G.ngon(x, y, s * 0.085, 4, 0, '#ffffff', rim, lw * 0.7);
+          return;
+        }
         if (vv === 2) {
           G.box(x - s * 0.28, y, s * 0.34, s * 0.48, s * 0.06, baseCol || '#1e293b', rim, lw * 0.8);
           G.pill(x - s * 0.37, y - s * 0.12, x - s * 0.19, y - s * 0.12, s * 0.045, c1);
@@ -1277,17 +1536,32 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         };
         var a1 = tt * 1.45;
         if (vv === 1) {
+          // Triangular 3-gear cluster (left hero + twin right pinions)
           drawGear(x - s * 0.16, y, s * 0.28, 8, a1, g1Col || '#0284c7', coreCol || '#ffd700');
           drawGear(x + s * 0.20, y - s * 0.18, s * 0.19, 6, -a1 * 1.33 + 0.3, g2Col || '#4f46e5', '#00e5ff');
           drawGear(x + s * 0.20, y + s * 0.20, s * 0.19, 6, -a1 * 1.33 + 0.8, '#f97316', '#f8fafc');
         } else if (vv === 2) {
+          // Enclosed machine gearbox capsule with side-by-side meshed gears
           G.box(x, y, s * 0.96, s * 0.56, s * 0.14, '#0f172a', rim, lw);
           drawGear(x - s * 0.20, y, s * 0.23, 8, a1, g1Col || '#0284c7', coreCol || '#ffd700');
           drawGear(x + s * 0.20, y, s * 0.23, 8, -a1 + 0.38, g2Col || '#4f46e5', '#00e5ff');
         } else if (vv === 3) {
+          // Single giant turbine gear inside orbiting telemetry arc
           G.ring(x, y, s * 0.42, s * 0.05, tt * 0.9, tt * 0.9 + Math.PI * 1.4, '#00e5ff');
           drawGear(x, y, s * 0.34, 10, -a1, g1Col || '#4f46e5', coreCol || '#ffd700');
+        } else if (vv === 4) {
+          // Hexagonal mechanical engine housing driving concentric inner gear
+          G.ngon(x, y, s * 0.44, 6, 0, '#1e293b', rim, lw);
+          drawGear(x, y, s * 0.29, 8, a1 * 1.2, g1Col || '#0284c7', coreCol || '#ffd700');
+          G.star(x, y, s * 0.10, s * 0.045, 4, -a1, '#ffffff', rim, lw * 0.5);
+        } else if (vv === 5) {
+          // Vertical conveyor drive: stacked sprockets + vertical belt rails
+          G.capsule(x - s * 0.15, y, s * 0.09, s * 0.64, '#334155', rim, lw * 0.7);
+          G.capsule(x + s * 0.15, y, s * 0.09, s * 0.64, '#334155', rim, lw * 0.7);
+          drawGear(x, y - s * 0.21, s * 0.24, 8, a1, g1Col || '#0284c7', coreCol || '#ffd700');
+          drawGear(x, y + s * 0.21, s * 0.24, 8, a1 + 0.3, g2Col || '#4f46e5', '#00e5ff');
         } else {
+          // Classic diagonal paired cogs
           drawGear(x - s * 0.14, y + s * 0.10, s * 0.30, 8, a1, g1Col || '#0284c7', coreCol || '#ffd700');
           drawGear(x + s * 0.22, y - s * 0.18, s * 0.22, 6, -a1 * 1.33 + 0.4, g2Col || '#4f46e5', '#00e5ff');
         }
@@ -1297,6 +1571,7 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = cardCol || '#1e293b', pc = personCol || '#0284c7', ac = accentCol || '#00e5ff';
         if (vv === 1) {
+          // Vertical lanyard ID pass + star seal
           G.capsule(x, y - s * 0.42, s * 0.22, s * 0.08, ac, rim, lw * 0.7);
           G.box(x, y + s * 0.02, s * 0.72, s * 0.88, s * 0.10, cc, rim, lw);
           G.person(x, y - s * 0.12, s * 0.32, pc, '#f8fafc', rim);
@@ -1304,23 +1579,38 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
           G.pill(x - bw1 * 0.5, y + s * 0.18, x + bw1 * 0.5, y + s * 0.18, s * 0.05, ac);
           G.star(x, y + s * 0.32, s * 0.10, s * 0.045, 5, -Math.PI / 2, '#ffd700', rim, lw * 0.6);
         } else if (vv === 2) {
-          G.box(x, y, s * 1.00, s * 0.74, s * 0.10, cc, rim, lw);
-          G.box(x + s * 0.24, y, s * 0.34, s * 0.48, s * 0.06, '#0f172a', rim, lw * 0.75);
-          G.person(x + s * 0.24, y + s * 0.03, s * 0.30, pc, '#f8fafc', rim);
+          // FRAMELESS circular executive avatar crest + floating verified star badge (NO card rectangle!)
+          G.ring(x, y, s * 0.42, s * 0.045, tt * 0.8, tt * 0.8 + Math.PI * 1.45, ac);
+          G.disc(x, y, s * 0.35, cc, rim, lw);
+          G.person(x, y + s * 0.04, s * 0.42, pc, '#f8fafc', rim);
+          var ks2 = 1 + 0.10 * Math.sin(tt * 3.0);
+          G.disc(x + s * 0.28, y - s * 0.26, s * 0.13 * ks2, '#ffd700', rim, lw * 0.85);
+          G.check(x + s * 0.28, y - s * 0.26, s * 0.11 * ks2, s * 0.03, '#0f172a');
+        } else if (vv === 3) {
+          // Team trio leadership podium (tall center leader + flanking team members, NO card box!)
+          G.person(x - s * 0.29, y + s * 0.10, s * 0.30, '#4f46e5', '#f8fafc', rim);
+          G.person(x + s * 0.29, y + s * 0.10, s * 0.30, ac, '#f8fafc', rim);
+          G.person(x, y + s * 0.02 + Math.sin(tt * 2.3) * s * 0.02, s * 0.40, pc, '#f8fafc', rim);
+          G.star(x, y - s * 0.33, s * 0.10, s * 0.045, 5, -Math.PI / 2, '#ffd700', rim, lw * 0.65);
+        } else if (vv === 4) {
+          // Shield crest profile badge
+          G.shield(x, y, s * 0.94, cc, rim, '#0f172a');
+          G.person(x, y - s * 0.02, s * 0.36, pc, '#f8fafc', rim);
+          var bs4 = 1 + 0.10 * Math.sin(tt * 3.0);
+          G.star(x, y - s * 0.34, s * 0.095 * bs4, s * 0.042 * bs4, 5, -Math.PI / 2, '#ffd700', rim, lw * 0.6);
+        } else if (vv === 5) {
+          // Tilted dossier folder + popping talent badge + 3 rating stars
+          G.box(x - s * 0.14, y - s * 0.31, s * 0.36, s * 0.14, s * 0.04, '#4f46e5', rim, lw);
+          G.box(x, y + s * 0.04, s * 0.90, s * 0.64, s * 0.09, cc, rim, lw);
+          G.disc(x - s * 0.22, y + s * 0.04, s * 0.20, '#0f172a', ac, lw * 0.8);
+          G.person(x - s * 0.22, y + s * 0.06, s * 0.23, pc, '#f8fafc', rim);
           for (var si = 0; si < 3; si++) {
             var kst = 1 + 0.12 * Math.sin(tt * 3.0 - si * 0.8);
-            G.star(x - s * 0.32 + si * s * 0.13, y - s * 0.16, s * 0.055 * kst, s * 0.025 * kst, 5, -Math.PI / 2, '#ffd700', null, 0);
+            G.star(x + s * 0.06 + si * s * 0.12, y - s * 0.08, s * 0.052 * kst, s * 0.024 * kst, 5, -Math.PI / 2, '#ffd700', null, 0);
           }
-          G.pill(x - s * 0.38, y + s * 0.04, x - s * 0.02, y + s * 0.04, s * 0.055, ac);
-          G.pill(x - s * 0.38, y + s * 0.20, x - s * 0.08, y + s * 0.20, s * 0.055, '#38bdf8');
-        } else if (vv === 3) {
-          G.box(x, y + s * 0.06, s * 0.96, s * 0.66, s * 0.10, cc, rim, lw);
-          G.disc(x - s * 0.24, y - s * 0.06, s * 0.24, '#0f172a', ac, lw * 0.85);
-          G.person(x - s * 0.24, y - s * 0.04, s * 0.26, pc, '#f8fafc', rim);
-          var slw = s * (0.30 + 0.07 * Math.sin(tt * 2.5));
-          G.pill(x + s * 0.06, y - s * 0.04, x + s * 0.06 + slw, y - s * 0.04, s * 0.055, '#ffd700');
-          G.pill(x + s * 0.06, y + s * 0.12, x + s * 0.34, y + s * 0.12, s * 0.055, ac);
+          G.pill(x + s * 0.02, y + s * 0.14, x + s * (0.20 + 0.12 * Math.sin(tt * 2.5)), y + s * 0.14, s * 0.055, ac);
         } else {
+          // Landscape HR badge card
           G.box(x, y, s * 1.00, s * 0.74, s * 0.10, cc, rim, lw);
           G.box(x - s * 0.24, y, s * 0.34, s * 0.48, s * 0.06, '#0f172a', rim, lw * 0.75);
           G.person(x - s * 0.24, y + s * 0.03, s * 0.30, pc, '#f8fafc', rim);
@@ -1338,145 +1628,330 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = cardCol || '#1e293b', ic = inkCol || '#f8fafc', ac = accentCol || '#00e5ff';
-        G.box(x, y, s * 0.90, s * 0.82, s * 0.08, cc, rim, lw);
-        var cx0 = s * 0.45, cy0 = s * 0.41;
-        G.box(x - cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
-        G.box(x + cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
-        G.box(x - cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
-        G.box(x + cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
         if (vv === 1) {
-          G.pill(x - s * 0.22, y - s * 0.20, x + s * 0.22, y - s * 0.20, s * 0.075, ic);
-          G.pill(x, y - s * 0.20, x, y + s * 0.18, s * 0.085, ic);
-          G.pill(x - s * 0.10, y + s * 0.18, x + s * 0.10, y + s * 0.18, s * 0.055, ac);
+          // FRAMELESS giant 'T' monogram inside circular bezier dial + anchor handles (NO box frame!)
+          G.disc(x, y, s * 0.43, cc, rim, lw);
+          G.ring(x, y, s * 0.36, s * 0.035, tt * 0.7, tt * 0.7 + Math.PI * 1.4, ac);
+          G.pill(x - s * 0.20, y - s * 0.16, x + s * 0.20, y - s * 0.16, s * 0.075, ic);
+          G.pill(x, y - s * 0.16, x, y + s * 0.20, s * 0.085, ic);
+          G.disc(x - s * 0.20, y - s * 0.16, s * 0.05, '#ffd700', rim, lw * 0.6);
+          G.disc(x + s * 0.20, y - s * 0.16, s * 0.05, '#ffd700', rim, lw * 0.6);
         } else if (vv === 2) {
-          G.pill(x - s * 0.24, y - s * 0.18, x - s * 0.24, y + s * 0.16, s * 0.07, ic);
-          G.pill(x + s * 0.24, y - s * 0.18, x + s * 0.24, y + s * 0.16, s * 0.07, ic);
-          G.pill(x - s * 0.24, y, x + s * 0.24, y, s * 0.07, ac);
+          // Pen-tool nib drafting over smooth spline curve (NO rectangular artboard!)
+          var ny = Math.sin(tt * 2.4) * s * 0.04;
+          G.pill(x - s * 0.34, y + s * 0.26, x + s * 0.34, y + s * 0.26, s * 0.038, '#64748b');
+          G.disc(x - s * 0.34, y + s * 0.26, s * 0.06, ac, rim, lw * 0.6);
+          G.disc(x + s * 0.34, y + s * 0.26, s * 0.06, ac, rim, lw * 0.6);
+          G.poly([[x, y - s * 0.38 + ny], [x + s * 0.26, y + s * 0.04 + ny], [x + s * 0.16, y + s * 0.22 + ny], [x - s * 0.16, y + s * 0.22 + ny], [x - s * 0.26, y + s * 0.04 + ny]], cc, rim, lw, true);
+          G.pill(x, y - s * 0.36 + ny, x, y - s * 0.04 + ny, s * 0.04, '#ffd700');
+          G.disc(x, y - s * 0.02 + ny, s * 0.065, ac, rim, lw * 0.6);
+          G.box(x, y + s * 0.28 + ny, s * 0.36, s * 0.12, s * 0.03, '#4f46e5', rim, lw * 0.8);
         } else if (vv === 3) {
-          G.pill(x - s * 0.26, y + s * 0.14, x + s * 0.26, y - s * 0.14, s * 0.04, '#64748b');
-          G.disc(x - s * 0.26, y + s * 0.14, s * 0.055, '#ffd700', rim, lw * 0.6);
-          G.disc(x + s * 0.26, y - s * 0.14, s * 0.055, '#ffd700', rim, lw * 0.6);
-          G.pill(x - s * 0.18, y + s * 0.14, x, y - s * 0.22, s * 0.075, ic);
-          G.pill(x + s * 0.18, y + s * 0.14, x, y - s * 0.22, s * 0.075, ic);
+          // Open typographic specimen book spread ('Aa' dual pages)
+          G.box(x - s * 0.24, y, s * 0.44, s * 0.70, s * 0.06, cc, rim, lw);
+          G.box(x + s * 0.24, y, s * 0.44, s * 0.70, s * 0.06, '#0f172a', ac, lw);
+          G.pill(x - s * 0.33, y + s * 0.14, x - s * 0.24, y - s * 0.14, s * 0.055, ic);
+          G.pill(x - s * 0.15, y + s * 0.14, x - s * 0.24, y - s * 0.14, s * 0.055, ic);
+          G.pill(x - s * 0.30, y + s * 0.04, x - s * 0.18, y + s * 0.04, s * 0.045, ac);
+          var sl3 = s * (0.18 + 0.08 * Math.sin(tt * 2.5));
+          G.pill(x + s * 0.10, y - s * 0.16, x + s * 0.10 + sl3, y - s * 0.16, s * 0.05, '#ffd700');
+          G.pill(x + s * 0.10, y, x + s * 0.36, y, s * 0.045, ac);
+          G.pill(x + s * 0.10, y + s * 0.16, x + s * 0.30, y + s * 0.16, s * 0.045, '#94a3b8');
+        } else if (vv === 4) {
+          // Vertical ruler + editorial pillar + slider handle
+          G.box(x - s * 0.34, y, s * 0.16, s * 0.84, s * 0.04, '#4f46e5', rim, lw * 0.85);
+          G.box(x + s * 0.11, y, s * 0.66, s * 0.76, s * 0.09, cc, rim, lw);
+          G.pill(x - s * 0.08, y - s * 0.16, x + s * 0.30, y - s * 0.16, s * 0.065, ic);
+          G.pill(x + s * 0.11, y - s * 0.16, x + s * 0.11, y + s * 0.14, s * 0.07, ic);
+          G.capsule(x + s * 0.11, y + s * 0.26, s * 0.44, s * 0.09, '#0f172a', ac, lw * 0.6);
+          G.disc(x - s * 0.04 + (0.5 + 0.5 * Math.sin(tt * 2.2)) * s * 0.30, y + s * 0.26, s * 0.055, '#ffd700', rim, lw * 0.6);
+        } else if (vv === 5) {
+          // Hexagonal vector anchor crest with 'A' glyph + glowing spline handle
+          G.ngon(x, y, s * 0.44, 6, 0, cc, rim, lw);
+          G.pill(x - s * 0.22, y + s * 0.14, x + s * 0.22, y - s * 0.14, s * 0.04, '#64748b');
+          G.disc(x - s * 0.22, y + s * 0.14, s * 0.055, '#ffd700', rim, lw * 0.6);
+          G.disc(x + s * 0.22, y - s * 0.14, s * 0.055, '#ffd700', rim, lw * 0.6);
+          G.pill(x - s * 0.15, y + s * 0.16, x, y - s * 0.20, s * 0.07, ic);
+          G.pill(x + s * 0.15, y + s * 0.16, x, y - s * 0.20, s * 0.07, ic);
+          G.pill(x - s * 0.09, y + s * 0.05, x + s * 0.09, y + s * 0.05, s * 0.06, ac);
         } else {
+          // Classic bounding artboard with 4 corner nodes + A glyph + baseline slider
+          G.box(x, y, s * 0.90, s * 0.82, s * 0.08, cc, rim, lw);
+          var cx0 = s * 0.45, cy0 = s * 0.41;
+          G.box(x - cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+          G.box(x + cx0, y - cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+          G.box(x - cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
+          G.box(x + cx0, y + cy0, s * 0.10, s * 0.10, s * 0.02, ac, rim, lw * 0.6);
           G.pill(x - s * 0.20, y + s * 0.16, x, y - s * 0.22, s * 0.075, ic);
           G.pill(x + s * 0.20, y + s * 0.16, x, y - s * 0.22, s * 0.075, ic);
           G.pill(x - s * 0.11, y + s * 0.04, x + s * 0.11, y + s * 0.04, s * 0.065, ac);
+          var curX = x - s * 0.24 + (0.5 + 0.5 * Math.sin(tt * 2.2)) * s * 0.48;
+          G.pill(x - s * 0.28, y + s * 0.26, x + s * 0.28, y + s * 0.26, s * 0.032, '#64748b');
+          G.disc(curX, y + s * 0.26, s * 0.065, '#ffd700', rim, lw * 0.7);
         }
-        var curX = x - s * 0.24 + (0.5 + 0.5 * Math.sin(tt * 2.2)) * s * 0.48;
-        G.pill(x - s * 0.28, y + s * 0.26, x + s * 0.28, y + s * 0.26, s * 0.032, '#64748b');
-        G.disc(curX, y + s * 0.26, s * 0.065, '#ffd700', rim, lw * 0.7);
       },
       briefcase: function(x, y, s, bodyCol, flapCol, claspCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
-        var dy = Math.sin(tt * 2.4) * s * 0.022;
-        if (vv === 2) {
-          G.box(x + s * 0.12, y - s * 0.22 + dy, s * 0.34, s * 0.26, s * 0.04, '#f8fafc', '#0f172a', lw * 0.65);
-          G.pill(x + s * 0.01, y - s * 0.24 + dy, x + s * 0.22, y - s * 0.24 + dy, s * 0.04, '#00e5ff');
-        }
-        G.ring(x, y - s * 0.23, s * 0.15, s * 0.06, Math.PI, Math.PI * 2, rim);
-        G.box(x, y + s * 0.07, s * 0.94, s * 0.60, s * 0.09, bodyCol || '#1e293b', rim, lw);
-        G.box(x, y - s * 0.06 + dy, s * 0.96, s * 0.27, s * 0.07, flapCol || '#4f46e5', rim, lw);
+        var bc = bodyCol || '#1e293b', fc = flapCol || '#4f46e5', cc = claspCol || '#ffd700';
+        var dy = Math.sin(tt * 2.4) * s * 0.028;
         if (vv === 1) {
-          G.box(x - s * 0.22, y + s * 0.07 + dy * 0.6, s * 0.10, s * 0.22, s * 0.025, claspCol || '#ffd700', rim, lw * 0.7);
-          G.box(x + s * 0.22, y + s * 0.07 + dy * 0.6, s * 0.10, s * 0.22, s * 0.025, claspCol || '#ffd700', rim, lw * 0.7);
+          // Tall vertical folio attaché case with twin vertical straps
+          G.ring(x, y - s * 0.35, s * 0.13, s * 0.055, Math.PI, Math.PI * 2, rim);
+          G.box(x, y + s * 0.04, s * 0.68, s * 0.80, s * 0.09, bc, rim, lw);
+          G.box(x, y - s * 0.18 + dy, s * 0.70, s * 0.24, s * 0.07, fc, rim, lw);
+          G.box(x - s * 0.18, y + s * 0.06, s * 0.09, s * 0.46, s * 0.025, cc, rim, lw * 0.7);
+          G.box(x + s * 0.18, y + s * 0.06, s * 0.09, s * 0.46, s * 0.025, cc, rim, lw * 0.7);
+        } else if (vv === 2) {
+          // Open portfolio folder spilling glowing upward bar chart + sheet
+          G.box(x, y - s * 0.10, s * 0.84, s * 0.58, s * 0.07, '#0f172a', rim, lw);
+          G.box(x + s * 0.16, y - s * 0.22 + dy, s * 0.42, s * 0.34, s * 0.04, '#f8fafc', '#0f172a', lw * 0.7);
+          G.bar(x - s * 0.18, y + s * 0.04, s * 0.11, s * (0.18 + 0.05 * Math.sin(tt * 2.5)), s * 0.02, '#00e5ff', null, 0);
+          G.bar(x - s * 0.03, y + s * 0.04, s * 0.11, s * (0.28 + 0.05 * Math.sin(tt * 2.5 - 0.8)), s * 0.02, cc, null, 0);
+          G.poly([[x - s * 0.46, y + s * 0.34], [x - s * 0.38, y + s * 0.02], [x + s * 0.38, y + s * 0.02], [x + s * 0.46, y + s * 0.34]], fc, rim, lw, true);
+          G.capsule(x, y + s * 0.18, s * 0.24, s * 0.065, cc, rim, lw * 0.7);
         } else if (vv === 3) {
-          G.disc(x, y + s * 0.08 + dy * 0.6, s * 0.11, claspCol || '#ffd700', rim, lw * 0.8);
-          G.check(x, y + s * 0.08 + dy * 0.6, s * 0.09, s * 0.025, '#0f172a');
+          // Circular heraldic briefcase crest medallion (round silhouette!)
+          G.disc(x, y, s * 0.44, bc, rim, lw);
+          G.ring(x, y, s * 0.36, s * 0.04, tt * 0.7, tt * 0.7 + Math.PI * 1.35, '#00e5ff');
+          G.ring(x, y - s * 0.16, s * 0.10, s * 0.045, Math.PI, Math.PI * 2, rim);
+          G.box(x, y + s * 0.05, s * 0.56, s * 0.38, s * 0.06, fc, rim, lw * 0.85);
+          G.disc(x, y + s * 0.05 + dy * 0.5, s * 0.09, cc, rim, lw * 0.7);
+        } else if (vv === 4) {
+          // Hardshell aluminum briefcase with chamfered corners + star emblem
+          G.ring(x, y - s * 0.23, s * 0.16, s * 0.055, Math.PI, Math.PI * 2, '#00e5ff');
+          G.poly([[x - s * 0.40, y - s * 0.22], [x + s * 0.40, y - s * 0.22], [x + s * 0.48, y - s * 0.12], [x + s * 0.48, y + s * 0.30], [x + s * 0.40, y + s * 0.38], [x - s * 0.40, y + s * 0.38], [x - s * 0.48, y + s * 0.30], [x - s * 0.48, y - s * 0.12]], bc, rim, lw, true);
+          G.pill(x - s * 0.44, y + s * 0.02, x + s * 0.44, y + s * 0.02, s * 0.05, fc);
+          G.star(x, y + s * 0.08 + dy * 0.5, s * 0.13, s * 0.06, 5, -Math.PI / 2, cc, rim, lw * 0.7);
+        } else if (vv === 5) {
+          // Rising stepped dossier trio + growth arrow (NO outer briefcase rectangle!)
+          G.box(x - s * 0.16, y + s * 0.08, s * 0.54, s * 0.66, s * 0.07, bc, rim, lw);
+          G.box(x + s * 0.14, y - s * 0.04 + dy, s * 0.56, s * 0.68, s * 0.07, fc, rim, lw);
+          G.pill(x - s * 0.02, y - s * 0.20 + dy, x + s * 0.30, y - s * 0.20 + dy, s * 0.055, '#f8fafc');
+          G.pill(x - s * 0.02, y - s * 0.06 + dy, x + s * 0.24, y - s * 0.06 + dy, s * 0.05, '#00e5ff');
+          G.disc(x + s * 0.24, y + s * 0.18 + dy, s * 0.13, cc, rim, lw * 0.8);
+          G.check(x + s * 0.24, y + s * 0.18 + dy, s * 0.11, s * 0.03, '#0f172a');
         } else {
-          G.box(x, y + s * 0.08 + dy * 0.6, s * 0.16, s * 0.15, s * 0.03, claspCol || '#ffd700', rim, lw * 0.85);
+          // Classic wide leather executive briefcase + hinged flap
+          G.ring(x, y - s * 0.23, s * 0.15, s * 0.06, Math.PI, Math.PI * 2, rim);
+          G.box(x, y + s * 0.07, s * 0.94, s * 0.60, s * 0.09, bc, rim, lw);
+          G.box(x, y - s * 0.06 + dy, s * 0.96, s * 0.27, s * 0.07, fc, rim, lw);
+          G.box(x, y + s * 0.08 + dy * 0.6, s * 0.16, s * 0.15, s * 0.03, cc, rim, lw * 0.85);
         }
       },
       trophy: function(x, y, s, cupCol, baseCol, starCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
         var cc = cupCol || '#ffd700', bc = baseCol || '#1e293b', sc = starCol || '#ffffff';
-        G.ring(x - s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
-        G.ring(x + s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
-        G.box(x, y + s * 0.40, s * 0.48, s * 0.11, s * 0.03, bc, rim, lw);
-        if (vv === 2) G.box(x, y + s * 0.32, s * 0.34, s * 0.09, s * 0.02, '#4f46e5', rim, lw * 0.8);
-        G.box(x, y + s * 0.26, s * 0.14, s * 0.20, s * 0.02, cc, rim, lw);
-        G.poly([[x - s * 0.28, y - s * 0.33], [x + s * 0.28, y - s * 0.33], [x + s * 0.16, y + s * 0.17], [x - s * 0.16, y + s * 0.17]], cc, rim, lw, true);
         var st = 1 + 0.12 * Math.sin(tt * 3.2);
         if (vv === 1) {
-          G.box(x, y - s * 0.29, s * 0.52, s * 0.08, s * 0.03, '#4f46e5', rim, lw * 0.7);
-          G.star(x, y - s * 0.07, s * 0.12 * st, s * 0.055 * st, 5, -Math.PI / 2, sc, '#b45309', lw * 0.7);
+          // Royal 5-peak crown emblem floating over tiered pedestal
+          G.box(x, y + s * 0.34, s * 0.64, s * 0.12, s * 0.03, bc, rim, lw);
+          G.poly([[x - s * 0.36, y + s * 0.18], [x - s * 0.42, y - s * 0.22], [x - s * 0.18, y - s * 0.02], [x, y - s * 0.34], [x + s * 0.18, y - s * 0.02], [x + s * 0.42, y - s * 0.22], [x + s * 0.36, y + s * 0.18]], cc, rim, lw, true);
+          G.disc(x - s * 0.42, y - s * 0.25, s * 0.055, '#00e5ff', rim, lw * 0.6);
+          G.disc(x, y - s * 0.37, s * 0.07 * st, '#f43f5e', rim, lw * 0.65);
+          G.disc(x + s * 0.42, y - s * 0.25, s * 0.055, '#00e5ff', rim, lw * 0.6);
+          G.star(x, y + s * 0.02, s * 0.11 * st, s * 0.05 * st, 5, -Math.PI / 2, sc, '#b45309', lw * 0.6);
+        } else if (vv === 2) {
+          // Olympic V-ribbon champion medal medallion
+          G.poly([[x - s * 0.28, y - s * 0.44], [x - s * 0.08, y - s * 0.44], [x + s * 0.06, y - s * 0.06], [x - s * 0.12, y - s * 0.06]], '#4f46e5', rim, lw * 0.85, true);
+          G.poly([[x + s * 0.28, y - s * 0.44], [x + s * 0.08, y - s * 0.44], [x - s * 0.06, y - s * 0.06], [x + s * 0.12, y - s * 0.06]], '#00e5ff', rim, lw * 0.85, true);
+          G.disc(x, y + s * 0.12, s * 0.34, cc, rim, lw);
+          G.ring(x, y + s * 0.12, s * 0.25, s * 0.032, 0, Math.PI * 2, '#b45309');
+          G.star(x, y + s * 0.12, s * 0.16 * st, s * 0.07 * st, 5, -Math.PI / 2, sc, '#b45309', lw * 0.7);
         } else if (vv === 3) {
-          G.ngon(x, y - s * 0.09, s * 0.13 * st, 4, 0, '#00e5ff', rim, lw * 0.8);
+          // 1st-2nd-3rd stepped winner podium + hovering diamond star
+          G.box(x - s * 0.28, y + s * 0.22, s * 0.24, s * 0.32, s * 0.04, '#4f46e5', rim, lw * 0.85);
+          G.box(x + s * 0.28, y + s * 0.26, s * 0.24, s * 0.24, s * 0.04, '#00e5ff', rim, lw * 0.85);
+          G.box(x, y + s * 0.14, s * 0.28, s * 0.48, s * 0.04, bc, rim, lw);
+          var dy3 = Math.sin(tt * 2.5) * s * 0.03;
+          G.star(x, y - s * 0.26 + dy3, s * 0.19 * st, s * 0.085 * st, 5, -Math.PI / 2, cc, rim, lw * 0.8);
+        } else if (vv === 4) {
+          // Winged diamond spire trophy on plinth
+          G.box(x, y + s * 0.36, s * 0.48, s * 0.12, s * 0.03, bc, rim, lw);
+          G.poly([[x - s * 0.14, y - s * 0.04], [x - s * 0.42, y - s * 0.22], [x - s * 0.34, y + s * 0.08]], '#00e5ff', rim, lw * 0.85, true);
+          G.poly([[x + s * 0.14, y - s * 0.04], [x + s * 0.42, y - s * 0.22], [x + s * 0.34, y + s * 0.08]], '#00e5ff', rim, lw * 0.85, true);
+          G.poly([[x, y - s * 0.40], [x + s * 0.22, y - s * 0.04], [x + s * 0.10, y + s * 0.29], [x - s * 0.10, y + s * 0.29], [x - s * 0.22, y - s * 0.04]], cc, rim, lw, true);
+          G.ngon(x, y - s * 0.05, s * 0.11 * st, 4, 0, sc, '#b45309', lw * 0.65);
+        } else if (vv === 5) {
+          // Shield victory crest topped with floating star ribbon
+          G.shield(x, y + s * 0.06, s * 0.88, bc, rim, '#4f46e5');
+          G.star(x, y + s * 0.04, s * 0.20 * st, s * 0.09 * st, 5, -Math.PI / 2, cc, rim, lw * 0.75);
+          G.capsule(x, y - s * 0.38, s * 0.44, s * 0.12, cc, rim, lw * 0.8);
         } else {
+          // Classic twin-handled goblet trophy cup
+          G.ring(x - s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
+          G.ring(x + s * 0.25, y - s * 0.12, s * 0.13, s * 0.05, 0, Math.PI * 2, cc);
+          G.box(x, y + s * 0.40, s * 0.48, s * 0.11, s * 0.03, bc, rim, lw);
+          G.box(x, y + s * 0.26, s * 0.14, s * 0.20, s * 0.02, cc, rim, lw);
+          G.poly([[x - s * 0.28, y - s * 0.33], [x + s * 0.28, y - s * 0.33], [x + s * 0.16, y + s * 0.17], [x - s * 0.16, y + s * 0.17]], cc, rim, lw, true);
           G.star(x, y - s * 0.10, s * 0.12 * st, s * 0.055 * st, 5, -Math.PI / 2, sc, '#b45309', lw * 0.7);
         }
       },
       clock: function(x, y, s, bezelCol, faceCol, handCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
-        if (vv === 1) G.capsule(x, y - s * 0.48, s * 0.18, s * 0.10, '#ffd700', rim, lw * 0.8);
-        if (vv === 2) {
+        var bz = bezelCol || '#4f46e5', fc = faceCol || '#f8fafc', hc = handCol || '#1e293b';
+        var ha = -Math.PI / 2 + tt * 0.55, ma = -Math.PI / 2 + tt * 2.4;
+        if (vv === 1) {
+          // Classical hourglass sand timer (NO round dial!)
+          G.capsule(x, y - s * 0.39, s * 0.58, s * 0.10, bz, rim, lw);
+          G.capsule(x, y + s * 0.39, s * 0.58, s * 0.10, bz, rim, lw);
+          G.poly([[x - s * 0.23, y - s * 0.34], [x + s * 0.23, y - s * 0.34], [x, y], [x + s * 0.23, y + s * 0.34], [x - s * 0.23, y + s * 0.34], [x, y]], fc, rim, lw, true);
+          var sand = 0.5 + 0.4 * Math.sin(tt * 2.0);
+          G.poly([[x - s * 0.13 * sand, y - s * 0.20 * sand], [x + s * 0.13 * sand, y - s * 0.20 * sand], [x, y]], '#ffd700', null, 0, true);
+          G.poly([[x, y + s * 0.32 - s * 0.20 * (1 - sand * 0.5)], [x + s * 0.18, y + s * 0.32], [x - s * 0.18, y + s * 0.32]], '#ffd700', null, 0, true);
+        } else if (vv === 2) {
+          // Twin-bell vintage alarm clock on tilted feet
+          G.pill(x - s * 0.22, y + s * 0.32, x - s * 0.30, y + s * 0.44, s * 0.06, '#ffd700');
+          G.pill(x + s * 0.22, y + s * 0.32, x + s * 0.30, y + s * 0.44, s * 0.06, '#ffd700');
           G.disc(x - s * 0.30, y - s * 0.32, s * 0.12, '#f97316', rim, lw * 0.8);
           G.disc(x + s * 0.30, y - s * 0.32, s * 0.12, '#f97316', rim, lw * 0.8);
-        }
-        if (vv === 3) {
-          G.box(x, y, s * 0.88, s * 0.88, s * 0.22, bezelCol || '#4f46e5', rim, lw);
-          G.box(x, y, s * 0.68, s * 0.68, s * 0.16, faceCol || '#f8fafc', '#0f172a', lw * 0.7);
+          G.disc(x, y + s * 0.02, s * 0.40, bz, rim, lw);
+          G.disc(x, y + s * 0.02, s * 0.30, fc, '#0f172a', lw * 0.7);
+          G.pill(x, y + s * 0.02, x + Math.cos(ha) * s * 0.16, y + s * 0.02 + Math.sin(ha) * s * 0.16, s * 0.05, hc);
+          G.pill(x, y + s * 0.02, x + Math.cos(ma) * s * 0.23, y + s * 0.02 + Math.sin(ma) * s * 0.23, s * 0.036, '#00e5ff');
+        } else if (vv === 3) {
+          // Squircle smartwatch dial with top/bottom strap bands
+          G.box(x, y - s * 0.36, s * 0.42, s * 0.24, s * 0.06, '#334155', rim, lw * 0.85);
+          G.box(x, y + s * 0.36, s * 0.42, s * 0.24, s * 0.06, '#334155', rim, lw * 0.85);
+          G.box(x, y, s * 0.70, s * 0.70, s * 0.18, bz, rim, lw);
+          G.box(x, y, s * 0.56, s * 0.56, s * 0.13, '#0f172a', '#00e5ff', lw * 0.7);
+          G.ring(x, y, s * 0.20, s * 0.045, -Math.PI / 2, -Math.PI / 2 + Math.PI * (0.9 + 0.5 * Math.sin(tt * 2.0)), '#38bdf8');
+          G.pill(x, y, x + Math.cos(ma) * s * 0.17, y + Math.sin(ma) * s * 0.17, s * 0.038, '#ffd700');
+          G.disc(x, y, s * 0.045, '#f43f5e', null, 0);
+        } else if (vv === 4) {
+          // Octagonal sports stopwatch + top push-button crown
+          G.capsule(x, y - s * 0.45, s * 0.20, s * 0.10, '#ffd700', rim, lw * 0.8);
+          G.capsule(x + s * 0.30, y - s * 0.32, s * 0.11, s * 0.11, '#00e5ff', rim, lw * 0.7);
+          G.ngon(x, y + s * 0.02, s * 0.42, 8, Math.PI / 8, bz, rim, lw);
+          G.disc(x, y + s * 0.02, s * 0.31, fc, '#0f172a', lw * 0.7);
+          G.pill(x, y + s * 0.02, x + Math.cos(ha) * s * 0.16, y + s * 0.02 + Math.sin(ha) * s * 0.16, s * 0.05, hc);
+          G.pill(x, y + s * 0.02, x + Math.cos(ma) * s * 0.24, y + s * 0.02 + Math.sin(ma) * s * 0.24, s * 0.036, '#f43f5e');
+        } else if (vv === 5) {
+          // Flipping digital calendar-deadline hybrid card + corner clock badge
+          G.box(x - s * 0.06, y, s * 0.76, s * 0.76, s * 0.10, '#0f172a', rim, lw);
+          G.box(x - s * 0.06, y - s * 0.24, s * 0.72, s * 0.18, s * 0.05, '#f43f5e', null, 0);
+          G.pill(x - s * 0.28, y - s * 0.02, x + s * 0.08, y - s * 0.02, s * 0.06, '#f8fafc');
+          G.pill(x - s * 0.28, y + s * 0.14, x + s * 0.02, y + s * 0.14, s * 0.05, '#38bdf8');
+          G.disc(x + s * 0.24, y + s * 0.20, s * 0.24, bz, rim, lw);
+          G.disc(x + s * 0.24, y + s * 0.20, s * 0.18, fc, '#0f172a', lw * 0.6);
+          G.pill(x + s * 0.24, y + s * 0.20, x + s * 0.24 + Math.cos(ma) * s * 0.13, y + s * 0.20 + Math.sin(ma) * s * 0.13, s * 0.032, '#f43f5e');
         } else {
-          G.disc(x, y, s * 0.46, bezelCol || '#4f46e5', rim, lw);
-          G.disc(x, y, s * 0.36, faceCol || '#f8fafc', '#0f172a', lw * 0.7);
+          // Classic sleek round wall clock
+          G.disc(x, y, s * 0.46, bz, rim, lw);
+          G.disc(x, y, s * 0.36, fc, '#0f172a', lw * 0.7);
+          G.pill(x, y, x + Math.cos(ha) * s * 0.19, y + Math.sin(ha) * s * 0.19, s * 0.05, hc);
+          G.pill(x, y, x + Math.cos(ma) * s * 0.27, y + Math.sin(ma) * s * 0.27, s * 0.038, '#00e5ff');
+          G.disc(x, y, s * 0.055, '#f43f5e', '#0f172a', lw * 0.6);
         }
-        if (vv === 1 || vv === 3) {
-          G.ring(x, y, s * 0.27, s * 0.04, -Math.PI / 2, -Math.PI / 2 + Math.PI * (0.9 + 0.5 * Math.sin(tt * 2.0)), '#38bdf8');
-        }
-        var ha = -Math.PI / 2 + tt * 0.55, ma = -Math.PI / 2 + tt * 2.4;
-        G.pill(x, y, x + Math.cos(ha) * s * 0.19, y + Math.sin(ha) * s * 0.19, s * 0.05, handCol || '#1e293b');
-        G.pill(x, y, x + Math.cos(ma) * s * 0.27, y + Math.sin(ma) * s * 0.27, s * 0.038, '#00e5ff');
-        G.disc(x, y, s * 0.055, '#f43f5e', '#0f172a', lw * 0.6);
       },
       lock: function(x, y, s, bodyCol, shackleCol, accentCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
+        var bc = bodyCol || '#1e293b', sc = shackleCol || '#38bdf8', ac = accentCol || '#ffd700';
         var lift = Math.abs(Math.sin(tt * 2.3)) * s * 0.05;
-        G.ring(x, y - s * 0.16 - lift, s * 0.20, s * 0.085, Math.PI, Math.PI * 2, shackleCol || '#38bdf8');
-        if (vv === 2) {
-          G.ngon(x, y + s * 0.12, s * 0.36, 8, Math.PI / 8, bodyCol || '#1e293b', rim, lw);
-          G.ring(x, y + s * 0.12, s * 0.18, s * 0.045, tt * 1.8, tt * 1.8 + Math.PI * 1.4, accentCol || '#ffd700');
+        var ks = 1 + 0.1 * Math.sin(tt * 3.0);
+        if (vv === 1) {
+          // Security heraldic shield padlock crest (shield outer silhouette!)
+          G.shield(x, y, s * 0.96, bc, rim, '#0f172a');
+          G.ring(x, y - s * 0.10 - lift * 0.6, s * 0.13, s * 0.055, Math.PI, Math.PI * 2, sc);
+          G.box(x, y + s * 0.08, s * 0.38, s * 0.30, s * 0.06, '#4f46e5', rim, lw * 0.8);
+          G.check(x, y + s * 0.08, s * 0.13 * ks, s * 0.032, ac);
+        } else if (vv === 2) {
+          // Octagonal armored bank vault wheel lock
+          G.ring(x, y - s * 0.16 - lift, s * 0.20, s * 0.085, Math.PI, Math.PI * 2, sc);
+          G.ngon(x, y + s * 0.12, s * 0.36, 8, Math.PI / 8, bc, rim, lw);
+          G.ring(x, y + s * 0.12, s * 0.18, s * 0.045, tt * 1.8, tt * 1.8 + Math.PI * 1.4, ac);
           G.disc(x, y + s * 0.12, s * 0.07, '#00e5ff', rim, lw * 0.6);
+        } else if (vv === 3) {
+          // Heavy circular dial bank safe door
+          G.box(x, y, s * 0.84, s * 0.84, s * 0.16, bc, rim, lw);
+          G.disc(x, y, s * 0.28, '#0f172a', sc, lw);
+          G.part(x, y, Math.sin(tt * 2.0) * 0.65, 1, 1, function() {
+            G.pill(-s * 0.18, 0, s * 0.18, 0, s * 0.045, ac);
+            G.pill(0, -s * 0.18, 0, s * 0.18, s * 0.045, ac);
+            G.disc(0, 0, s * 0.08, sc, rim, lw * 0.6);
+          });
+        } else if (vv === 4) {
+          // Giant golden diagonal key emblem with floating verified crest
+          G.part(x, y, -0.35 + Math.sin(tt * 2.0) * 0.05, 1, 1, function() {
+            G.pill(-s * 0.18, 0, s * 0.38, 0, s * 0.095, ac);
+            G.box(s * 0.22, s * 0.11, s * 0.09, s * 0.14, s * 0.02, ac, rim, lw * 0.7);
+            G.box(s * 0.34, s * 0.12, s * 0.09, s * 0.16, s * 0.02, ac, rim, lw * 0.7);
+            G.disc(-s * 0.26, 0, s * 0.20, sc, rim, lw);
+            G.disc(-s * 0.26, 0, s * 0.08, bc, rim, lw * 0.6);
+          });
+        } else if (vv === 5) {
+          // Biometric hexagon scanner crest
+          G.ngon(x, y, s * 0.44, 6, 0, bc, rim, lw);
+          G.ring(x, y, s * 0.30, s * 0.04, 0, Math.PI * 1.4, sc);
+          G.ring(x, y, s * 0.20, s * 0.04, Math.PI * 0.4, Math.PI * 1.8, '#00e5ff');
+          G.disc(x, y, s * 0.08 * ks, ac, rim, lw * 0.6);
         } else {
-          G.box(x, y + s * 0.12, s * 0.70, s * 0.56, s * 0.10, bodyCol || '#1e293b', rim, lw);
-          if (vv === 1) {
-            G.box(x, y + s * 0.12, s * 0.68, s * 0.18, s * 0.04, '#4f46e5', rim, lw * 0.7);
-            G.check(x, y + s * 0.12, s * 0.14, s * 0.035, accentCol || '#ffd700');
-          } else if (vv === 3) {
-            var k3 = 1 + 0.1 * Math.sin(tt * 3.0);
-            G.star(x, y + s * 0.12, s * 0.14 * k3, s * 0.06 * k3, 5, -Math.PI / 2, accentCol || '#ffd700', rim, lw * 0.65);
-          } else {
-            var ks = 1 + 0.1 * Math.sin(tt * 3.0);
-            G.disc(x, y + s * 0.09, s * 0.10 * ks, accentCol || '#ffd700', rim, lw * 0.7);
-            G.pill(x, y + s * 0.14, x, y + s * 0.24, s * 0.055, accentCol || '#ffd700');
-          }
+          // Classic rectangular brass-keyhole padlock
+          G.ring(x, y - s * 0.16 - lift, s * 0.20, s * 0.085, Math.PI, Math.PI * 2, sc);
+          G.box(x, y + s * 0.12, s * 0.70, s * 0.56, s * 0.10, bc, rim, lw);
+          G.disc(x, y + s * 0.09, s * 0.10 * ks, ac, rim, lw * 0.7);
+          G.pill(x, y + s * 0.14, x, y + s * 0.24, s * 0.055, ac);
         }
       },
       cloudSync: function(x, y, s, cloudCol, arrowCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = cloudCol || '#38bdf8', ac = arrowCol || '#ffd700';
-        G.disc(x - s * 0.23, y + s * 0.04, s * 0.22, cc, rim, lw);
-        G.disc(x + s * 0.23, y + s * 0.04, s * 0.20, cc, rim, lw);
-        G.disc(x, y - s * 0.09, s * 0.28, cc, rim, lw);
-        G.box(x, y + s * 0.12, s * 0.52, s * 0.24, s * 0.06, cc, null, 0);
-        G.pill(x - s * 0.24, y + s * 0.24, x + s * 0.24, y + s * 0.24, lw, rim);
-        var dy = Math.sin(tt * 2.8) * s * 0.05;
+        var dy = Math.sin(tt * 2.8) * s * 0.045;
         if (vv === 1) {
+          // Twin docked cloud domes with bi-directional upload/download arrows
+          G.disc(x - s * 0.23, y + s * 0.04, s * 0.22, cc, rim, lw);
+          G.disc(x + s * 0.23, y + s * 0.04, s * 0.20, cc, rim, lw);
+          G.disc(x, y - s * 0.09, s * 0.28, cc, rim, lw);
+          G.box(x, y + s * 0.12, s * 0.52, s * 0.24, s * 0.06, cc, null, 0);
+          G.pill(x - s * 0.24, y + s * 0.24, x + s * 0.24, y + s * 0.24, lw, rim);
           G.arrow(x - s * 0.10, y + s * 0.17 + dy, x - s * 0.10, y - s * 0.10 + dy, s * 0.045, s * 0.11, ac);
           G.arrow(x + s * 0.10, y - s * 0.10 - dy, x + s * 0.10, y + s * 0.17 - dy, s * 0.045, s * 0.11, '#f8fafc');
         } else if (vv === 2) {
-          G.box(x, y + s * 0.30, s * 0.62, s * 0.18, s * 0.05, '#1e293b', rim, lw * 0.9);
-          G.disc(x - s * 0.14, y + s * 0.30, s * (0.04 + 0.012 * Math.sin(tt * 3.5)), ac, null, 0);
-          G.disc(x + s * 0.04, y + s * 0.30, s * 0.04, '#00e5ff', null, 0);
-          G.arrow(x, y + s * 0.14 + dy * 0.8, x, y - s * 0.10 + dy * 0.8, s * 0.05, s * 0.11, ac);
+          // Top floating mini cloud tethered by data beam to stacked twin server blades below
+          G.disc(x - s * 0.14, y - s * 0.24, s * 0.14, cc, rim, lw * 0.85);
+          G.disc(x + s * 0.14, y - s * 0.24, s * 0.13, cc, rim, lw * 0.85);
+          G.disc(x, y - s * 0.30, s * 0.18, cc, rim, lw * 0.85);
+          G.box(x, y - s * 0.18, s * 0.34, s * 0.14, s * 0.04, cc, null, 0);
+          G.arrow(x, y - s * 0.02 + dy * 0.5, x, y - s * 0.14 + dy * 0.5, s * 0.042, s * 0.09, ac);
+          G.box(x, y + s * 0.14, s * 0.78, s * 0.18, s * 0.05, '#1e293b', rim, lw);
+          G.box(x, y + s * 0.34, s * 0.78, s * 0.18, s * 0.05, '#0f172a', '#4f46e5', lw);
+          G.disc(x - s * 0.22, y + s * 0.14, s * 0.04, '#00e5ff', null, 0);
+          G.disc(x - s * 0.22, y + s * 0.34, s * (0.04 + 0.01 * Math.sin(tt * 3.5)), ac, null, 0);
         } else if (vv === 3) {
-          G.ring(x, y + s * 0.04, s * 0.14, s * 0.045, tt * 2.4, tt * 2.4 + Math.PI * 1.4, ac);
-          G.disc(x, y + s * 0.04, s * 0.055, '#f8fafc', '#1e293b', lw * 0.6);
+          // Cylindrical 3-tier database stack connected to orbiting cloud ring
+          G.ring(x, y, s * 0.44, s * 0.04, tt * 0.9, tt * 0.9 + Math.PI * 1.35, cc);
+          var ty3 = [y - s * 0.20, y, y + s * 0.20];
+          for (var d3 = 0; d3 < 3; d3++) {
+            G.box(x, ty3[d3], s * 0.56, s * 0.16, s * 0.07, d3 === 0 ? '#4f46e5' : '#1e293b', rim, lw);
+            G.disc(x + s * 0.16, ty3[d3], s * 0.036, d3 === Math.floor((tt * 2) % 3) ? ac : '#00e5ff', null, 0);
+          }
+        } else if (vv === 4) {
+          // Hexagonal cloud lock vault crest
+          G.ngon(x, y, s * 0.44, 6, 0, '#1e293b', rim, lw);
+          G.disc(x - s * 0.14, y + s * 0.04, s * 0.14, cc, rim, lw * 0.8);
+          G.disc(x + s * 0.14, y + s * 0.04, s * 0.13, cc, rim, lw * 0.8);
+          G.disc(x, y - s * 0.05, s * 0.18, cc, rim, lw * 0.8);
+          G.box(x, y + s * 0.09, s * 0.32, s * 0.14, s * 0.04, cc, null, 0);
+          G.ring(x, y + s * 0.05, s * 0.08, s * 0.035, tt * 2.2, tt * 2.2 + Math.PI * 1.4, ac);
+        } else if (vv === 5) {
+          // Orbital rotating sync arrows around floating cloud core (NO rectangular server!)
+          G.ring(x, y, s * 0.41, s * 0.045, tt * 1.4, tt * 1.4 + Math.PI * 0.8, ac);
+          G.ring(x, y, s * 0.41, s * 0.045, tt * 1.4 + Math.PI, tt * 1.4 + Math.PI * 1.8, '#00e5ff');
+          G.disc(x - s * 0.16, y + s * 0.04, s * 0.15, cc, rim, lw * 0.85);
+          G.disc(x + s * 0.16, y + s * 0.04, s * 0.14, cc, rim, lw * 0.85);
+          G.disc(x, y - s * 0.05, s * 0.20, cc, rim, lw * 0.85);
+          G.box(x, y + s * 0.10, s * 0.36, s * 0.16, s * 0.04, cc, null, 0);
         } else {
+          // Classic wide cloud with centered rising upload arrow
+          G.disc(x - s * 0.23, y + s * 0.04, s * 0.22, cc, rim, lw);
+          G.disc(x + s * 0.23, y + s * 0.04, s * 0.20, cc, rim, lw);
+          G.disc(x, y - s * 0.09, s * 0.28, cc, rim, lw);
+          G.box(x, y + s * 0.12, s * 0.52, s * 0.24, s * 0.06, cc, null, 0);
+          G.pill(x - s * 0.24, y + s * 0.24, x + s * 0.24, y + s * 0.24, lw, rim);
           G.arrow(x, y + s * 0.18 + dy, x, y - s * 0.12 + dy, s * 0.055, s * 0.13, ac);
         }
       },
@@ -1484,33 +1959,62 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.034), vv = G._v(v);
         var bc = bodyCol || '#1e293b', vc = visorCol || '#0f172a', ec = eyeCol || '#00e5ff';
-        if (vv === 2) {
-          G.pill(x - s * 0.16, y - s * 0.28, x - s * 0.22, y - s * 0.44, s * 0.04, rim);
-          G.pill(x + s * 0.16, y - s * 0.28, x + s * 0.22, y - s * 0.44, s * 0.04, rim);
-          G.disc(x - s * 0.22, y - s * 0.45, s * 0.05, '#ffd700', rim, lw * 0.6);
-          G.disc(x + s * 0.22, y - s * 0.45, s * 0.05, ec, rim, lw * 0.6);
-        } else {
+        var er = s * (0.062 + 0.014 * Math.sin(tt * 3.2));
+        if (vv === 1) {
+          // Studio headphone DJ-bot head + equalizer voice mouth
           G.pill(x, y - s * 0.28, x, y - s * 0.44, s * 0.045, rim);
           G.disc(x, y - s * 0.45, s * (0.065 + 0.015 * Math.sin(tt * 3.5)), '#ffd700', rim, lw * 0.7);
-        }
-        if (vv === 1) {
           G.box(x - s * 0.42, y + s * 0.02, s * 0.14, s * 0.28, s * 0.05, '#4f46e5', rim, lw * 0.8);
           G.box(x + s * 0.42, y + s * 0.02, s * 0.14, s * 0.28, s * 0.05, '#4f46e5', rim, lw * 0.8);
-        }
-        G.box(x, y + s * 0.03, s * 0.78, s * 0.60, vv === 2 ? s * 0.26 : s * 0.16, bc, rim, lw);
-        G.box(x, y - s * 0.01, s * 0.56, s * 0.28, s * 0.09, vc, '#4f46e5', lw * 0.8);
-        var er = s * (0.062 + 0.014 * Math.sin(tt * 3.2));
-        if (vv === 2) {
-          G.disc(x + Math.sin(tt * 2.2) * s * 0.15, y - s * 0.01, s * 0.08, ec, '#ffffff', lw * 0.5);
-        } else {
+          G.box(x, y + s * 0.03, s * 0.78, s * 0.60, s * 0.16, bc, rim, lw);
+          G.box(x, y - s * 0.01, s * 0.56, s * 0.28, s * 0.09, vc, '#4f46e5', lw * 0.8);
           G.disc(x - s * 0.13, y - s * 0.01, er, ec, null, 0);
           G.disc(x + s * 0.13, y - s * 0.01, er, ec, null, 0);
-        }
-        if (vv === 1) {
           for (var mb = -1; mb <= 1; mb++) {
             G.bar(x + mb * s * 0.09, y + s * 0.24, s * 0.055, s * (0.07 + 0.04 * Math.abs(Math.sin(tt * 4.0 + mb))), s * 0.02, '#ffd700', null, 0);
           }
+        } else if (vv === 2) {
+          // Round spherical cyclops drone pod + twin antennae
+          G.pill(x - s * 0.16, y - s * 0.26, x - s * 0.24, y - s * 0.43, s * 0.04, rim);
+          G.pill(x + s * 0.16, y - s * 0.26, x + s * 0.24, y - s * 0.43, s * 0.04, rim);
+          G.disc(x - s * 0.24, y - s * 0.44, s * 0.05, '#ffd700', rim, lw * 0.6);
+          G.disc(x + s * 0.24, y - s * 0.44, s * 0.05, ec, rim, lw * 0.6);
+          G.disc(x, y + s * 0.04, s * 0.36, bc, rim, lw);
+          G.capsule(x, y + s * 0.02, s * 0.52, s * 0.24, vc, '#4f46e5', lw * 0.8);
+          G.disc(x + Math.sin(tt * 2.2) * s * 0.14, y + s * 0.02, s * 0.075, ec, '#ffffff', lw * 0.5);
+        } else if (vv === 3) {
+          // Full mini torso android + articulated side arms + glowing chest core
+          G.disc(x, y - s * 0.23, s * 0.18, bc, rim, lw);
+          G.box(x, y - s * 0.23, s * 0.26, s * 0.13, s * 0.05, vc, ec, lw * 0.7);
+          G.disc(x - s * 0.055, y - s * 0.23, s * 0.032, ec, null, 0);
+          G.disc(x + s * 0.055, y - s * 0.23, s * 0.032, ec, null, 0);
+          G.capsule(x - s * 0.33, y + s * 0.10 + Math.sin(tt * 2.4) * s * 0.03, s * 0.12, s * 0.32, '#4f46e5', rim, lw * 0.8);
+          G.capsule(x + s * 0.33, y + s * 0.10 - Math.sin(tt * 2.4) * s * 0.03, s * 0.12, s * 0.32, '#4f46e5', rim, lw * 0.8);
+          G.box(x, y + s * 0.14, s * 0.46, s * 0.44, s * 0.10, bc, rim, lw);
+          G.disc(x, y + s * 0.14, s * (0.09 + 0.02 * Math.sin(tt * 3.0)), '#ffd700', rim, lw * 0.65);
+        } else if (vv === 4) {
+          // Hexagonal AI assistant badge + neural ring core
+          G.ngon(x, y, s * 0.43, 6, 0, bc, rim, lw);
+          G.box(x, y - s * 0.04, s * 0.50, s * 0.24, s * 0.08, vc, ec, lw * 0.75);
+          G.disc(x - s * 0.11, y - s * 0.04, er * 0.9, ec, null, 0);
+          G.disc(x + s * 0.11, y - s * 0.04, er * 0.9, ec, null, 0);
+          G.capsule(x, y + s * 0.17, s * (0.20 + 0.06 * Math.sin(tt * 3.0)), s * 0.055, '#ffd700', null, 0);
+        } else if (vv === 5) {
+          // Floating chat-bubble AI assistant head + top spark star
+          G.poly([[x - s * 0.24, y + s * 0.26], [x - s * 0.34, y + s * 0.42], [x - s * 0.08, y + s * 0.26]], bc, rim, lw, true);
+          G.box(x, y + s * 0.02, s * 0.80, s * 0.58, s * 0.16, bc, rim, lw);
+          G.box(x, y - s * 0.02, s * 0.56, s * 0.26, s * 0.08, vc, '#4f46e5', lw * 0.75);
+          G.disc(x - s * 0.12, y - s * 0.02, er, ec, null, 0);
+          G.disc(x + s * 0.12, y - s * 0.02, er, ec, null, 0);
+          G.star(x + s * 0.32, y - s * 0.32, s * 0.10, s * 0.045, 4, tt * 0.9, '#ffd700', rim, lw * 0.55);
         } else {
+          // Classic friendly rectangular bot head + single beacon antenna
+          G.pill(x, y - s * 0.28, x, y - s * 0.44, s * 0.045, rim);
+          G.disc(x, y - s * 0.45, s * (0.065 + 0.015 * Math.sin(tt * 3.5)), '#ffd700', rim, lw * 0.7);
+          G.box(x, y + s * 0.03, s * 0.78, s * 0.60, s * 0.16, bc, rim, lw);
+          G.box(x, y - s * 0.01, s * 0.56, s * 0.28, s * 0.09, vc, '#4f46e5', lw * 0.8);
+          G.disc(x - s * 0.13, y - s * 0.01, er, ec, null, 0);
+          G.disc(x + s * 0.13, y - s * 0.01, er, ec, null, 0);
           G.capsule(x, y + s * 0.20, s * (0.22 + 0.06 * Math.sin(tt * 3.0)), s * 0.055, '#38bdf8', null, 0);
         }
       },
@@ -1518,19 +2022,70 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var pk = pkgCol || '#1e293b', pn = pinCol || '#38bdf8', cr = coreCol || '#ffd700';
-        var offs = vv === 2 ? [-s * 0.18, -s * 0.06, s * 0.06, s * 0.18] : [-s * 0.16, 0, s * 0.16];
-        for (var i = 0; i < offs.length; i++) {
-          G.pill(x + offs[i], y - s * 0.42, x + offs[i], y - s * 0.26, s * 0.045, pn);
-          G.pill(x + offs[i], y + s * 0.26, x + offs[i], y + s * 0.42, s * 0.045, pn);
-          G.pill(x - s * 0.42, y + offs[i], x - s * 0.26, y + offs[i], s * 0.045, pn);
-          G.pill(x + s * 0.26, y + offs[i], x + s * 0.42, y + offs[i], s * 0.045, pn);
+        var kp = s * (0.095 + 0.025 * Math.sin(tt * 3.4));
+        if (vv === 1) {
+          // Hexagonal quantum core + 6 radial circuit spoke nodes (NO square box!)
+          for (var k1 = 0; k1 < 6; k1++) {
+            var a1 = (k1 * Math.PI * 2) / 6;
+            G.pill(x + Math.cos(a1) * s * 0.26, y + Math.sin(a1) * s * 0.26, x + Math.cos(a1) * s * 0.42, y + Math.sin(a1) * s * 0.42, s * 0.042, pn);
+            G.disc(x + Math.cos(a1) * s * 0.42, y + Math.sin(a1) * s * 0.42, s * 0.055, cr, rim, lw * 0.6);
+          }
+          G.ngon(x, y, s * 0.34, 6, 0, pk, rim, lw);
+          G.ngon(x, y, s * 0.20, 4, 0, '#4f46e5', rim, lw * 0.8);
+          G.disc(x, y, kp, cr, rim, lw * 0.65);
+        } else if (vv === 2) {
+          // Circular neural radial die + orbiting star core
+          G.ring(x, y, s * 0.42, s * 0.04, tt * 0.9, tt * 0.9 + Math.PI * 1.45, pn);
+          G.disc(x, y, s * 0.34, pk, rim, lw);
+          G.box(x, y, s * 0.36, s * 0.36, s * 0.06, '#4f46e5', rim, lw * 0.8);
+          G.star(x, y, s * (0.12 + 0.02 * Math.sin(tt * 3.4)), s * 0.055, 4, tt * 0.8, cr, rim, lw * 0.6);
+        } else if (vv === 3) {
+          // Octagonal 8-way armored processor + radial pins
+          var offs3 = [-s * 0.14, 0, s * 0.14];
+          for (var i3 = 0; i3 < offs3.length; i3++) {
+            G.pill(x + offs3[i3], y - s * 0.42, x + offs3[i3], y - s * 0.26, s * 0.042, pn);
+            G.pill(x + offs3[i3], y + s * 0.26, x + offs3[i3], y + s * 0.42, s * 0.042, pn);
+          }
+          G.ngon(x, y, s * 0.36, 8, Math.PI / 8, pk, rim, lw);
+          G.disc(x, y, s * 0.19, '#4f46e5', rim, lw * 0.8);
+          G.disc(x, y, kp, cr, rim, lw * 0.65);
+        } else if (vv === 4) {
+          // Wide dual-core GPU card module + twin fans/cores
+          G.box(x, y, s * 0.96, s * 0.58, s * 0.09, pk, rim, lw);
+          for (var p4 = -2; p4 <= 2; p4++) {
+            G.pill(x + p4 * s * 0.14, y + s * 0.28, x + p4 * s * 0.14, y + s * 0.40, s * 0.045, cr);
+          }
+          G.disc(x - s * 0.20, y, s * 0.16, '#4f46e5', pn, lw * 0.8);
+          G.disc(x + s * 0.20, y, s * 0.16, '#4f46e5', pn, lw * 0.8);
+          G.star(x - s * 0.20, y, s * 0.08, s * 0.035, 4, tt * 2.2, cr, null, 0);
+          G.star(x + s * 0.20, y, s * 0.08, s * 0.035, 4, -tt * 2.2, pn, null, 0);
+        } else if (vv === 5) {
+          // 45-degree rotated diamond silicon processor
+          G.part(x, y, Math.PI / 4, 1, 1, function() {
+            var o5 = [-s * 0.12, 0, s * 0.12];
+            for (var k5 = 0; k5 < 3; k5++) {
+              G.pill(o5[k5], -s * 0.38, o5[k5], -s * 0.24, s * 0.042, pn);
+              G.pill(o5[k5], s * 0.24, o5[k5], s * 0.38, s * 0.042, pn);
+              G.pill(-s * 0.38, o5[k5], -s * 0.24, o5[k5], s * 0.042, pn);
+              G.pill(s * 0.24, o5[k5], s * 0.38, o5[k5], s * 0.042, pn);
+            }
+            G.box(0, 0, s * 0.54, s * 0.54, s * 0.08, pk, rim, lw);
+            G.box(0, 0, s * 0.28, s * 0.28, s * 0.04, '#4f46e5', rim, lw * 0.75);
+            G.disc(0, 0, kp * 0.85, cr, rim, lw * 0.6);
+          });
+        } else {
+          // Classic square microchip + 12 pins + inner core
+          var offs = [-s * 0.16, 0, s * 0.16];
+          for (var i = 0; i < offs.length; i++) {
+            G.pill(x + offs[i], y - s * 0.42, x + offs[i], y - s * 0.26, s * 0.045, pn);
+            G.pill(x + offs[i], y + s * 0.26, x + offs[i], y + s * 0.42, s * 0.045, pn);
+            G.pill(x - s * 0.42, y + offs[i], x - s * 0.26, y + offs[i], s * 0.045, pn);
+            G.pill(x + s * 0.26, y + offs[i], x + s * 0.42, y + offs[i], s * 0.045, pn);
+          }
+          G.box(x, y, s * 0.62, s * 0.62, s * 0.08, pk, rim, lw);
+          G.box(x, y, s * 0.34, s * 0.34, s * 0.05, '#4f46e5', rim, lw * 0.8);
+          G.disc(x, y, kp, cr, rim, lw * 0.65);
         }
-        if (vv === 3) G.ngon(x, y, s * 0.36, 8, Math.PI / 8, pk, rim, lw);
-        else G.box(x, y, s * 0.62, s * 0.62, s * 0.08, pk, rim, lw);
-        if (vv === 1) G.ngon(x, y, s * 0.22, 4, 0, '#4f46e5', rim, lw * 0.8);
-        else G.box(x, y, s * 0.34, s * 0.34, s * 0.05, '#4f46e5', rim, lw * 0.8);
-        if (vv === 2) G.star(x, y, s * (0.11 + 0.02 * Math.sin(tt * 3.4)), s * 0.05, 4, tt * 0.8, cr, rim, lw * 0.6);
-        else G.disc(x, y, s * (0.095 + 0.025 * Math.sin(tt * 3.4)), cr, rim, lw * 0.65);
       },
       coinStack: function(x, y, s, coinCol, sideCol, starCol, rimCol, t, v) {
         x = G._n(x); y = G._n(y); s = Math.max(24, Math.abs(G._n(s, 76)));
@@ -1538,23 +2093,41 @@ const STUDIO_GEOMETRY_ENGINE_JS = `
         var cc = coinCol || '#ffd700', sc = sideCol || '#f59e0b', stc = starCol || '#ffffff';
         var k = 1 + 0.12 * Math.sin(tt * 3.0);
         if (vv === 1) {
+          // Stacked isometric cylinder coins left + tall upright coin right
           for (var cs = 0; cs < 3; cs++) {
             G.oval(x - s * 0.14, y + s * (0.18 - cs * 0.12), s * 0.28, s * 0.11, 0, cs === 2 ? cc : sc, rim, lw * 0.8);
           }
           G.disc(x + s * 0.16, y + s * (0.05 + 0.03 * Math.sin(tt * 2.6)), s * 0.26, cc, rim, lw);
           G.ngon(x + s * 0.16, y + s * (0.05 + 0.03 * Math.sin(tt * 2.6)), s * 0.11 * k, 4, 0, stc, '#b45309', lw * 0.65);
         } else if (vv === 2) {
-          G.disc(x - s * 0.24, y + s * 0.06, s * 0.20, sc, rim, lw * 0.8);
-          G.disc(x + s * 0.24, y + s * 0.06, s * 0.20, sc, rim, lw * 0.8);
-          G.disc(x, y - s * 0.02, s * 0.30, cc, rim, lw);
-          G.ring(x, y - s * 0.02, s * 0.21, s * 0.028, 0, Math.PI * 2, '#b45309');
-          G.star(x, y - s * 0.02, s * 0.13 * k, s * 0.055 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.65);
+          // Classic bank vault / piggy treasury bar stack + gold medallion
+          G.box(x - s * 0.12, y + s * 0.20, s * 0.56, s * 0.20, s * 0.05, sc, rim, lw);
+          G.box(x + s * 0.10, y + s * 0.02, s * 0.54, s * 0.20, s * 0.05, '#00e5ff', rim, lw);
+          G.disc(x, y - s * 0.16, s * 0.24, cc, rim, lw);
+          G.star(x, y - s * 0.16, s * 0.11 * k, s * 0.048 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.65);
         } else if (vv === 3) {
-          G.disc(x - s * 0.20, y + s * 0.14, s * 0.18, sc, rim, lw * 0.8);
+          // Diagonal ascending 3-tier coin stairs + upward arrow
+          G.disc(x - s * 0.22, y + s * 0.16, s * 0.18, sc, rim, lw * 0.8);
           G.disc(x, y, s * 0.22, '#00e5ff', rim, lw * 0.85);
-          G.disc(x + s * 0.18, y - s * 0.12, s * 0.25, cc, rim, lw);
-          G.star(x + s * 0.18, y - s * 0.12, s * 0.11 * k, s * 0.05 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.6);
+          G.disc(x + s * 0.20, y - s * 0.14, s * 0.25, cc, rim, lw);
+          G.star(x + s * 0.20, y - s * 0.14, s * 0.11 * k, s * 0.05 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.6);
+        } else if (vv === 4) {
+          // Single giant circular minted coin emblem inside orbital halo ring
+          G.ring(x, y, s * 0.43, s * 0.04, tt * 0.9, tt * 0.9 + Math.PI * 1.4, '#00e5ff');
+          G.disc(x, y, s * 0.35, cc, rim, lw);
+          G.ring(x, y, s * 0.26, s * 0.03, 0, Math.PI * 2, '#b45309');
+          G.ngon(x, y, s * 0.14 * k, 4, 0, stc, '#b45309', lw * 0.7);
+        } else if (vv === 5) {
+          // Twin staggered cylinder coin pillars side-by-side
+          for (var cL = 0; cL < 3; cL++) {
+            G.oval(x - s * 0.18, y + s * (0.20 - cL * 0.12), s * 0.22, s * 0.09, 0, cL === 2 ? '#00e5ff' : '#4f46e5', rim, lw * 0.8);
+          }
+          for (var cR = 0; cR < 4; cR++) {
+            G.oval(x + s * 0.18, y + s * (0.22 - cR * 0.12 + Math.sin(tt * 2.5) * 0.02), s * 0.22, s * 0.09, 0, cR === 3 ? cc : sc, rim, lw * 0.8);
+          }
+          G.star(x + s * 0.18, y - s * 0.32, s * 0.09 * k, s * 0.04 * k, 5, -Math.PI / 2, stc, '#b45309', lw * 0.6);
         } else {
+          // Classic twin overlapping embossed coins
           G.disc(x - s * 0.14, y - s * 0.07, s * 0.27, sc, rim, lw * 0.85);
           G.disc(x + s * 0.07, y + s * 0.05, s * 0.34, cc, rim, lw);
           G.ring(x + s * 0.07, y + s * 0.05, s * 0.25, s * 0.028, 0, Math.PI * 2, '#b45309');
@@ -3028,8 +3601,9 @@ export async function generatePromptsViaGemini(
   return collectedPrompts;
 }
 
-// Variation DNA & Code Fingerprint Deduplication Engine (ensures zero identical animations across batches or days)
+// Variation DNA & Code Fingerprint Deduplication Engine (ensures zero identical silhouettes across batches or days)
 let __variationSeq = 0;
+const subjectVariantCursor = new Map<string, number>();
 const MAX_RECENT_CODE_FINGERPRINTS = 160;
 const recentCodeFingerprints: string[] = [];
 let __hydratedRecentFingerprints = false;
@@ -3054,9 +3628,24 @@ const VARIATION_MOTIONS: string[] = [
   'bobY=Math.cos(t*2.1)*0.03*R, sc=1+0.03*Math.cos(t*2.4), rot=Math.sin(t*1.3)*0.022',
 ];
 
+function getPromptTopicBucket(promptTopic: string): string {
+  const stopWords = new Set([
+    'create', 'a', 'an', 'the', 'minimalist', 'corporate', 'business', 'modern', 'professional',
+    'clean', 'flat', '3d', 'ui', 'icon', 'animation', 'animated', 'design', 'concept', 'style',
+    'isolated', 'background', 'seamless', 'loop', 'motion', 'with', 'and', 'for', 'of', 'in', 'on',
+  ]);
+  const tokens = String(promptTopic || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !stopWords.has(w));
+  return tokens.slice(0, 3).join('_') || '_default';
+}
+
 export interface VariationSeed {
   seedId: string;
   variantIdx: number;
+  compMode: number;
   palette: string[];
   motionExpr: string;
   tag: string;
@@ -3068,6 +3657,14 @@ export function createUniqueVariationSeed(
   forceSalt: number = 0
 ): VariationSeed {
   __variationSeq = (__variationSeq + 1) % 1000000;
+  const bucket = getPromptTopicBucket(promptTopic);
+  const bucketSeq = subjectVariantCursor.get(bucket) || 0;
+  subjectVariantCursor.set(bucket, bucketSeq + 1);
+  if (subjectVariantCursor.size > 400) {
+    const oldestKey = subjectVariantCursor.keys().next().value;
+    if (oldestKey !== undefined) subjectVariantCursor.delete(oldestKey);
+  }
+
   let topicHash = 0;
   const txt = String(promptTopic || '');
   for (let i = 0; i < txt.length; i++) {
@@ -3078,14 +3675,17 @@ export function createUniqueVariationSeed(
   const slot = Math.max(0, Math.floor(slotIndex));
   const salt = Math.max(0, Math.floor(forceSalt));
 
-  const variantIdx = (absMix + slot + salt) % 4;
-  const paletteIdx = ((absMix >> 2) + slot * 3 + salt * 5) % VARIATION_PALETTES.length;
-  const motionIdx = ((absMix >> 4) + slot * 2 + salt * 3) % VARIATION_MOTIONS.length;
-  const tag = `V${variantIdx}-${(absMix % 8999) + 1000}-${__variationSeq}`;
+  // Deterministic anti-collision rotation per subject bucket so consecutive prompts NEVER get the same silhouette
+  const variantIdx = (bucketSeq + slot + salt) % 6;
+  const compMode = (bucketSeq + slot * 2 + salt) % 3;
+  const paletteIdx = (absMix + bucketSeq * 3 + slot * 5 + salt * 7) % VARIATION_PALETTES.length;
+  const motionIdx = (bucketSeq + slot * 2 + salt * 3 + (absMix >> 4)) % VARIATION_MOTIONS.length;
+  const tag = `V${variantIdx}C${compMode}-${(absMix % 8999) + 1000}-${__variationSeq}`;
 
   return {
     seedId: tag,
     variantIdx,
+    compMode,
     palette: VARIATION_PALETTES[paletteIdx],
     motionExpr: VARIATION_MOTIONS[motionIdx],
     tag,
@@ -3108,6 +3708,12 @@ export function normalizeCanvasCodeFingerprint(codeOrHtml: string): string {
   return body
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/[^\n]*/g, '')
+    // Color-agnostic normalization: color-swapped clones produce identical structural fingerprints
+    .replace(/['"]#[0-9a-f]{3,8}['"]/gi, "'#C'")
+    .replace(/#[0-9a-f]{3,8}/gi, '#C')
+    .replace(/['"]rgba?\([^)]*\)['"]/gi, "'#C'")
+    .replace(/rgba?\([^)]*\)/gi, '#C')
+    .replace(/['"](?:white|black|cyan|gold|orange|indigo|blue|purple|red|pink|yellow|slate|amber|rose|violet|sky|teal|emerald)['"]/gi, "'#C'")
     .replace(/\s+/g, '')
     .trim();
 }
@@ -3162,15 +3768,35 @@ export function resolvePromptMotionPlan(
   type: AnimationType,
   _style?: string,
   overrideMode?: string,
-  variantIdx: number = 0
+  variantIdx: number = 0,
+  compMode: number = 0
 ): { label: string; anatomyHint: string; codeHint: string } {
-  const v = Math.abs(Math.floor(variantIdx || 0)) % 4;
+  const v = Math.abs(Math.floor(variantIdx || 0)) % 6;
+  const cm = Math.abs(Math.floor(compMode || 0)) % 3;
+  const applyCompWrapper = (plan: { label: string; anatomyHint: string; codeHint: string }) => {
+    if (type === 'bg' || cm === 0) return plan;
+    if (cm === 1) {
+      return {
+        label: `${plan.label} [bespoke]`,
+        anatomyHint: `BESPOKE VECTOR COMPOSE (DO NOT rely only on one default box!): Compose this exact subject cleanly using distinct outer primitives (G.ngon / G.poly / G.disc / G.ring / G.bar / G.arrow / G.star) welded inside [-0.54*R,+0.54*R] OR pair a creative sub-part around ${plan.anatomyHint}`,
+        codeHint: `${plan.codeHint} + staggered multi-part secondary motion`,
+      };
+    }
+    return {
+      label: `${plan.label} [kinetic]`,
+      anatomyHint: `DYNAMIC ASYMMETRIC COMPOSE: Mirror or angle secondary badges/ribbons cleanly around v=${v} (${plan.anatomyHint}) while keeping all joints overlapped >= 0.04*R.`,
+      codeHint: `${plan.codeHint} + subtle counter-oscillating sub-element motion`,
+    };
+  };
+
   if (type === 'bg') {
     const bgStyles = [
       '3-4 smooth full-width layered cosine ribbons spanning -0.1*w..1.1*w across 0..h.',
       'perspective isometric wireframe grid planes sweeping seamlessly across 0..w, 0..h.',
       'diagonal flowing wave bands + clean concentric aura arcs across -0.1*w..1.1*w.',
       'soft gradient horizon curves with synchronized geometric bar pulses across 0..w, 0..h.',
+      'stacked futuristic aurora wave contours + gliding horizontal light beams spanning -0.1*w..1.1*w.',
+      'woven dual-phase sine lattice mesh + smooth drifting geometric diamond accents across 0..w, 0..h.',
     ];
     return {
       label: `full-frame harmonic wave (v${v})`,
@@ -3180,319 +3806,382 @@ export function resolvePromptMotionPlan(
   }
   const topic = (promptTopic || '').toLowerCase();
   if (/\b(video\s*conferenc\w*|video\s*call\w*|teleconferenc\w*|webinar\w*|zoom\s*call|online\s*meeting|virtual\s*meeting)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `video conference display (v${v})`,
-      anatomyHint: `Call G.videoCall(0, 0, 1.06*R, frameCol, tileCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — widescreen monitor with webcam & live remote participant tiles!`,
+      anatomyHint: `Call G.videoCall(0, 0, 1.06*R, frameCol, tileCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright monitor float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + speaker tile pulse inside screen',
-    };
+    });
   }
   if (/\b(meeting\s+table|conference\s+table|boardroom|roundtable|conference\s+room)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `conference table ensemble (v${v})`,
-      anatomyHint: `TOP-DOWN CONFERENCE TABLE (v=${v}): draw 4 docked G.person seats at (0,-0.34*R), (0,0.34*R), (-0.46*R,0), (0.46*R,0) FIRST; THEN centered table G.box(0,0.02*R,0.74*R,0.40*R,0.14*R) overlapping seat edges; LAST center tablet G.box(0,0.02*R,0.24*R,0.14*R,0.03*R) with ${v % 2 === 0 ? 'G.check' : 'G.chart'} glyph.`,
+      anatomyHint: `TOP-DOWN CONFERENCE TABLE (v=${v}): draw 4 docked G.person seats FIRST; THEN centered table G.${v % 2 === 0 ? 'box(0,0.02*R,0.74*R,0.40*R,0.14*R)' : 'oval(0,0.02*R,0.42*R,0.24*R,0)'} overlapping seat edges; LAST center tablet with ${v % 2 === 0 ? 'G.check' : 'G.chart'} glyph.`,
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + subtle synchronized chair breath ±0.02*R staying docked to table',
-    };
+    });
   }
   if (/\b(office\s+desk|desk|workstation|workspace|cubicle|study\s+table)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `organized desk workstation (v${v})`,
       anatomyHint: `UPRIGHT OFFICE DESK: desk pedestals G.box(±0.34*R,0.24*R,0.20*R,0.34*R,0.03*R) + wide top G.box(0,0.06*R,1.02*R,0.10*R,0.03*R) + monitor stand & G.chart(0,-0.22*R,0.48*R,"#0F172A","#38BDF8","#00E5FF","#FFD700","#F8FAFC",t,${v}) resting flush on top + gold lamp G.disc(${v % 2 === 0 ? '-0.36*R' : '0.36*R'},-0.20*R,0.08*R,"#FFD700").`,
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + chart telemetry inside monitor',
-    };
+    });
+  }
+  if (/\b(candlestick|trading|stock\s*market|forex|crypto|bitcoin|exchange)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `market candlestick pulse (v${v})`,
+      anatomyHint: `TRADING CANDLESTICK CHART (v=${v}): 4 upright vertical candlestick wicks G.pill(x,-0.32*R+dy,x,0.26*R+dy,0.035*R,"#F8FAFC") + solid candlestick bodies G.box(...) staggered upward + crisp diagonal G.arrow across top (NO generic briefcase/box!).`,
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + staggered candlestick height pulse & rising arrow',
+    });
+  }
+  if (/\b(contract|agreement|invoice|receipt|certificate|compliance|policy|tax\s*form)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `signed contract seal (v${v})`,
+      anatomyHint: `SIGNED DOCUMENT / CONTRACT (v=${v}): crisp folded paper sheet G.poly([[-0.34*R,-0.44*R],[0.14*R,-0.44*R],[0.32*R,-0.26*R],[0.32*R,0.42*R],[-0.34*R,0.42*R]],...) + G.pill text lines + golden wax seal G.star(0.16*R,0.20*R,...) + diagonal quill/pen G.capsule (NOT a briefcase!).`,
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + signature line progress & pulsing official seal',
+    });
+  }
+  if (/\b(folder|archive|directory|binder|filing|repository)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `tabbed archive folder (v${v})`,
+      anatomyHint: `TABBED ARCHIVE FOLDER (v=${v}): upper folder tab G.box(-0.20*R,-0.34*R,0.38*R,0.16*R,0.05*R) + back plate + peeking crisp paper cards sliding smoothly up/down FIRST + slanted front flap G.poly in front (NOT a briefcase!).`,
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + smooth vertical file card peek motion',
+    });
+  }
+  if (/\b(bank|treasury|lending|mortgage|institution)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `treasury colonnade crest (v${v})`,
+      anatomyHint: `CLASSICAL BANK / TREASURY TEMPLE (v=${v}): wide stepped base G.box(0,0.36*R,0.94*R,0.12*R,0.03*R) + 3 vertical columns G.box(x,0.05*R,0.14*R,0.52*R,0.02*R) + triangular roof pediment G.poly([[-0.48*R,-0.20*R],[0,-0.46*R],[0.48*R,-0.20*R]],...) + centered vault emblem G.star/G.disc.`,
+      codeHint: 'upright architectural poise bobY=Math.sin(t*2.0)*0.022*R + glowing top treasury emblem',
+    });
+  }
+  if (/\b(calculator|accounting|bookkeeping|budgeting|expense)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `financial calculator keypad (v${v})`,
+      anatomyHint: `CALCULATOR CONSOLE (v=${v}): upright slate body G.box(0,0,0.74*R,0.92*R,0.10*R) + top cyan LED readout strip G.box(0,-0.27*R,0.56*R,0.18*R,0.04*R) + 3x3 tactile button squares G.box below with active button wave.`,
+      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + rolling LED display pulse & staggered button press highlight',
+    });
+  }
+  if (/\b(network|nodes|blockchain|api|mesh|topology|ecosystem)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `connected network topology (v${v})`,
+      anatomyHint: `MULTI-NODE NETWORK MESH (v=${v}): centered hexagon hub G.ngon(0,0,0.22*R,6,...) + 4 outer satellite G.disc/G.ngon nodes welded via bold G.pill connector spokes + gliding data packet G.disc orbiting between hub & outer nodes (NO single box!).`,
+      codeHint: 'upright hover bobY=Math.sin(t*2.0)*0.025*R + continuous data packet pulse along spoke links',
+    });
+  }
+  if (/\b(server|database|sql|hosting|datacenter|rack)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `stacked server cluster (v${v})`,
+      anatomyHint: `SERVER / DATABASE RACK (v=${v}): 3 stacked horizontal server blades/cylinders G.box(0,-0.26*R/0/0.26*R,0.82*R,0.20*R,0.06*R) docked cleanly via vertical spine + blinking cyan/gold status LEDs + side sync G.arrow.`,
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + sequential rack LED telemetry scan',
+    });
+  }
+  if (/\b(headset|helpdesk|customer\s*service|call\s*center|hotline)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `support headset & wave (v${v})`,
+      anatomyHint: `SUPPORT HEADSET (v=${v}): thick upper headband arch G.ring(0,-0.02*R,0.34*R,0.08*R,Math.PI,Math.PI*2) + left/right padded ear cups G.capsule(±0.34*R,0.04*R,0.18*R,0.32*R) + curved mic boom & glowing LED tip at bottom center.`,
+      codeHint: 'upright acoustic float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.035 + glowing mic beacon pulse',
+    });
+  }
+  if (/\b(roadmap|timeline|milestone|journey|funnel|pipeline|strategy\s*map)\b/.test(topic)) {
+    return applyCompWrapper({
+      label: `milestone pathway flow (v${v})`,
+      anatomyHint: `STRATEGIC ROADMAP / FUNNEL (v=${v}): 3 tiered trapezoidal funnel/stepped milestone nodes connected by continuous G.pill path + moving gold marker G.star sliding smoothly along the track.`,
+      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + continuous gold milestone marker travel',
+    });
   }
   if (/\b(laptop|notebook|macbook|ultrabook|computer|desktop|monitor|screen)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `laptop productivity workstation (v${v})`,
-      anatomyHint: `Call G.laptop(0, 0, 1.06*R, bodyCol, "#0F172A", accentCol, "#F8FAFC", t, ${v}) inside G.part — unmistakably a laptop screen & keyboard deck with animated telemetry inside!`,
+      anatomyHint: `Call G.laptop(0, 0, 1.06*R, bodyCol, "#0F172A", accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R, rot=Math.sin(t*1.5)*0.025 + internal screen task/chart animation',
-    };
+    });
   }
   if (/\b(ui\s*layout|ui|ux|wireframe|interface|app\s*design|landing\s*page|mockup|website|web\s*app|software|code)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `interactive UI layout (v${v})`,
-      anatomyHint: `Call G.uiLayout(0, 0, 1.06*R, frameCol, headerCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — NEVER draw plain circles/squares!`,
+      anatomyHint: `Call G.uiLayout(0, 0, 1.06*R, frameCol, headerCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.025 + internal UI sidebar & card reveal driven by t',
-    };
+    });
   }
   if (/\b(hiring|recruit\w*|talent|candidate|hr|human\s*resources|interview|onboarding|staffing|resume|cv)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `talent profile verification (v${v})`,
-      anatomyHint: `Call G.userBadge(0, 0, 1.06*R, cardCol, personCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — clean HR card with person & verified badge!`,
+      anatomyHint: `Call G.userBadge(0, 0, 1.06*R, cardCol, personCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + pulsing verification checkmark & animated profile lines',
-    };
+    });
   }
   if (/\b(productivity|efficiency|checklist|todo|to-do|task\s*management|kanban|sprint|workflow)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `sequential task completion (v${v})`,
-      anatomyHint: `Call G.checklist(0, 0, 1.04*R, boardCol, clipCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — NEVER draw plain power discs or sagging corner boxes!`,
+      anatomyHint: `Call G.checklist(0, 0, 1.04*R, boardCol, clipCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + sequential animated task bars & checkmarks inside clipboard',
-    };
+    });
   }
   if (/\b(typography|font|lettering|typeface|editorial|copywriting|graphic\s*design|artboard|branding|vector)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `editorial artboard precision (v${v})`,
-      anatomyHint: `Call G.typography(0, 0, 1.06*R, cardCol, inkCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — crisp vector artboard & animated guide cursor!`,
+      anatomyHint: `Call G.typography(0, 0, 1.06*R, cardCol, inkCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.025 + crisp baseline cursor glide',
-    };
+    });
   }
   if (/\b(pie\s*chart|pie|donut|market\s*share|allocation|budget\s*breakdown|proportion)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `segmented pie expansion (v${v})`,
-      anatomyHint: `Call G.pieChart(0, 0, 1.08*R, baseCol, s1Col, s2Col, s3Col, "#F8FAFC", t, ${v}) inside G.part — bold full-sized animated pie slices!`,
+      anatomyHint: `Call G.pieChart(0, 0, 1.08*R, baseCol, s1Col, s2Col, s3Col, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.4)*0.03 + active radial pie wedge pop',
-    };
+    });
   }
   if (/\b(market\s*research|research|survey|discovery|audit|inspect\w*|seo|search|magnifying|investigat\w*)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `optical lens research scan (v${v})`,
-      anatomyHint: `Call G.magnifier(0, 0, 1.08*R, cardCol, lensCol, handleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — sweeping magnifying lens over data card!`,
+      anatomyHint: `Call G.magnifier(0, 0, 1.08*R, cardCol, lensCol, handleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.025*R + continuous smooth circular magnifying lens sweep over card',
-    };
+    });
   }
   if (/\b(entrepreneur\w*|startup|launch|venture|founder|rocket|boost|scaleup|scale-up|accelerate)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `ascendant rocket launch (v${v})`,
-      anatomyHint: `Call G.rocket(0, 0, 1.06*R, hullCol, wingCol, flameCol, "#F8FAFC", t, ${v}) inside G.part(cx, cy+bobY, -0.18+rot, 1, 1, fn) — unmistakable rocket!`,
+      anatomyHint: `Call G.rocket(0, 0, 1.06*R, hullCol, wingCol, flameCol, "#F8FAFC", t, ${v}) inside G.part(cx, cy+bobY, -0.18+rot, 1, 1, fn) — variant v=${v}!`,
       codeHint: 'dynamic thrust bobY=Math.sin(t*3.2)*0.04*R, slight diagonal flight angle + pulsing exhaust plume',
-    };
+    });
   }
   if (/\b(opportunity|breakthrough|lightbulb|idea|bulb|innovation|creative|spark|brainstorm|insight|vision)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `radiant idea glow (v${v})`,
-      anatomyHint: `Call G.lightbulb(0, 0, 1.06*R, bulbCol, rayCol, baseCol, "#F8FAFC", t, ${v}) inside G.part — NEVER draw G.rays alone without solid glass bulb!`,
+      anatomyHint: `Call G.lightbulb(0, 0, 1.06*R, bulbCol, rayCol, baseCol, "#F8FAFC", t, ${v}) inside G.part — distinct variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.5)*0.03 + rhythmic radial ray pulse around glass dome',
-    };
+    });
   }
   if (/\b(shopping\s*cart|cart|trolley|ecommerce|e-commerce|checkout|retail|marketplace)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `shopping cart glide (v${v})`,
       anatomyHint: 'Draw 2 tucked parcel boxes G.box(0.06*R,-0.24*R+bobItem,0.24*R,0.22*R,0.04*R,accCol,"#F8FAFC",2) FIRST, THEN G.cart(0,0.06*R,0.96*R,bodyCol,wheelCol,"#F8FAFC") cleanly in front!',
       codeHint: 'gentle horizontal glide offsetX=Math.sin(t*2.2)*0.05*R + suspension bounce & parcel settle inside basket',
-    };
+    });
   }
   if (/\b(procurement|purchase|order|supply\s*chain|inventory|warehouse|logistics|vendor)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `procurement manifest sync (v${v})`,
       anatomyHint: `Call G.checklist(0, 0, 1.04*R, bodyCol, clipCol, accentCol, "#F8FAFC", t, ${v}) + welded top-right gold badge G.disc(0.32*R,-0.32*R,0.14*R,"#FFD700","#F8FAFC",2) inside G.part.`,
       codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + sequential manifest check animation',
-    };
+    });
   }
   if (/\b(digital\s*wallet|e-wallet|wallet|purse|mobile\s*pay|fintech)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `digital wallet card reveal (v${v})`,
       anatomyHint: `Draw peeking payment card G.box(${v % 2 === 0 ? '-0.08*R' : '0.06*R'}, -0.22*R + Math.sin(t*2.4)*0.06*R, 0.58*R, 0.34*R, 0.05*R, accCol, "#F8FAFC", 2) FIRST, THEN G.wallet(0, 0.08*R, 0.98*R, bodyCol, flapCol, claspCol, "#F8FAFC") overlapping lower half!`,
       codeHint: 'upright wallet hover bobY=Math.sin(t*2.2)*0.03*R + smooth vertical card reveal & golden clasp pulse',
-    };
+    });
   }
   if (/\b(reputation|trust|credibility|review|rating|endorsement|testimonial|brand\s*image)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `trust crest radiance (v${v})`,
       anatomyHint: `Call G.shield(0, 0.02*R, 0.96*R, shieldCol, "#F8FAFC", "#1E293B") + pulsing centered gold G.${v % 2 === 0 ? 'star' : 'check'}(0, 0.02*R, ...) LAST on top.`,
       codeHint: 'upright heraldic float bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.03 + centered emblem pulse',
-    };
+    });
   }
   if (/\b(global\s*comm\w*|international|worldwide|globe|global|world|earth|continent)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `orbital global relay (v${v})`,
       anatomyHint: `Call G.globe(0, 0.02*R, 0.44*R, sphereCol, lineCol, "#F8FAFC") + tilted ring G.oval(0, 0.02*R, 0.56*R, 0.20*R, ${v % 2 === 0 ? '-0.35' : '0.35'}, null, "#FFD700", 0.045*R) + 2 orbiting signal nodes G.disc.`,
       codeHint: 'upright globe hover bobY=Math.sin(t*2.1)*0.025*R + continuous orbiting satellite relay nodes along tilted ellipse',
-    };
+    });
   }
   if (/\b(megaphone|broadcast|announce\w*|marketing|campaign|publicity|loudspeaker)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `acoustic broadcast wave (v${v})`,
-      anatomyHint: 'Call G.megaphone(-0.12*R, 0.02*R, 0.90*R, coneCol, handleCol, accCol, "#F8FAFC") + 2 right-opening G.ring(0.24*R, 0, r1/r2, 0.045*R, -0.58, 0.58, col). NEVER bisect cone vertically!',
+      anatomyHint: 'Call G.megaphone(-0.12*R, 0.02*R, 0.90*R, coneCol, handleCol, accCol, "#F8FAFC") + 2 right-opening G.ring arcs. NEVER bisect cone vertically!',
       codeHint: 'recoil tilt rot=-0.05+Math.sin(t*3.2)*0.05 + bobY=Math.sin(t*2.5)*0.03*R + expanding acoustic wave arcs',
-    };
+    });
   }
-  if (/\b(handshake|deal|agreement)\b/.test(topic)) {
-    return {
+  if (/\b(handshake|deal)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `executive handshake clasp (v${v})`,
       anatomyHint: `Call G.handshake(0, 0.04*R, 0.62*R, cL, cR, "#F59E0B", "#F8FAFC", "#1E293B") + crisp top emblem G.disc(0,-0.32*R,0.12*R,accCol,"#F8FAFC",2) with G.${v % 2 === 0 ? 'check' : 'star'}.`,
       codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.035 + subtle top badge pulse',
-    };
+    });
   }
-  if (/\b(medal|ribbon|badge|certificate)\b/.test(topic)) {
-    return {
+  if (/\b(medal|ribbon|badge)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `suspended medal gleam (v${v})`,
       anatomyHint: 'Draw V-ribbon straps G.poly FIRST behind medal, THEN outer medal G.disc(0,0.08*R,0.38*R), inner rim G.ring(0,0.08*R,0.29*R,0.035*R), and centered G.star(0,0.08*R,0.16*R,0.07*R,5) LAST on top.',
       codeHint: 'upright pendulum sway bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.7)*0.05 + pulsing centered star',
-    };
+    });
   }
   if (/\b(trophy|award|achievement|cup|winner|crown)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `celebratory crest lift (v${v})`,
-      anatomyHint: `Call G.trophy(0, 0, 1.06*R, cupCol, baseCol, starCol, "#F8FAFC", t, ${v}) inside G.part — cohesive trophy & pulsing inner star!`,
+      anatomyHint: `Call G.trophy(0, 0, 1.06*R, cupCol, baseCol, starCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.035 + pulsing center star emblem',
-    };
+    });
   }
   if (/\b(chat|conversation|dialogue|messaging|communication|telecom|discussion|comment)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `speech bubble dialogue pulse (v${v})`,
       anatomyHint: 'Back bubble tail + G.box(-0.14*R,-0.12*R,0.66*R,0.44*R,0.12*R,c1,"#F8FAFC",2.5); front bubble tail + G.box(0.16*R,0.14*R,0.64*R,0.42*R,0.12*R,c2,"#F8FAFC",2.5); 3 oscillating typing dots G.disc inside front bubble.',
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + sequential 3-dot wave inside front bubble',
-    };
+    });
   }
   if (/\b(email|mail|envelope|inbox|newsletter|message)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `envelope & badge float (v${v})`,
       anatomyHint: 'Envelope G.box(0,0.05*R,1.02*R,0.68*R,0.08*R), crisp inner V-flap G.poly([[-0.48*R,-0.22*R],[0,0.12*R],[0.48*R,-0.22*R]],null,rimCol,0.055*R,false), welded top-right badge G.disc(0.40*R,-0.22*R,0.14*R) LAST on top.',
       codeHint: 'upright float bobY=Math.sin(t*2.4)*0.035*R, rot=Math.sin(t*1.6)*0.04 + smooth badge scale pulse',
-    };
+    });
   }
   if (/\b(negotiation|partnership|team|meeting|collaboration|networking)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `paired executive agreement (v${v})`,
       anatomyHint: 'Use G.person(-0.30*R,0.06*R,0.34*R,col1,head1,rim) & G.person(0.30*R,0.06*R,0.34*R,col2,head2,rim) joined cleanly by G.handshake(0,0.14*R,0.28*R,col1,col2,"#F59E0B","#F8FAFC",rim) + top check emblem.',
       codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth continuous top check badge pulse',
-    };
+    });
   }
-  if (/\b(leadership|executive|leader|manager|ceo|mentor|customer|support|headset|people|person|user|avatar|chair)\b/.test(topic)) {
-    return {
+  if (/\b(leadership|executive|leader|manager|ceo|mentor|customer|support|people|person|user|avatar|chair)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `executive figure poise (v${v})`,
-      anatomyHint: `Call G.userBadge(0, 0, 1.04*R, cardCol, personCol, accCol, "#F8FAFC", t, ${v}) inside G.part — sharp profile card & executive emblem!`,
+      anatomyHint: `Call G.userBadge(0, 0, 1.04*R, cardCol, personCol, accCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.4)*0.03 + crest badge pulse',
-    };
+    });
   }
   if (/\b(presentation|whiteboard|projector|pitch|slide|training)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `easel chart presentation (v${v})`,
       anatomyHint: `Tripod legs FIRST behind board, THEN call G.chart(0, -0.06*R, 0.96*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t, ${v}) as the easel screen!`,
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + animated easel bars & upward arrow',
-    };
+    });
   }
-  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement|money|dollar|coin|currency|bank|finance|investment|cash)\b/.test(topic)) {
-    return {
+  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement|money|dollar|coin|currency|finance|investment|cash)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `minted cash flow (v${v})`,
-      anatomyHint: `Call G.coinStack(0, 0.04*R, 0.98*R, coinCol, sideCol, "#FFFFFF", "#F8FAFC", t, ${v}) + crisp flow arrows G.arrow(-0.34*R+fx,-0.36*R,0.34*R+fx,-0.36*R,0.05*R,0.12*R,accCol) inside G.part.`,
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + smooth arrow transfer motion & coin star pulse',
-    };
+      anatomyHint: `Call G.coinStack(0, 0.04*R, 0.98*R, coinCol, sideCol, "#FFFFFF", "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
+      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.03*R + coin star & transfer pulse',
+    });
   }
-  if (/\b(briefcase|portfolio|folder|file|document|contract|invoice)\b/.test(topic)) {
-    return {
+  if (/\b(briefcase|portfolio|document)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `executive hinged float (v${v})`,
-      anatomyHint: `Call G.briefcase(0, 0, 1.06*R, bodyCol, flapCol, claspCol, "#F8FAFC", t, ${v}) inside G.part — ZERO dark backdrop disc!`,
+      anatomyHint: `Call G.briefcase(0, 0, 1.06*R, bodyCol, flapCol, claspCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.035 + lid clasp articulation',
-    };
+    });
   }
   if (/\b(target|bullseye|strategy|aim|dart|goal)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `diagonal strike & ripple (v${v})`,
       anatomyHint: 'Opaque discs G.disc(0,0,0.52*R,"#F43F5E","#F8FAFC",3), G.disc(0,0,0.34*R,"#F8FAFC"), G.disc(0,0,0.16*R,"#F43F5E"), G.disc(0,0,0.07*R,"#FFD700") + inward G.arrow(0.50*R+d,-0.50*R-d,0.03*R+d*0.1,-0.03*R-d*0.1,0.05*R,0.14*R,"#F8FAFC") pointing INWARD!',
       codeHint: 'bullseye scale=1+0.04*Math.sin(t*3.0) + inward diagonal dart strike',
-    };
+    });
   }
-  if (/\b(analytics|dashboard|chart|graph|report|metric|kpi|profit|growth|candlestick|statistics|market\s*analysis)\b/.test(topic)) {
-    return {
+  if (/\b(analytics|dashboard|chart|graph|report|metric|kpi|profit|growth|statistics|market\s*analysis)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `ascending elastic lift (v${v})`,
-      anatomyHint: `Call G.chart(0, 0, 1.06*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t, ${v}) inside G.part — bold full-width animated chart card!`,
+      anatomyHint: `Call G.chart(0, 0, 1.06*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.03*R, rot=Math.sin(t*1.5)*0.03 + live rising bars & trend arrow',
-    };
+    });
   }
   if (/\b(building|skyscraper|tower|headquarters|architecture|real\s*estate)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `architectural plinth glow (v${v})`,
       anatomyHint: 'Spire + crown + main tower G.box(-0.08*R,0.02*R,0.48*R,0.82*R,0.04*R) + side wing G.box(0.24*R,0.14*R,0.26*R,0.58*R,0.04*R) + plinth + 3x4 illuminated window grid G.box across full tower height.',
       codeHint: 'upright float bobY=Math.sin(t*1.8)*0.02*R + upward window illumination wave',
-    };
+    });
   }
   if (/\b(puzzle|connect|link|integration)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `interlocked precision fit (v${v})`,
       anatomyHint: '2 solid blocks G.box(-0.19*R,0,0.42*R,0.42*R,0.06*R) & G.box(0.19*R,0,0.42*R,0.42*R,0.06*R) interlocked over centered tab G.disc(0,0,0.12*R) LAST on top.',
       codeHint: 'gentle x micro-slide ±0.03*R staying overlapped + upright float bobY=Math.sin(t*2.2)*0.03*R',
-    };
+    });
   }
   if (/\b(calendar|event|schedule)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `structured grid calendar (v${v})`,
       anatomyHint: 'Top rings + body G.box(0,0.05*R,0.88*R,0.74*R,0.08*R) + header strip + crisp 3x2 date squares G.box inside body.',
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + active date cell highlight',
-    };
+    });
   }
   if (/\b(clock|deadline|timer|time)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `precision dial sweep (v${v})`,
-      anatomyHint: `Call G.clock(0, 0, 1.06*R, bezelCol, faceCol, handCol, "#F8FAFC", t, ${v}) inside G.part — clean ticking hands anchored at center!`,
+      anatomyHint: `Call G.clock(0, 0, 1.06*R, bezelCol, faceCol, handCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.1)*0.03*R + sweeping clock hands',
-    };
+    });
   }
   if (/\b(bell|alarm|siren|alert|horn|speaker|mic)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `acoustic ring swing (v${v})`,
       anatomyHint: 'Top loop + flared bell dome G.poly + bottom rim G.capsule + clapper G.disc + symmetric outer sound arcs G.ring at ±0.45*R.',
       codeHint: 'pendulum swing + delayed clapper sway & expanding soundwave arc sweep',
-    };
+    });
   }
   if (/\b(heart|pulse|ecg|cardiogram|dna|pill|capsule|syringe|medical|stethoscope|health)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `cardiac lub-dub pulse (v${v})`,
       anatomyHint: 'Unified medical emblem centered at (0,0) scaled >= 0.90*R: symmetric heart (2 welded G.disc + lower G.poly) or rounded cross with crisp ECG line inside.',
       codeHint: 'double-beat lub-dub scale pulse + smooth bobY',
-    };
+    });
   }
   if (/\b(shield|protection|firewall|cybersecurity|antivirus)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `shield defense gleam (v${v})`,
       anatomyHint: `Call G.shield(0, 0.02*R, 0.98*R, shieldCol, "#F8FAFC", "#1E293B") + centered pulsing G.${v % 2 === 0 ? 'check' : 'star'}(0, 0.02*R, ...) LAST on top.`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + smooth emblem pulse',
-    };
+    });
   }
   if (/\b(lock|padlock|vault|key|fingerprint|biometric|security|safe)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `precision locking recoil (v${v})`,
-      anatomyHint: `Call G.lock(0, 0, 1.06*R, bodyCol, shackleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — crisp articulated shackle & keyhole!`,
+      anatomyHint: `Call G.lock(0, 0, 1.06*R, bodyCol, shackleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.03*R + smooth vertical shackle lock recoil',
-    };
+    });
   }
   if (/\b(truck|drone|airplane|plane|wheel|forklift|parcel|cargo|delivery)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `kinetic transport suspension (v${v})`,
       anatomyHint: 'Cohesive vehicle chassis inside [-0.54*R,+0.54*R] with wheels overlapping body by >= 0.04*R — zero detached wheels!',
       codeHint: 'chassis suspension bobY=Math.sin(t*3.2)*0.03*R + spinning wheels at exact wheel sockets',
-    };
+    });
   }
   if (/\b(gear|settings|cog|automation|operations|engineering|system|process)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `meshed cog rotation (v${v})`,
-      anatomyHint: `Call G.gears(0, 0, 1.06*R, g1Col, g2Col, coreCol, "#F8FAFC", t, ${v}) inside G.part — dual interlocked rotating gears!`,
+      anatomyHint: `Call G.gears(0, 0, 1.06*R, g1Col, g2Col, coreCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright float bobY=Math.sin(t*2.0)*0.025*R + counter-rotating meshed cogwheels',
-    };
+    });
   }
   if (/\b(atom|orbit|planet|radar|compass|satellite|astrolabe)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `orbital & axis precession (v${v})`,
       anatomyHint: 'Centered core G.disc(0,0,0.20*R) + bold tilted G.oval/G.ring orbits (radius >= 0.42*R, thick >= 0.04*R) + orbiting nodes G.disc along exact path.',
       codeHint: 'smooth continuous rotation + orbiting bright nodes along tilted rings',
-    };
+    });
   }
   if (/\b(chip|cpu|processor|circuit|microchip|semiconductor|hardware)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `silicon pulse grid (v${v})`,
-      anatomyHint: `Call G.chip(0, 0, 1.06*R, pkgCol, pinCol, coreCol, "#F8FAFC", t, ${v}) inside G.part — crisp square processor with welded pins & pulsing core!`,
+      anatomyHint: `Call G.chip(0, 0, 1.06*R, pkgCol, pinCol, coreCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright tech float bobY=Math.sin(t*2.2)*0.03*R + pulsing silicon core',
-    };
+    });
   }
   if (/\b(robot|bot|chatbot|assistant|ai|neural)\b/.test(topic)) {
-    return {
+    return applyCompWrapper({
       label: `intelligent bot nod (v${v})`,
-      anatomyHint: `Call G.robot(0, 0, 1.06*R, bodyCol, visorCol, eyeCol, "#F8FAFC", t, ${v}) inside G.part — friendly clean AI robot head!`,
+      anatomyHint: `Call G.robot(0, 0, 1.06*R, bodyCol, visorCol, eyeCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'friendly hover bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + eye & beacon pulse',
-    };
+    });
   }
-  if (/\b(cloud|saas|storage|backup|sync|server)\b/.test(topic)) {
-    return {
+  if (/\b(cloud|saas|storage|backup|sync)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `cloud sync lift (v${v})`,
-      anatomyHint: `Call G.cloudSync(0, 0, 1.06*R, cloudCol, arrowCol, "#F8FAFC", t, ${v}) inside G.part — solid cloud & smooth animated sync arrow!`,
+      anatomyHint: `Call G.cloudSync(0, 0, 1.06*R, cloudCol, arrowCol, "#F8FAFC", t, ${v}) inside G.part — distinct silhouette variant v=${v}!`,
       codeHint: 'upright cloud float bobY=Math.sin(t*2.1)*0.03*R + smooth vertical arrow sync motion',
-    };
+    });
   }
-  if (/\b(brain|network|camera|eye|microscope)\b/.test(topic)) {
-    return {
+  if (/\b(brain|camera|eye|microscope)\b/.test(topic)) {
+    return applyCompWrapper({
       label: `smart telemetry pulse (v${v})`,
       anatomyHint: 'Unified centered tech housing inside [-0.54*R,+0.54*R] scaled >= 0.90*R (ZERO dark backdrop disc!); all pins/nodes overlap housing >= 0.04*R.',
       codeHint: 'upright float bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.04 + staggered node pulse',
-    };
+    });
   }
   if (overrideMode && overrideMode !== 'auto') {
     const legacy: Record<string, string> = {
@@ -3504,18 +4193,18 @@ export function resolvePromptMotionPlan(
       flow: 'bobY=Math.sin(t*2.4)*(S*0.04), tilt=Math.sin(t*1.8)*0.05',
     };
     if (legacy[overrideMode]) {
-      return {
+      return applyCompWrapper({
         label: overrideMode,
-        anatomyHint: `Framed centered vector emblem (s=1.04*R, v=${v}) or matching G hero helper inside G.part — NEVER draw tiny dots <0.5*R or bare rays!`,
+        anatomyHint: `Distinct geometric silhouette (v=${v}) composed with G.ngon/G.poly/G.disc/G.ring/G.star OR matching G hero helper at s=1.05*R — NEVER draw plain repetitive boxes or tiny dots <0.5*R!`,
         codeHint: legacy[overrideMode],
-      };
+      });
     }
   }
-  return {
+  return applyCompWrapper({
     label: `harmonic elastic float (v${v})`,
-    anatomyHint: `Pick the closest G hero helper (G.uiLayout / G.chart / G.checklist / G.rocket / G.lightbulb / G.briefcase / G.gears / G.laptop / G.videoCall) at size s=1.05*R passing v=${v}, OR build a bold framed emblem G.box(0,0,0.96*R,0.74*R,0.10*R) + crisp inner animated icon. NEVER draw small dots <0.6*R, bare G.rays, or stacked snowman circles!`,
+    anatomyHint: `Design a DISTINCT bespoke silhouette (v=${v}) using G.ngon/G.poly/G.disc/G.ring/G.star OR closest G hero helper with t,${v} at s=1.05*R. NEVER emit identical box frames across prompts!`,
     codeHint: 'upright bobY=Math.sin(t*2.3)*0.035*R, rot=Math.sin(t*1.6)*0.035 + internal t-driven sub-part pulse',
-  };
+  });
 }
 
 // Single-shot Direct Browser Google GenAI SDK animation generator (lean drawFrame output + offscreen pixel validator)
@@ -3543,7 +4232,7 @@ async function generateAnimationDirect(
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, (index || 1) - 1), variationOffset);
-  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx);
+  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode);
 
   const colorStyleDirective = isGreenScreen
     ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC).`
@@ -3553,17 +4242,17 @@ async function generateAnimationDirect(
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): ${motionPlan.anatomyHint}`
-    : `CONCISE HERO ICON (10-20 lines, <=320 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). PREFER G.<hero>(0,0,1.05*R,...,t,${seed.variantIdx}) with unique Palette=[${seed.palette.join(',')}] & Motion=[${seed.motionExpr}] so shape+motion are fresh! NEVER draw tiny dots <0.5*R, bare G.rays alone, or backdrop plates. ANATOMY: ${motionPlan.anatomyHint}`;
+    : `CONCISE HERO ICON (10-20 lines, <=320 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${seed.variantIdx} & CompMode=${seed.compMode} (${seed.compMode === 1 ? 'BespokePrimitives' : seed.compMode === 2 ? 'KineticCounterMotion' : 'HeroHelper'}) with Palette=[${seed.palette.join(',')}] & Motion=[${seed.motionExpr}] so silhouette+motion are genuinely unique (NEVER clone geometry with just color swaps!). ANATOMY: ${motionPlan.anatomyHint}`;
 
   const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t,v) | G.videoCall(x,y,s,fr,ti,ac,rim,t,v) | G.laptop(x,y,s,bd,sc,ac,rim,t,v) | G.checklist(x,y,s,bd,cl,ac,rim,t,v) | G.rocket(x,y,s,hu,wi,fl,rim,t,v) | G.lightbulb(x,y,s,bu,ra,ba,rim,t,v) | G.chart(x,y,s,cd,b1,b2,ar,rim,t,v) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t,v) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t,v) | G.gears(x,y,s,g1,g2,co,rim,t,v) | G.userBadge(x,y,s,cd,pe,ac,rim,t,v) | G.typography(x,y,s,cd,in,ac,rim,t,v) | G.briefcase(x,y,s,bd,fl,cl,rim,t,v) | G.trophy(x,y,s,cu,ba,st,rim,t,v) | G.clock(x,y,s,be,fa,ha,rim,t,v) | G.lock(x,y,s,bd,sh,ac,rim,t,v) | G.cloudSync(x,y,s,cl,ar,rim,t,v) | G.robot(x,y,s,bd,vi,ey,rim,t,v) | G.chip(x,y,s,pk,pn,co,rim,t,v) | G.coinStack(x,y,s,co,si,st,rim,t,v) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t,v) | G.videoCall(x,y,s,fr,ti,ac,rim,t,v) | G.laptop(x,y,s,bd,sc,ac,rim,t,v) | G.checklist(x,y,s,bd,cl,ac,rim,t,v) | G.rocket(x,y,s,hu,wi,fl,rim,t,v) | G.lightbulb(x,y,s,bu,ra,ba,rim,t,v) | G.chart(x,y,s,cd,b1,b2,ar,rim,t,v) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t,v) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t,v) | G.gears(x,y,s,g1,g2,co,rim,t,v) | G.userBadge(x,y,s,cd,pe,ac,rim,t,v) | G.typography(x,y,s,cd,in,ac,rim,t,v) | G.briefcase(x,y,s,bd,fl,cl,rim,t,v) | G.trophy(x,y,s,cu,ba,st,rim,t,v) | G.clock(x,y,s,be,fa,ha,rim,t,v) | G.lock(x,y,s,bd,sh,ac,rim,t,v) | G.cloudSync(x,y,s,cl,ar,rim,t,v) | G.robot(x,y,s,bd,vi,ey,rim,t,v) | G.chip(x,y,s,pk,pn,co,rim,t,v) | G.coinStack(x,y,s,co,si,st,rim,t,v) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [${seed.palette.join(',')}]
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint} | Kinetic: ${seed.motionExpr}.
 - ${colorStyleDirective}`;
 
   const config: any = {
-    temperature: 0.42,
+    temperature: 0.48,
     maxOutputTokens: 950,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
@@ -3700,27 +4389,27 @@ async function generateAnimationBatchDirect(
 
   const geometryGuide = isBackground
     ? 'FULL-FRAME BG (0..w,0..h): 3-4 smooth cosine ribbons/grids spanning -0.1*w..1.1*w.'
-    : 'CONCISE HERO ICON (10-20 lines each, <=300 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). Each ANIM_i MUST pass its assigned v integer AND use distinct palette/motion so outputs NEVER look identical!';
+    : 'CONCISE HERO ICON (10-20 lines each, <=300 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). Each ANIM_i MUST have a genuinely DIFFERENT outer silhouette (using its assigned v, CompMode & primitives/helpers — NEVER clone shapes with only different colors!).';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
   const topicLines = prompts.map((p, idx) => {
     const seed = slotSeeds[idx];
-    const plan = resolvePromptMotionPlan(p, type, style, motionDynamics, seed.variantIdx);
-    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" [v=${seed.variantIdx} | Palette:${seed.palette.join(',')} | Kinetic:${seed.motionExpr} | Anatomy:${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint}]`;
+    const plan = resolvePromptMotionPlan(p, type, style, motionDynamics, seed.variantIdx, seed.compMode);
+    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" [v=${seed.variantIdx} | CompMode=${seed.compMode === 1 ? 'BespokePrimitives' : seed.compMode === 2 ? 'KineticCounterMotion' : 'HeroHelper'} | Palette:${seed.palette.join(',')} | Kinetic:${seed.motionExpr} | Anatomy:${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint}]`;
   }).join('\n');
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} VISUALLY DISTINCT concise RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t,v) | G.videoCall(x,y,s,fr,ti,ac,rim,t,v) | G.laptop(x,y,s,bd,sc,ac,rim,t,v) | G.checklist(x,y,s,bd,cl,ac,rim,t,v) | G.rocket(x,y,s,hu,wi,fl,rim,t,v) | G.lightbulb(x,y,s,bu,ra,ba,rim,t,v) | G.chart(x,y,s,cd,b1,b2,ar,rim,t,v) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t,v) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t,v) | G.gears(x,y,s,g1,g2,co,rim,t,v) | G.userBadge(x,y,s,cd,pe,ac,rim,t,v) | G.typography(x,y,s,cd,in,ac,rim,t,v) | G.briefcase(x,y,s,bd,fl,cl,rim,t,v) | G.trophy(x,y,s,cu,ba,st,rim,t,v) | G.clock(x,y,s,be,fa,ha,rim,t,v) | G.lock(x,y,s,bd,sh,ac,rim,t,v) | G.cloudSync(x,y,s,cl,ar,rim,t,v) | G.robot(x,y,s,bd,vi,ey,rim,t,v) | G.chip(x,y,s,pk,pn,co,rim,t,v) | G.coinStack(x,y,s,co,si,st,rim,t,v) | G.part(tx,ty,rot,sx,sy,fn)
+HELPERS G: G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,fill,rim,lw) | G.bar(x,yBase,bw,bh,r,fill,rim,lw) | G.capsule(x,y,bw,bh,fill,rim,lw) | G.disc(x,y,r,fill,rim,lw) | G.oval(x,y,rx,ry,rot,fill,rim,lw) | G.ring(x,y,r,thick,a0,a1,col) | G.poly(pts,fill,rim,lw,close) | G.ngon(x,y,r,n,rot,fill,rim) | G.star(x,y,ro,ri,n,rot,fill,rim) | G.pill(x1,y1,x2,y2,thick,col) | G.arrow(x1,y1,x2,y2,thick,headLen,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,thick,col) | G.pie(x,y,r,a0,sw,sCol,bCol,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.handshake(x,y,s,cL,cR,hCol,cuff,rim) | G.shield(x,y,s,fill,rim,in) | G.cart(x,y,s,body,wheel,rim) | G.megaphone(x,y,s,cone,handle,acc,rim) | G.wallet(x,y,s,body,flap,clasp,rim) | G.globe(x,y,r,sph,line,rim) | G.uiLayout(x,y,s,fr,hd,ac,rim,t,v) | G.videoCall(x,y,s,fr,ti,ac,rim,t,v) | G.laptop(x,y,s,bd,sc,ac,rim,t,v) | G.checklist(x,y,s,bd,cl,ac,rim,t,v) | G.rocket(x,y,s,hu,wi,fl,rim,t,v) | G.lightbulb(x,y,s,bu,ra,ba,rim,t,v) | G.chart(x,y,s,cd,b1,b2,ar,rim,t,v) | G.magnifier(x,y,s,cd,le,ha,ac,rim,t,v) | G.pieChart(x,y,s,ba,s1,s2,s3,rim,t,v) | G.gears(x,y,s,g1,g2,co,rim,t,v) | G.userBadge(x,y,s,cd,pe,ac,rim,t,v) | G.typography(x,y,s,cd,in,ac,rim,t,v) | G.briefcase(x,y,s,bd,fl,cl,rim,t,v) | G.trophy(x,y,s,cu,ba,st,rim,t,v) | G.clock(x,y,s,be,fa,ha,rim,t,v) | G.lock(x,y,s,bd,sh,ac,rim,t,v) | G.cloudSync(x,y,s,cl,ar,rim,t,v) | G.robot(x,y,s,bd,vi,ey,rim,t,v) | G.chip(x,y,s,pk,pn,co,rim,t,v) | G.coinStack(x,y,s,co,si,st,rim,t,v) | G.part(tx,ty,rot,sx,sy,fn)
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
-CRITICAL: Each ANIM_i MUST have its own unique layout, variant v, colors, and kinetic motion — NEVER copy code across slots!
+CRITICAL: Each ANIM_i MUST have its own DISTINCT outer silhouette, structural layout, variant v, colors, and kinetic motion — NEVER copy geometry across slots with only color changes!
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;
 
   const config: any = {
-    temperature: 0.42,
+    temperature: 0.48,
     maxOutputTokens: Math.min(1850, Math.max(950, prompts.length * 850)),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
@@ -3985,6 +4674,12 @@ export async function generateSingleAnimationCode(
         throw new Error(`Validasi render server gagal (${serverCheck.reason || 'canvas blank'})`);
       }
 
+      if (attempt < maxRetries && isCodeFingerprintDuplicate(healedHtml)) {
+        if (onRetry) onRetry(attempt, maxRetries, 'Mendeteksi kemiripan desain dari server, menyusun variasi unik baru...');
+        sawRenderDefect = true;
+        continue;
+      }
+
       recordCodeFingerprint(healedHtml);
       if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
       return {
@@ -4051,6 +4746,7 @@ export async function generateBatchAnimationCodes(
     colorMode?: ColorMode;
     motionDynamics?: MotionDynamics;
     neonGlow?: boolean;
+    variationOffset?: number;
     onLog?: (msg: string, level?: 'info' | 'warn' | 'error' | 'success') => void;
   } = {}
 ): Promise<Array<{ prompt: string; anim?: any; error?: string; exhausted?: boolean }>> {
@@ -4059,6 +4755,7 @@ export async function generateBatchAnimationCodes(
     colorMode = 'gradient',
     motionDynamics = 'flow',
     neonGlow = true,
+    variationOffset = 0,
     onLog,
   } = options;
 
@@ -4079,7 +4776,8 @@ export async function generateBatchAnimationCodes(
         isGreenScreen,
         colorMode,
         motionDynamics,
-        neonGlow
+        neonGlow,
+        variationOffset
       );
       return [{ prompt: prompts[0], anim }];
     } catch (e: any) {
@@ -4155,7 +4853,7 @@ export async function generateBatchAnimationCodes(
             colorMode,
             motionDynamics,
             neonGlow,
-            attempt - 1
+            variationOffset + attempt - 1
           );
           for (let k = 0; k < prompts.length; k++) {
             if (!batchItems[k] && partialItems[k]) batchItems[k] = partialItems[k];
@@ -4227,7 +4925,7 @@ export async function generateBatchAnimationCodes(
             colorMode,
             motionDynamics,
             neonGlow,
-            variationOffset: attempt - 1,
+            variationOffset: variationOffset + attempt - 1,
           }),
         });
         if (res.ok) {
@@ -4302,7 +5000,7 @@ export async function generateBatchAnimationCodes(
           colorMode,
           motionDynamics,
           neonGlow,
-          i + 7
+          variationOffset + i + 7
         );
         finalOut.push({ prompt: prompts[i], anim: single });
       } catch (e: any) {

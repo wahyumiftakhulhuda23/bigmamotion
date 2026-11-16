@@ -255,7 +255,7 @@ export function deduplicateFailedItems(items: FailedAutoPilotItem[]): FailedAuto
   for (const it of items) {
     const accKey = normalizeAccountKey(it.accountName);
     const promptKey = normalizePromptKey(it.prompt);
-    const key = isPendingAutoPromptItem(it) ? `${accKey}::AUTO::${it.id}` : `${accKey}::${promptKey}`;
+    const key = isPendingAutoPromptItem(it) ? `${accKey}::AUTO` : `${accKey}::${promptKey}`;
     if (!seen.has(key)) {
       seen.add(key);
       out.push(it);
