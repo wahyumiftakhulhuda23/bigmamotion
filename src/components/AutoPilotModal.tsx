@@ -501,11 +501,22 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
               className="bg-gray-950 border border-sky-500/40 rounded-lg px-2.5 py-1.5 text-xs text-sky-300 font-bold focus:outline-none focus:ring-1 focus:ring-sky-400 cursor-pointer"
             >
               <option value="ALL">Semua Akun Sesuai Antrian (Batch Serial)</option>
-              {accounts.map((acc, aIdx) => (
-                <option key={acc.id || aIdx} value={acc.name}>
-                  Hanya Akun: {acc.name} ({acc.promptCount} item)
-                </option>
-              ))}
+              {accounts.map((acc, aIdx) => {
+                const isCustom = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
+                const targetTotal = isCustom
+                  ? new Set(acc.customPrompts!.map((p) => normalizePromptKey(p)).filter(Boolean)).size
+                  : acc.promptCount || 0;
+                const done = Math.min(
+                  targetTotal,
+                  getAccountCompletedCount(completedLedger, animations, acc.name, isCustom ? acc.customPrompts : undefined)
+                );
+                const rem = Math.max(0, targetTotal - done);
+                return (
+                  <option key={acc.id || aIdx} value={acc.name}>
+                    Hanya Akun: {acc.name} ({done > 0 ? `sisa ${rem}/${targetTotal}` : `${targetTotal} item`})
+                  </option>
+                );
+              })}
             </select>
           </div>
 

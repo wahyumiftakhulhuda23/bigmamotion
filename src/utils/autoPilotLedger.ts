@@ -47,8 +47,8 @@ export function safeLocalStorageSetCritical(key: string, value: string): boolean
       const rawAnims = localStorage.getItem(STORAGE_ANIMATIONS_KEY);
       if (rawAnims) {
         const parsed = JSON.parse(rawAnims);
-        if (Array.isArray(parsed) && parsed.length > 20) {
-          for (const cap of [Math.floor(parsed.length * 0.6), 40, 20, 10]) {
+        if (Array.isArray(parsed) && parsed.length > 5) {
+          for (const cap of [Math.floor(parsed.length * 0.5), 40, 20, 10, 5]) {
             try {
               localStorage.setItem(STORAGE_ANIMATIONS_KEY, JSON.stringify(parsed.slice(0, cap)));
               localStorage.setItem(key, value);
@@ -56,6 +56,19 @@ export function safeLocalStorageSetCritical(key: string, value: string): boolean
             } catch {}
           }
         }
+      }
+      // Last-resort trim of bulky prompt bank / i2m cache if still over 5MB quota
+      for (const bulkyKey of ['bigma_prompt_history_bank', 'bigma_i2m_items']) {
+        try {
+          const rawBulky = localStorage.getItem(bulkyKey);
+          if (!rawBulky) continue;
+          const parsedBulky = JSON.parse(rawBulky);
+          if (Array.isArray(parsedBulky) && parsedBulky.length > 10) {
+            localStorage.setItem(bulkyKey, JSON.stringify(parsedBulky.slice(0, 10)));
+            localStorage.setItem(key, value);
+            return true;
+          }
+        } catch {}
       }
     } catch {}
     return false;

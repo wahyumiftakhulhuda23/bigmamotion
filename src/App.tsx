@@ -201,10 +201,14 @@ export default function App() {
   const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([]);
   const [failedPrompts, setFailedPrompts] = useState<string[]>([]);
   const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>(() => loadFailedAutoPilotItems());
+  const failedAutoPilotItemsRef = useRef<FailedAutoPilotItem[]>(failedAutoPilotItems);
+  failedAutoPilotItemsRef.current = failedAutoPilotItems;
   const [completedLedger, setCompletedLedger] = useState<CompletedLedger>(() => loadCompletedLedger());
   const completedLedgerRef = useRef<CompletedLedger>(completedLedger);
   completedLedgerRef.current = completedLedger;
   const [animations, setAnimations] = useState<AnimationItem[]>([]);
+  const animationsRef = useRef<AnimationItem[]>(animations);
+  animationsRef.current = animations;
   const [downloadQueue, setDownloadQueue] = useState<string[]>([]);
   const [exportBitrate, setExportBitrate] = useState<number>(() => {
     try {
@@ -288,6 +292,7 @@ export default function App() {
   const [isGeneratingPrompts, setIsGeneratingPrompts] = useState<boolean>(false);
   const [isGeneratingAnimations, setIsGeneratingAnimations] = useState<boolean>(false);
   const [isAutoPilotRunning, setIsAutoPilotRunning] = useState<boolean>(false);
+  const isAutoPilotRunningRef = useRef<boolean>(false);
 
   // Modals
   const [isApiModalOpen, setIsApiModalOpen] = useState<boolean>(false);
@@ -310,7 +315,14 @@ export default function App() {
     saveStoredModel(newModel);
     resetKeyHealthPool();
     setIsModelRotationModalOpen(false);
-    addLog(`✅ [Rotasi Model AI] Berhasil beralih ke model ${newModel}.`, 'success');
+    const activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, animationsRef.current);
+    completedLedgerRef.current = activeLedger;
+    setCompletedLedger(activeLedger);
+    const pendingFailed = filterPendingFailedItems(failedAutoPilotItemsRef.current, activeLedger, animationsRef.current);
+    failedAutoPilotItemsRef.current = pendingFailed;
+    setFailedAutoPilotItems(pendingFailed);
+    saveFailedAutoPilotItems(pendingFailed);
+    addLog(`✅ [Rotasi Model AI] Beralih ke ${newModel}. Sisa item gagal/tertunda siap lanjut: ${pendingFailed.length} (seluruh prompt selesai tetap terkunci aman).`, 'success');
     showToast(`Berhasil beralih ke model ${newModel}!`, 'success');
   };
 
@@ -319,9 +331,16 @@ export default function App() {
     saveStoredModel(newModel);
     resetKeyHealthPool();
     setIsModelRotationModalOpen(false);
-    addLog(`🔄 [Rotasi Model AI] Beralih ke ${newModel} & langsung melanjutkan hanya item yang gagal/tertunda...`, 'cyan');
+    const activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, animationsRef.current);
+    completedLedgerRef.current = activeLedger;
+    setCompletedLedger(activeLedger);
+    const pendingFailed = filterPendingFailedItems(failedAutoPilotItemsRef.current, activeLedger, animationsRef.current);
+    failedAutoPilotItemsRef.current = pendingFailed;
+    setFailedAutoPilotItems(pendingFailed);
+    saveFailedAutoPilotItems(pendingFailed);
+    addLog(`🔄 [Rotasi Model AI] Beralih ke ${newModel} & langsung melanjutkan hanya ${pendingFailed.length} item yang gagal/tertunda (prompt selesai dilewati otomatis)...`, 'cyan');
     showToast(`Beralih ke ${newModel} & melanjutkan sisa antrean gagal!`, 'info');
-    if (failedAutoPilotItems.length > 0) {
+    if (pendingFailed.length > 0) {
       void handleRetryFailedAutoPilot(newModel);
     } else if (failedPrompts.length > 0) {
       void handleRetryFailedPrompts(newModel);
@@ -363,6 +382,8 @@ export default function App() {
       },
     ];
   });
+  const autoPilotAccountsRef = useRef<AutoPilotAccount[]>(autoPilotAccounts);
+  autoPilotAccountsRef.current = autoPilotAccounts;
 
   // Startup cleanup for dummy names in localStorage (cleans out legacy dummy accounts)
   useEffect(() => {
@@ -469,8 +490,10 @@ export default function App() {
   }, []);
 
   const saveAnimationsToStorage = (newAnims: AnimationItem[]) => {
+    animationsRef.current = newAnims;
     setAnimations(newAnims);
-    const caps = [220, 140, 90, 50, 25];
+    // Keep localStorage under ~2.2MB headroom so completedLedger & failedAutoPilotItems never face 5MB eviction
+    const caps = [120, 80, 50, 25];
     for (const cap of caps) {
       try {
         localStorage.setItem(STORAGE_ANIMATIONS, JSON.stringify(newAnims.slice(0, cap)));
@@ -500,9 +523,17 @@ export default function App() {
     resetKeyHealthPool();
     setIsApiModalOpen(false);
 
+    const activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, animationsRef.current);
+    completedLedgerRef.current = activeLedger;
+    setCompletedLedger(activeLedger);
+    const pendingFailed = filterPendingFailedItems(failedAutoPilotItemsRef.current, activeLedger, animationsRef.current);
+    failedAutoPilotItemsRef.current = pendingFailed;
+    setFailedAutoPilotItems(pendingFailed);
+    saveFailedAutoPilotItems(pendingFailed);
+
     if (keys.length > 0) {
       showToast(`${keys.length} API Key berhasil disimpan!`, 'success');
-      addLog(`Tersimpan ${keys.length} API key Gemini. Model: ${model}`, 'success');
+      addLog(`Tersimpan ${keys.length} API key Gemini. Model aktif: ${model}.${pendingFailed.length > 0 ? ` Sisa ${pendingFailed.length} prompt gagal siap dilanjutkan (prompt selesai tetap terkunci aman).` : ''}`, 'success');
     } else {
       showToast('API Key kosong. Mohon masukkan minimal 1 Key.', 'warn');
     }
@@ -1118,7 +1149,7 @@ export default function App() {
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const BATCH_ANIM_SIZE = 2;
     let completedOverall = 0;
-    let currentAnimList = [...animations];
+    let currentAnimList = [...animationsRef.current];
     let stopAll = false;
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
@@ -1242,17 +1273,18 @@ export default function App() {
     showToast(`${prompts.length} prompt berhasil dimuat ke daftar siap render!`, 'success');
   };
 
-  // Run Auto Pilot batch sequentially account by account (2-in-1 batching + auto cooldown wait — never skips 40 items in 1.5s!)
+  // Run Auto Pilot batch sequentially account by account (2-in-1 batching + auto cooldown wait — never repeats completed prompts!)
   const handleStartAutoPilot = async (targetAccountName: string = 'ALL') => {
+    const accountsSnapshot = autoPilotAccountsRef.current;
     const accountsToRun = targetAccountName === 'ALL'
-      ? autoPilotAccounts
-      : autoPilotAccounts.filter((a) => a.name === targetAccountName);
+      ? accountsSnapshot
+      : accountsSnapshot.filter((a) => a.name === targetAccountName);
 
     if (accountsToRun.length === 0) {
       showToast('Daftar akun Auto Pilot masih kosong!', 'warn');
       return;
     }
-    if (isAutoPilotRunning) {
+    if (isAutoPilotRunningRef.current || isAutoPilotRunning) {
       showToast('Auto Pilot sedang berjalan!', 'warn');
       return;
     }
@@ -1265,6 +1297,7 @@ export default function App() {
       return;
     }
 
+    isAutoPilotRunningRef.current = true;
     setIsAutoPilotRunning(true);
     setIsPromptAutoPilotModalOpen(false);
     const accLabel = targetAccountName === 'ALL' ? 'Semua Akun' : `Akun: "${targetAccountName}"`;
@@ -1273,7 +1306,7 @@ export default function App() {
     showToast(`🚀 Auto Pilot [${accLabel}] Dimulai!`, 'info');
     setIsGalleryModalOpen(true);
 
-    let currentAnimList = [...animations];
+    let currentAnimList = [...animationsRef.current];
     let activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, currentAnimList);
     completedLedgerRef.current = activeLedger;
     setCompletedLedger(activeLedger);
@@ -1284,98 +1317,118 @@ export default function App() {
     addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda batch ${(pacingDelay / 1000).toFixed(1)}s • Jeda antar key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s • Cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s/${(modelProfile.cooldownStepsMs[1] / 1000).toFixed(0)}s agar kuota irit & bebas retry beruntun.`, 'cyan');
     let stopAllForQuota = false;
 
-    for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
-      const acc = accountsToRun[i];
-      let prompts: string[] = [];
+    try {
+      for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
+        const acc = accountsToRun[i];
+        let prompts: string[] = [];
 
-      const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
+        const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
 
-      if (hasCustomPrompts) {
-        const seenAccPrompts = new Set<string>();
-        const uniqueCustom = acc.customPrompts!.filter((p) => {
-          const nk = normalizePromptKey(p);
-          if (!nk || seenAccPrompts.has(nk)) return false;
-          seenAccPrompts.add(nk);
-          return true;
-        });
-        prompts = uniqueCustom.filter((p) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, p));
-        const skippedExisting = uniqueCustom.length - prompts.length;
-        addLog(
-          `📂 [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Total ${uniqueCustom.length} prompt unik${
-            skippedExisting > 0 ? ` (${skippedExisting} sudah selesai tercatat -> dilewati otomatis, sisa ${prompts.length})` : ''
-          }...`,
-          'cyan'
-        );
-        if (prompts.length === 0) {
-          addLog(`✅ [${acc.name}] Seluruh prompt sudah berhasil selesai — langsung lanjut akun berikutnya.`, 'success');
-          continue;
-        }
-      } else {
-        const alreadyDoneAi = getAccountCompletedCount(activeLedger, currentAnimList, acc.name);
-        const remainingTarget = Math.max(0, (acc.promptCount || 0) - alreadyDoneAi);
-        if (remainingTarget === 0) {
-          addLog(`✅ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Target ${acc.promptCount} animasi sudah terpenuhi (${alreadyDoneAi} selesai) — langsung lanjut akun berikutnya.`, 'success');
-          continue;
-        }
-        addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${remainingTarget} prompt${alreadyDoneAi > 0 ? ` (${alreadyDoneAi} sudah selesai sebelumnya)` : ''}...`, 'info');
-
-        try {
-          prompts = await generatePromptsViaGemini(
-            apiKeys,
-            selectedModel,
-            acc.type,
-            acc.subCategory,
-            acc.style,
-            remainingTarget,
-            undefined,
-            acc.isGreenScreen ?? false,
-            acc.colorMode ?? 'gradient',
-            'auto',
-            acc.neonGlow ?? true,
-            (singlePrompt, index, total) => {
-              if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
-                addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
-              }
-            }
-          );
-          addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt. Memulai render hemat batch 2-in-1...`, 'success');
-          await new Promise((res) => setTimeout(res, 400));
-        } catch (e: any) {
-          addLog(`❌ [${acc.name}] Gagal generate prompt: ${e.message}`, 'error');
-          newFailedItems.push({
-            id: 'fail_p_' + Date.now() + '_' + i,
-            accountName: acc.name,
-            prompt: `(Auto Prompt: ${remainingTarget} animasi ${acc.type} - ${acc.subCategory})`,
-            type: acc.type,
-            subCategory: acc.subCategory,
-            style: acc.style,
-            isGreenScreen: acc.isGreenScreen ?? false,
-            colorMode: acc.colorMode ?? 'gradient',
-            motionDynamics: 'auto',
-            neonGlow: acc.neonGlow ?? true,
-            isAutoPromptPending: true,
-            promptCount: remainingTarget,
-            error: e.message || 'Gagal menghasilkan prompt',
+        if (hasCustomPrompts) {
+          const seenAccPrompts = new Set<string>();
+          const uniqueCustom = acc.customPrompts!.filter((p) => {
+            const nk = normalizePromptKey(p);
+            if (!nk || seenAccPrompts.has(nk)) return false;
+            seenAccPrompts.add(nk);
+            return true;
           });
-          const isQuotaFail = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
-          if (isQuotaFail) {
-            for (let k = i + 1; k < accountsToRun.length; k++) {
-              const nextAcc = accountsToRun[k];
-              const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
-              if (hasNextCustom) {
-                const seenNext = new Set<string>();
-                nextAcc.customPrompts!
-                  .filter((np) => {
-                    const nk = normalizePromptKey(np);
-                    if (!nk || seenNext.has(nk)) return false;
-                    seenNext.add(nk);
-                    return !isPromptCompleted(activeLedger, currentAnimList, nextAcc.name, np);
-                  })
-                  .forEach((np, nIdx) => {
+          prompts = uniqueCustom.filter((p) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, p));
+          const skippedExisting = uniqueCustom.length - prompts.length;
+          addLog(
+            `📂 [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Total ${uniqueCustom.length} prompt unik${
+              skippedExisting > 0 ? ` (${skippedExisting} sudah selesai tercatat -> dilewati otomatis, sisa ${prompts.length})` : ''
+            }...`,
+            'cyan'
+          );
+          if (prompts.length === 0) {
+            addLog(`✅ [${acc.name}] Seluruh prompt sudah berhasil selesai — langsung lanjut akun berikutnya.`, 'success');
+            continue;
+          }
+        } else {
+          const alreadyDoneAi = getAccountCompletedCount(activeLedger, currentAnimList, acc.name);
+          const remainingTarget = Math.max(0, (acc.promptCount || 0) - alreadyDoneAi);
+          if (remainingTarget === 0) {
+            addLog(`✅ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Target ${acc.promptCount} animasi sudah terpenuhi (${alreadyDoneAi} selesai) — langsung lanjut akun berikutnya.`, 'success');
+            continue;
+          }
+          addLog(`⚡ [Antrian Akun #${i + 1}/${accountsToRun.length}: ${acc.name}] Meminta AI generate ${remainingTarget} prompt${alreadyDoneAi > 0 ? ` (${alreadyDoneAi} sudah selesai sebelumnya)` : ''}...`, 'info');
+
+          try {
+            const rawGen = await generatePromptsViaGemini(
+              apiKeys,
+              selectedModel,
+              acc.type,
+              acc.subCategory,
+              acc.style,
+              remainingTarget,
+              undefined,
+              acc.isGreenScreen ?? false,
+              acc.colorMode ?? 'gradient',
+              'auto',
+              acc.neonGlow ?? true,
+              (singlePrompt, index, total) => {
+                if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
+                  addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
+                }
+              }
+            );
+            prompts = rawGen.filter((gp) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, gp));
+            addLog(`✅ [${acc.name}] Berhasil mendapatkan ${prompts.length} prompt unik. Memulai render hemat batch 2-in-1...`, 'success');
+            await new Promise((res) => setTimeout(res, 400));
+          } catch (e: any) {
+            addLog(`❌ [${acc.name}] Gagal generate prompt: ${e.message}`, 'error');
+            newFailedItems.push({
+              id: 'fail_p_' + Date.now() + '_' + i,
+              accountName: acc.name,
+              prompt: `(Auto Prompt: ${remainingTarget} animasi ${acc.type} - ${acc.subCategory})`,
+              type: acc.type,
+              subCategory: acc.subCategory,
+              style: acc.style,
+              isGreenScreen: acc.isGreenScreen ?? false,
+              colorMode: acc.colorMode ?? 'gradient',
+              motionDynamics: 'auto',
+              neonGlow: acc.neonGlow ?? true,
+              isAutoPromptPending: true,
+              promptCount: remainingTarget,
+              error: e.message || 'Gagal menghasilkan prompt',
+            });
+            const isQuotaFail = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
+            if (isQuotaFail) {
+              for (let k = i + 1; k < accountsToRun.length; k++) {
+                const nextAcc = accountsToRun[k];
+                const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
+                if (hasNextCustom) {
+                  const seenNext = new Set<string>();
+                  nextAcc.customPrompts!
+                    .filter((np) => {
+                      const nk = normalizePromptKey(np);
+                      if (!nk || seenNext.has(nk)) return false;
+                      seenNext.add(nk);
+                      return !isPromptCompleted(activeLedger, currentAnimList, nextAcc.name, np);
+                    })
+                    .forEach((np, nIdx) => {
+                      newFailedItems.push({
+                        id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
+                        accountName: nextAcc.name,
+                        prompt: np,
+                        type: nextAcc.type,
+                        subCategory: nextAcc.subCategory,
+                        style: nextAcc.style,
+                        isGreenScreen: nextAcc.isGreenScreen ?? false,
+                        colorMode: nextAcc.colorMode ?? 'gradient',
+                        motionDynamics: 'auto',
+                        neonGlow: nextAcc.neonGlow ?? true,
+                        error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                      });
+                    });
+                } else {
+                  const nextDone = getAccountCompletedCount(activeLedger, currentAnimList, nextAcc.name);
+                  const nextRemain = Math.max(0, (nextAcc.promptCount || 0) - nextDone);
+                  if (nextRemain > 0) {
                     newFailedItems.push({
-                      id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
+                      id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
                       accountName: nextAcc.name,
-                      prompt: np,
+                      prompt: `(Auto Prompt: ${nextRemain} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
                       type: nextAcc.type,
                       subCategory: nextAcc.subCategory,
                       style: nextAcc.style,
@@ -1383,17 +1436,176 @@ export default function App() {
                       colorMode: nextAcc.colorMode ?? 'gradient',
                       motionDynamics: 'auto',
                       neonGlow: nextAcc.neonGlow ?? true,
-                      error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                      isAutoPromptPending: true,
+                      promptCount: nextRemain,
+                      error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
                     });
-                  });
-              } else {
-                const nextDone = getAccountCompletedCount(activeLedger, currentAnimList, nextAcc.name);
-                const nextRemain = Math.max(0, (nextAcc.promptCount || 0) - nextDone);
-                if (nextRemain > 0) {
+                  }
+                }
+              }
+              addLog(`⏸️ [${acc.name}] Kuota penuh saat generate prompt — seluruh prompt belum selesai dari ${accountsToRun.length - i} akun tersisa diamankan ke Coba Ulang!`, 'warn');
+              stopAllForQuota = true;
+              break;
+            }
+            continue;
+          }
+        }
+
+        let consecutiveExhaustedBatches = 0;
+        for (let j = 0; j < prompts.length; j += BATCH_ANIM_SIZE) {
+          const rawSlice = prompts.slice(j, j + BATCH_ANIM_SIZE);
+          const slice = rawSlice.filter((p) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, p));
+          const endNum = Math.min(prompts.length, j + rawSlice.length);
+          if (slice.length === 0) {
+            continue;
+          }
+          addLog(`🎬 [${acc.name}] Render Animasi #${j + 1}${slice.length > 1 ? `–#${endNum}` : ''}/${prompts.length}: "${slice[0].substring(0, 35)}..."`, 'info');
+
+          let results = await generateBatchAnimationCodes(
+            apiKeys,
+            selectedModel,
+            slice,
+            acc.type,
+            acc.subCategory,
+            acc.style,
+            j + 1,
+            prompts.length,
+            {
+              isGreenScreen: acc.isGreenScreen ?? false,
+              colorMode: acc.colorMode ?? 'gradient',
+              motionDynamics: 'auto',
+              neonGlow: acc.neonGlow ?? true,
+              onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+            }
+          );
+
+          if (results.every((r) => r.exhausted)) {
+            const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
+            if (waitMs > 0 && waitMs <= 68000) {
+              addLog(`⏳ [${acc.name}] Semua API Key pendinginan kuota. Menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu melanjutkan #${j + 1}...`, 'warn');
+              await new Promise((res) => setTimeout(res, waitMs));
+              results = await generateBatchAnimationCodes(
+                apiKeys,
+                selectedModel,
+                slice,
+                acc.type,
+                acc.subCategory,
+                acc.style,
+                j + 1,
+                prompts.length,
+                {
+                  isGreenScreen: acc.isGreenScreen ?? false,
+                  colorMode: acc.colorMode ?? 'gradient',
+                  motionDynamics: 'auto',
+                  neonGlow: acc.neonGlow ?? true,
+                  onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+                }
+              );
+            }
+          }
+
+          let hadSuccessInBatch = false;
+          let stillExhausted = false;
+          for (let rIdx = 0; rIdx < results.length; rIdx++) {
+            const res = results[rIdx];
+            if (res.anim) {
+              hadSuccessInBatch = true;
+              const resolvedPrompt = res.anim.prompt || res.prompt;
+              const alreadyRecorded =
+                isPromptCompleted(activeLedger, currentAnimList, acc.name, resolvedPrompt) ||
+                isPromptCompleted(activeLedger, currentAnimList, acc.name, res.prompt);
+              activeLedger = recordCompletedPrompt(activeLedger, acc.name, resolvedPrompt);
+              if (normalizePromptKey(res.prompt) !== normalizePromptKey(resolvedPrompt)) {
+                activeLedger = recordCompletedPrompt(activeLedger, acc.name, res.prompt);
+              }
+              completedLedgerRef.current = activeLedger;
+              setCompletedLedger(activeLedger);
+              if (!alreadyRecorded) {
+                const newAnimItem: AnimationItem = {
+                  ...res.anim,
+                  prompt: resolvedPrompt,
+                  account: acc.name,
+                  createdAt: Date.now(),
+                };
+                currentAnimList = [newAnimItem, ...currentAnimList];
+                saveAnimationsToStorage(currentAnimList);
+              }
+              addLog(`✅ [${acc.name}] Animasi #${j + rIdx + 1}/${prompts.length} selesai ("${resolvedPrompt.substring(0, 38)}...") & disimpan ke Galeri!`, 'success');
+            } else {
+              if (res.exhausted) stillExhausted = true;
+              addLog(`⚠️ [${acc.name}] Lewati animasi #${j + rIdx + 1}: ${res.error || 'Kendala API'}. Menyimpan untuk fitur coba ulang...`, 'warn');
+              newFailedItems.push({
+                id: 'fail_' + Date.now() + '_' + (j + rIdx) + '_' + Math.random().toString(36).substring(7),
+                accountName: acc.name,
+                prompt: res.prompt,
+                type: acc.type,
+                subCategory: acc.subCategory,
+                style: acc.style,
+                isGreenScreen: acc.isGreenScreen ?? false,
+                colorMode: acc.colorMode ?? 'gradient',
+                motionDynamics: 'auto',
+                neonGlow: acc.neonGlow ?? true,
+                error: res.error || 'Gagal merender animasi',
+              });
+            }
+          }
+
+          // Immediately prune any newly completed prompt from existing failedAutoPilotItems in memory & localStorage
+          if (hadSuccessInBatch && failedAutoPilotItemsRef.current.length > 0) {
+            const prunedExisting = filterPendingFailedItems(failedAutoPilotItemsRef.current, activeLedger, currentAnimList);
+            if (prunedExisting.length !== failedAutoPilotItemsRef.current.length) {
+              failedAutoPilotItemsRef.current = prunedExisting;
+              setFailedAutoPilotItems(prunedExisting);
+              saveFailedAutoPilotItems(prunedExisting);
+            }
+          }
+
+          if (hadSuccessInBatch) {
+            consecutiveExhaustedBatches = 0;
+          } else if (stillExhausted) {
+            consecutiveExhaustedBatches++;
+          }
+
+          const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
+          if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
+            const remainingPrompts = prompts.slice(endNum).filter((remP) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, remP));
+            remainingPrompts.forEach((remP, remIdx) => {
+              newFailedItems.push({
+                id: 'fail_rem_' + Date.now() + '_' + remIdx + '_' + Math.random().toString(36).substring(7),
+                accountName: acc.name,
+                prompt: remP,
+                type: acc.type,
+                subCategory: acc.subCategory,
+                style: acc.style,
+                isGreenScreen: acc.isGreenScreen ?? false,
+                colorMode: acc.colorMode ?? 'gradient',
+                motionDynamics: 'auto',
+                neonGlow: acc.neonGlow ?? true,
+                error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
+              });
+            });
+
+            let savedSubsequentAccounts = 0;
+            let savedSubsequentPrompts = 0;
+            for (let k = i + 1; k < accountsToRun.length; k++) {
+              const nextAcc = accountsToRun[k];
+              const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
+              if (hasNextCustom) {
+                const seenNext = new Set<string>();
+                const pendingNext = nextAcc.customPrompts!.filter((np) => {
+                  const nk = normalizePromptKey(np);
+                  if (!nk || seenNext.has(nk)) return false;
+                  seenNext.add(nk);
+                  return !isPromptCompleted(activeLedger, currentAnimList, nextAcc.name, np);
+                });
+                if (pendingNext.length === 0) continue;
+                savedSubsequentAccounts++;
+                savedSubsequentPrompts += pendingNext.length;
+                pendingNext.forEach((np, nIdx) => {
                   newFailedItems.push({
-                    id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
+                    id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
                     accountName: nextAcc.name,
-                    prompt: `(Auto Prompt: ${nextRemain} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
+                    prompt: np,
                     type: nextAcc.type,
                     subCategory: nextAcc.subCategory,
                     style: nextAcc.style,
@@ -1401,164 +1613,19 @@ export default function App() {
                     colorMode: nextAcc.colorMode ?? 'gradient',
                     motionDynamics: 'auto',
                     neonGlow: nextAcc.neonGlow ?? true,
-                    isAutoPromptPending: true,
-                    promptCount: nextRemain,
-                    error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                    error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
                   });
-                }
-              }
-            }
-            addLog(`⏸️ [${acc.name}] Kuota penuh saat generate prompt — seluruh prompt belum selesai dari ${accountsToRun.length - i} akun tersisa diamankan ke Coba Ulang!`, 'warn');
-            handleModelQuotaExceeded(selectedModel);
-            stopAllForQuota = true;
-            break;
-          }
-          continue;
-        }
-      }
-
-      let consecutiveExhaustedBatches = 0;
-      for (let j = 0; j < prompts.length; j += BATCH_ANIM_SIZE) {
-        const rawSlice = prompts.slice(j, j + BATCH_ANIM_SIZE);
-        const slice = rawSlice.filter((p) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, p));
-        const endNum = Math.min(prompts.length, j + rawSlice.length);
-        if (slice.length === 0) {
-          continue;
-        }
-        addLog(`🎬 [${acc.name}] Render Animasi #${j + 1}${slice.length > 1 ? `–#${endNum}` : ''}/${prompts.length}: "${slice[0].substring(0, 35)}..."`, 'info');
-
-        let results = await generateBatchAnimationCodes(
-          apiKeys,
-          selectedModel,
-          slice,
-          acc.type,
-          acc.subCategory,
-          acc.style,
-          j + 1,
-          prompts.length,
-          {
-            isGreenScreen: acc.isGreenScreen ?? false,
-            colorMode: acc.colorMode ?? 'gradient',
-            motionDynamics: 'auto',
-            neonGlow: acc.neonGlow ?? true,
-            onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
-          }
-        );
-
-        // If all returned exhausted (short RPM/TPM cooldown), wait out the exact cooldown across fallback chain and retry ONCE before giving up!
-        if (results.every((r) => r.exhausted)) {
-          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
-          if (waitMs > 0 && waitMs <= 68000) {
-            addLog(`⏳ [${acc.name}] Semua API Key pendinginan kuota. Menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu melanjutkan #${j + 1}...`, 'warn');
-            await new Promise((res) => setTimeout(res, waitMs));
-            results = await generateBatchAnimationCodes(
-              apiKeys,
-              selectedModel,
-              slice,
-              acc.type,
-              acc.subCategory,
-              acc.style,
-              j + 1,
-              prompts.length,
-              {
-                isGreenScreen: acc.isGreenScreen ?? false,
-                colorMode: acc.colorMode ?? 'gradient',
-                motionDynamics: 'auto',
-                neonGlow: acc.neonGlow ?? true,
-                onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
-              }
-            );
-          }
-        }
-
-        let hadSuccessInBatch = false;
-        let stillExhausted = false;
-        for (let rIdx = 0; rIdx < results.length; rIdx++) {
-          const res = results[rIdx];
-          if (res.anim) {
-            hadSuccessInBatch = true;
-            const resolvedPrompt = res.anim.prompt || res.prompt;
-            const newAnimItem: AnimationItem = {
-              ...res.anim,
-              prompt: resolvedPrompt,
-              account: acc.name,
-              createdAt: Date.now(),
-            };
-            currentAnimList = [newAnimItem, ...currentAnimList];
-            saveAnimationsToStorage(currentAnimList);
-            activeLedger = recordCompletedPrompt(activeLedger, acc.name, resolvedPrompt);
-            if (normalizePromptKey(res.prompt) !== normalizePromptKey(resolvedPrompt)) {
-              activeLedger = recordCompletedPrompt(activeLedger, acc.name, res.prompt);
-            }
-            completedLedgerRef.current = activeLedger;
-            setCompletedLedger(activeLedger);
-            addLog(`✅ [${acc.name}] Animasi #${j + rIdx + 1}/${prompts.length} berhasil dibuat & disimpan ke Galeri!`, 'success');
-          } else {
-            if (res.exhausted) stillExhausted = true;
-            addLog(`⚠️ [${acc.name}] Lewati animasi #${j + rIdx + 1}: ${res.error || 'Kendala API'}. Menyimpan untuk fitur coba ulang...`, 'warn');
-            newFailedItems.push({
-              id: 'fail_' + Date.now() + '_' + (j + rIdx) + '_' + Math.random().toString(36).substring(7),
-              accountName: acc.name,
-              prompt: res.prompt,
-              type: acc.type,
-              subCategory: acc.subCategory,
-              style: acc.style,
-              isGreenScreen: acc.isGreenScreen ?? false,
-              colorMode: acc.colorMode ?? 'gradient',
-              motionDynamics: 'auto',
-              neonGlow: acc.neonGlow ?? true,
-              error: res.error || 'Gagal merender animasi',
-            });
-          }
-        }
-
-        if (hadSuccessInBatch) {
-          consecutiveExhaustedBatches = 0;
-        } else if (stillExhausted) {
-          consecutiveExhaustedBatches++;
-        }
-
-        // If daily/shared-project quota is genuinely exhausted across ALL keys & models (or 2 consecutive batches stayed exhausted after cooldown wait), stop skipping blindly!
-        const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
-        if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
-          const remainingPrompts = prompts.slice(endNum).filter((remP) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, remP));
-          remainingPrompts.forEach((remP, remIdx) => {
-            newFailedItems.push({
-              id: 'fail_rem_' + Date.now() + '_' + remIdx + '_' + Math.random().toString(36).substring(7),
-              accountName: acc.name,
-              prompt: remP,
-              type: acc.type,
-              subCategory: acc.subCategory,
-              style: acc.style,
-              isGreenScreen: acc.isGreenScreen ?? false,
-              colorMode: acc.colorMode ?? 'gradient',
-              motionDynamics: 'auto',
-              neonGlow: acc.neonGlow ?? true,
-              error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
-            });
-          });
-
-          let savedSubsequentAccounts = 0;
-          let savedSubsequentPrompts = 0;
-          for (let k = i + 1; k < accountsToRun.length; k++) {
-            const nextAcc = accountsToRun[k];
-            const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
-            if (hasNextCustom) {
-              const seenNext = new Set<string>();
-              const pendingNext = nextAcc.customPrompts!.filter((np) => {
-                const nk = normalizePromptKey(np);
-                if (!nk || seenNext.has(nk)) return false;
-                seenNext.add(nk);
-                return !isPromptCompleted(activeLedger, currentAnimList, nextAcc.name, np);
-              });
-              if (pendingNext.length === 0) continue;
-              savedSubsequentAccounts++;
-              savedSubsequentPrompts += pendingNext.length;
-              pendingNext.forEach((np, nIdx) => {
+                });
+              } else {
+                const nextDone = getAccountCompletedCount(activeLedger, currentAnimList, nextAcc.name);
+                const nextRemain = Math.max(0, (nextAcc.promptCount || 0) - nextDone);
+                if (nextRemain === 0) continue;
+                savedSubsequentAccounts++;
+                savedSubsequentPrompts += nextRemain;
                 newFailedItems.push({
-                  id: 'fail_next_' + Date.now() + '_' + k + '_' + nIdx + '_' + Math.random().toString(36).substring(7),
+                  id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
                   accountName: nextAcc.name,
-                  prompt: np,
+                  prompt: `(Auto Prompt: ${nextRemain} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
                   type: nextAcc.type,
                   subCategory: nextAcc.subCategory,
                   style: nextAcc.style,
@@ -1566,73 +1633,58 @@ export default function App() {
                   colorMode: nextAcc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: nextAcc.neonGlow ?? true,
-                  error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
+                  isAutoPromptPending: true,
+                  promptCount: nextRemain,
+                  error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
                 });
-              });
-            } else {
-              const nextDone = getAccountCompletedCount(activeLedger, currentAnimList, nextAcc.name);
-              const nextRemain = Math.max(0, (nextAcc.promptCount || 0) - nextDone);
-              if (nextRemain === 0) continue;
-              savedSubsequentAccounts++;
-              savedSubsequentPrompts += nextRemain;
-              newFailedItems.push({
-                id: 'fail_next_auto_' + Date.now() + '_' + k + '_' + Math.random().toString(36).substring(7),
-                accountName: nextAcc.name,
-                prompt: `(Auto Prompt: ${nextRemain} animasi ${nextAcc.type} - ${nextAcc.subCategory})`,
-                type: nextAcc.type,
-                subCategory: nextAcc.subCategory,
-                style: nextAcc.style,
-                isGreenScreen: nextAcc.isGreenScreen ?? false,
-                colorMode: nextAcc.colorMode ?? 'gradient',
-                motionDynamics: 'auto',
-                neonGlow: nextAcc.neonGlow ?? true,
-                isAutoPromptPending: true,
-                promptCount: nextRemain,
-                error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
-              });
+              }
             }
+
+            const extraAccMsg = savedSubsequentAccounts > 0
+              ? ` + ${savedSubsequentPrompts} antrean dari ${savedSubsequentAccounts} akun berikutnya`
+              : '';
+            addLog(`⏸️ [${acc.name}] Menghentikan antrean secara aman: ${remainingPrompts.length} prompt sisa [${acc.name}]${extraAccMsg} seluruhnya diamankan ke Coba Ulang agar tidak terbakar error 429 beruntun.`, 'warn');
+            stopAllForQuota = true;
+            break;
           }
 
-          const extraAccMsg = savedSubsequentAccounts > 0
-            ? ` + ${savedSubsequentPrompts} antrean dari ${savedSubsequentAccounts} akun berikutnya`
-            : '';
-          addLog(`⏸️ [${acc.name}] Menghentikan antrean secara aman: ${remainingPrompts.length} prompt sisa [${acc.name}]${extraAccMsg} seluruhnya diamankan ke Coba Ulang agar tidak terbakar error 429 beruntun.`, 'warn');
-          handleModelQuotaExceeded(selectedModel);
-          stopAllForQuota = true;
-          break;
-        }
-
-        if (endNum < prompts.length) {
-          const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
-          if (extraBreath > 0) {
-            addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Memberi jeda pemulihan ${Math.round(extraBreath / 1000)}s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
+          if (endNum < prompts.length) {
+            const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
+            if (extraBreath > 0) {
+              addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Memberi jeda pemulihan ${Math.round(extraBreath / 1000)}s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
+            }
+            await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
           }
-          await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
       }
+
+      const ranAccountNames = new Set(accountsToRun.map((a) => normalizeAccountKey(a.name)));
+      const dedupedNewFailed = filterPendingFailedItems(newFailedItems, activeLedger, currentAnimList);
+      const preservedOther = failedAutoPilotItemsRef.current.filter((old) => !ranAccountNames.has(normalizeAccountKey(old.accountName)));
+      const mergedFailed = filterPendingFailedItems([...dedupedNewFailed, ...preservedOther], activeLedger, currentAnimList);
+      failedAutoPilotItemsRef.current = mergedFailed;
+      setFailedAutoPilotItems(mergedFailed);
+      saveFailedAutoPilotItems(mergedFailed);
+
+      if (dedupedNewFailed.length > 0) {
+        showToast(`Auto Pilot selesai dengan ${dedupedNewFailed.length} item tersimpan di "Ulangi Animasi Gagal".`, 'warn');
+        addLog(`⚠️ [AUTO PILOT SELESAI] Terdapat ${dedupedNewFailed.length} animasi unik yang belum selesai & tersimpan di fitur Coba Ulang.`, 'warn');
+      } else {
+        showToast(`🏆 Auto Pilot [${accLabel}] Selesai dengan sempurna!`, 'success');
+        addLog(`🏆 [AUTO PILOT SELESAI] Seluruh animasi [${accLabel}] berhasil diproses!`, 'success');
+      }
+    } finally {
+      isAutoPilotRunningRef.current = false;
+      setIsAutoPilotRunning(false);
     }
 
-    const ranAccountNames = new Set(accountsToRun.map((a) => normalizeAccountKey(a.name)));
-    const dedupedNewFailed = filterPendingFailedItems(newFailedItems, activeLedger, currentAnimList);
-    setFailedAutoPilotItems((prev) => {
-      // Purge stale queued items for accounts just re-run cleanly in this pass, and remove any already completed
-      const preservedOther = prev.filter((old) => !ranAccountNames.has(normalizeAccountKey(old.accountName)));
-      return filterPendingFailedItems([...dedupedNewFailed, ...preservedOther], activeLedger, currentAnimList);
-    });
-
-    if (dedupedNewFailed.length > 0) {
-      showToast(`Auto Pilot selesai dengan ${dedupedNewFailed.length} item tersimpan di "Ulangi Animasi Gagal".`, 'warn');
-      addLog(`⚠️ [AUTO PILOT SELESAI] Terdapat ${dedupedNewFailed.length} animasi unik yang belum selesai & tersimpan di fitur Coba Ulang.`, 'warn');
-    } else {
-      showToast(`🏆 Auto Pilot [${accLabel}] Selesai dengan sempurna!`, 'success');
-      addLog(`🏆 [AUTO PILOT SELESAI] Seluruh animasi [${accLabel}] berhasil diproses!`, 'success');
+    if (stopAllForQuota) {
+      handleModelQuotaExceeded(selectedModel);
     }
-
-    setIsAutoPilotRunning(false);
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
   };
 
-  // Re-try failed animations from Auto Pilot sequentially (expands pending auto-prompts + runs 2-in-1 hemat batching)
+  // Re-try failed animations from Auto Pilot sequentially (expands pending auto-prompts + runs 2-in-1 hemat batching + never repeats completed prompts)
   const handleRetryFailedAutoPilot = async (overrideModel?: GeminiModel) => {
     const activeModel = overrideModel || selectedModel;
     const hasValidKey = apiKeys.some((k) => k && k.trim().replace(/[\r\n\t ]+/g, '').length > 5);
@@ -1643,28 +1695,40 @@ export default function App() {
       return;
     }
 
-    if (failedAutoPilotItems.length === 0) {
+    if (isAutoPilotRunningRef.current || isAutoPilotRunning) {
+      showToast('Auto Pilot / Coba Ulang sedang berjalan!', 'warn');
+      return;
+    }
+
+    const latestFailedQueue = failedAutoPilotItemsRef.current;
+    if (latestFailedQueue.length === 0) {
       showToast('Tidak ada animasi gagal dari Auto Pilot.', 'info');
       return;
     }
 
+    isAutoPilotRunningRef.current = true;
     setIsAutoPilotRunning(true);
-    let currentAnimList = [...animations];
+
+    let currentAnimList = [...animationsRef.current];
     let activeLedger = syncLedgerFromAnimations(completedLedgerRef.current, currentAnimList);
     completedLedgerRef.current = activeLedger;
     setCompletedLedger(activeLedger);
 
-    const itemsToRetry = filterPendingFailedItems(failedAutoPilotItems, activeLedger, currentAnimList);
-    const skippedAlreadyDone = failedAutoPilotItems.length - itemsToRetry.length;
+    const itemsToRetry = filterPendingFailedItems(latestFailedQueue, activeLedger, currentAnimList);
+    const skippedAlreadyDone = latestFailedQueue.length - itemsToRetry.length;
     if (skippedAlreadyDone > 0) {
       addLog(`⏩ [Coba Ulang Hemat] Melewati ${skippedAlreadyDone} prompt duplikat / sudah selesai tercatat sebelumnya.`, 'cyan');
     }
     if (itemsToRetry.length === 0) {
+      failedAutoPilotItemsRef.current = [];
       setFailedAutoPilotItems([]);
+      saveFailedAutoPilotItems([]);
+      isAutoPilotRunningRef.current = false;
       setIsAutoPilotRunning(false);
       showToast('🎉 Seluruh item di daftar Coba Ulang sudah selesai!', 'success');
       return;
     }
+
     const pacingDelay = getAdaptiveModelPacingDelay(activeModel, apiKeys.length);
     addLog('═══════════════════════════════════════════════════════════════', 'warn');
     addLog(`🔄 [ULANGI AUTO PILOT GAGAL - ${activeModel}] Memproses ${itemsToRetry.length} item unik yang belum selesai dengan mode hemat batch 2-in-1...`, 'warn');
@@ -1673,212 +1737,248 @@ export default function App() {
     const remainingFailed: FailedAutoPilotItem[] = [];
     const expandedItems: FailedAutoPilotItem[] = [];
     let quotaStoppedInExpansion = false;
+    let stopAllForQuota = false;
 
-    for (let idx = 0; idx < itemsToRetry.length; idx++) {
-      const it = itemsToRetry[idx];
-      const isPendingAuto = it.isAutoPromptPending || it.prompt.startsWith('(Auto Prompt:') || it.prompt.startsWith('(Generate Prompts:');
-      if (!isPendingAuto) {
-        if (!isPromptCompleted(activeLedger, currentAnimList, it.accountName, it.prompt)) {
-          expandedItems.push(it);
-        }
-        continue;
-      }
-      const alreadyDoneAi = getAccountCompletedCount(activeLedger, currentAnimList, it.accountName);
-      const targetAccCfg = autoPilotAccounts.find((a) => normalizeAccountKey(a.name) === normalizeAccountKey(it.accountName));
-      const desiredTotal = targetAccCfg?.promptCount ?? it.promptCount ?? 5;
-      const targetPromptCount = targetAccCfg ? Math.max(0, desiredTotal - alreadyDoneAi) : (it.promptCount || 5);
-      if (targetPromptCount === 0) {
-        addLog(`✅ [${it.accountName}] Target ${desiredTotal} animasi sudah terpenuhi — dilewati.`, 'success');
-        continue;
-      }
-      addLog(`⚡ [${it.accountName}] Membuat ${targetPromptCount} Auto Prompt sebelum render batch...`, 'info');
-      try {
-        const genPrompts = await generatePromptsViaGemini(
-          apiKeys,
-          activeModel,
-          it.type,
-          it.subCategory,
-          it.style,
-          targetPromptCount,
-          undefined,
-          it.isGreenScreen ?? false,
-          it.colorMode ?? 'gradient',
-          'auto',
-          it.neonGlow ?? true
-        );
-        genPrompts.forEach((gp, gpIdx) => {
-          if (isPromptCompleted(activeLedger, currentAnimList, it.accountName, gp)) return;
-          expandedItems.push({
-            id: 'retry_exp_' + Date.now() + '_' + idx + '_' + gpIdx + '_' + Math.random().toString(36).substring(7),
-            accountName: it.accountName,
-            prompt: gp,
-            type: it.type,
-            subCategory: it.subCategory,
-            style: it.style,
-            isGreenScreen: it.isGreenScreen ?? false,
-            colorMode: it.colorMode ?? 'gradient',
-            motionDynamics: 'auto',
-            neonGlow: it.neonGlow ?? true,
-            error: 'Siap dirender dari antrean Auto Prompt',
-          });
-        });
-      } catch (e: any) {
-        const isQuota = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
-        if (isQuota) {
-          addLog(`⏸️ [${it.accountName}] Kuota masih penuh saat expand Auto Prompt — semua antrean tersisa tetap disimpan aman.`, 'warn');
-          remainingFailed.push(...itemsToRetry.slice(idx));
-          handleModelQuotaExceeded(activeModel);
-          quotaStoppedInExpansion = true;
-          break;
-        }
-        remainingFailed.push({ ...it, error: e.message || 'Gagal expand Auto Prompt' });
-      }
-    }
-
-    if (!quotaStoppedInExpansion && expandedItems.length > 0) {
-      const BATCH_ANIM_SIZE = 2;
-      const chunks: FailedAutoPilotItem[][] = [];
-      for (const item of expandedItems) {
-        const last = chunks[chunks.length - 1];
-        const canMerge =
-          last &&
-          last.length < BATCH_ANIM_SIZE &&
-          normalizeAccountKey(last[0].accountName) === normalizeAccountKey(item.accountName) &&
-          last[0].type === item.type &&
-          last[0].subCategory === item.subCategory &&
-          last[0].style === item.style &&
-          !!last[0].isGreenScreen === !!item.isGreenScreen &&
-          (last[0].colorMode ?? 'gradient') === (item.colorMode ?? 'gradient') &&
-          (last[0].neonGlow ?? true) === (item.neonGlow ?? true);
-        if (canMerge) {
-          last.push(item);
-        } else {
-          chunks.push([item]);
-        }
-      }
-
-      let processedCount = 0;
-      let consecutiveExhaustedBatches = 0;
-      for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
-        const rawChunk = chunks[cIdx];
-        const chunk = rawChunk.filter((c) => !isPromptCompleted(activeLedger, currentAnimList, c.accountName, c.prompt));
-        processedCount += rawChunk.length;
-        if (chunk.length === 0) {
+    try {
+      for (let idx = 0; idx < itemsToRetry.length; idx++) {
+        const it = itemsToRetry[idx];
+        const isPendingAuto = it.isAutoPromptPending || it.prompt.startsWith('(Auto Prompt:') || it.prompt.startsWith('(Generate Prompts:');
+        if (!isPendingAuto) {
+          if (!isPromptCompleted(activeLedger, currentAnimList, it.accountName, it.prompt)) {
+            expandedItems.push(it);
+          }
           continue;
         }
-        const lead = chunk[0];
-        addLog(`🎬 [Coba Ulang #${processedCount - rawChunk.length + 1}${chunk.length > 1 ? `–#${processedCount}` : ''}/${expandedItems.length} - ${lead.accountName}] Render "${lead.prompt.substring(0, 35)}..."`, 'info');
-
-        let results = await generateBatchAnimationCodes(
-          apiKeys,
-          activeModel,
-          chunk.map((c) => c.prompt),
-          lead.type,
-          lead.subCategory,
-          lead.style,
-          processedCount - rawChunk.length + 1,
-          expandedItems.length,
-          {
-            isGreenScreen: lead.isGreenScreen ?? false,
-            colorMode: lead.colorMode ?? 'gradient',
-            motionDynamics: 'auto',
-            neonGlow: lead.neonGlow ?? true,
-            onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+        const alreadyDoneAi = getAccountCompletedCount(activeLedger, currentAnimList, it.accountName);
+        const targetAccCfg = autoPilotAccountsRef.current.find((a) => normalizeAccountKey(a.name) === normalizeAccountKey(it.accountName));
+        const desiredTotal = targetAccCfg?.promptCount ?? it.promptCount ?? 5;
+        const targetPromptCount = targetAccCfg ? Math.max(0, desiredTotal - alreadyDoneAi) : (it.promptCount || 5);
+        if (targetPromptCount === 0) {
+          addLog(`✅ [${it.accountName}] Target ${desiredTotal} animasi sudah terpenuhi — dilewati.`, 'success');
+          continue;
+        }
+        addLog(`⚡ [${it.accountName}] Membuat ${targetPromptCount} Auto Prompt sebelum render batch...`, 'info');
+        try {
+          const genPrompts = await generatePromptsViaGemini(
+            apiKeys,
+            activeModel,
+            it.type,
+            it.subCategory,
+            it.style,
+            targetPromptCount,
+            undefined,
+            it.isGreenScreen ?? false,
+            it.colorMode ?? 'gradient',
+            'auto',
+            it.neonGlow ?? true
+          );
+          genPrompts.forEach((gp, gpIdx) => {
+            if (isPromptCompleted(activeLedger, currentAnimList, it.accountName, gp)) return;
+            expandedItems.push({
+              id: 'retry_exp_' + Date.now() + '_' + idx + '_' + gpIdx + '_' + Math.random().toString(36).substring(7),
+              accountName: it.accountName,
+              prompt: gp,
+              type: it.type,
+              subCategory: it.subCategory,
+              style: it.style,
+              isGreenScreen: it.isGreenScreen ?? false,
+              colorMode: it.colorMode ?? 'gradient',
+              motionDynamics: 'auto',
+              neonGlow: it.neonGlow ?? true,
+              error: 'Siap dirender dari antrean Auto Prompt',
+            });
+          });
+        } catch (e: any) {
+          const isQuota = e instanceof AllKeysExhaustedError || e?.isAllKeysExhausted || /429|quota|exhausted|pendinginan|resource_exhausted/i.test(String(e?.message || ''));
+          if (isQuota) {
+            addLog(`⏸️ [${it.accountName}] Kuota masih penuh saat expand Auto Prompt — semua antrean tersisa tetap disimpan aman.`, 'warn');
+            remainingFailed.push(...itemsToRetry.slice(idx));
+            quotaStoppedInExpansion = true;
+            stopAllForQuota = true;
+            break;
           }
-        );
-
-        if (results.every((r) => r.exhausted)) {
-          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel));
-          if (waitMs > 0 && waitMs <= 68000) {
-            addLog(`⏳ [${lead.accountName}] Menunggu pemulihan cooldown ${Math.ceil(waitMs / 1000)}s sebelum lanjut...`, 'warn');
-            await new Promise((res) => setTimeout(res, waitMs));
-            results = await generateBatchAnimationCodes(
-              apiKeys,
-              activeModel,
-              chunk.map((c) => c.prompt),
-              lead.type,
-              lead.subCategory,
-              lead.style,
-              processedCount - rawChunk.length + 1,
-              expandedItems.length,
-              {
-                isGreenScreen: lead.isGreenScreen ?? false,
-                colorMode: lead.colorMode ?? 'gradient',
-                motionDynamics: 'auto',
-                neonGlow: lead.neonGlow ?? true,
-                onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
-              }
-            );
-          }
-        }
-
-        let hadSuccess = false;
-        let stillExhausted = false;
-        for (let rIdx = 0; rIdx < chunk.length; rIdx++) {
-          const item = chunk[rIdx];
-          const res = results[rIdx];
-          if (res?.anim) {
-            hadSuccess = true;
-            const resolvedPrompt = res.anim.prompt || item.prompt;
-            const newAnimItem: AnimationItem = {
-              ...res.anim,
-              prompt: resolvedPrompt,
-              account: item.accountName,
-              createdAt: Date.now(),
-            };
-            currentAnimList = [newAnimItem, ...currentAnimList];
-            saveAnimationsToStorage(currentAnimList);
-            activeLedger = recordCompletedPrompt(activeLedger, item.accountName, resolvedPrompt);
-            if (normalizePromptKey(item.prompt) !== normalizePromptKey(resolvedPrompt)) {
-              activeLedger = recordCompletedPrompt(activeLedger, item.accountName, item.prompt);
-            }
-            completedLedgerRef.current = activeLedger;
-            setCompletedLedger(activeLedger);
-            addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi selesai & disimpan ke Galeri!`, 'success');
-          } else {
-            if (res?.exhausted) stillExhausted = true;
-            addLog(`⚠️ [Masih Kendala] [${item.accountName}]: ${res?.error || 'Gagal saat dicoba ulang'}`, 'warn');
-            remainingFailed.push({ ...item, error: res?.error || 'Masih kendala saat dicoba ulang' });
-          }
-        }
-
-        if (hadSuccess) {
-          consecutiveExhaustedBatches = 0;
-        } else if (stillExhausted) {
-          consecutiveExhaustedBatches++;
-        }
-
-        const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel)) : 0;
-        if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
-          const unretried = chunks.slice(cIdx + 1).flat();
-          remainingFailed.push(...unretried);
-          addLog(`⏸️ Kuota penuh saat coba ulang — ${unretried.length} item tersisa dari semua akun tetap disimpan aman.`, 'warn');
-          handleModelQuotaExceeded(activeModel);
-          break;
-        }
-
-        if (cIdx < chunks.length - 1) {
-          const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(activeModel) : 0;
-          await new Promise((res) => setTimeout(res, Math.max(800, Math.round(pacingDelay * 0.7)) + extraBreath));
+          remainingFailed.push({ ...it, error: e.message || 'Gagal expand Auto Prompt' });
         }
       }
+
+      if (quotaStoppedInExpansion && expandedItems.length > 0) {
+        remainingFailed.push(...expandedItems);
+      }
+
+      if (!quotaStoppedInExpansion && expandedItems.length > 0) {
+        const BATCH_ANIM_SIZE = 2;
+        const chunks: FailedAutoPilotItem[][] = [];
+        for (const item of expandedItems) {
+          const last = chunks[chunks.length - 1];
+          const canMerge =
+            last &&
+            last.length < BATCH_ANIM_SIZE &&
+            normalizeAccountKey(last[0].accountName) === normalizeAccountKey(item.accountName) &&
+            last[0].type === item.type &&
+            last[0].subCategory === item.subCategory &&
+            last[0].style === item.style &&
+            !!last[0].isGreenScreen === !!item.isGreenScreen &&
+            (last[0].colorMode ?? 'gradient') === (item.colorMode ?? 'gradient') &&
+            (last[0].neonGlow ?? true) === (item.neonGlow ?? true);
+          if (canMerge) {
+            last.push(item);
+          } else {
+            chunks.push([item]);
+          }
+        }
+
+        let processedCount = 0;
+        let consecutiveExhaustedBatches = 0;
+        for (let cIdx = 0; cIdx < chunks.length; cIdx++) {
+          const rawChunk = chunks[cIdx];
+          const chunk = rawChunk.filter((c) => !isPromptCompleted(activeLedger, currentAnimList, c.accountName, c.prompt));
+          processedCount += rawChunk.length;
+          if (chunk.length === 0) {
+            continue;
+          }
+          const lead = chunk[0];
+          const chunkLabel = chunk.length > 1
+            ? `"${lead.prompt.substring(0, 26)}..." + "${chunk[1].prompt.substring(0, 26)}..."`
+            : `"${lead.prompt.substring(0, 35)}..."`;
+          addLog(`🎬 [Coba Ulang #${processedCount - rawChunk.length + 1}${chunk.length > 1 ? `–#${processedCount}` : ''}/${expandedItems.length} - ${lead.accountName}] Render ${chunkLabel}`, 'info');
+
+          let results = await generateBatchAnimationCodes(
+            apiKeys,
+            activeModel,
+            chunk.map((c) => c.prompt),
+            lead.type,
+            lead.subCategory,
+            lead.style,
+            processedCount - rawChunk.length + 1,
+            expandedItems.length,
+            {
+              isGreenScreen: lead.isGreenScreen ?? false,
+              colorMode: lead.colorMode ?? 'gradient',
+              motionDynamics: 'auto',
+              neonGlow: lead.neonGlow ?? true,
+              onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+            }
+          );
+
+          if (results.every((r) => r.exhausted)) {
+            const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel));
+            if (waitMs > 0 && waitMs <= 68000) {
+              addLog(`⏳ [${lead.accountName}] Menunggu pemulihan cooldown ${Math.ceil(waitMs / 1000)}s sebelum lanjut...`, 'warn');
+              await new Promise((res) => setTimeout(res, waitMs));
+              results = await generateBatchAnimationCodes(
+                apiKeys,
+                activeModel,
+                chunk.map((c) => c.prompt),
+                lead.type,
+                lead.subCategory,
+                lead.style,
+                processedCount - rawChunk.length + 1,
+                expandedItems.length,
+                {
+                  isGreenScreen: lead.isGreenScreen ?? false,
+                  colorMode: lead.colorMode ?? 'gradient',
+                  motionDynamics: 'auto',
+                  neonGlow: lead.neonGlow ?? true,
+                  onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
+                }
+              );
+            }
+          }
+
+          let hadSuccess = false;
+          let stillExhausted = false;
+          for (let rIdx = 0; rIdx < chunk.length; rIdx++) {
+            const item = chunk[rIdx];
+            const res = results[rIdx];
+            if (res?.anim) {
+              hadSuccess = true;
+              const resolvedPrompt = res.anim.prompt || item.prompt;
+              const alreadyRecorded =
+                isPromptCompleted(activeLedger, currentAnimList, item.accountName, resolvedPrompt) ||
+                isPromptCompleted(activeLedger, currentAnimList, item.accountName, item.prompt);
+              activeLedger = recordCompletedPrompt(activeLedger, item.accountName, resolvedPrompt);
+              if (normalizePromptKey(item.prompt) !== normalizePromptKey(resolvedPrompt)) {
+                activeLedger = recordCompletedPrompt(activeLedger, item.accountName, item.prompt);
+              }
+              completedLedgerRef.current = activeLedger;
+              setCompletedLedger(activeLedger);
+              if (!alreadyRecorded) {
+                const newAnimItem: AnimationItem = {
+                  ...res.anim,
+                  prompt: resolvedPrompt,
+                  account: item.accountName,
+                  createdAt: Date.now(),
+                };
+                currentAnimList = [newAnimItem, ...currentAnimList];
+                saveAnimationsToStorage(currentAnimList);
+              }
+              addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] "${resolvedPrompt.substring(0, 38)}..." selesai & disimpan ke Galeri!`, 'success');
+            } else {
+              if (res?.exhausted) stillExhausted = true;
+              addLog(`⚠️ [Masih Kendala] [${item.accountName}]: ${res?.error || 'Gagal saat dicoba ulang'}`, 'warn');
+              remainingFailed.push({ ...item, error: res?.error || 'Masih kendala saat dicoba ulang' });
+            }
+          }
+
+          // Incremental live persistence of remaining failed queue after EVERY batch so mid-run stops/reloads/switches NEVER lose progress!
+          if (hadSuccess) {
+            const liveRemaining = filterPendingFailedItems(
+              [...remainingFailed, ...chunks.slice(cIdx + 1).flat()],
+              activeLedger,
+              currentAnimList
+            );
+            failedAutoPilotItemsRef.current = liveRemaining;
+            setFailedAutoPilotItems(liveRemaining);
+            saveFailedAutoPilotItems(liveRemaining);
+          }
+
+          if (hadSuccess) {
+            consecutiveExhaustedBatches = 0;
+          } else if (stillExhausted) {
+            consecutiveExhaustedBatches++;
+          }
+
+          const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel)) : 0;
+          if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
+            const unretried = chunks.slice(cIdx + 1).flat().filter((c) => !isPromptCompleted(activeLedger, currentAnimList, c.accountName, c.prompt));
+            remainingFailed.push(...unretried);
+            addLog(`⏸️ Kuota penuh saat coba ulang — ${unretried.length} item tersisa dari semua akun tetap disimpan aman.`, 'warn');
+            stopAllForQuota = true;
+            break;
+          }
+
+          if (cIdx < chunks.length - 1) {
+            const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(activeModel) : 0;
+            await new Promise((res) => setTimeout(res, Math.max(800, Math.round(pacingDelay * 0.7)) + extraBreath));
+          }
+        }
+      }
+
+      const finalRemainingFailed = filterPendingFailedItems(remainingFailed, activeLedger, currentAnimList);
+      saveAnimationsToStorage(currentAnimList);
+      failedAutoPilotItemsRef.current = finalRemainingFailed;
+      setFailedAutoPilotItems(finalRemainingFailed);
+      saveFailedAutoPilotItems(finalRemainingFailed);
+
+      if (finalRemainingFailed.length === 0) {
+        showToast('🎉 Semua animasi gagal Auto Pilot berhasil diperbaiki!', 'success');
+        addLog('🏁 [SELESAI COBA ULANG] Seluruh animasi gagal Auto Pilot telah berhasil diperbaiki!', 'success');
+      } else {
+        showToast(`Tersisa ${finalRemainingFailed.length} item Auto Pilot yang masih kendala/tertunda.`, 'warn');
+      }
+    } finally {
+      isAutoPilotRunningRef.current = false;
+      setIsAutoPilotRunning(false);
     }
 
-    const finalRemainingFailed = filterPendingFailedItems(remainingFailed, activeLedger, currentAnimList);
-    saveAnimationsToStorage(currentAnimList);
-    setFailedAutoPilotItems(finalRemainingFailed);
-    setIsAutoPilotRunning(false);
-
-    if (finalRemainingFailed.length === 0) {
-      showToast('🎉 Semua animasi gagal Auto Pilot berhasil diperbaiki!', 'success');
-      addLog('🏁 [SELESAI COBA ULANG] Seluruh animasi gagal Auto Pilot telah berhasil diperbaiki!', 'success');
-    } else {
-      showToast(`Tersisa ${finalRemainingFailed.length} item Auto Pilot yang masih kendala/tertunda.`, 'warn');
+    if (stopAllForQuota) {
+      handleModelQuotaExceeded(activeModel);
     }
   };
 
   const handleRetrySingleAutoPilotItem = async (item: FailedAutoPilotItem) => {
     try {
+      const latestAnims = animationsRef.current;
       const isPendingAuto = item.isAutoPromptPending || item.prompt.startsWith('(Auto Prompt:') || item.prompt.startsWith('(Generate Prompts:');
       if (isPendingAuto) {
         const targetCount = item.promptCount || 5;
@@ -1896,7 +1996,7 @@ export default function App() {
           item.neonGlow ?? neonGlow
         );
         const expanded: FailedAutoPilotItem[] = genPrompts
-          .filter((gp) => !isPromptCompleted(completedLedgerRef.current, animations, item.accountName, gp))
+          .filter((gp) => !isPromptCompleted(completedLedgerRef.current, latestAnims, item.accountName, gp))
           .map((gp, gIdx) => ({
             id: 'single_exp_' + Date.now() + '_' + gIdx + '_' + Math.random().toString(36).substring(7),
             accountName: item.accountName,
@@ -1910,14 +2010,24 @@ export default function App() {
             neonGlow: item.neonGlow ?? neonGlow,
             error: 'Auto Prompt siap dirender',
           }));
-        setFailedAutoPilotItems((prev) => filterPendingFailedItems(prev.flatMap((f) => (f.id === item.id ? expanded : [f])), completedLedgerRef.current, animations));
+        setFailedAutoPilotItems((prev) => {
+          const next = filterPendingFailedItems(prev.flatMap((f) => (f.id === item.id ? expanded : [f])), completedLedgerRef.current, animationsRef.current);
+          failedAutoPilotItemsRef.current = next;
+          saveFailedAutoPilotItems(next);
+          return next;
+        });
         showToast(`${expanded.length} prompt untuk [${item.accountName}] berhasil dibuat! Klik "Ulangi Semua" untuk merender batch.`, 'success');
         addLog(`✅ [${item.accountName}] ${expanded.length} Auto Prompt siap dirender dari daftar Coba Ulang.`, 'success');
         return;
       }
 
-      if (isPromptCompleted(completedLedgerRef.current, animations, item.accountName, item.prompt)) {
-        setFailedAutoPilotItems((prev) => prev.filter((f) => f.id !== item.id));
+      if (isPromptCompleted(completedLedgerRef.current, latestAnims, item.accountName, item.prompt)) {
+        setFailedAutoPilotItems((prev) => {
+          const next = prev.filter((f) => f.id !== item.id);
+          failedAutoPilotItemsRef.current = next;
+          saveFailedAutoPilotItems(next);
+          return next;
+        });
         showToast(`Prompt [${item.accountName}] sudah selesai sebelumnya — dihapus dari daftar gagal.`, 'info');
         return;
       }
@@ -1946,7 +2056,7 @@ export default function App() {
           account: item.accountName,
           createdAt: Date.now(),
         };
-        const updated = [newAnimItem, ...animations];
+        const updated = [newAnimItem, ...animationsRef.current];
         saveAnimationsToStorage(updated);
         let nextLedger = recordCompletedPrompt(completedLedgerRef.current, item.accountName, resolvedPrompt);
         if (normalizePromptKey(item.prompt) !== normalizePromptKey(resolvedPrompt)) {
@@ -1954,9 +2064,14 @@ export default function App() {
         }
         completedLedgerRef.current = nextLedger;
         setCompletedLedger(nextLedger);
-        setFailedAutoPilotItems((prev) => filterPendingFailedItems(prev.filter((f) => f.id !== item.id), nextLedger, updated));
+        setFailedAutoPilotItems((prev) => {
+          const next = filterPendingFailedItems(prev.filter((f) => f.id !== item.id), nextLedger, updated);
+          failedAutoPilotItemsRef.current = next;
+          saveFailedAutoPilotItems(next);
+          return next;
+        });
         showToast(`Animasi [${item.accountName}] berhasil diperbaiki!`, 'success');
-        addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] Animasi tersimpan ke Galeri!`, 'success');
+        addLog(`✅ [Sukses Diperbaiki] [${item.accountName}] "${resolvedPrompt.substring(0, 38)}..." tersimpan ke Galeri!`, 'success');
       }
     } catch (e: any) {
       showToast(`Gagal mencoba ulang: ${e.message}`, 'error');
@@ -2002,6 +2117,7 @@ export default function App() {
   };
 
   const handleClearAllAnimations = () => {
+    animationsRef.current = [];
     setAnimations([]);
     setDownloadQueue([]);
     try {
@@ -2084,19 +2200,12 @@ export default function App() {
   };
 
   const handleAddAnimation = useCallback((newAnim: AnimationItem) => {
-    setAnimations((prev) => {
-      const exists = prev.some((a) => a.id === newAnim.id);
-      const updated = exists
-        ? prev.map((a) => (a.id === newAnim.id ? newAnim : a))
-        : [newAnim, ...prev];
-      const trimmed = updated.slice(0, 300);
-      try {
-        localStorage.setItem(STORAGE_ANIMATIONS, JSON.stringify(trimmed));
-      } catch (e) {
-        console.error('Failed to save animations', e);
-      }
-      return trimmed;
-    });
+    const prev = animationsRef.current;
+    const exists = prev.some((a) => a.id === newAnim.id);
+    const updated = exists
+      ? prev.map((a) => (a.id === newAnim.id ? newAnim : a))
+      : [newAnim, ...prev];
+    saveAnimationsToStorage(updated);
   }, []);
 
   const handlePreviewAnimation = useCallback((anim: AnimationItem) => {
