@@ -1518,7 +1518,7 @@ export default function App() {
               colorMode: acc.colorMode ?? 'gradient',
               motionDynamics: 'auto',
               neonGlow: acc.neonGlow ?? true,
-              variationOffset: j * 3 + i * 11,
+              variationOffset: (j >> 1) * 5 + i * 11,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -1542,7 +1542,7 @@ export default function App() {
                   colorMode: acc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: acc.neonGlow ?? true,
-                  variationOffset: j * 3 + i * 11 + 19,
+                  variationOffset: (j >> 1) * 5 + i * 11 + 19,
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
               );
@@ -1901,7 +1901,7 @@ export default function App() {
               colorMode: lead.colorMode ?? 'gradient',
               motionDynamics: 'auto',
               neonGlow: lead.neonGlow ?? true,
-              variationOffset: cIdx * 5 + 31,
+              variationOffset: cIdx * 5 + 31 + (currentAnimList.length % 17),
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -1925,7 +1925,7 @@ export default function App() {
                   colorMode: lead.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: lead.neonGlow ?? true,
-                  variationOffset: cIdx * 5 + 47,
+                  variationOffset: cIdx * 5 + 47 + (currentAnimList.length % 17),
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
               );

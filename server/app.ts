@@ -984,7 +984,7 @@ export async function handleGenerateAnimationLogic(body: any) {
 
   const isBackground = type === 'bg';
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, Number(index) - 1), Number(variationOffset) || 0);
-  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode);
+  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = isGreenScreen
     ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC).`
@@ -994,7 +994,7 @@ export async function handleGenerateAnimationLogic(body: any) {
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): Palette c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". ${motionPlan.anatomyHint}`
-    : `CONCISE HERO ICON (8-16 lines, <=240 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${seed.variantIdx}, Palette c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}" & Motion=[${seed.motionExpr}]. ALWAYS call the cohesive hero helper specified in ANATOMY with distinct v=${seed.variantIdx} (NEVER scatter loose circles/boxes!). ANATOMY: ${motionPlan.anatomyHint}`;
+    : `CONCISE HERO ICON (8-16 lines, <=240 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${seed.variantIdx}, Palette c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}" & Motion=[${seed.motionExpr}]. ALWAYS call the EXACT G.${motionPlan.helperName} helper specified in ANATOMY with distinct v=${seed.variantIdx} (NEVER substitute G.network/G.typography unless assigned, NEVER scatter loose circles/boxes!). ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
@@ -1120,18 +1120,27 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
     : "CONCISE HERO ICON (8-16 lines each, <=240 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). Each ANIM_i MUST call its assigned cohesive G.<hero> helper with its unique v, c0..c3 palette & kinetic motion (NEVER scatter loose circles/boxes or clone shapes across slots!).";
 
   const seeds = promptList.map((p, idx) => createUniqueVariationSeed(p, idx, Number(variationOffset) || 0));
+  const batchPlanSeen = new Set<string>();
 
   const topicLines = promptList.map((p, idx) => {
     const seed = seeds[idx];
-    const plan = resolvePromptMotionPlan(p, type, style, motionDynamics, seed.variantIdx, seed.compMode);
-    return `// ===ANIM_${idx}=== "${p}" [${seed.tag}] v=${seed.variantIdx} | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint} | Kinetic: ${seed.motionExpr}`;
+    let v = seed.variantIdx;
+    let cm = seed.compMode;
+    let plan = resolvePromptMotionPlan(p, type, style, motionDynamics, v, cm, subCategory);
+    for (let k = 1; k < 6 && batchPlanSeen.has(`${plan.helperName}:v${v}`); k++) {
+      v = (seed.variantIdx + k * 5) % 6;
+      cm = (seed.compMode + k) % 3;
+      plan = resolvePromptMotionPlan(p, type, style, motionDynamics, v, cm, subCategory);
+    }
+    batchPlanSeen.add(`${plan.helperName}:v${v}`);
+    return `// ===ANIM_${idx}=== "${p}" [${seed.tag}] MUST CALL G.${plan.helperName} with v=${v} | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint} | Kinetic: ${seed.motionExpr}`;
   }).join('\n');
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
   const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${promptList.length} concise RAW JS functions separated ONLY by:
 ${promptList.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
-CRITICAL: Each ANIM_i MUST use its assigned variant v, colors c0..c3, hero helper, and kinetic motion — NEVER emit identical geometry across items or sessions!
+CRITICAL: Each ANIM_i MUST call the EXACT assigned G.<helper> and variant v from its Anatomy line (NEVER substitute G.network/G.typography unless assigned, NEVER emit identical geometry across items or sessions!).
 ${helpersDoc}
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
@@ -1163,10 +1172,13 @@ ${topicLines}`;
     const valid = /\b(?:G\.\w+|ctx\.(?:fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo))\s*\(/i.test(rawCode);
     if (!html || !valid) return null;
     const fp = normalizeCanvasCodeFingerprint(html);
-    if (fp && batchSeen.has(fp)) {
+    const hvMatch = html.match(/\bG\.([a-zA-Z0-9_]+)\([^;)]*,\s*([0-5])\s*\)/);
+    const hvKey = hvMatch ? `hv:${hvMatch[1]}:v${hvMatch[2]}` : '';
+    if ((fp && batchSeen.has(fp)) || (hvKey && batchSeen.has(hvKey))) {
       return null;
     }
     if (fp) batchSeen.add(fp);
+    if (hvKey) batchSeen.add(hvKey);
     return {
       id: 'anim_' + Date.now() + '_' + idx + Math.random().toString(36).substring(7),
       title: `${promptTopic.substring(0, 35)}... (${idx + 1}/${promptList.length})`,
@@ -1212,7 +1224,7 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const targetModel = sanitizeModel(model);
   const isBackground = type === 'bg';
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, Number(index) - 1), Number(variationOffset) || 0);
-  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode);
+  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = isGreenScreen
     ? "- GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h); shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors."

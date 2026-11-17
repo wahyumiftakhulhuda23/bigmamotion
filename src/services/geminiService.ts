@@ -1940,30 +1940,69 @@ export async function generatePromptsViaGemini(
 
 // Variation DNA & Code Fingerprint Deduplication Engine (ensures zero identical silhouettes across batches or days)
 
-const MAX_RECENT_CODE_FINGERPRINTS = 160;
+const MAX_RECENT_CODE_FINGERPRINTS = 1200;
 const recentCodeFingerprints: string[] = [];
+const MAX_RECENT_HELPER_VARIANTS = 24;
+const recentHelperVariantQueue: string[] = [];
 let __hydratedRecentFingerprints = false;
 
-const VARIATION_PALETTES: string[][] = [
-  ['#1E293B', '#4F46E5', '#00E5FF', '#FFD700'],
-  ['#0F172A', '#0284C7', '#38BDF8', '#F97316'],
-  ['#1E1B4B', '#7C3AED', '#22D3EE', '#FACC15'],
-  ['#1F2937', '#E11D48', '#FB923C', '#F8FAFC'],
-  ['#0F172A', '#2563EB', '#F59E0B', '#38BDF8'],
-  ['#1E293B', '#9333EA', '#00E5FF', '#FB7185'],
-  ['#172554', '#0EA5E9', '#F43F5E', '#FFD700'],
-  ['#27272A', '#6366F1', '#EC4899', '#FBBF24'],
-];
+function extractHelperVariantTag(codeOrHtml: string): string | null {
+  const m = String(codeOrHtml || '').match(/\bG\.([a-zA-Z0-9_]+)\([^;)]*,\s*([0-5])\s*\)/);
+  return m ? `${m[1]}:v${m[2]}` : null;
+}
 
-const VARIATION_MOTIONS: string[] = [
-  'bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.4)*0.028',
-  'bobY=Math.cos(t*2.4)*0.032*R, rot=Math.sin(t*1.6)*0.032, sc=1+0.025*Math.sin(t*2.8)',
-  'bobX=Math.sin(t*1.5)*0.018*R, bobY=Math.sin(t*2.5)*0.03*R, rot=Math.cos(t*1.5)*0.025',
-  'bobY=Math.sin(t*2.0+0.8)*0.034*R, rot=-Math.sin(t*1.7)*0.03, sx=1+0.02*Math.sin(t*2.6), sy=1-0.02*Math.sin(t*2.6)',
-  'bobY=Math.sin(t*2.7)*0.028*R, rot=Math.sin(t*1.9)*0.035',
-  'bobY=Math.cos(t*2.1)*0.03*R, sc=1+0.03*Math.cos(t*2.4), rot=Math.sin(t*1.3)*0.022',
-];
+function recordHelperVariantUsage(helperKey: string | null | undefined): void {
+  if (!helperKey) return;
+  const idx = recentHelperVariantQueue.indexOf(helperKey);
+  if (idx !== -1) recentHelperVariantQueue.splice(idx, 1);
+  recentHelperVariantQueue.unshift(helperKey);
+  if (recentHelperVariantQueue.length > MAX_RECENT_HELPER_VARIANTS) {
+    recentHelperVariantQueue.length = MAX_RECENT_HELPER_VARIANTS;
+  }
+}
 
+function pickNonCollidingMotionPlan(
+  promptTopic: string,
+  type: AnimationType,
+  style: string,
+  motionDynamics: MotionDynamics,
+  seed: ReturnType<typeof createUniqueVariationSeed>,
+  subCategory: string,
+  batchSeenHelpers?: Set<string>
+): { variantIdx: number; compMode: number; plan: ReturnType<typeof resolvePromptMotionPlan> } {
+  const recentWindow = recentHelperVariantQueue.slice(0, 12);
+  let bestV = seed.variantIdx;
+  let bestCm = seed.compMode;
+  let bestPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, bestV, bestCm, subCategory);
+
+  for (let k = 0; k < 6; k++) {
+    const candV = (seed.variantIdx + k * 5) % 6;
+    const candCm = (seed.compMode + k) % 3;
+    const candPlan =
+      k === 0
+        ? bestPlan
+        : resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, candV, candCm, subCategory);
+    const key = `${candPlan.helperName}:v${candV}`;
+    const inBatch = batchSeenHelpers ? batchSeenHelpers.has(key) : false;
+    const inRecent = recentWindow.includes(key);
+    if (!inBatch && !inRecent) {
+      bestV = candV;
+      bestCm = candCm;
+      bestPlan = candPlan;
+      break;
+    }
+    if (!inBatch && batchSeenHelpers && batchSeenHelpers.has(`${bestPlan.helperName}:v${bestV}`)) {
+      bestV = candV;
+      bestCm = candCm;
+      bestPlan = candPlan;
+    }
+  }
+
+  if (batchSeenHelpers) {
+    batchSeenHelpers.add(`${bestPlan.helperName}:v${bestV}`);
+  }
+  return { variantIdx: bestV, compMode: bestCm, plan: bestPlan };
+}
 
 function hydrateRecentFingerprintsOnce(): void {
   if (__hydratedRecentFingerprints) return;
@@ -1974,12 +2013,16 @@ function hydrateRecentFingerprintsOnce(): void {
     if (!raw) return;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return;
-    const tail = parsed.slice(0, 50);
-    for (const item of tail) {
+    const tail = parsed.slice(0, 250);
+    for (let i = 0; i < tail.length; i++) {
+      const item = tail[i];
       if (item && typeof item.html === 'string') {
         const fp = normalizeCanvasCodeFingerprint(item.html);
         if (fp && !recentCodeFingerprints.includes(fp)) {
           recentCodeFingerprints.push(fp);
+        }
+        if (i < 24) {
+          recordHelperVariantUsage(extractHelperVariantTag(item.html));
         }
       }
     }
@@ -1990,6 +2033,11 @@ function hydrateRecentFingerprintsOnce(): void {
 
 export function isCodeFingerprintDuplicate(codeOrHtml: string, extraSeen?: Set<string>): boolean {
   hydrateRecentFingerprintsOnce();
+  const hv = extractHelperVariantTag(codeOrHtml);
+  if (hv) {
+    if (extraSeen && extraSeen.has(`hv:${hv}`)) return true;
+    if (recentHelperVariantQueue.slice(0, 6).includes(hv)) return true;
+  }
   const fp = normalizeCanvasCodeFingerprint(codeOrHtml);
   if (!fp || fp.length < 24) return false;
   if (extraSeen && extraSeen.has(fp)) return true;
@@ -1998,6 +2046,11 @@ export function isCodeFingerprintDuplicate(codeOrHtml: string, extraSeen?: Set<s
 
 export function recordCodeFingerprint(codeOrHtml: string, extraSeen?: Set<string>): void {
   hydrateRecentFingerprintsOnce();
+  const hv = extractHelperVariantTag(codeOrHtml);
+  if (hv) {
+    recordHelperVariantUsage(hv);
+    if (extraSeen) extraSeen.add(`hv:${hv}`);
+  }
   const fp = normalizeCanvasCodeFingerprint(codeOrHtml);
   if (!fp || fp.length < 24) return;
   if (extraSeen) extraSeen.add(fp);
@@ -2035,7 +2088,9 @@ async function generateAnimationDirect(
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, (index || 1) - 1), variationOffset);
-  const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode);
+  const picked = pickNonCollidingMotionPlan(promptTopic, type, style, motionDynamics, seed, subCategory);
+  const assignedV = picked.variantIdx;
+  const motionPlan = picked.plan;
 
   const colorStyleDirective = isGreenScreen
     ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC).`
@@ -2045,7 +2100,7 @@ async function generateAnimationDirect(
 
   const geometryGuide = isBackground
     ? `FULL-FRAME BG (0..w,0..h): Palette c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". ${motionPlan.anatomyHint}`
-    : `CONCISE HERO ICON (8-16 lines, <=240 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${seed.variantIdx}, Palette c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}" & Motion=[${seed.motionExpr}]. ALWAYS call the cohesive hero helper specified in ANATOMY with distinct v=${seed.variantIdx} (NEVER scatter loose circles/boxes!). ANATOMY: ${motionPlan.anatomyHint}`;
+    : `CONCISE HERO ICON (8-16 lines, <=240 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${assignedV}, Palette c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}" & Motion=[${seed.motionExpr}]. ALWAYS call the EXACT G.${motionPlan.helperName} helper specified in ANATOMY with distinct v=${assignedV} (NEVER substitute G.network/G.typography unless assigned, NEVER scatter loose circles/boxes!). ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
@@ -2103,6 +2158,7 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
   if (!check.ok) {
     throw new Error(`Validasi render gagal (${check.reason || 'canvas blank'})`);
   }
+  recordHelperVariantUsage(`${motionPlan.helperName}:v${assignedV}`);
 
   return {
     id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
@@ -2197,10 +2253,14 @@ async function generateAnimationBatchDirect(
     : 'CONCISE HERO ICON (8-16 lines each, <=240 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). Each ANIM_i MUST call its assigned cohesive G.<hero> helper with its unique v, c0..c3 palette & kinetic motion (NEVER scatter loose circles/boxes or clone shapes across slots!).';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
+  const batchPlanSeen = new Set<string>();
+  const slotPlans = prompts.map((p, idx) =>
+    pickNonCollidingMotionPlan(p, type, style, motionDynamics, slotSeeds[idx], subCategory, batchPlanSeen)
+  );
   const topicLines = prompts.map((p, idx) => {
     const seed = slotSeeds[idx];
-    const plan = resolvePromptMotionPlan(p, type, style, motionDynamics, seed.variantIdx, seed.compMode);
-    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" [v=${seed.variantIdx} | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Kinetic:${seed.motionExpr} | Anatomy:${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint}]`;
+    const picked = slotPlans[idx];
+    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" [MUST CALL G.${picked.plan.helperName} with v=${picked.variantIdx} | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Kinetic:${seed.motionExpr} | Anatomy:${picked.plan.anatomyHint} | Motion (${picked.plan.label}): ${picked.plan.codeHint}]`;
   }).join('\n');
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -2210,7 +2270,7 @@ ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, c
 ${helpersDoc}
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
-CRITICAL: Each ANIM_i MUST use its assigned variant v, colors c0..c3, hero helper, and kinetic motion — NEVER copy identical geometry across slots!
+CRITICAL: Each ANIM_i MUST call the EXACT assigned G.<helper> and variant v from its Anatomy line (NEVER substitute G.network/G.typography unless assigned, NEVER copy identical geometry across slots!).
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;

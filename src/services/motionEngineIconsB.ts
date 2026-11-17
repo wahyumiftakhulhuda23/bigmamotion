@@ -516,54 +516,65 @@ export const ENGINE_HERO_ICONS_B_JS = `
         var rt = G._rt(rimCol, t), rim = rt.r, tt = rt.t, lw = Math.max(1.8, s * 0.032), vv = G._v(v);
         var cc = coreCol || '#4f46e5', nc = nodeCol || '#00e5ff', lc = linkCol || '#ffd700';
         var pulse = 1 + 0.09 * Math.sin(tt * 3.0);
+        var act = Math.floor((tt * 2.5) % 4);
         if (vv === 1) {
-          G.ring(x, y, s * 0.32, lw * 1.1, 0, Math.PI * 2, lc);
+          G.ring(x, y, s * 0.36, lw * 1.15, tt * 0.4, tt * 0.4 + Math.PI * 1.65, lc);
+          G.ring(x, y, s * 0.23, lw, -tt * 0.6, -tt * 0.6 + Math.PI * 1.35, nc);
           for (var i1 = 0; i1 < 4; i1++) {
             var a1 = tt * 0.55 + i1 * Math.PI * 0.5;
-            G.disc(x + Math.cos(a1) * s * 0.32, y + Math.sin(a1) * s * 0.32, s * 0.10, nc, rim, lw * 0.75);
+            G.disc(x + Math.cos(a1) * s * 0.36, y + Math.sin(a1) * s * 0.36, s * 0.085, i1 === act ? lc : nc, rim, lw * 0.7);
           }
-          G.disc(x, y, s * 0.17 * pulse, cc, rim, lw);
+          G.disc(x, y, s * 0.14 * pulse, cc, rim, lw);
         } else if (vv === 2) {
-          G.pill(x, y - s * 0.28, x - s * 0.30, y + s * 0.24, lw * 1.1, lc);
-          G.pill(x, y - s * 0.28, x + s * 0.30, y + s * 0.24, lw * 1.1, lc);
-          G.pill(x - s * 0.30, y + s * 0.24, x + s * 0.30, y + s * 0.24, lw * 1.1, lc);
-          G.disc(x, y - s * 0.28, s * 0.14 * pulse, cc, rim, lw);
-          G.disc(x - s * 0.30, y + s * 0.24, s * 0.12, nc, rim, lw * 0.85);
-          G.disc(x + s * 0.30, y + s * 0.24, s * 0.12, nc, rim, lw * 0.85);
-          G.disc(x, y + s * 0.02, s * 0.09, lc, rim, lw * 0.7);
+          G.box(x, y + s * 0.14, s * 0.68, s * 0.28, s * 0.08, '#1e293b', rim, lw);
+          G.pill(x - s * 0.22, y - s * 0.20, x, y + s * 0.06, lw * 1.1, lc);
+          G.pill(x + s * 0.22, y - s * 0.20, x, y + s * 0.06, lw * 1.1, lc);
+          G.pill(x, y - s * 0.28, x, y + s * 0.06, lw * 1.1, nc);
+          G.disc(x - s * 0.22, y - s * 0.20, s * 0.095, act === 0 ? lc : nc, rim, lw * 0.75);
+          G.disc(x + s * 0.22, y - s * 0.20, s * 0.095, act === 1 ? lc : nc, rim, lw * 0.75);
+          G.disc(x, y - s * 0.28, s * 0.11 * pulse, cc, rim, lw * 0.85);
+          G.capsule(x, y + s * 0.14, s * 0.42, s * 0.10, cc, rim, lw * 0.65);
         } else if (vv === 3) {
-          G.box(x, y, s * 0.84, s * 0.76, s * 0.14, '#1e293b', rim, lw);
+          G.box(x, y, s * 0.84, s * 0.78, s * 0.14, '#0f172a', rim, lw);
           G.pill(x - s * 0.24, y, x + s * 0.24, y, lw * 1.2, lc);
           G.pill(x, y - s * 0.22, x, y + s * 0.22, lw * 1.2, lc);
-          G.disc(x, y, s * 0.13 * pulse, cc, rim, lw * 0.85);
-          G.disc(x - s * 0.24, y, s * 0.08, nc, rim, lw * 0.65);
-          G.disc(x + s * 0.24, y, s * 0.08, nc, rim, lw * 0.65);
-          G.disc(x, y - s * 0.22, s * 0.08, nc, rim, lw * 0.65);
-          G.disc(x, y + s * 0.22, s * 0.08, nc, rim, lw * 0.65);
+          G.disc(x, y, s * 0.14 * pulse, cc, rim, lw * 0.85);
+          G.disc(x - s * 0.24, y, s * 0.085, act === 0 ? lc : nc, rim, lw * 0.65);
+          G.disc(x + s * 0.24, y, s * 0.085, act === 1 ? lc : nc, rim, lw * 0.65);
+          G.disc(x, y - s * 0.22, s * 0.085, act === 2 ? lc : nc, rim, lw * 0.65);
+          G.disc(x, y + s * 0.22, s * 0.085, act === 3 ? lc : nc, rim, lw * 0.65);
         } else if (vv === 4) {
-          G.ngon(x, y, s * 0.42, 6, -Math.PI / 2, '#1e293b', rim, lw);
+          G.ngon(x, y, s * 0.43, 6, -Math.PI / 2, '#1e293b', rim, lw);
           for (var i4 = 0; i4 < 6; i4++) {
             var a4 = -Math.PI / 2 + i4 * Math.PI / 3;
-            G.pill(x, y, x + Math.cos(a4) * s * 0.26, y + Math.sin(a4) * s * 0.26, lw * 0.9, lc);
-            G.disc(x + Math.cos(a4) * s * 0.28, y + Math.sin(a4) * s * 0.28, s * 0.065, i4 === Math.floor((tt * 3) % 6) ? lc : nc, rim, lw * 0.55);
+            G.pill(x, y, x + Math.cos(a4) * s * 0.27, y + Math.sin(a4) * s * 0.27, lw * 0.95, lc);
+            G.disc(x + Math.cos(a4) * s * 0.28, y + Math.sin(a4) * s * 0.28, s * 0.07, i4 === Math.floor((tt * 3) % 6) ? lc : nc, rim, lw * 0.55);
           }
-          G.disc(x, y, s * 0.13 * pulse, cc, rim, lw * 0.8);
+          G.disc(x, y, s * 0.14 * pulse, cc, rim, lw * 0.8);
         } else if (vv === 5) {
-          G.pill(x - s * 0.30, y - s * 0.20, x, y + s * 0.04, lw * 1.1, lc);
-          G.pill(x + s * 0.30, y - s * 0.20, x, y + s * 0.04, lw * 1.1, lc);
-          G.pill(x, y + s * 0.04, x, y + s * 0.32, lw * 1.1, lc);
-          G.disc(x - s * 0.30, y - s * 0.20, s * 0.12, nc, rim, lw * 0.8);
-          G.disc(x + s * 0.30, y - s * 0.20, s * 0.12, nc, rim, lw * 0.8);
-          G.disc(x, y + s * 0.32, s * 0.12, nc, rim, lw * 0.8);
-          G.disc(x, y + s * 0.04, s * 0.16 * pulse, cc, rim, lw);
+          var lX = [-s * 0.28, 0, s * 0.28];
+          var lY = [[-s * 0.18, s * 0.18], [-s * 0.24, 0, s * 0.24], [-s * 0.14, s * 0.14]];
+          for (var li = 0; li < lY[0].length; li++) {
+            for (var lj = 0; lj < lY[1].length; lj++) {
+              G.pill(x + lX[0], y + lY[0][li], x + lX[1], y + lY[1][lj], lw * 0.75, lc);
+            }
+          }
+          for (var lj2 = 0; lj2 < lY[1].length; lj2++) {
+            for (var lk = 0; lk < lY[2].length; lk++) {
+              G.pill(x + lX[1], y + lY[1][lj2], x + lX[2], y + lY[2][lk], lw * 0.75, nc);
+            }
+          }
+          for (var li2 = 0; li2 < lY[0].length; li2++) G.disc(x + lX[0], y + lY[0][li2], s * 0.085, cc, rim, lw * 0.65);
+          for (var lj3 = 0; lj3 < lY[1].length; lj3++) G.disc(x + lX[1], y + lY[1][lj3], s * 0.08 * (lj3 === act % 3 ? pulse : 1), lj3 === act % 3 ? lc : nc, rim, lw * 0.65);
+          for (var lk2 = 0; lk2 < lY[2].length; lk2++) G.disc(x + lX[2], y + lY[2][lk2], s * 0.085, cc, rim, lw * 0.65);
         } else {
           for (var i0 = 0; i0 < 5; i0++) {
-            var a0 = -Math.PI / 2 + i0 * (Math.PI * 2 / 5) + tt * 0.35;
-            var nx = x + Math.cos(a0) * s * 0.33, ny = y + Math.sin(a0) * s * 0.33;
+            var a0 = -Math.PI / 2 + i0 * (Math.PI * 2 / 5) + tt * 0.32;
+            var nx = x + Math.cos(a0) * s * 0.34, ny = y + Math.sin(a0) * s * 0.34;
             G.pill(x, y, nx, ny, lw, lc);
-            G.disc(nx, ny, s * 0.10, nc, rim, lw * 0.75);
+            G.disc(nx, ny, s * 0.095, i0 === act ? lc : nc, rim, lw * 0.75);
           }
-          G.disc(x, y, s * 0.17 * pulse, cc, rim, lw);
+          G.disc(x, y, s * 0.16 * pulse, cc, rim, lw);
         }
       },
       server: function(x, y, s, rackCol, ledCol, accCol, rimCol, t, v) {

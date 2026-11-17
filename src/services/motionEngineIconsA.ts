@@ -202,7 +202,8 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
             var vsx = G._n(sx, 1);
             ctx.scale(vsx, sy != null ? G._n(sy, vsx) : vsx);
           }
-          fn();
+          var __partR = (typeof R !== 'undefined' && isFinite(R)) ? R : (typeof S !== 'undefined' && isFinite(S) ? S * 0.72 : 160);
+          fn(__partR);
         } finally {
           ctx.restore();
         }
