@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GeminiModel, ImageToPromptItem, ImageToPromptProject } from '../types';
+import { AnimationType, GeminiModel, ImageToPromptItem, ImageToPromptProject } from '../types';
 import { generateMotionPromptFromImage } from '../services/geminiService';
 
 interface ImageToPromptSectionProps {
@@ -56,6 +56,7 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0, currentName: '' });
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editedProjectName, setEditedProjectName] = useState<string>('');
+  const [batchType, setBatchType] = useState<AnimationType | 'auto'>('auto');
   const [previewModalImage, setPreviewModalImage] = useState<ImageToPromptItem | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -163,6 +164,7 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
           imagePreviewUrl: base64Data,
           imageBase64: base64Data,
           mimeType: file.type || 'image/png',
+          type: batchType,
           status: 'idle',
           createdAt: Date.now(),
         });
@@ -198,7 +200,7 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [activeProject.id]);
+  }, [activeProject.id, batchType]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -237,6 +239,7 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
           mimeType: item.mimeType,
           fileName: item.fileName,
           projectName: activeProject.name,
+          type: item.type || batchType,
         }
       );
 
@@ -638,10 +641,20 @@ export const ImageToPromptSection: React.FC<ImageToPromptSectionProps> = ({
 
         {/* Batch Run Command Bar */}
         <div className="bg-slate-950/85 rounded-xl p-3 border border-indigo-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
-          <div className="flex items-center gap-2 text-xs text-gray-300">
+          <div className="flex items-center gap-2 text-xs text-gray-300 flex-wrap">
             <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse"></span>
             <span className="font-bold">Status Antrian:</span>
             <span className="text-amber-300 font-bold font-mono">{pendingItems.length} Menunggu Analisa</span>
+            <select
+              value={batchType}
+              onChange={(e) => setBatchType(e.target.value as AnimationType | 'auto')}
+              className="bg-slate-900 border border-indigo-500/40 rounded-lg px-2 py-1 text-[11px] font-bold text-indigo-200 focus:outline-none focus:ring-1 focus:ring-indigo-400 cursor-pointer"
+              title="Mode analisa gambar menjadi prompt animasi"
+            >
+              <option value="auto">Auto Deteksi (Ikon/BG)</option>
+              <option value="icon">Mode Ikon</option>
+              <option value="bg">Mode Background</option>
+            </select>
           </div>
 
           <div className="flex items-center gap-2">

@@ -554,10 +554,31 @@ export function getCostOptimizedThinkingConfig(
 interface ClassifiedGeminiErr {
   message: string;
   isInvalidKey: boolean;
+  isPermissionDenied: boolean;
   isQuota: boolean;
   isNotFound: boolean;
   isConfigIssue: boolean;
   isNetworkError: boolean;
+}
+
+function diagnoseGooglePermissionReason(msg: string): string {
+  const lower = (msg || '').toLowerCase();
+  if (lower.includes('referer') || lower.includes('referrer') || lower.includes('http_referrer_blocked')) {
+    return 'Diblokir batasan Referrer Website di Google Cloud (tambahkan domain Vercel/AI Studio atau pilih None)';
+  }
+  if (
+    lower.includes('has not been used') ||
+    lower.includes('is disabled') ||
+    lower.includes('service_disabled') ||
+    lower.includes('api_key_service_blocked') ||
+    lower.includes('blocked')
+  ) {
+    return 'Generative Language API belum diizinkan/diaktifkan pada API Key atau Project Cloud ini';
+  }
+  if (lower.includes('ip_address_blocked') || lower.includes('ip address')) {
+    return 'Diblokir batasan IP Address di Google Cloud Credentials';
+  }
+  return msg.length > 90 ? `${msg.substring(0, 90)}...` : msg || 'Akses ditolak (403 PERMISSION_DENIED)';
 }
 
 function classifyGeminiError(err: any): ClassifiedGeminiErr {
@@ -570,6 +591,7 @@ function classifyGeminiError(err: any): ClassifiedGeminiErr {
   }
   const lower = msg.toLowerCase();
 
+  // Strictly identify true key auth failures; NEVER quarantine a valid key for 403 model/referrer restrictions
   const isInvalidKey =
     lower.includes('api_key_invalid') ||
     lower.includes('api key not valid') ||
@@ -577,21 +599,26 @@ function classifyGeminiError(err: any): ClassifiedGeminiErr {
     lower.includes('invalid api key') ||
     lower.includes('api_key_expired') ||
     lower.includes('unauthenticated') ||
-    lower.includes('permission_denied') ||
     lower.includes('suspended') ||
-    lower.includes('401') ||
-    lower.includes('403');
+    /\b401\b/.test(lower);
+
+  const isPermissionDenied =
+    !isInvalidKey &&
+    (lower.includes('permission_denied') ||
+      lower.includes('api_key_service_blocked') ||
+      lower.includes('api_key_http_referrer_blocked') ||
+      /\b403\b/.test(lower));
 
   const isQuota =
     lower.includes('resource_exhausted') ||
     lower.includes('quota') ||
     lower.includes('exceeded') ||
     lower.includes('rate limit') ||
-    lower.includes('429');
+    /\b429\b/.test(lower);
 
   const isNotFound =
     lower.includes('not found') ||
-    lower.includes('404') ||
+    /\b404\b/.test(lower) ||
     lower.includes('not supported') ||
     lower.includes('unrecognized') ||
     lower.includes('proxy_generation_disabled');
@@ -604,6 +631,7 @@ function classifyGeminiError(err: any): ClassifiedGeminiErr {
 
   const isNetworkError =
     !isInvalidKey &&
+    !isPermissionDenied &&
     !isQuota &&
     !isNotFound &&
     !isConfigIssue &&
@@ -613,7 +641,7 @@ function classifyGeminiError(err: any): ClassifiedGeminiErr {
       lower.includes('abort') ||
       lower.includes('cors'));
 
-  return { message: msg, isInvalidKey, isQuota, isNotFound, isConfigIssue, isNetworkError };
+  return { message: msg, isInvalidKey, isPermissionDenied, isQuota, isNotFound, isConfigIssue, isNetworkError };
 }
 
 export class AllKeysExhaustedError extends Error {
@@ -944,7 +972,7 @@ export function verifyCanvasAnimationHtml(
     const minVis = Math.min(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
     const maxVis = Math.max(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
 
-    if (m3.nonZeroAlphaPixels === 0 || minVis < (type === 'bg' ? 400 : 650)) {
+    if (m3.nonZeroAlphaPixels === 0 || minVis < (type === 'bg' ? 3200 : 1050)) {
       return {
         ok: false,
         visiblePixels,
@@ -961,7 +989,7 @@ export function verifyCanvasAnimationHtml(
     }
 
     if (type === 'bg') {
-      if (m3.bboxW < 140 || m3.bboxH < 70) {
+      if (m3.bboxW < 250 || m3.bboxH < 135) {
         return {
           ok: false,
           visiblePixels,
@@ -970,11 +998,11 @@ export function verifyCanvasAnimationHtml(
       }
     } else {
       for (const fm of [m1, m2, m3]) {
-        if (Math.max(fm.bboxW, fm.bboxH) < 56 || Math.min(fm.bboxW, fm.bboxH) < 32) {
+        if (Math.max(fm.bboxW, fm.bboxH) < 74 || Math.min(fm.bboxW, fm.bboxH) < 46) {
           return {
             ok: false,
             visiblePixels,
-            reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px — pastikan s=1.05*R)`,
+            reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px — pastikan elemen utama mengisi [-0.62*R,+0.62*R])`,
           };
         }
         if (fm.bboxW / Math.max(1, fm.bboxH) > 4.2 || fm.bboxH / Math.max(1, fm.bboxW) > 4.2) {
@@ -1072,14 +1100,92 @@ export function extractCleanApiKey(rawKey: string): string {
   if (!rawKey) return '';
   let key = rawKey.trim();
   key = key.replace(/^["'`\s]+|["'`\s,;]+$/g, '');
-  const match = key.match(/AIza[0-9A-Za-z-_]{35}/);
+  const match = key.match(/AIza[0-9A-Za-z\-_]{30,}/);
   if (match) {
     return match[0];
   }
   return key;
 }
 
-// Accurate, robust test for a single key (Direct Google API probe with server proxy fallback)
+// Helper: Zero-token Google official REST endpoint check (/v1beta/models?key=...)
+// Accurately validates key authenticity AND returns real models enabled on that key without wasting RPM/tokens.
+async function probeGoogleModelsEndpointDirect(
+  key: string,
+  requestedModel?: string
+): Promise<{
+  ok: boolean;
+  definiteInvalidKey?: boolean;
+  isQuota?: boolean;
+  isPermissionDenied?: boolean;
+  availableModels?: string[];
+  matchedModel?: string;
+  errorMsg?: string;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 9000);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}&pageSize=60`,
+      { method: 'GET', signal: controller.signal }
+    );
+    const data: any = await res.json().catch(() => ({}));
+    if (res.ok && Array.isArray(data?.models)) {
+      const availableModels = data.models
+        .filter((m: any) => !Array.isArray(m.supportedGenerationMethods) || m.supportedGenerationMethods.includes('generateContent'))
+        .map((m: any) => String(m.name || '').replace(/^models\//, ''))
+        .filter(Boolean);
+
+      const sanitizedReq = sanitizeModel(requestedModel || 'gemini-2.5-flash');
+      const priorityPick = [
+        sanitizedReq,
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite',
+        'gemini-3.5-flash-lite',
+        'gemini-3.1-flash-lite',
+        'gemini-2.0-flash',
+      ];
+      const matchedModel =
+        priorityPick.find((cand) => availableModels.includes(cand)) ||
+        availableModels.find((m) => m.includes('flash')) ||
+        availableModels[0] ||
+        'gemini-2.5-flash';
+
+      return {
+        ok: true,
+        availableModels,
+        matchedModel,
+      };
+    }
+
+    const errMsg = data?.error?.message || `HTTP ${res.status}`;
+    const errStatus = String(data?.error?.status || '').toUpperCase();
+    const classified = classifyGeminiError(`${errStatus} ${errMsg} ${res.status}`);
+    if (classified.isInvalidKey || errStatus === 'UNAUTHENTICATED' || errMsg.toLowerCase().includes('api key not valid')) {
+      return {
+        ok: false,
+        definiteInvalidKey: true,
+        errorMsg: 'API Key tidak valid atau salah ketik (ditolak Google)',
+      };
+    }
+    if (classified.isQuota || res.status === 429) {
+      return { ok: false, isQuota: true, errorMsg: errMsg };
+    }
+    if (classified.isPermissionDenied || res.status === 403) {
+      return {
+        ok: false,
+        isPermissionDenied: true,
+        errorMsg: diagnoseGooglePermissionReason(errMsg),
+      };
+    }
+    return { ok: false, errorMsg: errMsg };
+  } catch (err: any) {
+    return { ok: false, errorMsg: err?.message || 'Gagal menjangkau Google API dari browser' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Accurate, robust test for a single key (Zero-token /v1beta/models check -> GA countTokens -> server proxy fallback)
 export async function testSingleApiKey(
   rawKey: string,
   lineIndex?: number,
@@ -1102,7 +1208,7 @@ export async function testSingleApiKey(
     };
   }
 
-  if (!key.startsWith('AIza') && key.length < 20) {
+  if (!key.startsWith('AIza') && key.toLowerCase() !== 'default' && key.toLowerCase() !== 'system' && key.length < 20) {
     return {
       key,
       maskedKey,
@@ -1128,37 +1234,68 @@ export async function testSingleApiKey(
     }
   };
 
+  // Prioritize real GA public models so preview model unavailability never flags a valid key as invalid
   const candidateModels = Array.from(new Set([
-    sanitizeModel(model || 'gemini-3.8-flash'),
     'gemini-2.5-flash',
-  ])).slice(0, 2);
+    'gemini-2.5-flash-lite',
+    sanitizeModel(model || 'gemini-2.5-flash'),
+  ])).slice(0, 3);
 
-  // Zero-generation-token probe in browser using countTokens first
-  const probeDirectInBrowser = async (): Promise<ApiKeyTestResult> => {
+  // Zero-generation-token probe in browser (/v1beta/models first, then countTokens on GA models)
+  const probeDirectInBrowser = async (): Promise<ApiKeyTestResult & { shouldFallbackToServer?: boolean }> => {
+    const modelsCheck = await probeGoogleModelsEndpointDirect(key, model);
+    if (modelsCheck.ok) {
+      unquarantineKey(key);
+      return {
+        key,
+        maskedKey,
+        valid: true,
+        latencyMs: Date.now() - start,
+        status: 'valid',
+        lineIndex,
+        testedModel: (modelsCheck.matchedModel || 'gemini-2.5-flash') as GeminiModel,
+      };
+    }
+
+    if (modelsCheck.definiteInvalidKey) {
+      markKeyInvalidOrSuspended(key);
+      return {
+        key,
+        maskedKey,
+        valid: false,
+        error: modelsCheck.errorMsg || 'API Key tidak valid atau salah',
+        latencyMs: Date.now() - start,
+        status: 'invalid',
+        lineIndex,
+      };
+    }
+
+    if (modelsCheck.isQuota) {
+      unquarantineKey(key);
+      return {
+        key,
+        maskedKey,
+        valid: true,
+        isQuotaLimit: true,
+        error: 'Key Valid • Kuota sementara penuh',
+        latencyMs: Date.now() - start,
+        status: 'valid',
+        lineIndex,
+      };
+    }
+
+    // Fallback SDK countTokens probe across reliable GA models first
     const ai = new GoogleGenAI({ apiKey: key });
     let hadQuota = false;
+    let lastPermErr: string | null = modelsCheck.isPermissionDenied ? (modelsCheck.errorMsg || null) : null;
     let lastErr: any = null;
 
     for (const m of candidateModels) {
       try {
-        try {
-          await ai.models.countTokens({
-            model: m,
-            contents: 'ping',
-          });
-        } catch (tokErr: any) {
-          const cTok = classifyGeminiError(tokErr);
-          if (cTok.isInvalidKey || cTok.isQuota) throw tokErr;
-          if (!cTok.isNotFound) {
-            await ai.models.generateContent({
-              model: m,
-              contents: 'hi',
-              config: { maxOutputTokens: 1 },
-            });
-          } else {
-            throw tokErr;
-          }
-        }
+        await ai.models.countTokens({
+          model: m,
+          contents: 'ping',
+        });
         unquarantineKey(key);
         return {
           key,
@@ -1184,6 +1321,10 @@ export async function testSingleApiKey(
             lineIndex,
           };
         }
+        if (classified.isPermissionDenied) {
+          lastPermErr = diagnoseGooglePermissionReason(classified.message);
+          continue;
+        }
         if (classified.isQuota) {
           hadQuota = true;
           continue;
@@ -1206,33 +1347,38 @@ export async function testSingleApiKey(
       };
     }
 
+    // If browser hit 403 (e.g. Referrer restriction on Vercel vs AI Studio) or network block, let server proxy verify too
     return {
       key,
       maskedKey,
       valid: false,
-      error: sanitizeErrorText(lastErr),
+      error: lastPermErr || sanitizeErrorText(lastErr || modelsCheck.errorMsg),
       latencyMs: Date.now() - start,
       status: 'invalid',
       lineIndex,
+      shouldFallbackToServer: true,
     };
   };
 
-  // For user AIza keys, run zero-token direct browser check first (eliminates Vercel proxy hop & burst limit)
+  let browserDirectFailure: ApiKeyTestResult | null = null;
   if (key.startsWith('AIza')) {
     try {
       const directResult = await probeDirectInBrowser();
-      if (directResult.valid || directResult.error === 'API Key tidak valid atau salah') {
-        return directResult;
+      if (directResult.valid || !directResult.shouldFallbackToServer) {
+        const { shouldFallbackToServer: _omit, ...cleanResult } = directResult;
+        return cleanResult;
       }
+      const { shouldFallbackToServer: _omit, ...cleanResult } = directResult;
+      browserDirectFailure = cleanResult;
     } catch {
       // Fallback to server probe on network/CORS issue
     }
   }
 
-  // Server proxy fallback (for 'default'/'system' keys or if browser network blocked)
+  // Server proxy fallback (for 'default'/'system' keys, Vercel/domain Referrer differences, or CORS)
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const timer = setTimeout(() => controller.abort(), 14000);
 
     const res = await fetch('/api/gemini/test-single-key', {
       method: 'POST',
@@ -1247,17 +1393,28 @@ export async function testSingleApiKey(
     const contentType = res.headers.get('content-type') || '';
     if (res.ok && contentType.includes('application/json')) {
       const data: any = await res.json();
-      if (data.valid) unquarantineKey(key);
+      if (data.valid) {
+        unquarantineKey(key);
+        return {
+          key,
+          maskedKey: data.maskedKey || maskedKey,
+          valid: true,
+          error: data.error ? sanitizeErrorText(data.error) : undefined,
+          latencyMs: data.latencyMs ?? latencyMs,
+          status: 'valid',
+          lineIndex,
+          testedModel: data.testedModel || model,
+          isQuotaLimit: !!data.isQuotaLimit,
+        };
+      }
       return {
         key,
         maskedKey: data.maskedKey || maskedKey,
-        valid: !!data.valid,
-        error: data.error ? sanitizeErrorText(data.error) : undefined,
+        valid: false,
+        error: sanitizeErrorText(data.error || browserDirectFailure?.error || 'Gagal verifikasi'),
         latencyMs: data.latencyMs ?? latencyMs,
-        status: data.valid ? 'valid' : 'invalid',
+        status: 'invalid',
         lineIndex,
-        testedModel: data.testedModel || model,
-        isQuotaLimit: !!data.isQuotaLimit,
       };
     }
 
@@ -1266,18 +1423,19 @@ export async function testSingleApiKey(
       key,
       maskedKey,
       valid: false,
-      error: sanitizeErrorText(err.error || `HTTP ${res.status}`),
+      error: sanitizeErrorText(browserDirectFailure?.error || err.error || `HTTP ${res.status}`),
       latencyMs,
       status: 'invalid',
       lineIndex,
     };
   } catch (serverErr: any) {
+    if (browserDirectFailure) return browserDirectFailure;
     const isTimeout = serverErr.name === 'AbortError';
     return {
       key,
       maskedKey,
       valid: false,
-      error: isTimeout ? 'Timeout pemeriksaan (> 12s)' : sanitizeErrorText(serverErr.message || 'Gagal koneksi verifikasi'),
+      error: isTimeout ? 'Timeout pemeriksaan (> 14s)' : sanitizeErrorText(serverErr.message || 'Gagal koneksi verifikasi'),
       latencyMs: Date.now() - start,
       status: 'invalid',
       lineIndex,
@@ -1285,7 +1443,7 @@ export async function testSingleApiKey(
   }
 }
 
-// Check key compatibility across all official Gemini models (gentle batched zero-token countTokens probe)
+// Check key compatibility across all official Gemini models (gentle /v1beta/models + zero-token countTokens probe)
 export async function testKeyAcrossModels(rawKey: string): Promise<{
   success: boolean;
   isKeyValid: boolean;
@@ -1315,9 +1473,25 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
     { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview', badge: 'Masterpiece Rigging' },
   ];
 
-  // Direct zero-token check in gentle pairs when user supplies AIza key
+  // Direct zero-token check when user supplies AIza key
   if (key.startsWith('AIza')) {
     try {
+      const restCheck = await probeGoogleModelsEndpointDirect(key);
+      if (restCheck.definiteInvalidKey) {
+        return {
+          success: true,
+          isKeyValid: false,
+          activeCount: 0,
+          total: modelsToCheck.length,
+          models: modelsToCheck.map((m) => ({
+            ...m,
+            status: 'invalid_key' as const,
+            valid: false,
+            message: 'API Key Salah / Tidak Valid',
+          })),
+        };
+      }
+
       const ai = new GoogleGenAI({ apiKey: key });
       const results: any[] = [];
       for (let i = 0; i < modelsToCheck.length; i += 2) {
@@ -1348,6 +1522,15 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
                   message: 'API Key Salah / Tidak Ditemukan',
                 };
               }
+              if (classified.isPermissionDenied) {
+                return {
+                  ...m,
+                  status: 'permission_denied' as const,
+                  valid: !!restCheck.ok,
+                  latencyMs: Date.now() - start,
+                  message: diagnoseGooglePermissionReason(classified.message),
+                };
+              }
               if (classified.isQuota) {
                 return {
                   ...m,
@@ -1363,7 +1546,7 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
                   status: 'not_available' as const,
                   valid: true,
                   latencyMs: Date.now() - start,
-                  message: 'Model Belum Tersedia di Region Akun Ini',
+                  message: 'Model Belum Tersedia di Akun/Region Ini (Otomatis dialihkan)',
                 };
               }
               return {
@@ -1382,7 +1565,7 @@ export async function testKeyAcrossModels(rawKey: string): Promise<{
         }
       }
       const activeCount = results.filter((r) => r.status === 'active').length;
-      const isKeyValid = !results.some((r) => r.status === 'invalid_key');
+      const isKeyValid = !!restCheck.ok || !results.some((r) => r.status === 'invalid_key');
       return { success: true, isKeyValid, activeCount, total: results.length, models: results };
     } catch {
       // Fall back to server route on CORS/network block
@@ -1849,6 +2032,10 @@ export async function generatePromptsViaGemini(
           markKeyInvalidOrSuspended(apiKey);
           continue;
         }
+        if (classified.isPermissionDenied) {
+          markModelUnsupportedCached(candidateModel);
+          continue;
+        }
         if (classified.isQuota) {
           markKeyModelCooldown(apiKey, candidateModel);
           continue;
@@ -1946,9 +2133,9 @@ const MAX_RECENT_HELPER_VARIANTS = 24;
 const recentHelperVariantQueue: string[] = [];
 let __hydratedRecentFingerprints = false;
 
-function extractHelperVariantTag(codeOrHtml: string): string | null {
-  const m = String(codeOrHtml || '').match(/\bG\.([a-zA-Z0-9_]+)\([^;)]*,\s*([0-5])\s*\)/);
-  return m ? `${m[1]}:v${m[2]}` : null;
+function extractHelperVariantTag(_codeOrHtml: string): string | null {
+  // Structural primitives do not take canned variant tags; geometry deduplication uses normalizeCanvasCodeFingerprint.
+  return null;
 }
 
 function recordHelperVariantUsage(helperKey: string | null | undefined): void {
@@ -1982,7 +2169,7 @@ function pickNonCollidingMotionPlan(
       k === 0
         ? bestPlan
         : resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, candV, candCm, subCategory);
-    const key = `${candPlan.helperName}:v${candV}`;
+    const key = `${candPlan.helperName}:c${candCm}:v${candV}`;
     const inBatch = batchSeenHelpers ? batchSeenHelpers.has(key) : false;
     const inRecent = recentWindow.includes(key);
     if (!inBatch && !inRecent) {
@@ -1991,7 +2178,7 @@ function pickNonCollidingMotionPlan(
       bestPlan = candPlan;
       break;
     }
-    if (!inBatch && batchSeenHelpers && batchSeenHelpers.has(`${bestPlan.helperName}:v${bestV}`)) {
+    if (!inBatch && batchSeenHelpers && batchSeenHelpers.has(`${bestPlan.helperName}:c${bestCm}:v${bestV}`)) {
       bestV = candV;
       bestCm = candCm;
       bestPlan = candPlan;
@@ -1999,7 +2186,7 @@ function pickNonCollidingMotionPlan(
   }
 
   if (batchSeenHelpers) {
-    batchSeenHelpers.add(`${bestPlan.helperName}:v${bestV}`);
+    batchSeenHelpers.add(`${bestPlan.helperName}:c${bestCm}:v${bestV}`);
   }
   return { variantIdx: bestV, compMode: bestCm, plan: bestPlan };
 }
@@ -2093,18 +2280,18 @@ async function generateAnimationDirect(
   const motionPlan = picked.plan;
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC).`
+    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC,#1E293B).`
     : neonGlow
     ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0).`
     : `CRISP VECTOR (#080c14 cleared): shadowBlur=0.`;
 
   const geometryGuide = isBackground
-    ? `FULL-FRAME BG (0..w,0..h): Palette c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". ${motionPlan.anatomyHint}`
-    : `CONCISE HERO ICON (8-16 lines, <=240 tokens): Set R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). USE v=${assignedV}, Palette c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}" & Motion=[${seed.motionExpr}]. ALWAYS call the EXACT G.${motionPlan.helperName} helper specified in ANATOMY with distinct v=${assignedV} (NEVER substitute G.network/G.typography unless assigned, NEVER scatter loose circles/boxes!). ANATOMY: ${motionPlan.anatomyHint}`;
+    ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
+    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Draw inside G.part(cx,cy+bobY,rot,sx,sy,function(R){ ... }) with commanding scale R=S*0.80 spanning [-0.65*R,+0.65*R]. RULES: (1) CENTER-ANCHOR: G.box/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes bottom yB; (2) ASSEMBLED & CONNECTED: draw 4-7 overlapping parts back-to-front (Painter's Order) with >=0.04*R joint overlap, uniform rim lw=Math.max(2,0.032*R), ZERO floating detached shapes in corners, ZERO random circle soup; (3) BESPOKE LITERAL SILHOUETTE: invent exact geometry for "${promptTopic.slice(0, 75)}" (NEVER clone a generic padlock/cloud/chat bubble/network template); (4) UPRIGHT & SOLID: keep |rot|<=0.05 on upright icons, NEVER hide parts via if(sin>0). Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Anatomy: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
-  const systemPrompt = `60 FPS Canvas 2D Motion Coder. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
+  const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
 SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}]
 - ${geometryGuide}
@@ -2112,8 +2299,8 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
 - ${colorStyleDirective}`;
 
   const config: any = {
-    temperature: 0.48,
-    maxOutputTokens: 950,
+    temperature: 0.42,
+    maxOutputTokens: isBackground ? 1350 : 1200,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -2158,7 +2345,7 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
   if (!check.ok) {
     throw new Error(`Validasi render gagal (${check.reason || 'canvas blank'})`);
   }
-  recordHelperVariantUsage(`${motionPlan.helperName}:v${assignedV}`);
+  recordHelperVariantUsage(`${motionPlan.helperName}:c${picked.compMode}:v${assignedV}`);
 
   return {
     id: 'anim_' + Date.now() + Math.random().toString(36).substring(7),
@@ -2245,12 +2432,12 @@ async function generateAnimationBatchDirect(
   const colorStyleDirective = isGreenScreen
     ? 'GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).'
     : neonGlow
-    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright LEDs (reset 0).'
+    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0).'
     : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0.';
 
   const geometryGuide = isBackground
-    ? 'FULL-FRAME BG (0..w,0..h): Call the exact G.bgWaves/G.bgGrid/G.bgGeo helper assigned to each slot with c1,c2,c3,t,v.'
-    : 'CONCISE HERO ICON (8-16 lines each, <=240 tokens): R=S*0.72 inside G.part(cx,cy+bobY,rot,sx,sy,fn). Each ANIM_i MUST call its assigned cohesive G.<hero> helper with its unique v, c0..c3 palette & kinetic motion (NEVER scatter loose circles/boxes or clone shapes across slots!).';
+    ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
+    : 'MICROSTOCK HERO ICONS (14-26 lines each): Draw via G.part(cx,cy+bobY,rot,sx,sy,fn) with commanding scale R=S*0.80 inside [-0.65*R,+0.65*R]. CENTER-ANCHOR rule (only G.bar uses yB); 4-7 connected overlapping parts (Painter Order, lw=Math.max(2,0.032*R), ZERO floating corner dots, ZERO random circles, keep upright |rot|<=0.05, NEVER hide via if(sin>0)).';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
   const batchPlanSeen = new Set<string>();
@@ -2260,24 +2447,24 @@ async function generateAnimationBatchDirect(
   const topicLines = prompts.map((p, idx) => {
     const seed = slotSeeds[idx];
     const picked = slotPlans[idx];
-    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" [MUST CALL G.${picked.plan.helperName} with v=${picked.variantIdx} | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Kinetic:${seed.motionExpr} | Anatomy:${picked.plan.anatomyHint} | Motion (${picked.plan.label}): ${picked.plan.codeHint}]`;
+    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Kinetic:${seed.motionExpr} | Anatomy:${picked.plan.anatomyHint} | Motion (${picked.plan.label}): ${picked.plan.codeHint}`;
   }).join('\n');
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
-  const batchPrompt = `60 FPS Canvas 2D Motion Coder. Write ${prompts.length} VISUALLY DISTINCT concise RAW JS functions separated ONLY by:
+  const batchPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Write ${prompts.length} 100% STRUCTURALLY DISTINCT, PROMPT-ACCURATE RAW JS functions separated ONLY by:
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
 ${helpersDoc}
 SPEC: ${geometryGuide}
 Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
-CRITICAL: Each ANIM_i MUST call the EXACT assigned G.<helper> and variant v from its Anatomy line (NEVER substitute G.network/G.typography unless assigned, NEVER copy identical geometry across slots!).
+STRICT ANTI-CLONE RULE: Each ANIM_i MUST depict the exact, literal distinct object/scene of its own prompt with different primary silhouette geometry, proportions & sub-part layout from all other slots! NEVER reuse the same layout/shape between ANIM_0 and ANIM_1!
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;
 
   const config: any = {
-    temperature: 0.48,
-    maxOutputTokens: Math.min(1850, Math.max(950, prompts.length * 850)),
+    temperature: 0.42,
+    maxOutputTokens: Math.min(2500, Math.max(1250, prompts.length * (isBackground ? 1250 : 1150))),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -2453,6 +2640,16 @@ export async function generateSingleAnimationCode(
             lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue;
+            }
+            throw lastError;
+          }
+          if (classified.isPermissionDenied) {
+            markModelUnsupportedCached(activeModel);
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            lastError = new Error(diagnoseGooglePermissionReason(classified.message));
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, `Akses model ${activeModel} dibatasi, beralih model...`);
               continue;
             }
             throw lastError;
@@ -2899,7 +3096,8 @@ async function generateImageToMotionDirect(
   isGreenScreen = false,
   _precisionLevel: 'ultra' | 'masterpiece' = 'masterpiece',
   _strokeWeight: 'bold' | 'medium' | 'fine' = 'bold',
-  customInstructions = ''
+  customInstructions = '',
+  contentType: AnimationType = 'icon'
 ): Promise<{
   id: string;
   title: string;
@@ -2929,20 +3127,33 @@ async function generateImageToMotionDirect(
 
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   const ai = new GoogleGenAI({ apiKey: cleanKey });
+  const resolvedType: AnimationType = contentType === 'bg' ? 'bg' : 'icon';
 
-  const visionPrompt = `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.72.
+  const visionPrompt = resolvedType === 'bg'
+    ? `Microstock Background Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME seluruh komposisi GAMBAR REFERENSI BACKGROUND ini menjadi animasi Canvas 2D 60 FPS murni yang hampir identik secara visual (tata letak, lapisan kedalaman, horizon, pola garis/gelombang/kisi, arah cahaya, dan palet warna HEX persis gambar).
+ATURAN FULL-BLEED BACKGROUND (-0.08*w..1.08*w, -0.08*h..1.08*h):
+1. Mulai dengan G.bgBackdrop(w, h, c0, c1, c2, dir) memakai warna HEX dominan gambar.
+2. Bangun minimal 2 lapisan struktur & elemen latar sesuai analisa detail gambar referensi (misal lengkung gelombang G.wave, pita G.capsule, kisi/perspektif garis, puncak gunung G.poly, lengkung orbit G.ring, dedaunan tepi G.leaf) yang mengisi seluruh frame dari sisi ke sisi.
+3. Berikan gerakan 60 FPS profesional sesuai karakter visual gambar (parallax kedalaman halus, arus gelombang kontinyu, geser kisi/garis kecepatan, sapuan cahaya diagonal) — JANGAN mengecilkan gambar menjadi stiker ikon di tengah canvas, JANGAN membuat partikel acak berantakan.
+${!neonGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
+${customInstructions ? `Instruksi khusus: ${customInstructions}` : ''}
+HELPERS G: ${HELPERS_G_VISION_DOC}
+Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
+<script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
+function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
+    : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.80.
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
 Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval adalah TITIK TENGAH; (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), overlap >=0.04*R di dalam [-0.62*R,+0.62*R], ZERO bagian di pojok luar G.part, ZERO piringan lingkaran latar/bayangan gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval/G.dome/G.grid/G.bolt/G.cross/G.leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), saling terhubung overlap >=0.04*R mengisi proporsional [-0.65*R,+0.65*R], ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: 1650,
+    maxOutputTokens: resolvedType === 'bg' ? 1900 : 1750,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -2997,8 +3208,9 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
   }
 
   const rawText = response?.text || '';
-  const cleanHTML = extractHTML(rawText, isGreenScreen);
-  const check = verifyCanvasAnimationHtml(cleanHTML, !!isGreenScreen, 'icon');
+  const effectiveGs = resolvedType === 'bg' ? false : isGreenScreen;
+  const cleanHTML = extractHTML(rawText, effectiveGs);
+  const check = verifyCanvasAnimationHtml(cleanHTML, !!effectiveGs, resolvedType);
   if (check.ok) {
     let detectedSubject = cleanTitle;
     let shapeAnalysis: ShapeAnalysis | undefined = undefined;
@@ -3022,11 +3234,11 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
     return {
       id: 'i2m_' + Date.now() + Math.random().toString(36).substring(7),
       title: `Motion: ${detectedSubject}`,
-      type: 'icon',
+      type: resolvedType,
       style: colorMode,
       subCategory: 'image-to-motion',
       html: cleanHTML,
-      isGreenScreen,
+      isGreenScreen: effectiveGs,
       colorMode,
       motionDynamics,
       neonGlow,
@@ -3049,6 +3261,7 @@ export async function generateImageToMotion(
     mimeType: string;
     fileName: string;
     projectName: string;
+    type?: AnimationType;
     motionDynamics?: MotionDynamics;
     colorMode?: ColorMode;
     neonGlow?: boolean;
@@ -3079,6 +3292,8 @@ export async function generateImageToMotion(
   const hasClientKeys = uniqueClientKeys.length > 0;
   const modelChain = buildModelFallbackChain(model);
   const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
+  const contentType: AnimationType = params.type === 'bg' ? 'bg' : 'icon';
+  const effectiveGs = contentType === 'bg' ? false : (params.isGreenScreen ?? false);
   let modelCursor = 0;
 
   let lastError: any = null;
@@ -3131,10 +3346,11 @@ export async function generateImageToMotion(
             params.motionDynamics || 'flow',
             params.colorMode || 'gradient',
             params.neonGlow ?? true,
-            params.isGreenScreen ?? false,
+            effectiveGs,
             params.precisionLevel || 'masterpiece',
             params.strokeWeight || 'bold',
-            params.customInstructions || ''
+            params.customInstructions || '',
+            contentType
           );
           recordKeyModelSuccess(selectedKey, activeModel);
           return i2mResult;
@@ -3145,6 +3361,16 @@ export async function generateImageToMotion(
             lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
             if (attempt < maxRetries) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              continue;
+            }
+            throw lastError;
+          }
+          if (classified.isPermissionDenied) {
+            markModelUnsupportedCached(activeModel);
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            lastError = new Error(diagnoseGooglePermissionReason(classified.message));
+            if (attempt < maxRetries) {
+              if (onRetry) onRetry(attempt, maxRetries, `Akses model ${activeModel} dibatasi, beralih model...`);
               continue;
             }
             throw lastError;
@@ -3190,10 +3416,11 @@ export async function generateImageToMotion(
           mimeType: params.mimeType,
           fileName: params.fileName,
           projectName: params.projectName,
+          type: contentType,
           motionDynamics: params.motionDynamics || 'flow',
           colorMode: params.colorMode || 'gradient',
           neonGlow: params.neonGlow ?? true,
-          isGreenScreen: params.isGreenScreen ?? false,
+          isGreenScreen: effectiveGs,
           precisionLevel: params.precisionLevel || 'masterpiece',
           strokeWeight: params.strokeWeight || 'bold',
           customInstructions: params.customInstructions || '',
@@ -3210,15 +3437,15 @@ export async function generateImageToMotion(
         throw new Error(data.error || 'AI mengembalikan kode kosong.');
       }
 
-      const healedHtml = extractHTML(data.html, params.isGreenScreen);
-      const check = verifyCanvasAnimationHtml(healedHtml, !!(params.isGreenScreen), 'icon');
+      const healedHtml = extractHTML(data.html, effectiveGs);
+      const check = verifyCanvasAnimationHtml(healedHtml, !!effectiveGs, contentType);
       if (!check.ok) {
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
         throw new Error(`Validasi render vision gagal (${check.reason || 'canvas blank'})`);
       }
 
       if (selectedKey) recordKeyModelSuccess(selectedKey, activeModel);
-      return { ...data, html: healedHtml };
+      return { ...data, type: contentType, isGreenScreen: effectiveGs, html: healedHtml };
     } catch (err: any) {
       if (err instanceof AllKeysExhaustedError) throw err;
       lastError = err;
@@ -3260,14 +3487,20 @@ export async function generateMotionPromptFromImage(
     mimeType: string;
     fileName: string;
     projectName?: string;
+    type?: AnimationType | 'auto';
   },
   maxRetries = 2
 ): Promise<string> {
   const uniqueKeys = getCleanUniqueKeys(apiKeys);
   const targetModel = sanitizeModel(model || 'gemini-3.8-flash');
   const pureBase64 = params.imageBase64.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, '');
+  const requestedType = params.type || 'auto';
 
-  const promptDirective = `Computer Vision Motion Director. Analyze this image and write EXACTLY ONE SINGLE CONTINUOUS LINE of a 60 FPS motion graphics animation prompt (no newlines, no quotes, no markdown). Include: Central Subject & Art Style; Geometric Anatomy; Exact HEX Palette; 60 FPS Motion Dynamics (floating oscillation, gimbal tilt, internal articulation, 45-deg specular gleam).`;
+  const promptDirective = requestedType === 'bg'
+    ? `Computer Vision Microstock Background Motion Director. Analyze this FULL-FRAME background image closely and write EXACTLY ONE SINGLE CONTINUOUS LINE of a 60 FPS motion graphics background prompt (25-40 words, no newlines, no quotes, no markdown). Preserve exact backdrop composition, depth planes, horizon/perspective/ribbons/grid structure, exact HEX palette, and smooth seamless full-frame 60 FPS motion (parallax drift, continuous wave phase, diagonal luster sweep).`
+    : requestedType === 'icon'
+    ? `Computer Vision Microstock Icon Motion Director. Analyze this reference icon and write EXACTLY ONE SINGLE CONTINUOUS LINE of a 60 FPS motion graphics icon prompt (20-35 words, no newlines, no quotes, no markdown). Specify exact subject silhouette, connected sub-parts & proportions, exact HEX palette, and authentic theme-appropriate 60 FPS motion.`
+    : `Computer Vision Motion Director. Detect whether this image is a centered icon OR a full-frame background scene and write EXACTLY ONE SINGLE CONTINUOUS LINE of a 60 FPS motion graphics animation prompt (22-38 words, no newlines, no quotes, no markdown). Include exact visual anatomy/layout, exact HEX palette, and authentic 60 FPS seamless looping motion matching the artwork.`;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const selectedKey = getBestHealthyKey(uniqueKeys, targetModel);
@@ -3343,6 +3576,7 @@ export async function generateMotionPromptFromImage(
           mimeType: params.mimeType,
           fileName: params.fileName,
           projectName: params.projectName || 'Project',
+          type: requestedType,
         }),
       });
 
@@ -3361,5 +3595,7 @@ export async function generateMotionPromptFromImage(
   }
 
   const baseName = params.fileName.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9]/g, ' ');
-  return `Dynamic 60 FPS motion graphic animation of ${baseName} featuring smooth articulated transformations, volumetric chiaroscuro bevels, rhythmic kinetic bouncing, and seamless looping easing curves.`;
+  return requestedType === 'bg'
+    ? `Full-frame 60 FPS microstock motion background inspired by ${baseName} with layered depth parallax, smooth luminous wave flow, and seamless loop.`
+    : `Clean 60 FPS microstock vector icon animation of ${baseName} with connected overlapping geometry, bold outlines, and smooth theme-matched motion.`;
 }

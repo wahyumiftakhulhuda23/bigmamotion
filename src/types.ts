@@ -149,6 +149,7 @@ export interface ImageToMotionItem {
   projectName: string;
   fileName: string;
   fileSize?: string;
+  type?: AnimationType;
   imagePreviewUrl: string; // base64 or blob URL
   imageBase64: string; // pure base64 string
   mimeType: string;
@@ -188,6 +189,7 @@ export interface ImageToMotionAutoPilotAccount {
   id: string;
   projectId?: string;
   name: string;
+  type?: AnimationType;
   motionDynamics: MotionDynamics;
   colorMode: ColorMode;
   neonGlow: boolean;
@@ -208,6 +210,7 @@ export interface ImageToPromptItem {
   projectId: string;
   fileName: string;
   fileSize: string;
+  type?: AnimationType | 'auto';
   imagePreviewUrl: string;
   imageBase64: string;
   mimeType: string;

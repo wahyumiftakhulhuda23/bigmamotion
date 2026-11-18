@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ImageToMotionAutoPilotAccount,
   ReferenceImageUpload,
+  AnimationType,
   ColorMode,
 } from '../types';
 
@@ -115,6 +116,7 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
     const newAcc: ImageToMotionAutoPilotAccount = {
       id: 'acc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       name: trimmed,
+      type: 'icon',
       motionDynamics: 'auto',
       colorMode: 'gradient',
       neonGlow: true,
@@ -602,7 +604,27 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                     </div>
 
                     {/* Per-Account Visual Options (Motion automatically matched per image subject) */}
-                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-amber-300 uppercase flex items-center gap-1">
+                          <i className="fa-solid fa-layer-group text-[9px]"></i>
+                          <span>Jenis Konten</span>
+                        </label>
+                        <select
+                          value={acc.type || 'icon'}
+                          onChange={(e) => {
+                            const nextType = e.target.value as AnimationType;
+                            handleUpdateAccount(acc.id, {
+                              type: nextType,
+                              isGreenScreen: nextType === 'bg' ? false : acc.isGreenScreen,
+                            });
+                          }}
+                          className="w-full bg-slate-950 border border-amber-500/40 rounded-lg p-1.5 text-xs text-amber-200 font-bold focus:border-amber-400 focus:outline-none cursor-pointer"
+                        >
+                          <option value="icon">Ikon (Tengah)</option>
+                          <option value="bg">Background (Full Frame)</option>
+                        </select>
+                      </div>
 
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">

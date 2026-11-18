@@ -654,12 +654,12 @@ export default function App() {
     const total = generatedPrompts.length;
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const modelProfile = getModelExecutionProfile(selectedModel);
-    const BATCH_ANIM_SIZE = 2;
-    addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM • MODE HEMAT BATCH 2-IN-1) ==========`, 'info');
+    const BATCH_ANIM_SIZE = 1;
+    addLog(`========== MEMULAI GENERATE ANIMASI (${total} ITEM • MODE 1-TO-1 DEDIKASI PENUH) ==========`, 'info');
     if (apiKeys.length <= 1) {
-      addLog(`[Mode Hemat Token + Pacing ${selectedModel}] 2 animasi/request + jeda ${(pacingDelay / 1000).toFixed(1)}s/batch (jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
+      addLog(`[Mode Presisi 1 Prompt = 1 Request + Pacing ${selectedModel}] Jeda ${(pacingDelay / 1000).toFixed(1)}s/item (jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
     } else {
-      addLog(`[Rotasi ${apiKeys.length} API Key + Pacing ${selectedModel}] Batch 2-in-1 (jeda ${(pacingDelay / 1000).toFixed(1)}s/batch, jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
+      addLog(`[Rotasi ${apiKeys.length} API Key + Pacing ${selectedModel}] 1 Prompt = 1 Animasi Dedikasi (jeda ${(pacingDelay / 1000).toFixed(1)}s/item, jeda key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s, cooldown ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s).`, 'cyan');
     }
 
     let currentAnimList = [...animations];
@@ -673,9 +673,9 @@ export default function App() {
       const percent = Math.round((endNum / total) * 100);
 
       setProgressShow(true);
-      setProgressText(`Menghasilkan Animasi #${i + 1}${slice.length > 1 ? `–#${endNum}` : ''} dari ${total}...`);
+      setProgressText(`Menghasilkan Animasi #${i + 1} dari ${total}...`);
       setProgressPercent(percent);
-      addLog(`Batch Canvas #${i + 1}${slice.length > 1 ? `–#${endNum}` : ''}/${total}: "${slice[0].substring(0, 38)}..."`, 'info');
+      addLog(`Render Canvas #${i + 1}/${total}: "${slice[0].substring(0, 42)}..."`, 'info');
 
       let results = await generateBatchAnimationCodes(
         apiKeys,
@@ -806,8 +806,8 @@ export default function App() {
     const promptsToRetry = [...failedPrompts];
     const total = promptsToRetry.length;
     const pacingDelay = getAdaptiveModelPacingDelay(activeModel, apiKeys.length);
-    const BATCH_ANIM_SIZE = 2;
-    addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL (${activeModel} • BATCH 2-IN-1) ==========`, 'warn');
+    const BATCH_ANIM_SIZE = 1;
+    addLog(`========== MENCOBA ULANG ${total} ANIMASI GAGAL (${activeModel} • MODE 1-PER-REQUEST) ==========`, 'warn');
     showToast(`Mencoba ulang ${total} animasi yang sebelumnya mengalami kendala...`, 'info');
 
     let currentAnimList = [...animations];
@@ -1054,10 +1054,11 @@ export default function App() {
           mimeType: img.mimeType || 'image/png',
           status: 'pending',
           progress: 0,
+          type: acc.type || 'icon',
           motionDynamics: 'auto',
           colorMode: acc.colorMode || 'gradient',
           neonGlow: acc.neonGlow ?? true,
-          isGreenScreen: acc.isGreenScreen ?? false,
+          isGreenScreen: acc.type === 'bg' ? false : (acc.isGreenScreen ?? false),
           customInstructions: acc.customInstructions || '',
           createdAt: Date.now(),
         });
@@ -1148,14 +1149,14 @@ export default function App() {
 
     const totalPromptsOverall = batches.reduce((sum, b) => sum + b.prompts.length, 0);
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
-    const BATCH_ANIM_SIZE = 2;
+    const BATCH_ANIM_SIZE = 1;
     let completedOverall = 0;
     let currentAnimList = [...animationsRef.current];
     let stopAll = false;
 
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
     addLog(
-      `🚀 [BATCH NOTEPAD 2-IN-1] Memulai generate ${batches.length} file Notepad (${totalPromptsOverall} prompt) dengan mode hemat token...`,
+      `🚀 [BATCH NOTEPAD 1-TO-1] Memulai generate ${batches.length} file Notepad (${totalPromptsOverall} prompt) dengan 1 prompt = 1 render dedikasi...`,
       'cyan'
     );
     showToast(`🚀 Memulai generate animasi dari ${batches.length} file Notepad...`, 'info');
@@ -1303,7 +1304,7 @@ export default function App() {
     setIsPromptAutoPilotModalOpen(false);
     const accLabel = targetAccountName === 'ALL' ? 'Semua Akun' : `Akun: "${targetAccountName}"`;
     addLog('═══════════════════════════════════════════════════════════════', 'cyan');
-    addLog(`🚀 [AUTO PILOT HEMAT TOKEN - ${accLabel}] Batch 2-in-1 & Anti-Skip Cooldown aktif...`, 'cyan');
+    addLog(`🚀 [AUTO PILOT PRESISI - ${accLabel}] Mode 1 Prompt = 1 Animasi Dedikasi & Anti-Skip Cooldown aktif...`, 'cyan');
     showToast(`🚀 Auto Pilot [${accLabel}] Dimulai!`, 'info');
     setIsGalleryModalOpen(true);
 
@@ -1312,10 +1313,10 @@ export default function App() {
     completedLedgerRef.current = activeLedger;
     setCompletedLedger(activeLedger);
     const newFailedItems: FailedAutoPilotItem[] = [];
-    const BATCH_ANIM_SIZE = 2;
+    const BATCH_ANIM_SIZE = 1;
     const pacingDelay = getAdaptiveModelPacingDelay(selectedModel, apiKeys.length);
     const modelProfile = getModelExecutionProfile(selectedModel);
-    addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda batch ${(pacingDelay / 1000).toFixed(1)}s • Jeda antar key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s • Cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s/${(modelProfile.cooldownStepsMs[1] / 1000).toFixed(0)}s agar kuota irit & bebas retry beruntun.`, 'cyan');
+    addLog(`⏱️ [Pacing Model ${selectedModel}] Jeda ${(pacingDelay / 1000).toFixed(1)}s/item • Jeda antar key ${(modelProfile.minKeyReuseGapMs / 1000).toFixed(1)}s • Cooldown 429 ${(modelProfile.cooldownStepsMs[0] / 1000).toFixed(0)}s/${(modelProfile.cooldownStepsMs[1] / 1000).toFixed(0)}s agar kualitas presisi & bebas kemiripan.`, 'cyan');
     let stopAllForQuota = false;
 
     try {
@@ -1400,7 +1401,7 @@ export default function App() {
                 (gp) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, gp) && !reusedSet.has(normalizePromptKey(gp))
               );
               prompts = [...reusedConcrete, ...freshFiltered];
-              addLog(`✅ [${acc.name}] Berhasil menyiapkan ${prompts.length} prompt unik. Memulai render hemat batch 2-in-1...`, 'success');
+              addLog(`✅ [${acc.name}] Berhasil menyiapkan ${prompts.length} prompt unik. Memulai render 1-per-request (anti-kemiripan)...`, 'success');
               await new Promise((res) => setTimeout(res, 400));
             } catch (e: any) {
               addLog(`❌ [${acc.name}] Gagal generate prompt: ${e.message}`, 'error');
@@ -1518,7 +1519,7 @@ export default function App() {
               colorMode: acc.colorMode ?? 'gradient',
               motionDynamics: 'auto',
               neonGlow: acc.neonGlow ?? true,
-              variationOffset: (j >> 1) * 5 + i * 11,
+              variationOffset: j * 7 + i * 13,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -1542,7 +1543,7 @@ export default function App() {
                   colorMode: acc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
                   neonGlow: acc.neonGlow ?? true,
-                  variationOffset: (j >> 1) * 5 + i * 11 + 19,
+                  variationOffset: j * 7 + i * 13 + 19,
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
               );
@@ -1776,7 +1777,7 @@ export default function App() {
 
     const pacingDelay = getAdaptiveModelPacingDelay(activeModel, apiKeys.length);
     addLog('═══════════════════════════════════════════════════════════════', 'warn');
-    addLog(`🔄 [ULANGI AUTO PILOT GAGAL - ${activeModel}] Memproses ${itemsToRetry.length} item unik yang belum selesai dengan mode hemat batch 2-in-1...`, 'warn');
+    addLog(`🔄 [ULANGI AUTO PILOT GAGAL - ${activeModel}] Memproses ${itemsToRetry.length} item unik dengan mode dedikasi 1 prompt = 1 animasi...`, 'warn');
     showToast(`🔄 Mencoba ulang ${itemsToRetry.length} item Auto Pilot yang gagal/tertunda dengan ${activeModel}...`, 'info');
 
     const remainingFailed: FailedAutoPilotItem[] = [];
@@ -1851,7 +1852,7 @@ export default function App() {
       }
 
       if (!quotaStoppedInExpansion && expandedItems.length > 0) {
-        const BATCH_ANIM_SIZE = 2;
+        const BATCH_ANIM_SIZE = 1;
         const chunks: FailedAutoPilotItem[][] = [];
         for (const item of expandedItems) {
           const last = chunks[chunks.length - 1];

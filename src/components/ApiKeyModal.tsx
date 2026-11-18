@@ -401,12 +401,12 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                     {/* Explanatory Note */}
                     <div className="bg-slate-900/90 rounded-lg p-2.5 border border-gray-800 text-[11px] text-gray-300 space-y-1">
                       <p className="font-bold text-amber-300 flex items-center gap-1">
-                        <i className="fa-solid fa-circle-info"></i> Mengapa API Key valid terkadang muncul tidak valid atau limit?
+                        <i className="fa-solid fa-circle-info"></i> Mengapa API Key baru bisa terbaca tidak valid atau limit?
                       </p>
                       <ul className="list-disc pl-4 space-y-0.5 text-gray-400 text-[10.5px]">
-                        <li><strong className="text-gray-200">Kuota Limit (429) per Model:</strong> Google memberlakukan kuota limit terpisah untuk setiap model. Bila satu model sedang limit (429), API Key Anda <strong className="text-emerald-300">tetap valid</strong> dan bisa langsung digunakan di model lainnya (seperti 3.5 Flash Lite atau 3.1 Flash Lite).</li>
-                        <li><strong className="text-gray-200">Timeout Jaringan:</strong> Verifikasi kini dilengkapi timeout 12 detik dengan multi-probe sehingga koneksi lambat tidak memicu status keliru.</li>
-                        <li><strong className="text-gray-200">Error 400 Bukan Berarti Key Salah:</strong> Error parameter permintaan lama tidak lagi dianggap sebagai "Key Tidak Valid".</li>
+                        <li><strong className="text-gray-200">Batasan Domain / Referrer (Vercel & AI Studio):</strong> Jika di Google Cloud Console API Key dibatasi hanya untuk domain tertentu (HTTP Referrer), domain baru seperti <span className="font-mono text-gray-300">*.vercel.app</span> akan ditolak (403). Gunakan <strong className="text-emerald-300">Application restrictions: None</strong> atau tambahkan kedua domain tersebut.</li>
+                        <li><strong className="text-gray-200">Model Preview vs Stabil (2.5 Flash):</strong> Pemeriksaan kunci kini memverifikasi langsung via endpoint resmi Google (<span className="font-mono text-gray-300">/v1beta/models</span>) tanpa menghabiskan kuota token agar kunci baru tetap terdeteksi valid meski satu model preview belum tersedia.</li>
+                        <li><strong className="text-gray-200">Kuota Limit (429) per Model:</strong> Bila satu model sedang limit (429), API Key Anda <strong className="text-emerald-300">tetap valid</strong> dan otomatis dialihkan ke model aktif lainnya.</li>
                       </ul>
                     </div>
                   </div>
@@ -427,7 +427,8 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   </div>
                   <div className="space-y-1.5 max-h-36 overflow-y-auto">
                     {currentLines.map((line, idx) => {
-                      const res = testResults[idx];
+                      const rawRes = testResults[idx];
+                      const res = rawRes && (rawRes.key === line || rawRes.status === 'testing') ? rawRes : undefined;
                       const isTestingThis = testingRowIndex === idx;
 
                       return (
@@ -453,7 +454,7 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                               >
                                 ✘ {(() => {
                                   const errStr = typeof res.error === 'string' ? res.error : (res.error ? String(res.error) : 'Gagal');
-                                  return errStr.length > 24 ? errStr.substring(0, 24) + '...' : errStr;
+                                  return errStr.length > 42 ? errStr.substring(0, 42) + '...' : errStr;
                                 })()}
                               </span>
                             )}

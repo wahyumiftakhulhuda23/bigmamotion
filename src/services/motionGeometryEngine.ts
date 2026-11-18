@@ -9,17 +9,17 @@ export const STUDIO_GEOMETRY_ENGINE_JS = `${ENGINE_BASE_PRIMITIVES_JS}${ENGINE_H
     };`;
 
 export const HELPERS_G_BASE_DOC =
-  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.part(tx,ty,rot,sx,sy,fn)';
+  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.dome(x,y,bw,bh,f,rim,lw) | G.wave(x,y,w,amp,freq,ph,th,col) | G.grid(x,y,bw,bh,cols,rows,r,act,f,aF,rim,lw) | G.bolt(x,y,s,f,rim,lw) | G.cross(x,y,s,th,f,rim,lw) | G.leaf(x,y,s,rot,f,rim,lw) | G.part(tx,ty,rot,sx,sy,fn)';
 
-export const HELPERS_G_HERO_DOC =
-  'HERO G (s=1.05*R,...,t,v=0..5): G.uiLayout | G.videoCall | G.laptop | G.checklist | G.rocket | G.lightbulb | G.chart | G.magnifier | G.pieChart | G.gears | G.userBadge | G.typography | G.briefcase | G.trophy | G.clock | G.lock | G.cloudSync | G.robot | G.chip | G.coinStack | G.handshake | G.shield | G.cart | G.megaphone | G.wallet | G.globe | G.building | G.document | G.folder | G.target | G.envelope | G.chat | G.network | G.server | G.calendar | G.candlestick | G.desk | G.negotiation | G.medical | G.delivery | G.puzzle | G.bell | G.calculator | G.scales | G.compass | G.camera | G.gamepad | G.vrHeadset | G.dice | G.headphones | G.atom | G.microscope | G.telescope | G.flask | G.book | G.gradCap | G.dna | G.stethoscope | G.syringe | G.heartbeat | G.palette | G.layers | G.ruler | G.penTool | G.drone | G.satellite | G.key | G.battery';
+export const HELPERS_G_HERO_DOC = '';
 
 export const HELPERS_G_BG_DOC =
-  'BG G (full-frame 0..w,0..h): G.bgWaves(w,h,c1,c2,c3,t,v) | G.bgGrid(w,h,c1,c2,c3,t,v) | G.bgGeo(w,h,c1,c2,c3,t,v)';
+  `${HELPERS_G_BASE_DOC} | G.bgBackdrop(w,h,c0,c1,c2,dir)`;
 
-export const HELPERS_G_DOC = `${HELPERS_G_BASE_DOC} | ${HELPERS_G_HERO_DOC}`;
+export const HELPERS_G_DOC = HELPERS_G_BASE_DOC;
 
-export const HELPERS_G_VISION_DOC = `${HELPERS_G_BASE_DOC} | G.handshake | G.shield | G.cart | G.megaphone | G.wallet | G.globe | G.building | G.document | G.folder | G.target | G.envelope | G.chat | G.network | G.server | G.calendar | G.candlestick | G.desk | G.negotiation | G.medical | G.delivery | G.puzzle | G.bell | G.calculator | G.scales | G.compass | G.camera | G.uiLayout | G.videoCall | G.laptop | G.checklist | G.rocket | G.lightbulb | G.chart | G.magnifier | G.pieChart | G.gears | G.userBadge | G.typography | G.briefcase | G.trophy | G.clock | G.lock | G.cloudSync | G.robot | G.chip | G.coinStack | G.gamepad | G.vrHeadset | G.dice | G.headphones | G.atom | G.microscope | G.telescope | G.flask | G.book | G.gradCap | G.dna | G.stethoscope | G.syringe | G.heartbeat | G.palette | G.layers | G.ruler | G.penTool | G.drone | G.satellite | G.key | G.battery`;
+export const HELPERS_G_VISION_DOC =
+  `${HELPERS_G_BASE_DOC} | G.bgBackdrop(w,h,c0,c1,c2,dir)`;
 
 export function stripLeadingCodeFenceAndLang(raw: string): string {
   const tick3 = String.fromCharCode(96, 96, 96);
@@ -186,7 +186,7 @@ ${jsBody}
     var ctx = canvas.getContext('2d');
     ${greenShadowLock}
     ${STUDIO_GEOMETRY_ENGINE_JS}
-    var w = 800, h = 600, cx = 400, cy = 300, S = 324, R = 233, dpr = 1;
+    var w = 800, h = 600, cx = 400, cy = 300, S = 372, R = 298, dpr = 1;
     __bigmaV = ${Math.floor(Math.random() * 1000000)};
     function __bigmaResize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -198,8 +198,8 @@ ${jsBody}
       canvas.style.height = h + 'px';
       cx = w / 2;
       cy = h / 2;
-      S = Math.min(w, h) * 0.54;
-      R = S * 0.72;
+      S = Math.min(w, h) * 0.62;
+      R = S * 0.80;
     }
     var resize = __bigmaResize;
     window.addEventListener('resize', __bigmaResize);
@@ -319,6 +319,7 @@ export function normalizeCanvasCodeFingerprint(codeOrHtml: string): string {
     .replace(/['"]rgba?\([^)]*\)['"]/gi, "'#C'")
     .replace(/rgba?\([^)]*\)/gi, '#C')
     .replace(/['"](?:white|black|cyan|gold|orange|indigo|blue|purple|red|pink|yellow|slate|amber|rose|violet|sky|teal|emerald)['"]/gi, "'#C'")
+    .replace(/(Math\.(?:sin|cos)\(\s*t\s*\*\s*)[0-9]+(?:\.[0-9]+)?/gi, '$1T')
     .replace(/\s+/g, '')
     .trim();
 }
@@ -344,754 +345,126 @@ export function resolvePromptMotionPlan(
   const topic = (promptTopic || '').toLowerCase();
   const sub = (subCategory || '').toLowerCase();
 
-  let topicHash = 0;
-  for (let i = 0; i < topic.length; i++) {
-    topicHash = ((topicHash << 5) - topicHash + topic.charCodeAt(i)) | 0;
-  }
-  const absTopicHash = Math.abs(topicHash);
-
   if (type === 'bg') {
-    if (/\b(grid|cyber|matrix|network|tech|circuit|wireframe|digital|future|perspective|mesh|hud|radar)\b/.test(topic)) {
+    const bgDirection = ['v', 'd', 'r', 'h'][(v + cm) % 4];
+    const motionDrift = [
+      'smooth diagonal phase drift + depth parallax waves',
+      'continuous horizontal perspective scroll + atmospheric gleam',
+      'breathing concentric horizon waves + synchronized kinetic ribbons',
+    ][cm];
+
+    if (/\b(retro|synthwave|vaporwave|80s|sunset|horizon|neon\s*grid)\b/.test(topic) || sub.includes('retro')) {
       return {
-        label: `cyber wireframe grid (v${v})`,
-        helperName: 'bgGrid',
-        anatomyHint: `Call G.bgGrid(w, h, c1, c2, c3, t, ${v}) directly in drawFrame (full-frame 0..w, 0..h)!`,
-        codeHint: 'seamless scrolling perspective/grid telemetry lattice across full canvas',
+        label: 'retro synthwave horizon',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'v'); (2) Segmented striped G.disc horizon sun near (cx,cy*0.72) + dark mountain G.poly ridge; (3) Perspective grid floor (y=cy*0.78..h) with receding perspective lines + phase-scrolled horizontal speed rails across 0..w.`,
+        codeHint: `perspective horizon scroll (t*k % 1) + horizontal slice shimmer on sun (${motionDrift})`,
       };
     }
-    if (/\b(geo|geometric|minimal|ribbon|bar|hexagon|hex|polygon|triangle|shape|abstract|isometric|cube)\b/.test(topic)) {
+    if (/\b(grid|cyber|scifi|sci-fi|hud|circuit|matrix|telemetry|radar|wireframe|fintech|data|network)\b/.test(topic) || /cyber|fintech|corporate/.test(sub)) {
       return {
-        label: `geometric rhythm field (v${v})`,
-        helperName: 'bgGeo',
-        anatomyHint: `Call G.bgGeo(w, h, c1, c2, c3, t, ${v}) directly in drawFrame (full-frame 0..w, 0..h)!`,
-        codeHint: 'gliding geometric capsules/hexagons + central harmonic orbital ring across full canvas',
+        label: 'cyber telemetry architecture',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Edge-to-edge architectural G.grid/circuit trace G.pill lines spanning -0.05*w..1.05*w; (3) Off-center sweeping radar G.ring arcs + sliding G.capsule telemetry beams.`,
+        codeHint: `continuous circuit/lattice travel + smooth ring arc precession (${motionDrift})`,
+      };
+    }
+    if (/\b(botanical|leaf|leaves|forest|nature|plant|flora|organic|eco|canopy)\b/.test(topic) || sub.includes('botanical')) {
+      return {
+        label: 'botanical layered canopy',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'d'); (2) Oversized layered G.leaf silhouettes anchored from bottom/side frame edges (-0.05*w..1.05*w, -0.05*h..1.05*h) swaying softly; (3) Flowing G.wave breeze currents across whole viewport.`,
+        codeHint: `gentle wind-sway rotation on perimeter G.leaf stems + smooth breeze wave (${motionDrift})`,
+      };
+    }
+    if (/\b(gold|silk|luxury|champagne|satin|ribbon|marble|royal|premium)\b/.test(topic) || sub.includes('luxury')) {
+      return {
+        label: 'luxury flowing silk ribbons',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) 5-7 full-width overlapping multi-amplitude G.wave satin caustics sweeping corner-to-corner (-0.08*w..1.08*w); (3) Slow diagonal metallic gleam bands.`,
+        codeHint: `velvety low-frequency sine drape phase + subtle diagonal luster sweep (${motionDrift})`,
+      };
+    }
+    if (/\b(speed|energy|hyper|warp|streak|tunnel|kinetic|dynamic|motion\s*blur|turbo)\b/.test(topic) || sub.includes('speed')) {
+      return {
+        label: 'dynamic kinetic energy streaks',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'r'); (2) Full-frame diagonal or radial velocity G.capsule streaks wrapping smoothly from edge to edge (-0.1*w..1.1*w); (3) Expanding concentric pulse G.ring + G.rays sweeps.`,
+        codeHint: `continuous velocity warp wrap + pulsing kinetic rays (${motionDrift})`,
+      };
+    }
+    if (/\b(geo|geometric|isometric|prism|mosaic|triangle|hexagon|polygon|bauhaus|abstract)\b/.test(topic) || sub.includes('abstract')) {
+      return {
+        label: 'full-frame architectural geometric field',
+        helperName: 'custom_bg',
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Repeating tessellated G.ngon / G.poly / G.capsule architectural ribbons filling -0.06*w..1.06*w & -0.06*h..1.06*h; (3) Coordinated depth-shifted foreground geometric sweeps.`,
+        codeHint: `synchronized geometric glide + scale/phase wave across full canvas (${motionDrift})`,
       };
     }
     return {
-      label: `full-frame harmonic waves (v${v})`,
-      helperName: 'bgWaves',
-      anatomyHint: `Call G.bgWaves(w, h, c1, c2, c3, t, ${v}) directly in drawFrame (full-frame 0..w, 0..h)!`,
-      codeHint: 'layered smooth cosine ribbon waves drifting seamlessly across 0..w, 0..h',
+      label: 'atmospheric multi-layer motion',
+      helperName: 'custom_bg',
+      anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Custom edge-to-edge thematic geometry matching "${promptTopic.slice(0, 60)}" spanning -0.08*w..1.08*w & -0.08*h..1.08*h with smooth overlapping G.wave/G.poly/G.oval/G.grid depth planes; (3) Continuous corner-to-corner foreground light flow.`,
+      codeHint: `bespoke theme-matched seamless 60 FPS motion (${motionDrift})`,
     };
   }
 
-  // Secondary kinetic polish NEVER replaces the cohesive hero helper (prevents random detached primitives!)
-  const withPolish = (plan: PromptMotionPlan): PromptMotionPlan => {
-    if (cm === 1) {
-      return {
-        label: `${plan.label} + pulse`,
-        helperName: plan.helperName,
-        anatomyHint: plan.anatomyHint,
-        codeHint: `${plan.codeHint} + smooth subtle scale breathe sx=sy=1+0.022*Math.sin(t*2.6)`,
-      };
-    }
-    if (cm === 2) {
-      return {
-        label: `${plan.label} + counter-sway`,
-        helperName: plan.helperName,
-        anatomyHint: plan.anatomyHint,
-        codeHint: `${plan.codeHint} + gentle counter-tilt rot=Math.sin(t*1.5)*0.03`,
-      };
-    }
-    return plan;
+  // ICON: Bespoke Structural Anatomy Blueprint — NEVER forces a cloned template!
+  // Builds prompt-accurate compound objects inside [-0.66*R, +0.66*R] with connected Painter's-Order geometry.
+  let structuralGuide =
+    'Build the EXACT literal object from the prompt using 4-7 cohesive, overlapping sub-parts inside [-0.66*R,+0.66*R] (1: outer housing/chassis silhouette; 2: secondary structural trim/frame/roof/stand physically joined with >=0.04*R overlap; 3: authentic internal functional mechanism; 4: animated focal element + crisp accent highlight).';
+  let themeMotion = 'upright stable hover bobY=Math.sin(t*2.2)*0.028*R, |rot|<=0.04, plus smooth theme-driven internal part articulation';
+
+  if (/\b(booth|kiosk|cabin|shelter|house|home|building|tower|store|shop|bank|office)\b/.test(topic)) {
+    structuralGuide =
+      'ARCHITECTURAL SILHOUETTE: Join crown/roof (G.dome or sloped G.poly) directly onto main structure G.box body -> crisp window/door G.grid panes -> interior subject detail (handset/hub/door) + solid foundation base G.box. Keep every sub-part physically anchored vertically with zero detached floating corner fragments.';
+    themeMotion = 'gentle grounded hover bobY=Math.sin(t*2.0)*0.022*R (keep upright |rot|<=0.02) + illuminated G.grid active pane pulse / beacon ring';
+  } else if (/\b(headset|headphone|call\s*center|earphone|mic|microphone|speaker|megaphone|audio|voice|podcast|music)\b/.test(topic)) {
+    structuralGuide =
+      'ACOUSTIC HARDWARE: Draw curved headband G.ring or flared cone G.poly connected seamlessly to padded earcups G.capsule / grille G.dome -> attached boom arm G.pill + acoustic G.wave waveform / sound arcs.';
+    themeMotion = 'rhythmic beat hover + oscillating G.wave voice/audio waveform + subtle acoustic G.ring pulse';
+  } else if (/\b(lock|padlock|encrypt|decrypt|cipher|vault|safe|key|shield|firewall|security|antivirus)\b/.test(topic)) {
+    structuralGuide =
+      'SECURITY ARTIFACT: Combine distinct security mechanism (arched G.ring shackle / faceted shield G.poly / machined G.pill key shaft+teeth) welded into sturdy armored G.box casing + centered keyhole/cipher G.grid or G.disc core (ZERO stock padlocks unless prompt is padlock; if encryption/cipher/key, build key/cipher dial/matrix!).';
+    themeMotion = 'steady upright float + sliding latch/bolt/key-turn or animated cipher G.grid scan';
+  } else if (/\b(browser|web|app|monitor|laptop|tablet|phone|smartphone|screen|terminal|dashboard|ui|ux|interface|window|error|loading)\b/.test(topic)) {
+    structuralGuide =
+      'DEVICE / UI FRAME: Main outer bezel G.box with top titlebar G.box & window controls -> clean inner viewport -> bespoke internal scene/alert/chart specific to THIS prompt (e.g. G.wave signal, G.bar KPIs, broken G.pill link, caution G.ngon triangle badge, progress G.capsule) nested completely inside the screen.';
+    themeMotion = 'upright hover + live internal screen motion (sweeping progress capsule / rising bars / smooth warning badge pulse)';
+  } else if (/\b(router|modem|wifi|wireless|network|server|cloud|cable|plug|disconnect|satellite|antenna|iot|smart\s*home)\b/.test(topic)) {
+    structuralGuide =
+      'CONNECTED HARDWARE / TELEMETRY: Build tangible prompt-specific hardware (e.g. house+hub, split cable plugs, server rack stack with G.grid LEDs, orbited satellite, parabolic dish G.dome, cloud silhouette of welded G.disc+G.box) with physically attached antennas/leads and synchronized signal arcs.';
+    themeMotion = 'smooth phase signal propagation along G.ring arcs / sequential G.grid LED telemetry / plug separation-rejoin bounce';
+  } else if (/\b(heart|medical|doctor|syringe|stethoscope|dna|pill|hospital|clinic|ambulance|virus|vaccine|health|lab|flask|microscope)\b/.test(topic)) {
+    structuralGuide =
+      'MEDICAL / SCIENCE INSTRUMENT: Craft the exact clinical instrument/anatomy (twin G.wave helix strands, Erlenmeyer triangular G.poly+neck G.box flask with rising bubbles, curved G.ring stethoscope chestpiece, sleek G.capsule syringe+plunger, or beveled G.cross core) with high contrast and clean bevel rims.';
+    themeMotion = 'organic double-beat pulse / rising bubbles / oscillating ECG G.wave or metered plunger glide';
+  } else if (/\b(cart|truck|delivery|drone|rocket|car|ship|plane|logistics|wallet|coin|bank|scale|calculator|calendar|clock|camera|trophy|book|grad|atom|palette)\b/.test(topic)) {
+    structuralGuide =
+      'BESPOKE HERO OBJECT: Assemble exact real-world geometry with recognizable proportions (wheels below chassis with G.ngon spokes, wings angled from fuselage, tripod/strap attached to body, stacked/peeking elements connected cleanly).';
+    themeMotion = 'authentic mechanical physics (rotating wheels/gears, swinging pendulum/arms, gliding progress, buoyant flight bob)';
+  }
+
+  const twistHints = [
+    'Composition Twist: clean bold front-facing isometric/flat-3D vector with crisp outer rim lw=Math.max(2,0.032*R)',
+    'Composition Twist: subtle volumetric depth shadow offset layer beneath primary casing using darker palette tone c0 + vivid c2/c3 front highlight',
+    'Composition Twist: crisp architectural symmetry with secondary animated kinetic highlight accent sweep inside main frame',
+  ];
+
+  const overrideMap: Record<string, string> = {
+    bounce: 'elastic bounce bobY=-Math.abs(Math.sin(t*2.6))*0.045*R with subtle squash-stretch sx/sy',
+    orbital: 'smooth orbital float bobY=Math.sin(t*2.1)*0.028*R + harmonic tilt rot=Math.sin(t*1.5)*0.03',
+    morph: 'fluid breathing scale sx=1+0.024*Math.sin(t*2.4), sy=1-0.024*Math.sin(t*2.4)',
+    cyber: 'crisp stepped electronic pulse + kinetic scanline/LED wave sweep',
+    mechanical: 'precision geared/articulated sub-part motion with damped spring settling',
+    flow: 'silky harmonic 60 FPS sine float + coordinated internal element flow',
   };
 
-  // --- PRIORITY 1: CONCRETE PHYSICAL SUBJECTS (Gaming, Science, Edu, Medical, Design, Hardware) ---
-  // Evaluated BEFORE broad nouns like "network", "design", "ui", "ai", "system" so specific items stay 100% on-theme!
-
-  // Gaming & Entertainment
-  if (/\b(gamepad|controller|joystick|console|arcade|esport\w*|d-pad|dpad|gaming\s*pad|retro\s*game)\b/.test(topic)) {
-    return withPolish({
-      label: `gaming controller console (v${v})`,
-      helperName: 'gamepad',
-      anatomyHint: `Call G.gamepad(0, 0, 1.05*R, bodyCol, padCol, btnCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.4)*0.028*R + live button & stick motion',
-    });
-  }
-  if (/\b(vr\b|virtual\s*reality|metaverse|vr\s*headset|vr\s*goggles|ar\s*glass\w*|spatial\s*visor|head-mounted)\b/.test(topic)) {
-    return withPolish({
-      label: `VR spatial headset (v${v})`,
-      helperName: 'vrHeadset',
-      anatomyHint: `Call G.vrHeadset(0, 0, 1.05*R, bodyCol, visorCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + glowing visor scan sweep',
-    });
-  }
-  if (/\b(dice|board\s*game|tabletop|casino|roulette|rng|gamification|lucky\s*cube)\b/.test(topic)) {
-    return withPolish({
-      label: `3D gaming dice (v${v})`,
-      helperName: 'dice',
-      anatomyHint: `Call G.dice(0, 0, 1.05*R, faceCol, "#F8FAFC", accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'buoyant tumble bobY=Math.sin(t*2.5)*0.03*R + playful cube rock & pip gleam',
-    });
-  }
-  if (/\b(headphone\w*|headset|earphone\w*|earbud\w*|equalizer|podcast|audio\s*studio|music\s*player|soundtrack)\b/.test(topic)) {
-    return withPolish({
-      label: `audio studio headphones (v${v})`,
-      helperName: 'headphones',
-      anatomyHint: `Call G.headphones(0, 0, 1.05*R, bandCol, cupCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'rhythmic float bobY=Math.sin(t*2.6)*0.028*R + live soundwave equalizer',
-    });
-  }
-
-  // Education & Science
-  if (/\b(atom\w*|quantum|physics|molecule|molecular|electron|proton|nucleus|bohr|nuclear|particle\s*orbit)\b/.test(topic)) {
-    return withPolish({
-      label: `atomic orbital model (v${v})`,
-      helperName: 'atom',
-      anatomyHint: `Call G.atom(0, 0, 1.05*R, nucCol, orb1Col, orb2Col, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'smooth precession float + continuous orbital electron revolution',
-    });
-  }
-  if (/\b(microscope|specimen|pathology|histology|microbiology|cell\s*research|petri|lens\s*turret)\b/.test(topic)) {
-    return withPolish({
-      label: `laboratory microscope (v${v})`,
-      helperName: 'microscope',
-      anatomyHint: `Call G.microscope(0, 0, 1.05*R, bodyCol, lensCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright lab hover bobY=Math.sin(t*2.0)*0.024*R + precision optical turret focus',
-    });
-  }
-  if (/\b(telescope|astronomy|observatory|astrophysics|cosmos|starfinder|planetarium)\b/.test(topic)) {
-    return withPolish({
-      label: `astronomy telescope (v${v})`,
-      helperName: 'telescope',
-      anatomyHint: `Call G.telescope(0, 0, 1.05*R, tubeCol, tripCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'gentle celestial float + smooth sky-scanning barrel sweep',
-    });
-  }
-  if (/\b(flask|beaker|erlenmeyer|chemistry|chemical|reagent|potion|test\s*tube|experiment|alchemy)\b/.test(topic)) {
-    return withPolish({
-      label: `chemistry lab flask (v${v})`,
-      helperName: 'flask',
-      anatomyHint: `Call G.flask(0, 0, 1.05*R, glassCol, liqCol, bubCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright flask float bobY=Math.sin(t*2.2)*0.026*R + rising effervescent bubbles',
-    });
-  }
-  if (/\b(graduat\w*|mortarboard|diploma|academic|university|campus|scholarship|degree|convocation|tassel)\b/.test(topic)) {
-    return withPolish({
-      label: `graduation cap & tassel (v${v})`,
-      helperName: 'gradCap',
-      anatomyHint: `Call G.gradCap(0, 0, 1.05*R, capCol, "#F8FAFC", tasCol, accCol, t, ${v}) inside G.part!`,
-      codeHint: 'upright academic float bobY=Math.sin(t*2.1)*0.026*R + swinging golden tassel',
-    });
-  }
-  if (/\b(book\w*|textbook|e-learning|elearning|ebook|library|reading|encyclopedia|dictionary|syllabus|curriculum|study)\b/.test(topic)) {
-    return withPolish({
-      label: `open knowledge book (v${v})`,
-      helperName: 'book',
-      anatomyHint: `Call G.book(0, 0, 1.05*R, coverCol, "#F8FAFC", accentCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.026*R + rhythmic page turn pulse',
-    });
-  }
-
-  // Medical & Health (Split cleanly across 4 distinct icons!)
-  if (/\b(dna|helix|genetic\w*|genome|chromosom\w*|biotech\w*)\b/.test(topic)) {
-    return withPolish({
-      label: `DNA double helix (v${v})`,
-      helperName: 'dna',
-      anatomyHint: `Call G.dna(0, 0, 1.05*R, s1Col, s2Col, rungCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright biotech float + smooth double-helix base-pair phase rotation',
-    });
-  }
-  if (/\b(stethoscope|auscultat\w*|doctor|physician|checkup|check-up|diagnosis|pediatric)\b/.test(topic)) {
-    return withPolish({
-      label: `clinical stethoscope (v${v})`,
-      helperName: 'stethoscope',
-      anatomyHint: `Call G.stethoscope(0, 0, 1.05*R, tubeCol, metalCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright medical float + rhythmic chestpiece diaphragm pulse',
-    });
-  }
-  if (/\b(syringe|vaccine|vaccinat\w*|injection|needle|immuniz\w*|booster|serum)\b/.test(topic)) {
-    return withPolish({
-      label: `precision vaccine syringe (v${v})`,
-      helperName: 'syringe',
-      anatomyHint: `Call G.syringe(0, 0, 1.05*R, "#F8FAFC", fluidCol, accentCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'angled precision float + smooth metered plunger glide',
-    });
-  }
-  if (/\b(heartbeat|cardiogram|ecg|ekg|pulse|cardio\w*|heart\s*rate|oximeter|vital\s*signs|defibrillator)\b/.test(topic)) {
-    return withPolish({
-      label: `cardiac heartbeat ECG (v${v})`,
-      helperName: 'heartbeat',
-      anatomyHint: `Call G.heartbeat(0, 0, 1.05*R, heartCol, "#F8FAFC", accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'rhythmic lub-dub cardiac expansion + live ECG wave beat',
-    });
-  }
-  if (/\b(pill|capsule|tablet|medicine|medical|cross|hospital|clinic|pharmacy|first\s*aid|ambulance|health|wellness)\b/.test(topic)) {
-    return withPolish({
-      label: `medical care emblem (v${v})`,
-      helperName: 'medical',
-      anatomyHint: `Call G.medical(0, 0, 1.05*R, "#F8FAFC", crossCol, accentCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'double-beat wellness pulse + clean medical cross / shield beat',
-    });
-  }
-
-  // UI Design & Graphic Design (Split cleanly across 5 distinct design tools!)
-  if (/\b(palette|paint\w*|brush|color\s*wheel|swatch\w*|illustrat\w*|artist|canvas\s*art|watercolor|pigment)\b/.test(topic)) {
-    return withPolish({
-      label: `color palette & brush (v${v})`,
-      helperName: 'palette',
-      anatomyHint: `Call G.palette(0, 0, 1.05*R, boardCol, c1Col, c2Col, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright creative float bobY=Math.sin(t*2.2)*0.026*R + oscillating artist brush/swatches',
-    });
-  }
-  if (/\b(layer\w*|stack|figma|component\s*library|prototype|prototyping|isometric\s*plane|design\s*system|card\s*stack)\b/.test(topic)) {
-    return withPolish({
-      label: `stacked UI design layers (v${v})`,
-      helperName: 'layers',
-      anatomyHint: `Call G.layers(0, 0, 1.05*R, topCol, midCol, botCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'isometric float + rhythmic Z-axis layer separation wave',
-    });
-  }
-  if (/\b(ruler|set\s*square|caliper|measurement|spacing|grid\s*tool|drafting|blueprint|measure|dimension)\b/.test(topic)) {
-    return withPolish({
-      label: `precision design ruler (v${v})`,
-      helperName: 'ruler',
-      anatomyHint: `Call G.ruler(0, 0, 1.05*R, rulCol, penCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright studio float + sliding alignment guide & caliper',
-    });
-  }
-  if (/\b(pen\s*tool|bezier|anchor\s*point|path\s*curve|vector\s*tool|spline|nib|stylus)\b/.test(topic)) {
-    return withPolish({
-      label: `vector bezier pen tool (v${v})`,
-      helperName: 'penTool',
-      anatomyHint: `Call G.penTool(0, 0, 1.05*R, nibCol, nodeCol, curveCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright vector hover + oscillating bezier anchor handles',
-    });
-  }
-  if (/\b(typography|font|lettering|typeface|serif|calligraphy|editorial\s*type)\b/.test(topic)) {
-    return withPolish({
-      label: `editorial typography glyph (v${v})`,
-      helperName: 'typography',
-      anatomyHint: `Call G.typography(0, 0, 1.05*R, cardCol, inkCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + baseline cursor glide',
-    });
-  }
-
-  // Robotics, Aerospace, Telecom, Power & Crypto Keys
-  if (/\b(drone|quadcopter|uav|aerial\s*bot|delivery\s*drone)\b/.test(topic)) {
-    return withPolish({
-      label: `autonomous UAV drone (v${v})`,
-      helperName: 'drone',
-      anatomyHint: `Call G.drone(0, 0, 1.05*R, bodyCol, rotorCol, camCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'hovering flight bobY=Math.sin(t*3.0)*0.035*R + high-speed rotor blur',
-    });
-  }
-  if (/\b(satellite|radar|dish|telemetry|antenna|radio\s*tower|5g|wireless|wifi|signal\s*relay|telecom\w*)\b/.test(topic)) {
-    return withPolish({
-      label: `orbital signal satellite (v${v})`,
-      helperName: 'satellite',
-      anatomyHint: `Call G.satellite(0, 0, 1.05*R, bodyCol, wingCol, beamCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'gentle orbital sway + pulsing concentric telemetry beams',
-    });
-  }
-  if (/\b(encryption\s*key|encryption\s+\w+\s+key|security\s*key|crypto\s*key|digital\s*key|api\s*key|passkey|password|token\s*key|access\s*key|credential)\b/.test(topic)) {
-    return withPolish({
-      label: `digital encryption key (v${v})`,
-      helperName: 'key',
-      anatomyHint: `Call G.key(0, 0, 1.05*R, keyCol, bowCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'metallic float + smooth security key turn rotation',
-    });
-  }
-  if (/\b(battery|eco-charger|charger|charging|ev\b|photovoltaic|clean\s*energy|power\s*cell|volt\w*)\b/.test(topic)) {
-    return withPolish({
-      label: `clean energy battery cell (v${v})`,
-      helperName: 'battery',
-      anatomyHint: `Call G.battery(0, 0, 1.05*R, shellCol, chargeCol, boltCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright power float + progressive segmented energy charge',
-    });
-  }
-
-  // --- PRIORITY 2: SPECIFIC COMPOUND WORK & ENTERPRISE SUBJECTS ---
-  if (/\b(video\s*conferenc\w*|video\s*call\w*|teleconferenc\w*|webinar\w*|zoom\s*call|online\s*meeting|virtual\s*meeting)\b/.test(topic)) {
-    return withPolish({
-      label: `video conference display (v${v})`,
-      helperName: 'videoCall',
-      anatomyHint: `Call G.videoCall(0, 0, 1.05*R, frameCol, tileCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright monitor float bobY=Math.sin(t*2.1)*0.025*R, rot=Math.sin(t*1.4)*0.025 + active tile pulse',
-    });
-  }
-  if (/\b(office\s+desk|desk|workstation|workspace|cubicle|study\s+table)\b/.test(topic)) {
-    return withPolish({
-      label: `organized desk workstation (v${v})`,
-      helperName: 'desk',
-      anatomyHint: `Call G.desk(0, 0, 1.05*R, deskCol, screenCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright desk workstation bobY=Math.sin(t*2.1)*0.025*R + live monitor screen motion',
-    });
-  }
-  if (/\b(candlestick|trading|stock\s*market|forex|crypto\w*|bitcoin|exchange)\b/.test(topic)) {
-    return withPolish({
-      label: `market candlestick chart (v${v})`,
-      helperName: 'candlestick',
-      anatomyHint: `Call G.candlestick(0, 0, 1.05*R, frameCol, bullCol, bearCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright trading float bobY=Math.sin(t*2.1)*0.025*R + animated candlestick bar motion',
-    });
-  }
-  if (/\b(contract|agreement|invoice|receipt|certificate|policy|report|annual\s*report|document|resume|cv|audit|compliance|tax\s*form)\b/.test(topic)) {
-    return withPolish({
-      label: `executive document seal (v${v})`,
-      helperName: 'document',
-      anatomyHint: `Call G.document(0, 0, 1.05*R, "#F8FAFC", headerCol, accentCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + internal highlight scan & badge pulse',
-    });
-  }
-  if (/\b(folder|archive|directory|binder|filing|repository)\b/.test(topic)) {
-    return withPolish({
-      label: `tabbed archive folder (v${v})`,
-      helperName: 'folder',
-      anatomyHint: `Call G.folder(0, 0, 1.05*R, backCol, frontCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + smooth vertical card peek inside folder',
-    });
-  }
-  if (/\b(building|skyscraper|tower|headquarters|architecture|real\s*estate|bank\s*vault|institution)\b|\boffice\s+building\b|\bcorporate\s+building\b/.test(topic)) {
-    return withPolish({
-      label: `corporate headquarters (v${v})`,
-      helperName: 'building',
-      anatomyHint: `Call G.building(0, 0, 1.05*R, bodyCol, winCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright architectural float bobY=Math.sin(t*1.9)*0.022*R + window illumination wave',
-    });
-  }
-  if (/\b(calculator|accounting|bookkeeping|budgeting|expense)\b/.test(topic)) {
-    return withPolish({
-      label: `financial calculator console (v${v})`,
-      helperName: 'calculator',
-      anatomyHint: `Call G.calculator(0, 0, 1.05*R, bodyCol, screenCol, btnCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + sequential glowing key pulse',
-    });
-  }
-  if (/\b(troubleshoot\w*|diagnostic\w*|repair|maintenance|debug\w*|gear|settings|cog|automation|operations|engineering)\b/.test(topic)) {
-    return withPolish({
-      label: `meshed cog rotation (v${v})`,
-      helperName: 'gears',
-      anatomyHint: `Call G.gears(0, 0, 1.05*R, g1Col, g2Col, coreCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.0)*0.025*R + counter-rotating meshed cogwheels',
-    });
-  }
-  if (/\b(bell|alarm|siren|alert|notification|error\s*notification|warning|reminder)\b/.test(topic)) {
-    return withPolish({
-      label: `acoustic ring bell (v${v})`,
-      helperName: 'bell',
-      anatomyHint: `Call G.bell(0, 0, 1.05*R, bellCol, clapperCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'pendulum swing rot=Math.sin(t*3.2)*0.06 + opposite clapper swing',
-    });
-  }
-  if (/\b(encrypt\w*|decrypt\w*|cipher|cryptograph\w*|ssl|tls|vpn|lock|padlock|vault|fingerprint|biometric|security|safe)\b/.test(topic)) {
-    return withPolish({
-      label: `precision security lock (v${v})`,
-      helperName: 'lock',
-      anatomyHint: `Call G.lock(0, 0, 1.05*R, bodyCol, shackleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + smooth vertical shackle lock recoil',
-    });
-  }
-  if (/\b(chip|cpu|processor|circuit|microchip|semiconductor|hardware|silicon|logic\s*cube|smart\s*home|iot)\b/.test(topic)) {
-    return withPolish({
-      label: `silicon processor chip (v${v})`,
-      helperName: 'chip',
-      anatomyHint: `Call G.chip(0, 0, 1.05*R, pkgCol, pinCol, coreCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright tech float bobY=Math.sin(t*2.2)*0.028*R + pulsing silicon core',
-    });
-  }
-  if (/\b(robot\w*|android|chatbot|ai\s*agent|assistant|gripper|humanoid|brain\b|synthetic\s*ai)\b/.test(topic)) {
-    return withPolish({
-      label: `intelligent AI bot (v${v})`,
-      helperName: 'robot',
-      anatomyHint: `Call G.robot(0, 0, 1.05*R, bodyCol, visorCol, eyeCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'friendly hover bobY=Math.sin(t*2.3)*0.03*R + eye & antenna beacon pulse',
-    });
-  }
-  if (/\b(server|database|sql|hosting|datacenter|rack|mainframe)\b/.test(topic)) {
-    return withPolish({
-      label: `stacked server cluster (v${v})`,
-      helperName: 'server',
-      anatomyHint: `Call G.server(0, 0, 1.05*R, rackCol, ledCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.025*R + sequential LED telemetry scan',
-    });
-  }
-  if (/\b(cloud|saas|storage|backup|sync|upload|download|recovery|restore|failover|snapshot)\b/.test(topic)) {
-    return withPolish({
-      label: `cloud data sync (v${v})`,
-      helperName: 'cloudSync',
-      anatomyHint: `Call G.cloudSync(0, 0, 1.05*R, cloudCol, arrowCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright cloud float bobY=Math.sin(t*2.1)*0.028*R + smooth vertical arrow sync',
-    });
-  }
-  if (/\b(neural\s*network|network\s*node\w*|blockchain|api\s*mesh|topology|network|intranet|connectivity|router|broadband|lan|wan)\b/.test(topic)) {
-    return withPolish({
-      label: `connected network topology (v${v})`,
-      helperName: 'network',
-      anatomyHint: `Call G.network(0, 0, 1.05*R, coreCol, nodeCol, linkCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.0)*0.025*R + pulsing perceptron/mesh nodes',
-    });
-  }
-  if (/\b(laptop|notebook|macbook|ultrabook|computer|desktop|monitor|screen)\b/.test(topic)) {
-    return withPolish({
-      label: `laptop workstation (v${v})`,
-      helperName: 'laptop',
-      anatomyHint: `Call G.laptop(0, 0, 1.05*R, bodyCol, "#0F172A", accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R, rot=Math.sin(t*1.5)*0.025 + internal screen animation',
-    });
-  }
-  if (/\b(browser|web\s*browser|webpage|website|web\s*portal|ui\s*layout|wireframe|interface|app\s*design|landing\s*page|mockup|web\s*app|dashboard\s*ui|ux\s*flow)\b/.test(topic)) {
-    return withPolish({
-      label: `interactive UI layout (v${v})`,
-      helperName: 'uiLayout',
-      anatomyHint: `Call G.uiLayout(0, 0, 1.05*R, frameCol, headerCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + animated UI blocks & progress bars',
-    });
-  }
-  if (/\b(hiring|recruit\w*|talent|candidate|hr\b|human\s*resources|interview|onboarding|staffing|leadership|executive|leader|manager|ceo|mentor|customer|support|avatar)\b/.test(topic)) {
-    return withPolish({
-      label: `talent & leadership badge (v${v})`,
-      helperName: 'userBadge',
-      anatomyHint: `Call G.userBadge(0, 0, 1.05*R, cardCol, personCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + verification crest & bar pulse',
-    });
-  }
-  if (/\b(productivity|efficiency|checklist|todo|to-do|task\s*management|kanban|sprint|workflow)\b/.test(topic)) {
-    return withPolish({
-      label: `task checklist flow (v${v})`,
-      helperName: 'checklist',
-      anatomyHint: `Call G.checklist(0, 0, 1.05*R, boardCol, clipCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + sequential animated task bars',
-    });
-  }
-  if (/\b(pie\s*chart|pie|donut|market\s*share|allocation|budget\s*breakdown|proportion)\b/.test(topic)) {
-    return withPolish({
-      label: `segmented pie chart (v${v})`,
-      helperName: 'pieChart',
-      anatomyHint: `Call G.pieChart(0, 0, 1.05*R, baseCol, s1Col, s2Col, s3Col, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.028*R + active pie slice expansion',
-    });
-  }
-  if (/\b(market\s*research|survey|discovery|inspect\w*|seo\b|search\s*engine|magnifying|investigat\w*)\b/.test(topic)) {
-    return withPolish({
-      label: `optical lens research scan (v${v})`,
-      helperName: 'magnifier',
-      anatomyHint: `Call G.magnifier(0, 0, 1.05*R, cardCol, lensCol, handleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.025*R + smooth circular lens sweep',
-    });
-  }
-  if (/\b(entrepreneur\w*|startup|launch|venture|founder|rocket|boost|scaleup|scale-up|accelerate|spaceship)\b/.test(topic)) {
-    return withPolish({
-      label: `ascendant rocket launch (v${v})`,
-      helperName: 'rocket',
-      anatomyHint: `Call G.rocket(0, 0, 1.05*R, hullCol, wingCol, flameCol, "#F8FAFC", t, ${v}) inside G.part(cx, cy+bobY, -0.16+rot, 1, 1, fn)!`,
-      codeHint: 'dynamic thrust bobY=Math.sin(t*3.0)*0.038*R + angled ascent & live exhaust flame',
-    });
-  }
-  if (/\b(opportunity|breakthrough|lightbulb|idea|bulb|innovation|brainstorm|insight)\b/.test(topic)) {
-    return withPolish({
-      label: `radiant idea lightbulb (v${v})`,
-      helperName: 'lightbulb',
-      anatomyHint: `Call G.lightbulb(0, 0, 1.05*R, bulbCol, rayCol, baseCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.3)*0.03*R + rhythmic radial ray glow',
-    });
-  }
-  if (/\b(shopping\s*cart|cart|trolley|ecommerce|e-commerce|checkout|retail|marketplace|shopping\s*bag)\b/.test(topic)) {
-    return withPolish({
-      label: `e-commerce shopping cart (v${v})`,
-      helperName: 'cart',
-      anatomyHint: `Call G.cart(0, 0, 1.05*R, bodyCol, wheelCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'gentle horizontal glide offsetX=Math.sin(t*2.2)*0.04*R + internal parcel settle',
-    });
-  }
-  if (/\b(procurement|purchase|order|supply\s*chain|inventory|warehouse|logistics|truck|cargo|delivery|shipping|parcel|courier)\b/.test(topic)) {
-    return withPolish({
-      label: `express logistics delivery (v${v})`,
-      helperName: 'delivery',
-      anatomyHint: `Call G.delivery(0, 0, 1.05*R, truckCol, cargoCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'suspension glide bobY=Math.sin(t*2.8)*0.025*R + forward cargo & wheel roll',
-    });
-  }
-  if (/\b(digital\s*wallet|e-wallet|wallet|purse|mobile\s*pay|fintech)\b/.test(topic)) {
-    return withPolish({
-      label: `digital wallet reveal (v${v})`,
-      helperName: 'wallet',
-      anatomyHint: `Call G.wallet(0, 0, 1.05*R, bodyCol, flapCol, claspCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + smooth card reveal & clasp pulse',
-    });
-  }
-  if (/\b(reputation|trust|credibility|review|rating|endorsement|testimonial|shield|protection|firewall|cybersecurity|antivirus)\b/.test(topic)) {
-    return withPolish({
-      label: `shield trust crest (v${v})`,
-      helperName: 'shield',
-      anatomyHint: `Call G.shield(0, 0, 1.05*R, shieldCol, "#F8FAFC", innerCol, accentCol, t, ${v}) inside G.part!`,
-      codeHint: 'upright heraldic float bobY=Math.sin(t*2.2)*0.028*R + pulsing emblem center',
-    });
-  }
-  if (/\b(global\s*comm\w*|international|worldwide|globe|global|world|earth|continent)\b/.test(topic)) {
-    return withPolish({
-      label: `orbital global relay (v${v})`,
-      helperName: 'globe',
-      anatomyHint: `Call G.globe(0, 0, 0.50*R, sphereCol, lineCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright globe hover bobY=Math.sin(t*2.1)*0.025*R + meridian spin & orbital relay',
-    });
-  }
-  if (/\b(megaphone|broadcast|announce\w*|marketing|campaign|publicity|loudspeaker)\b/.test(topic)) {
-    return withPolish({
-      label: `acoustic broadcast megaphone (v${v})`,
-      helperName: 'megaphone',
-      anatomyHint: `Call G.megaphone(0, 0, 1.05*R, coneCol, handleCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'recoil tilt rot=-0.04+Math.sin(t*3.0)*0.04 + expanding acoustic wave arcs',
-    });
-  }
-  if (/\b(handshake|deal)\b/.test(topic)) {
-    return withPolish({
-      label: `executive handshake clasp (v${v})`,
-      helperName: 'handshake',
-      anatomyHint: `Call G.handshake(0, 0, 1.05*R, cL, cR, "#F59E0B", "#F8FAFC", "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.03*R + synchronized hand clasp motion',
-    });
-  }
-  if (/\b(trophy|award|achievement|cup|winner|crown|medal|ribbon|badge|champion\w*|leaderboard)\b/.test(topic)) {
-    return withPolish({
-      label: `celebratory trophy crest (v${v})`,
-      helperName: 'trophy',
-      anatomyHint: `Call G.trophy(0, 0, 1.05*R, cupCol, baseCol, starCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.03*R + pulsing victory star',
-    });
-  }
-  if (/\b(telephone|phone\s*booth|payphone|landline|intercom|voip|telephony|chat|conversation|dialogue|messaging|communication|discussion|comment|helpdesk|call\s*center|hotline)\b/.test(topic)) {
-    return withPolish({
-      label: `speech dialogue communication (v${v})`,
-      helperName: 'chat',
-      anatomyHint: `Call G.chat(0, 0, 1.05*R, b1Col, b2Col, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.028*R + animated dialogue wave dots',
-    });
-  }
-  if (/\b(email|mail|envelope|inbox|newsletter|message)\b/.test(topic)) {
-    return withPolish({
-      label: `corporate envelope dispatch (v${v})`,
-      helperName: 'envelope',
-      anatomyHint: `Call G.envelope(0, 0, 1.05*R, bodyCol, flapCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.4)*0.03*R + rising letter / seal pulse',
-    });
-  }
-  if (/\b(negotiation|partnership|team|meeting|collaboration|networking|conference|boardroom|roundtable)\b/.test(topic)) {
-    return withPolish({
-      label: `team & partnership dialogue (v${v})`,
-      helperName: 'negotiation',
-      anatomyHint: `Call G.negotiation(0, 0, 1.05*R, p1Col, p2Col, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.028*R + synchronized agreement emblem',
-    });
-  }
-  if (/\b(cash\s*flow|cashflow|transaction|transfer|payment|revenue|payroll|remittance|settlement|money|dollar|coin|currency|finance|investment|cash)\b/.test(topic)) {
-    return withPolish({
-      label: `minted cash flow coins (v${v})`,
-      helperName: 'coinStack',
-      anatomyHint: `Call G.coinStack(0, 0, 1.05*R, coinCol, sideCol, "#FFFFFF", "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.2)*0.028*R + coin & star emblem pulse',
-    });
-  }
-  if (/\b(briefcase|portfolio)\b/.test(topic)) {
-    return withPolish({
-      label: `executive briefcase float (v${v})`,
-      helperName: 'briefcase',
-      anatomyHint: `Call G.briefcase(0, 0, 1.05*R, bodyCol, flapCol, claspCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.3)*0.03*R + hinged lid clasp articulation',
-    });
-  }
-  if (/\b(target|bullseye|strategy|aim|dart|goal|okr)\b/.test(topic)) {
-    return withPolish({
-      label: `precision bullseye strike (v${v})`,
-      helperName: 'target',
-      anatomyHint: `Call G.target(0, 0, 1.05*R, outerCol, "#F8FAFC", dartCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + inward dart strike & bullseye pulse',
-    });
-  }
-  if (/\b(analytics|chart|graph|metric|kpi|profit|growth|statistics|market\s*analysis|presentation|whiteboard|projector|pitch|slide|training)\b/.test(topic)) {
-    return withPolish({
-      label: `analytics growth dashboard (v${v})`,
-      helperName: 'chart',
-      anatomyHint: `Call G.chart(0, 0, 1.05*R, cardCol, bar1Col, bar2Col, arrowCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.1)*0.028*R + live rising bars & upward arrow',
-    });
-  }
-  if (/\b(puzzle|connect|integration|synergy)\b/.test(topic)) {
-    return withPolish({
-      label: `interlocked puzzle fit (v${v})`,
-      helperName: 'puzzle',
-      anatomyHint: `Call G.puzzle(0, 0, 1.05*R, p1Col, p2Col, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + synchronized interlocking piece fit',
-    });
-  }
-  if (/\b(calendar|event|schedule|roadmap|timeline|milestone)\b/.test(topic)) {
-    return withPolish({
-      label: `structured grid calendar (v${v})`,
-      helperName: 'calendar',
-      anatomyHint: `Call G.calendar(0, 0, 1.05*R, "#F8FAFC", topCol, accentCol, "#1E293B", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.026*R + active calendar cell animation',
-    });
-  }
-  if (/\b(clock|deadline|timer|time|stopwatch)\b/.test(topic)) {
-    return withPolish({
-      label: `precision dial clock (v${v})`,
-      helperName: 'clock',
-      anatomyHint: `Call G.clock(0, 0, 1.05*R, bezelCol, faceCol, handCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright float bobY=Math.sin(t*2.1)*0.028*R + sweeping clock hands',
-    });
-  }
-  if (/\b(legal|law|justice|scale|scales|governance|balance|risk)\b/.test(topic)) {
-    return withPolish({
-      label: `balanced governance scales (v${v})`,
-      helperName: 'scales',
-      anatomyHint: `Call G.scales(0, 0, 1.05*R, beamCol, panCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright poise bobY=Math.sin(t*2.0)*0.024*R + balanced scale beam oscillation',
-    });
-  }
-  if (/\b(compass|navigation|direction|journey|guide|explore)\b/.test(topic)) {
-    return withPolish({
-      label: `navigation dial compass (v${v})`,
-      helperName: 'compass',
-      anatomyHint: `Call G.compass(0, 0, 1.05*R, ringCol, dialCol, needleCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright poise bobY=Math.sin(t*2.1)*0.026*R + oscillating compass needle',
-    });
-  }
-  if (/\b(camera|photo|photography|video|studio|cinema|film|shutter|clapperboard)\b/.test(topic)) {
-    return withPolish({
-      label: `media camera shutter (v${v})`,
-      helperName: 'camera',
-      anatomyHint: `Call G.camera(0, 0, 1.05*R, bodyCol, lensCol, accentCol, "#F8FAFC", t, ${v}) inside G.part!`,
-      codeHint: 'upright hover bobY=Math.sin(t*2.2)*0.026*R + pulsing optical aperture lens',
-    });
-  }
-
-  // --- PRIORITY 3: CATEGORY-AWARE DOMAIN POOL FOR BROAD / GENERAL PROMPTS ---
-  type HelperEntry = { name: string; call: (vv: number) => string };
-  const makeEntry = (name: string, callFn: (vv: number) => string): HelperEntry => ({ name, call: callFn });
-
-  const categoryPools: Array<{ test: RegExp; pool: HelperEntry[] }> = [
-    {
-      test: /(^|[\s_-])(medic\w*|health\w*|kesehatan|clinic\w*|hospital\w*|biotech\w*|pharma\w*)($|[\s_-])/,
-      pool: [
-        makeEntry('stethoscope', (vv) => `G.stethoscope(0, 0, 1.05*R, c2, c1, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('heartbeat', (vv) => `G.heartbeat(0, 0, 1.05*R, c3, "#F8FAFC", c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('syringe', (vv) => `G.syringe(0, 0, 1.05*R, "#F8FAFC", c2, c3, "#1E293B", t, ${vv})`),
-        makeEntry('dna', (vv) => `G.dna(0, 0, 1.05*R, c2, c1, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('medical', (vv) => `G.medical(0, 0, 1.05*R, "#F8FAFC", c3, c2, "#1E293B", t, ${vv})`),
-        makeEntry('microscope', (vv) => `G.microscope(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(edu\w*|pendidik\w*|sains|science|learn\w*|school|academic|edtech)($|[\s_-])/,
-      pool: [
-        makeEntry('book', (vv) => `G.book(0, 0, 1.05*R, c1, "#F8FAFC", c3, "#1E293B", t, ${vv})`),
-        makeEntry('gradCap', (vv) => `G.gradCap(0, 0, 1.05*R, c0, "#F8FAFC", c3, c1, t, ${vv})`),
-        makeEntry('atom', (vv) => `G.atom(0, 0, 1.05*R, c3, c2, c1, "#F8FAFC", t, ${vv})`),
-        makeEntry('microscope', (vv) => `G.microscope(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('flask', (vv) => `G.flask(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('telescope', (vv) => `G.telescope(0, 0, 1.05*R, c1, c0, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('lightbulb', (vv) => `G.lightbulb(0, 0, 1.05*R, c3, c2, c0, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(game\w*|gaming|hibur\w*|entertain\w*|esport\w*|arcade|tabletop)($|[\s_-])/,
-      pool: [
-        makeEntry('gamepad', (vv) => `G.gamepad(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('vrHeadset', (vv) => `G.vrHeadset(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('dice', (vv) => `G.dice(0, 0, 1.05*R, c1, "#F8FAFC", c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('headphones', (vv) => `G.headphones(0, 0, 1.05*R, c1, c0, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('trophy', (vv) => `G.trophy(0, 0, 1.05*R, c3, c0, "#FFFFFF", "#F8FAFC", t, ${vv})`),
-        makeEntry('rocket', (vv) => `G.rocket(0, 0, 1.05*R, "#F8FAFC", c1, c3, c0, t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(ui|ux|design\w*|grafis|creative|multimedia|art|graphic\w*|vector)($|[\s_-])/,
-      pool: [
-        makeEntry('palette', (vv) => `G.palette(0, 0, 1.05*R, c0, c3, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('layers', (vv) => `G.layers(0, 0, 1.05*R, c2, c1, c0, "#F8FAFC", t, ${vv})`),
-        makeEntry('ruler', (vv) => `G.ruler(0, 0, 1.05*R, c3, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('penTool', (vv) => `G.penTool(0, 0, 1.05*R, c1, c3, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('uiLayout', (vv) => `G.uiLayout(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('typography', (vv) => `G.typography(0, 0, 1.05*R, c0, "#F8FAFC", c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('camera', (vv) => `G.camera(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(ecolog\w*|green|energy|solar|wind|eco)($|[\s_-])/,
-      pool: [
-        makeEntry('battery', (vv) => `G.battery(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('globe', (vv) => `G.globe(0, 0, 0.50*R, c1, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('lightbulb', (vv) => `G.lightbulb(0, 0, 1.05*R, c3, c2, c0, "#F8FAFC", t, ${vv})`),
-        makeEntry('atom', (vv) => `G.atom(0, 0, 1.05*R, c3, c2, c1, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(secur\w*|cyber\w*|privasi|protect\w*)($|[\s_-])/,
-      pool: [
-        makeEntry('shield', (vv) => `G.shield(0, 0, 1.05*R, c0, "#F8FAFC", c1, c3, t, ${vv})`),
-        makeEntry('lock', (vv) => `G.lock(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('key', (vv) => `G.key(0, 0, 1.05*R, c3, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('server', (vv) => `G.server(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(social\w*|communicat\w*|komunikasi|telecom\w*|media\s*sosial)($|[\s_-])/,
-      pool: [
-        makeEntry('chat', (vv) => `G.chat(0, 0, 1.05*R, c1, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('megaphone', (vv) => `G.megaphone(0, 0, 1.05*R, c2, c0, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('satellite', (vv) => `G.satellite(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('globe', (vv) => `G.globe(0, 0, 0.50*R, c1, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('envelope', (vv) => `G.envelope(0, 0, 1.05*R, "#F8FAFC", c1, c3, "#1E293B", t, ${vv})`),
-        makeEntry('bell', (vv) => `G.bell(0, 0, 1.05*R, c3, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('headphones', (vv) => `G.headphones(0, 0, 1.05*R, c1, c0, c2, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-    {
-      test: /(^|[\s_-])(tech\w*|ai|teknologi|data|software|digital|robot\w*|cloud)($|[\s_-])/,
-      pool: [
-        makeEntry('chip', (vv) => `G.chip(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('robot', (vv) => `G.robot(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('network', (vv) => `G.network(0, 0, 1.05*R, c1, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('server', (vv) => `G.server(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('cloudSync', (vv) => `G.cloudSync(0, 0, 1.05*R, c1, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('satellite', (vv) => `G.satellite(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-        makeEntry('drone', (vv) => `G.drone(0, 0, 1.05*R, c0, c2, c3, "#F8FAFC", t, ${vv})`),
-        makeEntry('atom', (vv) => `G.atom(0, 0, 1.05*R, c3, c2, c1, "#F8FAFC", t, ${vv})`),
-      ],
-    },
-  ];
-
-  const defaultPool: HelperEntry[] = [
-    makeEntry('chart', (vv) => `G.chart(0, 0, 1.05*R, c0, c1, c2, c3, "#F8FAFC", t, ${vv})`),
-    makeEntry('uiLayout', (vv) => `G.uiLayout(0, 0, 1.05*R, c0, c1, c2, "#F8FAFC", t, ${vv})`),
-    makeEntry('briefcase', (vv) => `G.briefcase(0, 0, 1.05*R, c0, c1, c3, "#F8FAFC", t, ${vv})`),
-    makeEntry('target', (vv) => `G.target(0, 0, 1.05*R, c1, "#F8FAFC", c3, c0, t, ${vv})`),
-    makeEntry('rocket', (vv) => `G.rocket(0, 0, 1.05*R, "#F8FAFC", c1, c3, c0, t, ${vv})`),
-    makeEntry('coinStack', (vv) => `G.coinStack(0, 0, 1.05*R, c3, c1, "#FFFFFF", "#F8FAFC", t, ${vv})`),
-    makeEntry('shield', (vv) => `G.shield(0, 0, 1.05*R, c0, "#F8FAFC", c1, c3, t, ${vv})`),
-  ];
-
-  const subNorm = sub.replace(/[_-]+/g, ' ');
-  const matchedPool =
-    categoryPools.find((c) => c.test.test(subNorm))?.pool ||
-    categoryPools.find((c) => c.test.test(topic))?.pool ||
-    defaultPool;
-  const chosenEntry = matchedPool[(absTopicHash + v) % matchedPool.length];
-  const fallbackCall = chosenEntry.call(v);
-
-  if (overrideMode && overrideMode !== 'auto') {
-    const legacy: Record<string, string> = {
-      bounce: 'bobY=-Math.abs(Math.sin(t*2.8))*0.05*R, sc=1+0.03*Math.cos(t*2.8)',
-      orbital: 'bobY=Math.sin(t*2.1)*0.028*R, rot=Math.sin(t*1.6)*0.035',
-      morph: 'bobY=Math.sin(t*2.3)*0.028*R, sx=1+0.025*Math.sin(t*2.6), sy=1-0.025*Math.sin(t*2.6)',
-      cyber: 'bobY=Math.sin(t*2.4)*0.025*R, rot=Math.sin(t*1.8)*0.025',
-      mechanical: 'bobY=Math.sin(t*2.2)*0.025*R, rot=Math.sin(t*2.0)*0.04',
-      flow: 'bobY=Math.sin(t*2.4)*0.032*R, rot=Math.sin(t*1.6)*0.03',
-    };
-    if (legacy[overrideMode]) {
-      return withPolish({
-        label: `${chosenEntry.name} ${overrideMode} (v${v})`,
-        helperName: chosenEntry.name,
-        anatomyHint: `Call ${fallbackCall} (or the closest matching G.<hero> at s=1.05*R with t,${v}) inside G.part! NEVER scatter tiny disconnected dots or overlapping circles.`,
-        codeHint: legacy[overrideMode],
-      });
-    }
-  }
-
-  return withPolish({
-    label: `${chosenEntry.name} icon motion (v${v})`,
-    helperName: chosenEntry.name,
-    anatomyHint: `Call ${fallbackCall} (or the closest matching G.<hero> at s=1.05*R with t,${v}) inside G.part! NEVER scatter loose disconnected circles/boxes.`,
-    codeHint: 'upright bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.5)*0.028 + internal t-driven motion',
-  });
+  return {
+    label: `custom bespoke vector`,
+    helperName: 'custom',
+    anatomyHint: `${structuralGuide} ${twistHints[cm]}. ZERO generic stock clones; 100% tailored silhouette for "${promptTopic.slice(0, 80)}".`,
+    codeHint: (overrideMode && overrideMap[overrideMode]) ? overrideMap[overrideMode] : themeMotion,
+  };
 }
+

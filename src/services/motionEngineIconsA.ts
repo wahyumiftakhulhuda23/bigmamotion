@@ -202,11 +202,126 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
             var vsx = G._n(sx, 1);
             ctx.scale(vsx, sy != null ? G._n(sy, vsx) : vsx);
           }
-          var __partR = (typeof R !== 'undefined' && isFinite(R)) ? R : (typeof S !== 'undefined' && isFinite(S) ? S * 0.72 : 160);
+          var __partR = (typeof R !== 'undefined' && isFinite(R)) ? R : (typeof S !== 'undefined' && isFinite(S) ? S * 0.80 : 180);
           fn(__partR);
         } finally {
           ctx.restore();
         }
+      },
+      dome: function(x, y, bw, bh, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        bw = Math.max(4, Math.abs(G._n(bw, 40))); bh = Math.max(4, Math.abs(G._n(bh, 40)));
+        var hx = bw / 2, hy = bh / 2, ar = Math.min(hx, bh * 0.65);
+        ctx.beginPath();
+        ctx.moveTo(x - hx, y + hy);
+        ctx.lineTo(x - hx, y - hy + ar);
+        ctx.quadraticCurveTo(x - hx, y - hy, x, y - hy);
+        ctx.quadraticCurveTo(x + hx, y - hy, x + hx, y - hy + ar);
+        ctx.lineTo(x + hx, y + hy);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+      },
+      wave: function(x, y, w, amp, freq, phase, th, col) {
+        x = G._n(x); y = G._n(y);
+        var ww = Math.max(8, Math.abs(G._n(w, 80))), aa = G._n(amp, 10), ff = G._n(freq, 2), ph = G._n(phase, 0);
+        var steps = 28;
+        ctx.beginPath();
+        for (var i = 0; i <= steps; i++) {
+          var p = i / steps;
+          var px = x - ww / 2 + ww * p;
+          var py = y + Math.sin(p * Math.PI * 2 * ff + ph) * aa;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = G._c(col || '#00e5ff');
+        ctx.lineWidth = Math.max(1.5, Math.abs(G._n(th, 3)));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      },
+      grid: function(x, y, bw, bh, cols, rows, r, actIdx, fill, actFill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        bw = Math.max(12, Math.abs(G._n(bw, 60))); bh = Math.max(12, Math.abs(G._n(bh, 60)));
+        var cCnt = Math.max(1, Math.min(8, Math.floor(G._n(cols, 3))));
+        var rCnt = Math.max(1, Math.min(8, Math.floor(G._n(rows, 3))));
+        var gapX = bw * 0.08, gapY = bh * 0.08;
+        var cw = (bw - gapX * (cCnt - 1)) / cCnt;
+        var ch = (bh - gapY * (rCnt - 1)) / rCnt;
+        var cr = Math.min(Math.max(1, G._n(r, 3)), cw * 0.45, ch * 0.45);
+        var act = (actIdx == null || actIdx < 0) ? -1 : Math.floor(G._n(actIdx, -1)) % (cCnt * rCnt);
+        var x0 = x - bw / 2 + cw / 2, y0 = y - bh / 2 + ch / 2;
+        for (var rr = 0; rr < rCnt; rr++) {
+          for (var cc = 0; cc < cCnt; cc++) {
+            var idx = rr * cCnt + cc;
+            var cxCell = x0 + cc * (cw + gapX);
+            var cyCell = y0 + rr * (ch + gapY);
+            var cellCol = (idx === act && actFill) ? actFill : (fill || '#334155');
+            G.box(cxCell, cyCell, cw, ch, cr, cellCol, rim || null, lw || 0);
+          }
+        }
+      },
+      bolt: function(x, y, s, fill, rim, lw) {
+        x = G._n(x); y = G._n(y); s = Math.max(6, Math.abs(G._n(s, 30)));
+        var pts = [
+          [x + s * 0.12, y - s * 0.56],
+          [x - s * 0.34, y + s * 0.06],
+          [x - s * 0.02, y + s * 0.06],
+          [x - s * 0.16, y + s * 0.56],
+          [x + s * 0.36, y - s * 0.08],
+          [x + s * 0.04, y - s * 0.08]
+        ];
+        G.poly(pts, fill || '#ffd700', rim || null, lw || 0, true);
+      },
+      cross: function(x, y, s, th, fill, rim, lw) {
+        x = G._n(x); y = G._n(y); s = Math.max(6, Math.abs(G._n(s, 28)));
+        var arm = s * 0.5, armTh = Math.max(2, Math.min(arm * 1.4, Math.abs(G._n(th, s * 0.34))));
+        var hT = armTh / 2;
+        var pts = [
+          [x - hT, y - arm], [x + hT, y - arm], [x + hT, y - hT],
+          [x + arm, y - hT], [x + arm, y + hT], [x + hT, y + hT],
+          [x + hT, y + arm], [x - hT, y + arm], [x - hT, y + hT],
+          [x - arm, y + hT], [x - arm, y - hT], [x - hT, y - hT]
+        ];
+        G.poly(pts, fill || '#f43f5e', rim || null, lw || 0, true);
+      },
+      leaf: function(x, y, s, rot, fill, rim, lw) {
+        x = G._n(x); y = G._n(y); s = Math.max(6, Math.abs(G._n(s, 28)));
+        ctx.save();
+        ctx.translate(x, y);
+        if (rot) ctx.rotate(G._n(rot, 0));
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.58);
+        ctx.quadraticCurveTo(s * 0.52, -s * 0.16, 0, s * 0.54);
+        ctx.quadraticCurveTo(-s * 0.52, -s * 0.16, 0, -s * 0.58);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.34);
+        ctx.lineTo(0, s * 0.44);
+        ctx.strokeStyle = G._c(rim || '#f8fafc');
+        ctx.lineWidth = Math.max(1, s * 0.07);
+        ctx.stroke();
+        ctx.restore();
+      },
+      bgBackdrop: function(w, h, c0, c1, c2, dir) {
+        var ww = Math.max(1, G._n(w, 800)), hh = Math.max(1, G._n(h, 600));
+        var d = String(dir || 'v');
+        var g;
+        if (d === 'r') {
+          g = ctx.createRadialGradient(ww * 0.5, hh * 0.5, 0, ww * 0.5, hh * 0.5, Math.max(ww, hh) * 0.65);
+        } else if (d === 'h') {
+          g = ctx.createLinearGradient(0, 0, ww, 0);
+        } else if (d === 'd') {
+          g = ctx.createLinearGradient(0, 0, ww, hh);
+        } else {
+          g = ctx.createLinearGradient(0, 0, 0, hh);
+        }
+        g.addColorStop(0, G._c(c0 || '#080c14'));
+        g.addColorStop(0.55, G._c(c1 || '#1e1b4b'));
+        g.addColorStop(1, G._c(c2 || c0 || '#0f172a'));
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, ww, hh);
       },
       sheen: function() {},
 `;
