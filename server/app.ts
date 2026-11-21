@@ -59,9 +59,9 @@ export function getSmartThinkingConfig(
   const m = (targetModel || '').toLowerCase();
   if (unsupportedServerThinkingModels.has(m)) return undefined;
 
-  // Gemini 2.5 series: uses numeric thinkingBudget (0 skips reasoning tokens completely for fast/cheap codegen)
+  // Gemini 2.5 series: lightweight 128-token scratchpad avoids garbled spatial math without excessive cost
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 256 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 320 : purpose === 'animation' ? 128 : 0 };
   }
 
   // Gemini 3.1-Pro / 4.x Pro series: uses ThinkingLevel.LOW
@@ -69,9 +69,11 @@ export function getSmartThinkingConfig(
     return { thinkingLevel: ThinkingLevel.LOW };
   }
 
-  // Gemini 3.x Flash & Flash-Lite series (3.1-flash-lite, 3.5-flash-lite, 3.6, 3.8):
-  // MINIMAL for prompt/animation saves ~75-90% hidden thinking tokens; LOW for vision
-  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+  // Gemini 3.8 uses LOW for geometric consistency; Flash-Lite keeps MINIMAL on first pass
+  if (m.includes('3.8')) {
+    return { thinkingLevel: ThinkingLevel.LOW };
+  }
+  if (m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
     return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
 
@@ -1111,7 +1113,12 @@ export async function handleGenerateAnimationLogic(body: any) {
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Draw inside G.part(cx,cy+bobY,rot,sx,sy,function(R){ ... }) with commanding scale R=S*0.80 spanning [-0.65*R,+0.65*R]. RULES: (1) CENTER-ANCHOR: G.box/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes bottom yB; (2) ASSEMBLED & CONNECTED: draw 4-7 overlapping parts back-to-front (Painter's Order) with >=0.04*R joint overlap, uniform rim lw=Math.max(2,0.032*R), ZERO floating detached shapes in corners, ZERO random circle soup; (3) BESPOKE LITERAL SILHOUETTE: invent exact geometry for "${promptTopic.slice(0, 75)}" (NEVER clone a generic padlock/cloud/chat bubble/network template); (4) UPRIGHT & SOLID: keep |rot|<=0.05 on upright icons, NEVER hide parts via if(sin>0). Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Anatomy: ${motionPlan.anatomyHint}`;
+    : `MICROSTOCK HERO ICON (14-26 lines crisp JS):
+- Line 1 inside drawFrame MUST be a brief 1-line plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
+- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) with scale R=S*0.80 inside [-0.58*R,+0.58*R] (NEVER mix S with R!).
+- JOINT ANCHORS & PAINTER ORDER: Compute seam coordinates (e.g. topY=y-h/2, botY=y+h/2) so attached handles/roofs/wheels/antennas/shackles physically touch/overlap parent edges (>=0.04*R) with uniform rim lw=Math.max(2,0.032*R). Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
+- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at their true joints! ZERO floating corner dots/confetti, ZERO unrequested dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
+- Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
@@ -1119,7 +1126,7 @@ export async function handleGenerateAnimationLogic(body: any) {
 ${helpersDoc}
 SPEC [${seed.tag}]: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}]
 - ${geometryGuide}
-- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Kinetic: ${seed.motionExpr}.
+- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
 - ${colorStyleDirective}`;
 
   const { response } = await generateContentWithFallback(
@@ -1127,7 +1134,7 @@ SPEC [${seed.tag}]: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: $
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.42,
+        temperature: 0.35,
         maxOutputTokens: isBackground ? 1350 : 1200,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
@@ -1234,7 +1241,7 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
 
   const geometryGuide = isBackground
     ? "FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti."
-    : "MICROSTOCK HERO ICONS (14-26 lines each): Draw via G.part(cx,cy+bobY,rot,sx,sy,fn) with commanding scale R=S*0.80 inside [-0.65*R,+0.65*R]. CENTER-ANCHOR rule (only G.bar uses yB); 4-7 connected overlapping parts (Painter Order, lw=Math.max(2,0.032*R), ZERO floating corner dots, ZERO random circles, keep upright |rot|<=0.05, NEVER hide via if(sin>0)).";
+    : "MICROSTOCK HERO ICONS (14-26 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup.";
 
   const seeds = promptList.map((p, idx) => createUniqueVariationSeed(p, idx, Number(variationOffset) || 0));
   const batchPlanSeen = new Set<string>();
@@ -1250,7 +1257,7 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
       plan = resolvePromptMotionPlan(p, type, style, motionDynamics, v, cm, subCategory);
     }
     batchPlanSeen.add(`${plan.helperName}:c${cm}:v${v}`);
-    return `// ===ANIM_${idx}=== "${p}" [${seed.tag}] | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint} | Kinetic: ${seed.motionExpr}`;
+    return `// ===ANIM_${idx}=== "${p}" [${seed.tag}] | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Anatomy: ${plan.anatomyHint} | Motion (${plan.label}): ${plan.codeHint} | Rhythm: ${seed.motionExpr}`;
   }).join('\n');
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -1270,7 +1277,7 @@ ${topicLines}`;
     targetModel,
     (currentModel) => {
       const cfg: any = {
-        temperature: 0.42,
+        temperature: 0.35,
         maxOutputTokens: Math.min(2500, Math.max(1250, promptList.length * (isBackground ? 1250 : 1150))),
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
@@ -1348,13 +1355,13 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (-0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered sticker icon. ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Draw via G.part(cx,cy+bobY,rot,sx,sy,fn) with R=S*0.80 inside [-0.65*R,+0.65*R]. CENTER-ANCHOR rule; 4-7 overlapping connected parts (Painter Order, lw=Math.max(2,0.032*R), ZERO floating corner dots, ZERO circle soup); upright |rot|<=0.05; bespoke literal silhouette for "${promptTopic.slice(0, 75)}". ANATOMY: ${motionPlan.anatomyHint}`;
+    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam anchors so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
   const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC [${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] | Motion (${motionPlan.label}): ${motionPlan.codeHint} | Kinetic: ${seed.motionExpr}.
+SPEC [${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] | Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
 ${colorStyleDirective}`;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -1363,7 +1370,7 @@ ${colorStyleDirective}`;
 
   try {
     const animConfig: any = {
-      temperature: 0.42,
+      temperature: 0.35,
       maxOutputTokens: isBackground ? 1350 : 1200,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
@@ -1461,12 +1468,13 @@ HELPERS G: ${HELPERS_G_VISION_DOC}
 Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
-      : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.80.
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
+      : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
+Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
+Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
 Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval/G.dome/G.grid/G.bolt/G.cross/G.leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), saling terhubung overlap >=0.04*R mengisi proporsional [-0.65*R,+0.65*R], ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;

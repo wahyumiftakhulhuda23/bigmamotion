@@ -323,6 +323,148 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, ww, hh);
       },
+      trap: function(x, y, tw, bw, h, r, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var utw = Math.max(2, Math.abs(G._n(tw, 40))), ubw = Math.max(2, Math.abs(G._n(bw, 60))), hh = Math.max(2, Math.abs(G._n(h, 40)));
+        var hxT = utw * 0.5, hxB = ubw * 0.5, hy = hh * 0.5;
+        var cr = Math.min(Math.max(0, G._n(r, 0)), hxT * 0.45, hxB * 0.45, hy * 0.45);
+        ctx.beginPath();
+        if (cr <= 0.5) {
+          ctx.moveTo(x - hxT, y - hy); ctx.lineTo(x + hxT, y - hy);
+          ctx.lineTo(x + hxB, y + hy); ctx.lineTo(x - hxB, y + hy);
+        } else {
+          ctx.moveTo(x - hxT + cr, y - hy);
+          ctx.lineTo(x + hxT - cr, y - hy);
+          ctx.quadraticCurveTo(x + hxT, y - hy, x + hxT + (hxB - hxT) * (cr / hh), y - hy + cr);
+          ctx.lineTo(x + hxB - (hxB - hxT) * (cr / hh), y + hy - cr);
+          ctx.quadraticCurveTo(x + hxB, y + hy, x + hxB - cr, y + hy);
+          ctx.lineTo(x - hxB + cr, y + hy);
+          ctx.quadraticCurveTo(x - hxB, y + hy, x - hxB + (hxB - hxT) * (cr / hh), y + hy - cr);
+          ctx.lineTo(x - hxT - (hxB - hxT) * (cr / hh), y - hy + cr);
+          ctx.quadraticCurveTo(x - hxT, y - hy, x - hxT + cr, y - hy);
+        }
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.8, G._n(lw, 1.8)); ctx.stroke(); }
+      },
+      uArc: function(x, y, bw, bh, th, dir, col) {
+        x = G._n(x); y = G._n(y);
+        var w2 = Math.max(4, Math.abs(G._n(bw, 40))), h2 = Math.max(4, Math.abs(G._n(bh, 40)));
+        var d = String(dir || 'd').toLowerCase(), hw = w2 * 0.5, hh = h2 * 0.5;
+        ctx.beginPath();
+        if (d === 'd') {
+          var rad = Math.min(hw, h2 * 0.65);
+          ctx.moveTo(x - hw, y + hh); ctx.lineTo(x - hw, y - hh + rad);
+          ctx.arc(x, y - hh + rad, hw, Math.PI, 0, false);
+          ctx.lineTo(x + hw, y + hh);
+        } else if (d === 'u') {
+          var radU = Math.min(hw, h2 * 0.65);
+          ctx.moveTo(x - hw, y - hh); ctx.lineTo(x - hw, y + hh - radU);
+          ctx.arc(x, y + hh - radU, hw, Math.PI, 0, true);
+          ctx.lineTo(x + hw, y - hh);
+        } else if (d === 'r') {
+          var radR = Math.min(hh, w2 * 0.65);
+          ctx.moveTo(x - hw, y - hh); ctx.lineTo(x + hw - radR, y - hh);
+          ctx.arc(x + hw - radR, y, hh, -Math.PI * 0.5, Math.PI * 0.5, false);
+          ctx.lineTo(x - hw, y + hh);
+        } else {
+          var radL = Math.min(hh, w2 * 0.65);
+          ctx.moveTo(x + hw, y - hh); ctx.lineTo(x - hw + radL, y - hh);
+          ctx.arc(x - hw + radL, y, hh, -Math.PI * 0.5, Math.PI * 0.5, true);
+          ctx.lineTo(x + hw, y + hh);
+        }
+        ctx.strokeStyle = G._c(col || '#f8fafc');
+        ctx.lineWidth = Math.max(1.5, Math.abs(G._n(th, 5)));
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      },
+      crest: function(x, y, bw, bh, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var hw = Math.max(4, Math.abs(G._n(bw, 56))) * 0.5, hh = Math.max(4, Math.abs(G._n(bh, 68))) * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, y - hh);
+        ctx.quadraticCurveTo(x + hw * 0.55, y - hh * 0.92, x + hw, y - hh * 0.68);
+        ctx.lineTo(x + hw * 0.92, y + hh * 0.10);
+        ctx.quadraticCurveTo(x + hw * 0.72, y + hh * 0.70, x, y + hh);
+        ctx.quadraticCurveTo(x - hw * 0.72, y + hh * 0.70, x - hw * 0.92, y + hh * 0.10);
+        ctx.lineTo(x - hw, y - hh * 0.68);
+        ctx.quadraticCurveTo(x - hw * 0.55, y - hh * 0.92, x, y - hh);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+      },
+      cloudShape: function(x, y, bw, bh, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var w2 = Math.max(12, Math.abs(G._n(bw, 76))), h2 = Math.max(8, Math.abs(G._n(bh, 48)));
+        var hw = w2 * 0.5, bot = y + h2 * 0.45, top = y - h2 * 0.52;
+        ctx.beginPath();
+        ctx.moveTo(x - hw * 0.56, bot);
+        ctx.bezierCurveTo(x - hw * 1.02, bot, x - hw * 1.02, y - h2 * 0.12, x - hw * 0.52, y - h2 * 0.12);
+        ctx.bezierCurveTo(x - hw * 0.42, top, x + hw * 0.24, top - h2 * 0.06, x + hw * 0.32, y - h2 * 0.18);
+        ctx.bezierCurveTo(x + hw * 0.98, y - h2 * 0.24, x + hw * 1.00, bot, x + hw * 0.56, bot);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+      },
+      gearWheel: function(x, y, r, teeth, rot, fill, holeCol, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var ro = Math.max(6, Math.abs(G._n(r, 26))), ri = ro * 0.77;
+        var cnt = Math.max(5, Math.min(16, Math.floor(G._n(teeth, 8))));
+        var a0 = G._n(rot, 0), step = (Math.PI * 2) / cnt;
+        ctx.beginPath();
+        for (var gi = 0; gi < cnt; gi++) {
+          var ba = a0 + gi * step;
+          var a1 = ba + step * 0.12, a2 = ba + step * 0.36, a3 = ba + step * 0.52, a4 = ba + step * 0.78;
+          var p0x = x + Math.cos(ba) * ri, p0y = y + Math.sin(ba) * ri;
+          if (gi === 0) ctx.moveTo(p0x, p0y); else ctx.lineTo(p0x, p0y);
+          ctx.lineTo(x + Math.cos(a1) * ro, y + Math.sin(a1) * ro);
+          ctx.lineTo(x + Math.cos(a2) * ro, y + Math.sin(a2) * ro);
+          ctx.lineTo(x + Math.cos(a3) * ri, y + Math.sin(a3) * ri);
+          ctx.lineTo(x + Math.cos(a4) * ri, y + Math.sin(a4) * ri);
+        }
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+        if (holeCol !== false) {
+          G.disc(x, y, ro * 0.33, holeCol || '#0f172a', rim || null, Math.max(1, G._n(lw, 2) * 0.85));
+        }
+      },
+      heartShape: function(x, y, s, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var hs = Math.max(8, Math.abs(G._n(s, 42)));
+        ctx.beginPath();
+        ctx.moveTo(x, y + hs * 0.44);
+        ctx.bezierCurveTo(x - hs * 0.62, y + hs * 0.04, x - hs * 0.56, y - hs * 0.48, x, y - hs * 0.18);
+        ctx.bezierCurveTo(x + hs * 0.56, y - hs * 0.48, x + hs * 0.62, y + hs * 0.04, x, y + hs * 0.44);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+      },
+      dropShape: function(x, y, s, rot, fill, rim, lw) {
+        x = G._n(x); y = G._n(y);
+        var ds = Math.max(6, Math.abs(G._n(s, 36)));
+        ctx.save();
+        ctx.translate(x, y);
+        if (rot) ctx.rotate(G._n(rot, 0));
+        ctx.beginPath();
+        ctx.moveTo(0, -ds * 0.54);
+        ctx.bezierCurveTo(ds * 0.46, -ds * 0.02, ds * 0.44, ds * 0.48, 0, ds * 0.48);
+        ctx.bezierCurveTo(-ds * 0.44, ds * 0.48, -ds * 0.46, -ds * 0.02, 0, -ds * 0.54);
+        ctx.closePath();
+        if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
+        ctx.restore();
+      },
+      curveArc: function(x1, y1, cx1, cy1, x2, y2, th, col) {
+        ctx.beginPath();
+        ctx.moveTo(G._n(x1), G._n(y1));
+        ctx.quadraticCurveTo(G._n(cx1), G._n(cy1), G._n(x2), G._n(y2));
+        ctx.strokeStyle = G._c(col || '#f8fafc');
+        ctx.lineWidth = Math.max(1.5, Math.abs(G._n(th, 4)));
+        ctx.lineCap = 'round';
+        ctx.stroke();
+      },
       sheen: function() {},
 `;
 

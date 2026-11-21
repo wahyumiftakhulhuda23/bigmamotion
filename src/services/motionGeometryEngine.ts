@@ -9,7 +9,7 @@ export const STUDIO_GEOMETRY_ENGINE_JS = `${ENGINE_BASE_PRIMITIVES_JS}${ENGINE_H
     };`;
 
 export const HELPERS_G_BASE_DOC =
-  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.dome(x,y,bw,bh,f,rim,lw) | G.wave(x,y,w,amp,freq,ph,th,col) | G.grid(x,y,bw,bh,cols,rows,r,act,f,aF,rim,lw) | G.bolt(x,y,s,f,rim,lw) | G.cross(x,y,s,th,f,rim,lw) | G.leaf(x,y,s,rot,f,rim,lw) | G.part(tx,ty,rot,sx,sy,fn)';
+  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.trap(x,y,tw,bw,h,r,f,rim,lw) | G.uArc(x,y,w,h,th,dir,col) | G.crest(x,y,bw,bh,f,rim,lw) | G.cloudShape(x,y,bw,bh,f,rim,lw) | G.gearWheel(x,y,r,teeth,rot,f,hC,rim,lw) | G.heartShape(x,y,s,f,rim,lw) | G.dropShape(x,y,s,rot,f,rim,lw) | G.curveArc(x1,y1,cx1,cy1,x2,y2,th,col) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.dome(x,y,bw,bh,f,rim,lw) | G.wave(x,y,w,amp,freq,ph,th,col) | G.grid(x,y,bw,bh,cols,rows,r,act,f,aF,rim,lw) | G.bolt(x,y,s,f,rim,lw) | G.cross(x,y,s,th,f,rim,lw) | G.leaf(x,y,s,rot,f,rim,lw) | G.part(tx,ty,rot,sx,sy,fn)';
 
 export const HELPERS_G_HERO_DOC = '';
 
@@ -225,12 +225,12 @@ export const VARIATION_PALETTES: string[][] = [
 ];
 
 export const VARIATION_MOTIONS: string[] = [
-  'bobY=Math.sin(t*2.2)*0.03*R, rot=Math.sin(t*1.4)*0.025',
-  'bobY=Math.cos(t*2.4)*0.032*R, rot=Math.sin(t*1.6)*0.028, sc=1+0.02*Math.sin(t*2.8)',
-  'bobX=Math.sin(t*1.5)*0.015*R, bobY=Math.sin(t*2.5)*0.028*R, rot=Math.cos(t*1.5)*0.022',
-  'bobY=Math.sin(t*2.0+0.8)*0.032*R, rot=-Math.sin(t*1.7)*0.026, sx=1+0.018*Math.sin(t*2.6), sy=1-0.018*Math.sin(t*2.6)',
-  'bobY=Math.sin(t*2.7)*0.028*R, rot=Math.sin(t*1.9)*0.030',
-  'bobY=Math.cos(t*2.1)*0.03*R, sc=1+0.024*Math.cos(t*2.4), rot=Math.sin(t*1.3)*0.020',
+  'hoverY=Math.sin(t*2.0)*0.022*R, rot=0, phase=0',
+  'hoverY=Math.cos(t*2.1)*0.024*R, rot=0, phase=0.8',
+  'hoverY=Math.sin(t*1.9+0.6)*0.020*R, rot=0, phase=1.6',
+  'hoverY=Math.sin(t*2.2)*0.022*R, rot=0, phase=2.4',
+  'hoverY=Math.cos(t*1.85)*0.024*R, rot=0, phase=3.1',
+  'hoverY=Math.sin(t*2.3+1.1)*0.020*R, rot=0, phase=4.0',
 ];
 
 function getPromptTopicBucket(promptTopic: string): string {
@@ -409,61 +409,225 @@ export function resolvePromptMotionPlan(
     };
   }
 
-  // ICON: Bespoke Structural Anatomy Blueprint — NEVER forces a cloned template!
-  // Builds prompt-accurate compound objects inside [-0.66*R, +0.66*R] with connected Painter's-Order geometry.
+  // ICON: Bespoke Structural Anatomy & Physical Motion Blueprint
+  // Anchors child parts directly onto parent seams inside [-0.58*R, +0.58*R] with Painter's Order.
   let structuralGuide =
-    'Build the EXACT literal object from the prompt using 4-7 cohesive, overlapping sub-parts inside [-0.66*R,+0.66*R] (1: outer housing/chassis silhouette; 2: secondary structural trim/frame/roof/stand physically joined with >=0.04*R overlap; 3: authentic internal functional mechanism; 4: animated focal element + crisp accent highlight).';
-  let themeMotion = 'upright stable hover bobY=Math.sin(t*2.2)*0.028*R, |rot|<=0.04, plus smooth theme-driven internal part articulation';
+    'LITERAL COMPOUND ANATOMY: Build the exact recognizable object from 4-7 tightly joined layers inside [-0.58*R,+0.58*R] using shared edge variables (e.g. topY=y-h/2) so sub-parts touch/overlap cleanly (>=0.04*R). ZERO loose floating corner blobs, ZERO dark circular backdrop behind non-round icons.';
+  let themeMotion = 'upright hoverY=Math.sin(t*2.0)*0.022*R (rot=0), articulating ONLY internal mechanism parts around fixed joints';
 
-  if (/\b(booth|kiosk|cabin|shelter|house|home|building|tower|store|shop|bank|office)\b/.test(topic)) {
+  if (/\b(booth|kiosk|phone\s*booth|telephone\s*booth|cabin|shelter)\b/.test(topic)) {
     structuralGuide =
-      'ARCHITECTURAL SILHOUETTE: Join crown/roof (G.dome or sloped G.poly) directly onto main structure G.box body -> crisp window/door G.grid panes -> interior subject detail (handset/hub/door) + solid foundation base G.box. Keep every sub-part physically anchored vertically with zero detached floating corner fragments.';
-    themeMotion = 'gentle grounded hover bobY=Math.sin(t*2.0)*0.022*R (keep upright |rot|<=0.02) + illuminated G.grid active pane pulse / beacon ring';
-  } else if (/\b(headset|headphone|call\s*center|earphone|mic|microphone|speaker|megaphone|audio|voice|podcast|music)\b/.test(topic)) {
+      'BOOTH ARCHITECTURE: Wide base plinth G.box at bottom -> tall outer frame G.box seated flush -> crowned with G.dome roof welded on top seam -> inner multi-pane glass G.grid + centered telephone handset G.uArc/G.curveArc inside booth.';
+    themeMotion = 'upright rot=0 steady stance; sequential illuminated G.grid pane highlight + subtle ringing handset pulse inside booth';
+  } else if (/\b(headset\w*|headphone\w*|call\s*center|earphone\w*)\b/.test(topic)) {
     structuralGuide =
-      'ACOUSTIC HARDWARE: Draw curved headband G.ring or flared cone G.poly connected seamlessly to padded earcups G.capsule / grille G.dome -> attached boom arm G.pill + acoustic G.wave waveform / sound arcs.';
-    themeMotion = 'rhythmic beat hover + oscillating G.wave voice/audio waveform + subtle acoustic G.ring pulse';
-  } else if (/\b(lock|padlock|encrypt|decrypt|cipher|vault|safe|key|shield|firewall|security|antivirus)\b/.test(topic)) {
+      'HEADSET ASSEMBLY: Centered padded ear-cups G.capsule on left & right snapped cleanly to ends of arched overhead G.uArc(...,"d") headband -> attached boom mic G.curveArc ending at mic G.disc + centered live G.wave/user badge.';
+    themeMotion = 'upright rot=0 hover; live oscillating acoustic G.wave & subtle ear-cup ring pulse';
+  } else if (/\b(megaphone\w*|bullhorn\w*)\b/.test(topic)) {
     structuralGuide =
-      'SECURITY ARTIFACT: Combine distinct security mechanism (arched G.ring shackle / faceted shield G.poly / machined G.pill key shaft+teeth) welded into sturdy armored G.box casing + centered keyhole/cipher G.grid or G.disc core (ZERO stock padlocks unless prompt is padlock; if encryption/cipher/key, build key/cipher dial/matrix!).';
-    themeMotion = 'steady upright float + sliding latch/bolt/key-turn or animated cipher G.grid scan';
-  } else if (/\b(browser|web|app|monitor|laptop|tablet|phone|smartphone|screen|terminal|dashboard|ui|ux|interface|window|error|loading)\b/.test(topic)) {
+      'MEGAPHONE CONE: Flared G.trap cone rotated horizontally (or 4-pt horn G.poly) with rear grip handle G.box welded underneath + 2 concentric curved sound G.ring arcs directly in front of horn mouth.';
+    themeMotion = 'gentle horn recoil bob + outward-pulsing acoustic G.ring arcs from mouth';
+  } else if (/\b(mic|microphone\w*|podcast\w*|voice\s*record\w*)\b/.test(topic)) {
     structuralGuide =
-      'DEVICE / UI FRAME: Main outer bezel G.box with top titlebar G.box & window controls -> clean inner viewport -> bespoke internal scene/alert/chart specific to THIS prompt (e.g. G.wave signal, G.bar KPIs, broken G.pill link, caution G.ngon triangle badge, progress G.capsule) nested completely inside the screen.';
-    themeMotion = 'upright hover + live internal screen motion (sweeping progress capsule / rising bars / smooth warning badge pulse)';
-  } else if (/\b(router|modem|wifi|wireless|network|server|cloud|cable|plug|disconnect|satellite|antenna|iot|smart\s*home)\b/.test(topic)) {
+      'MICROPHONE RIG: Rounded-top G.capsule grille with horizontal pill slots -> seated inside lower G.uArc(...,"u") cradle + vertical stem G.box welded to flat base G.capsule stand.';
+    themeMotion = 'upright rot=0; internal grille meter/wave pulse + subtle side sound G.ring arcs';
+  } else if (/\b(recover\w*|backup\w*|restor\w*)\b/.test(topic)) {
     structuralGuide =
-      'CONNECTED HARDWARE / TELEMETRY: Build tangible prompt-specific hardware (e.g. house+hub, split cable plugs, server rack stack with G.grid LEDs, orbited satellite, parabolic dish G.dome, cloud silhouette of welded G.disc+G.box) with physically attached antennas/leads and synchronized signal arcs.';
-    themeMotion = 'smooth phase signal propagation along G.ring arcs / sequential G.grid LED telemetry / plug separation-rejoin bounce';
-  } else if (/\b(heart|medical|doctor|syringe|stethoscope|dna|pill|hospital|clinic|ambulance|virus|vaccine|health|lab|flask|microscope)\b/.test(topic)) {
+      'RECOVERY / BACKUP DRIVE: Stacked cylinder/rack storage G.box tiers with glowing LED G.pill bars -> crisp circular restore G.ring arc (>240deg) with arrowhead G.poly wrapping smoothly around corner/side edge.';
+    themeMotion = 'upright rot=0; rotating circular restore arrow G.ring + sequential tier LED scan';
+  } else if (/\b(padlock\w*|lock\s*icon|locked|security\s*lock|smart\s*lock)\b/.test(topic)) {
     structuralGuide =
-      'MEDICAL / SCIENCE INSTRUMENT: Craft the exact clinical instrument/anatomy (twin G.wave helix strands, Erlenmeyer triangular G.poly+neck G.box flask with rising bubbles, curved G.ring stethoscope chestpiece, sleek G.capsule syringe+plunger, or beveled G.cross core) with high contrast and clean bevel rims.';
-    themeMotion = 'organic double-beat pulse / rising bubbles / oscillating ECG G.wave or metered plunger glide';
-  } else if (/\b(cart|truck|delivery|drone|rocket|car|ship|plane|logistics|wallet|coin|bank|scale|calculator|calendar|clock|camera|trophy|book|grad|atom|palette)\b/.test(topic)) {
+      'PADLOCK ASSEMBLY: Top U-shackle G.uArc(...,"d") whose bottom legs penetrate >=0.06*R into thick armored G.box lock body -> centered keyhole G.disc + G.trap slot inside lock face.';
+    themeMotion = 'upright rot=0; vertical shackle latch slide (smooth open-close breath) + glowing keyhole core';
+  } else if (/\b(encrypt\w*|decrypt\w*|cipher\w*|password\w*|vault\w*|safe)\b/.test(topic)) {
     structuralGuide =
-      'BESPOKE HERO OBJECT: Assemble exact real-world geometry with recognizable proportions (wheels below chassis with G.ngon spokes, wings angled from fuselage, tripod/strap attached to body, stacked/peeking elements connected cleanly).';
-    themeMotion = 'authentic mechanical physics (rotating wheels/gears, swinging pendulum/arms, gliding progress, buoyant flight bob)';
+      'ENCRYPTION / CIPHER ARTIFACT: Faceted G.crest or G.box armored frame -> recessed dark inner chamber -> animated G.grid cipher matrix or rotating tumbler G.gearWheel/dial + crisp keyhole/G.check lock core.';
+    themeMotion = 'upright rot=0; rotating combination dial / sequential G.grid cipher scan inside frame';
+  } else if (/\b(shield\w*|firewall\w*|antivirus|protect\w*|defender\w*|secur\w*)\b/.test(topic)) {
+    structuralGuide =
+      'CREST SHIELD: Outer G.crest bevelled armor -> inset dual-tone inner G.crest -> centered verification emblem (G.check, G.cross, or mini lock G.box) layered cleanly on top.';
+    themeMotion = 'upright rot=0; crisp verification checkmark/emblem pulse + smooth vertical highlight sweep inside crest';
+  } else if (/\b(key|keyring|access\s*key)\b/.test(topic)) {
+    structuralGuide =
+      'PRECISION KEY: Ornate G.disc/G.ring bow on left with inner hole -> horizontal cylindrical G.capsule shaft extending right -> stepped notch teeth G.box welded flush to bottom edge of shaft.';
+    themeMotion = 'smooth gentle key rotation turn (Math.sin(t*1.8)*0.14 rad) around bow + metallic tooth glint';
+  } else if (/\b(disconnect\w*|unplug\w*|cable\w*|plug\w*|broken\s*link|offline)\b/.test(topic)) {
+    structuralGuide =
+      'SPLIT PLUG / CONNECTION: Left cable G.curveArc + plug housing G.box with twin G.pill metal prongs facing right -> matching right socket G.box facing left -> centered small gap spark G.bolt or warning badge.';
+    themeMotion = 'upright rot=0; synchronized inward-outward horizontal plug reconnect oscillation + center spark G.bolt pulse';
+  } else if (/\b(troubleshoot\w*|diagnos\w*|repair\w*|fix\w*|bug\w*|warning\w*|alert\w*|error\w*)\b/.test(topic)) {
+    structuralGuide =
+      'DIAGNOSTIC / ALERT PANEL: Clean G.box UI frame with header bar + prominent G.ngon(3) warning triangle or G.gearWheel + wrench/exclamation G.capsule+G.disc centered sharply inside.';
+    themeMotion = 'upright rot=0; crisp warning/exclamation pulse or diagnostic gear inspection turn inside frame';
+  } else if (/\b(browser\w*|webpage\w*|website\w*|internet|tab|window)\b/.test(topic)) {
+    structuralGuide =
+      'BROWSER WINDOW: Rounded G.box window -> full-width top header G.box with 3 left window dots G.disc -> structured inner layout (G.globe / content G.bar rows / hero G.box card) strictly inside window bounds.';
+    themeMotion = 'upright rot=0; smooth loading G.capsule bar progress + interactive viewport element animation';
+  } else if (/\b(dashboard\w*|analytic\w*|chart\w*|graph\w*|kpi|monitor\w*|laptop\w*|tablet\w*|smartphone\w*|phone|screen|terminal|ui|ux|interface)\b/.test(topic)) {
+    structuralGuide =
+      'DEVICE / UI WORKSPACE: Outer hardware bezel G.box (+ attached stand G.trap or laptop base G.capsule if monitor/laptop) -> dark inset screen G.box -> rising anchored G.bar columns, G.wave trendline, or G.pie strictly inside screen!';
+    themeMotion = 'upright rot=0; live bar heights oscillating >=0.14*R + smooth line/pie progress sweep inside screen';
+  } else if (/\b(smart\s*home|house|home)\b/.test(topic)) {
+    structuralGuide =
+      'SMART HOME / HOUSE: Sloped G.poly triangular gable roof overhanging slightly -> solid G.box house walls overlapping roof seam -> centered arched G.dome door or G.grid window -> centered pulsing Wi-Fi G.ring arcs above/inside roof.';
+    themeMotion = 'upright rot=0; sequential outward propagation of wireless G.ring signal arcs + warm window pane pulse';
+  } else if (/\b(bank|courthouse|temple|office|building|tower|store|shop)\b/.test(topic)) {
+    structuralGuide =
+      'CLASSIC BUILDING FACADE: Triangular pediment G.poly + cornice G.box -> 3-4 evenly spaced vertical G.box pillars or G.grid lit windows -> wide stepped foundation base G.box anchored cleanly underneath.';
+    themeMotion = 'upright rot=0; subtle architectural window G.grid illumination + clean beacon/emblem pulse';
+  } else if (/\b(router\w*|modem\w*|wifi|wireless|hotspot|antenna\w*|network\w*|server\w*|database\w*|rack\w*)\b/.test(topic)) {
+    structuralGuide =
+      'NETWORK / SERVER HARDWARE: Sleek multi-tier G.box chassis/stack with crisp status G.pill LEDs -> vertical G.pill antennas welded to top edge (if wireless/router) + centered radiating G.ring signal arcs.';
+    themeMotion = 'upright rot=0; smooth staggered Wi-Fi arc wave / left-to-right G.grid telemetry LED chase';
+  } else if (/\b(cloud\w*|sync\w*|upload\w*|download\w*|saas)\b/.test(topic)) {
+    structuralGuide =
+      'UNIFIED CLOUD SILHOUETTE: Single crisp G.cloudShape contour (never jagged disconnected blobs!) -> centered directional G.arrow (upload/download) or interlocking circular sync G.ring arcs seated cleanly inside cloud.';
+    themeMotion = 'upright rot=0 soft float; vertical arrow transfer glide or continuous rotating sync arcs inside cloud';
+  } else if (/\b(hourglass\w*|sandglass\w*)\b/.test(topic)) {
+    structuralGuide =
+      'HOURGLASS FRAME: Top & bottom horizontal G.capsule wooden caps -> upper & lower G.trap glass bulbs meeting cleanly at center waist -> falling sand stream G.pill + rising lower sand triangle G.trap.';
+    themeMotion = 'upright rot=0 (or periodic crisp 180 flip); animated falling sand stream + sand level shift';
+  } else if (/\b(clock\w*|timer\w*|stopwatch\w*|alarm\s*clock|watch\w*)\b/.test(topic)) {
+    structuralGuide =
+      'CLOCK / TIMER FACE: Outer circular G.disc bezel -> high-contrast inner dial G.disc + 12 radial G.rays hour ticks -> center pivot G.disc anchoring rotating hour & minute G.pill hands.';
+    themeMotion = 'upright rot=0; continuous smooth clockwise hand rotation from exact dial center (minute 6x faster than hour)';
+  } else if (/\b(calendar\w*|schedul\w*|appointment\w*|planner\w*|deadline\w*)\b/.test(topic)) {
+    structuralGuide =
+      'CALENDAR PAGE: Crisp G.box card -> colored top month header G.box -> 2 top binder rings G.capsule straddling top edge -> neat 4x3 date G.grid inside body with animated active day cell + G.check.';
+    themeMotion = 'upright rot=0; smooth sequential day-cell focus pulse + checkmark bounce';
+  } else if (/\b(troph\w*|award\w*|cup|medal\w*|podium|winner)\b/.test(topic)) {
+    structuralGuide =
+      'TROPHY / AWARD CHALICE: Wide-top G.trap chalice bowl -> twin curved C-handles G.uArc(...,"l"/"r") touching upper bowl flanks -> narrow stem G.box + stepped G.trap/G.box pedestal base + shining G.star on bowl face.';
+    themeMotion = 'upright rot=0 proud float; twinkling G.star gleam + subtle shimmer sweep across chalice rim';
+  } else if (/\b(wallet\w*|purse|payment\w*|credit\s*card\w*)\b/.test(topic)) {
+    structuralGuide =
+      'WALLET & PEEKING CARD: Slightly tilted peeking card G.box tucked into top edge of wide rounded leather G.box wallet body -> overlapping right clasp strap G.capsule + metallic snap G.disc.';
+    themeMotion = 'upright rot=0; smooth vertical card peek glide + clasp metallic gleam';
+  } else if (/\b(coin\w*|money|dollar\w*|crypto\w*|revenue|profit|cash)\b/.test(topic)) {
+    structuralGuide =
+      'COIN / FINANCE STACK: Layered cylindrical coin G.oval discs stacked cleanly from bottom up (overlapping vertically) + bold front circular coin G.disc with inner G.ring rim & G.star/G.bolt emblem or upward G.arrow.';
+    themeMotion = 'upright rot=0; staggered gentle stack settle + upward value G.arrow / rim shine';
+  } else if (/\b(camera\w*|photo\w*|lens\w*|snapshot\w*)\b/.test(topic)) {
+    structuralGuide =
+      'CAMERA OPTICS: Rounded G.box camera body -> beveled viewfinder hump G.trap flush on top + shutter G.capsule button -> large centered multi-ring G.disc lens + corner flash G.disc.';
+    themeMotion = 'upright rot=0; smooth aperture ring expansion-contraction + periodic soft flash G.rays glint';
+  } else if (/\b(microscope\w*)\b/.test(topic)) {
+    structuralGuide =
+      'LAB MICROSCOPE: Angled optical barrel G.capsule -> curved C-arm G.uArc(...,"r") connecting barrel down to horizontal specimen stage G.box -> tapered heavy base G.trap.';
+    themeMotion = 'upright rot=0; fine focus barrel/eyepiece micro-glide + illuminated specimen beam pulse';
+  } else if (/\b(flask\w*|beaker\w*|chemistr\w*|potion\w*|test\s*tube\w*)\b/.test(topic)) {
+    structuralGuide =
+      'ERLENMEYER LAB FLASK: Conical G.trap lower vessel + cylindrical neck G.box + rounded lip G.capsule at top -> glowing inner liquid trapezoid filling bottom 55% + rising tiny bubbles G.disc strictly inside vessel!';
+    themeMotion = 'upright rot=0; gently undulating liquid surface & staggered rising bubbles inside flask';
+  } else if (/\b(dna|gene\w*|helix|atom\w*|molecule\w*|physics)\b/.test(topic)) {
+    structuralGuide =
+      'SCIENCE HELIX / ATOM: If DNA: twin opposing G.wave strands bridged by horizontal G.pill rungs. If Atom: glowing center G.disc nucleus + 3 symmetrically tilted orbital G.oval ellipses with orbiting electron G.disc dots on path.';
+    themeMotion = 'smooth phase-shifted helix ripple or synchronized multi-plane electron orbit around center';
+  } else if (/\b(heart\w*|ecg|medic\w*|health\w*|clinic\w*|hospital\w*|syring\w*|vaccin\w*|pill\w*)\b/.test(topic)) {
+    structuralGuide =
+      'CLINICAL / HEALTH EMBLEM: Bold G.heartShape or G.cross/G.crest medical badge (or sleek angled syringe G.capsule + plunger G.pill + needle) with high-contrast internal ECG G.wave monitor trace.';
+    themeMotion = 'authentic double-beat lub-dub pulse (1 + 0.06*pow(sin,4)) + scrolling ECG G.wave pulse across emblem';
+  } else if (/\b(gear\w*|cog\w*|setting\w*|engin\w*|automat\w*|mech\w*)\b/.test(topic)) {
+    structuralGuide =
+      'INTERLOCKING GEARS: Primary larger G.gearWheel(x1,y1,r1,8,rot1,...) + secondary smaller meshed G.gearWheel(x2,y2,r2,6,rot2,...) positioned so outer teeth mesh cleanly without crashing.';
+    themeMotion = 'upright rot=0 centers; strictly counter-rotating synchronized gear teeth (omega2 = -omega1 * (8/6))';
+  } else if (/\b(magnif\w*|search\w*|inspect\w*|audit\w*|zoom\w*)\b/.test(topic)) {
+    structuralGuide =
+      'MAGNIFIER GLASS: Document/chart G.box subtly behind (optional) + thick circular lens G.ring bezel with bright glass G.disc + solid diagonal handle G.pill connected flush at 45deg rim edge (ZERO gap!).';
+    themeMotion = 'smooth elliptical scanning sweep over target center with crisp inner highlight reflection';
+  } else if (/\b(lightbulb\w*|idea\w*|lamp\w*|innovat\w*|creativ\w*)\b/.test(topic)) {
+    structuralGuide =
+      'IDEA LIGHTBULB: Bright circular G.disc upper glass + tapered collar G.trap leading seamlessly into horizontal screw threads G.capsule -> internal filament G.curveArc/G.bolt + 6-8 clean outward G.rays.';
+    themeMotion = 'upright rot=0; warm filament brightness pulse + radially breathing G.rays burst';
+  } else if (/\b(batter\w*|charg\w*|power\w*|energ\w*|lightning|bolt)\b/.test(topic)) {
+    structuralGuide =
+      'POWER BATTERY CELL: Tall vertical G.box shell + small top positive terminal G.box anchored flush -> stacked segmented charge G.box bars bottom-to-top -> crisp centered G.bolt overlay.';
+    themeMotion = 'upright rot=0; sequential bottom-up charge bar illumination + crisp energy bolt pulse';
+  } else if (/\b(rocket\w*|launch\w*|spacecraft\w*)\b/.test(topic)) {
+    structuralGuide =
+      'SPACE ROCKET: Pointed fuselage (G.dome nose + tapered G.trap/G.box body) + symmetric left & right swept triangular fins G.poly welded to lower flanks + circular porthole G.disc + flickering G.dropShape flame under nozzle.';
+    themeMotion = 'smooth vertical thrust float + energetic exhaust flame length pulse (rot stays aligned along flight axis)';
+  } else if (/\b(drone\w*|quadcopter\w*|uav)\b/.test(topic)) {
+    structuralGuide =
+      'QUADCOPTER DRONE: Sleek center pod G.box with front camera G.disc -> left & right landing skids + angled arm struts G.pill -> horizontal spinning rotor blades G.oval centered directly atop arm tips.';
+    themeMotion = 'smooth aerodynamic hover + high-speed horizontal rotor blur width oscillation';
+  } else if (/\b(truck\w*|deliver\w*|shipp\w*|van|cargo)\b/.test(topic)) {
+    structuralGuide =
+      'DELIVERY TRUCK: Large rectangular cargo box G.box + front angled cab G.trap snapped flush side-by-side + horizontal chassis bar -> 2 circular wheels G.disc seated cleanly at chassis bottom line.';
+    themeMotion = 'smooth road suspension bounce (y only) + spinning spoke dots inside grounded wheels';
+  } else if (/\b(cart\w*|basket\w*|trolley\w*|shopp\w*)\b/.test(topic)) {
+    structuralGuide =
+      'SHOPPING CART: Angled push handle G.pill entering upper-left rim of wide-top G.trap basket frame + horizontal basket slots -> bottom axle + 2 wheels G.disc touching axle underneath.';
+    themeMotion = 'gentle forward roll glide + spinning wheel hubs + cargo item bounce inside basket';
+  } else if (/\b(compass\w*|gps|map\s*pin|locat\w*|navigat\w*|pin)\b/.test(topic)) {
+    structuralGuide =
+      'COMPASS / MAP PIN: Inverted teardrop G.dropShape(rot=Math.PI) pin with crisp center G.disc hole over flat map base G.trap, OR circular G.disc compass bezel with rotating 2-tone diamond needle G.poly.';
+    themeMotion = 'if pin: crisp vertical drop-bounce onto ground shadow oval; if compass: smooth magnetic needle seek-oscillation';
+  } else if (/\b(globe\w*|world|earth|global|planet\w*)\b/.test(topic)) {
+    structuralGuide =
+      'WIREFRAME GLOBE: Spherical G.disc + elliptical longitude meridian G.oval + horizontal latitude G.pill chords clipped visually inside sphere circumference (+ orbiting satellite dot or ring if orbital).';
+    themeMotion = 'upright rot=0; smooth meridian rx expansion sweep simulating 3D sphere rotation';
+  } else if (/\b(envelop\w*|email\w*|mail\w*|inbox\w*|newsletter\w*)\b/.test(topic)) {
+    structuralGuide =
+      'ENVELOPE MAIL: Wide G.box envelope body -> crisp V-shaped top flap G.poly touching exact upper-left/right corners + subtle letter card G.box peeking out top edge + centered badge.';
+    themeMotion = 'upright rot=0; smooth flap open-peek animation lifting inner message card slightly';
+  } else if (/\b(chat\w*|comment\w*|messag\w*|convers\w*|dialog\w*|bubbl\w*)\b/.test(topic)) {
+    structuralGuide =
+      'SPEECH BUBBLES: Rounded primary G.box bubble + seamless corner pointer tail G.poly welded to bottom edge + 3 staggered typing dots G.disc inside (plus secondary overlapping bubble behind if dialogue).';
+    themeMotion = 'upright rot=0; wave-bouncing 3 typing dots (phase staggered 0, 0.7, 1.4 rad) inside bubble';
+  } else if (/\b(bell\w*|notific\w*|ringing|chime\w*|alarm\w*)\b/.test(topic)) {
+    structuralGuide =
+      'NOTIFICATION BELL: Top ring loop G.disc -> flared G.dome bell body + wide lower flared G.capsule rim -> circular clapper G.disc tucked just below rim edge + symmetrical ringing arcs outside.';
+    themeMotion = 'pendulum swing around top loop pivot (rot=Math.sin(t*5)*0.11) + synchronized opposing clapper sway & sound arcs';
+  } else if (/\b(grad\w*|graduation|mortarboard|diploma)\b/.test(topic)) {
+    structuralGuide =
+      'GRADUATION CAP: Diamond mortarboard top G.poly overlapping trapezoidal under-cap G.trap cleanly -> hanging cord G.pill + tassel G.dropShape anchored at top center corner.';
+    themeMotion = 'upright hover + gentle tassel pendulum swing from top corner anchor';
+  } else if (/\b(book\w*|librar\w*|notebook\w*|study|manual\w*)\b/.test(topic)) {
+    structuralGuide =
+      'OPEN / STACKED BOOK: Symmetric left & right angled page G.poly panels joined along solid central spine G.box + bookmark ribbon G.trap draping neatly + printed G.pill lines on pages.';
+    themeMotion = 'upright rot=0; subtle breathing page lift + gliding bookmark ribbon / reading line highlight';
+  } else if (/\b(briefcase\w*|portfolio\w*|suitcase\w*)\b/.test(topic)) {
+    structuralGuide =
+      'BRIEFCASE PORTFOLIO: Wide rounded G.box case -> top U-handle G.uArc(...,"d") anchored firmly into top seam -> overlapping upper flap G.box with centered metallic clasp G.box.';
+    themeMotion = 'upright rot=0 carry bob + subtle clasp glint';
+  } else if (/\b(folder\w*|director\w*|archiv\w*)\b/.test(topic)) {
+    structuralGuide =
+      'DOCUMENT FOLDER: Back G.box folder plate with protruding top-left index tab G.box -> peeking white file edge G.box -> tilted/slotted front pocket G.trap.';
+    themeMotion = 'upright rot=0; subtle front pocket open-close tilt revealing peeking file card';
+  } else if (/\b(document\w*|checklist\w*|form\w*|clipboard\w*|contract\w*|report\w*|file\w*)\b/.test(topic)) {
+    structuralGuide =
+      'DOCUMENT / CHECKLIST SHEET: Crisp vertical G.box page + colored header bar or top clip G.capsule -> 3 aligned rows of small G.check/G.disc bullets + horizontal text G.pill bars strictly inside page.';
+    themeMotion = 'upright rot=0; sequential row highlight / animated line draw & checkmark pop';
+  } else if (/\b(gamepad\w*|joystick\w*|controller\w*|gaming|vr)\b/.test(topic)) {
+    structuralGuide =
+      'GAMEPAD CONTROLLER: Ergonomic wide bridge G.capsule + angled left/right grip G.capsule handles welded cleanly -> left G.cross D-pad + right 4-dot action G.disc cluster.';
+    themeMotion = 'gentle playful tilt (|rot|<=0.06) + alternating action button highlight pulse';
+  } else if (/\b(palett\w*|paint\w*|brush\w*|design\w*|art|draw\w*)\b/.test(topic)) {
+    structuralGuide =
+      'ARTIST PALETTE & BRUSH: Angled oval/bean G.oval palette with thumb hole G.disc + 4 vivid paint G.disc dollops arranged around upper curve + angled brush G.pill+G.dropShape.';
+    themeMotion = 'gentle brush dab oscillation + sequential vivid paint swatch pop';
   }
 
   const twistHints = [
-    'Composition Twist: clean bold front-facing isometric/flat-3D vector with crisp outer rim lw=Math.max(2,0.032*R)',
-    'Composition Twist: subtle volumetric depth shadow offset layer beneath primary casing using darker palette tone c0 + vivid c2/c3 front highlight',
-    'Composition Twist: crisp architectural symmetry with secondary animated kinetic highlight accent sweep inside main frame',
+    'Clean crisp flat-3D vector with uniform rim lw=Math.max(2,0.032*R)',
+    'Subtle recessed darker c0 depth plate behind main body + bright c2/c3 front focal accents',
+    'Crisp layered symmetry with smooth animated specular sweep inside main container',
   ];
 
   const overrideMap: Record<string, string> = {
-    bounce: 'elastic bounce bobY=-Math.abs(Math.sin(t*2.6))*0.045*R with subtle squash-stretch sx/sy',
-    orbital: 'smooth orbital float bobY=Math.sin(t*2.1)*0.028*R + harmonic tilt rot=Math.sin(t*1.5)*0.03',
-    morph: 'fluid breathing scale sx=1+0.024*Math.sin(t*2.4), sy=1-0.024*Math.sin(t*2.4)',
-    cyber: 'crisp stepped electronic pulse + kinetic scanline/LED wave sweep',
-    mechanical: 'precision geared/articulated sub-part motion with damped spring settling',
-    flow: 'silky harmonic 60 FPS sine float + coordinated internal element flow',
+    bounce: 'upright elastic hover bobY=-Math.abs(Math.sin(t*2.4))*0.04*R with coordinated internal motion',
+    orbital: 'smooth float hoverY=Math.sin(t*2.0)*0.025*R + subtle internal orbit motion',
+    morph: 'fluid breathing scale 1+0.02*Math.sin(t*2.2) with synchronized interior motion',
+    cyber: 'crisp digital telemetry pulse + kinetic LED/scanline sweep inside object',
+    mechanical: 'precision articulated sub-part rotation/sliding anchored to fixed joints',
+    flow: 'silky harmonic 60 FPS float + coordinated internal element animation',
   };
 
   return {
-    label: `custom bespoke vector`,
+    label: `bespoke vector`,
     helperName: 'custom',
-    anatomyHint: `${structuralGuide} ${twistHints[cm]}. ZERO generic stock clones; 100% tailored silhouette for "${promptTopic.slice(0, 80)}".`,
+    anatomyHint: `${structuralGuide} ${twistHints[cm]}.`,
     codeHint: (overrideMode && overrideMap[overrideMode]) ? overrideMap[overrideMode] : themeMotion,
   };
 }

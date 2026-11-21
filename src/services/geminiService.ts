@@ -540,12 +540,15 @@ export function getCostOptimizedThinkingConfig(
   const m = (targetModel || '').toLowerCase();
   if (unsupportedThinkingModels.has(m)) return undefined;
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' || highPrecision ? 256 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 320 : highPrecision ? 384 : purpose === 'animation' ? 128 : 0 };
   }
   if (m.includes('3.1-pro') || m.includes('4-')) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
-  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+  if (m.includes('3.8')) {
+    return { thinkingLevel: ThinkingLevel.LOW };
+  }
+  if (m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
     return { thinkingLevel: purpose === 'vision' || highPrecision ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
   return undefined;
@@ -958,6 +961,10 @@ export function verifyCanvasAnimationHtml(
         visiblePixels,
         nonZeroAlphaPixels,
         borderPixels,
+        minX,
+        maxX,
+        minY,
+        maxY,
         bboxW: maxX >= minX ? maxX - minX + 1 : 0,
         bboxH: maxY >= minY ? maxY - minY + 1 : 0,
         meanX: visiblePixels > 0 ? sumX / visiblePixels : rw / 2,
@@ -1002,7 +1009,7 @@ export function verifyCanvasAnimationHtml(
           return {
             ok: false,
             visiblePixels,
-            reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px — pastikan elemen utama mengisi [-0.62*R,+0.62*R])`,
+            reason: `Bentuk ikon terlalu kecil/cacat (${fm.bboxW}x${fm.bboxH}px — pastikan elemen utama mengisi [-0.58*R,+0.58*R])`,
           };
         }
         if (fm.bboxW / Math.max(1, fm.bboxH) > 4.2 || fm.bboxH / Math.max(1, fm.bboxW) > 4.2) {
@@ -1031,6 +1038,83 @@ export function verifyCanvasAnimationHtml(
             ok: false,
             visiblePixels,
             reason: `Posisi ikon melenceng keluar area tengah (${Math.round(fm.meanX)},${Math.round(fm.meanY)})`,
+          };
+        }
+      }
+
+      // Cohesion & Anti-Fragmentation Checks on frame #3
+      const fillRatio = m3.visiblePixels / Math.max(1, m3.bboxW * m3.bboxH);
+      if (fillRatio < 0.085) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Bentuk ikon terlalu renggang/kawat tipis (${Math.round(fillRatio * 100)}% isi bbox) — gunakan siluet utama padat & menyatu`,
+        };
+      }
+
+      const centroidJump = Math.max(
+        Math.hypot(m1.meanX - m2.meanX, m1.meanY - m2.meanY),
+        Math.hypot(m2.meanX - m3.meanX, m2.meanY - m3.meanY)
+      );
+      if (centroidJump > 28) {
+        return {
+          ok: false,
+          visiblePixels,
+          reason: `Gerakan ikon melompat liar antar frame (pergeseran ${Math.round(centroidJump)}px) — jaga badan utama stabil & animasikan sub-bagian terjangkar`,
+        };
+      }
+
+      // 8x8 coarse blob fragmentation detector inside icon bbox
+      if (m3.bboxW >= 16 && m3.bboxH >= 16) {
+        const GRID = 8;
+        const cellCounts = new Int32Array(GRID * GRID);
+        for (let py = m3.minY; py <= m3.maxY; py++) {
+          const gy = Math.min(GRID - 1, Math.floor(((py - m3.minY) / Math.max(1, m3.bboxH)) * GRID));
+          for (let px = m3.minX; px <= m3.maxX; px++) {
+            const idx = (py * rw + px) * 4;
+            const dist = Math.abs(imgData[idx] - bgR) + Math.abs(imgData[idx + 1] - bgG) + Math.abs(imgData[idx + 2] - bgB);
+            if (dist > 36) {
+              const gx = Math.min(GRID - 1, Math.floor(((px - m3.minX) / Math.max(1, m3.bboxW)) * GRID));
+              cellCounts[gy * GRID + gx]++;
+            }
+          }
+        }
+        const visited = new Uint8Array(GRID * GRID);
+        let blobCount = 0;
+        let maxBlobPixels = 0;
+        for (let c = 0; c < GRID * GRID; c++) {
+          if (cellCounts[c] >= 3 && !visited[c]) {
+            blobCount++;
+            let blobSum = 0;
+            const q = [c];
+            visited[c] = 1;
+            while (q.length > 0) {
+              const cur = q.pop()!;
+              blobSum += cellCounts[cur];
+              const cxC = cur % GRID;
+              const cyC = Math.floor(cur / GRID);
+              const neighbors = [
+                cxC > 0 ? cur - 1 : -1,
+                cxC < GRID - 1 ? cur + 1 : -1,
+                cyC > 0 ? cur - GRID : -1,
+                cyC < GRID - 1 ? cur + GRID : -1,
+              ];
+              for (const nb of neighbors) {
+                if (nb >= 0 && !visited[nb] && cellCounts[nb] >= 3) {
+                  visited[nb] = 1;
+                  q.push(nb);
+                }
+              }
+            }
+            if (blobSum > maxBlobPixels) maxBlobPixels = blobSum;
+          }
+        }
+        const largestShare = maxBlobPixels / Math.max(1, m3.visiblePixels);
+        if (blobCount >= 5 || (blobCount >= 3 && largestShare < 0.40)) {
+          return {
+            ok: false,
+            visiblePixels,
+            reason: `Bentuk terpecah/berantakan (${blobCount} bagian terpisah, inti ${Math.round(largestShare * 100)}%) — sambungkan seluruh bagian dengan overlap >=0.04*R`,
           };
         }
       }
@@ -2265,7 +2349,8 @@ async function generateAnimationDirect(
   motionDynamics: MotionDynamics = 'auto',
   neonGlow: boolean = true,
   highPrecision: boolean = false,
-  variationOffset: number = 0
+  variationOffset: number = 0,
+  defectFeedback: string = ''
 ): Promise<{ id: string; title: string; prompt?: string; type: AnimationType; style: string; subCategory: string; html: string; isGreenScreen?: boolean; colorMode?: ColorMode; motionDynamics?: MotionDynamics; neonGlow?: boolean }> {
   const cleanKey = extractCleanApiKey(apiKey);
   if (!cleanKey || !cleanKey.startsWith('AIza')) {
@@ -2287,19 +2372,25 @@ async function generateAnimationDirect(
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Draw inside G.part(cx,cy+bobY,rot,sx,sy,function(R){ ... }) with commanding scale R=S*0.80 spanning [-0.65*R,+0.65*R]. RULES: (1) CENTER-ANCHOR: G.box/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes bottom yB; (2) ASSEMBLED & CONNECTED: draw 4-7 overlapping parts back-to-front (Painter's Order) with >=0.04*R joint overlap, uniform rim lw=Math.max(2,0.032*R), ZERO floating detached shapes in corners, ZERO random circle soup; (3) BESPOKE LITERAL SILHOUETTE: invent exact geometry for "${promptTopic.slice(0, 75)}" (NEVER clone a generic padlock/cloud/chat bubble/network template); (4) UPRIGHT & SOLID: keep |rot|<=0.05 on upright icons, NEVER hide parts via if(sin>0). Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Anatomy: ${motionPlan.anatomyHint}`;
+    : `MICROSTOCK HERO ICON (14-26 lines crisp JS):
+- Line 1 inside drawFrame MUST be a brief 1-line plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
+- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) with scale R=S*0.80 inside [-0.58*R,+0.58*R] (NEVER mix S with R!).
+- JOINT ANCHORS & PAINTER ORDER: Compute seam coordinates (e.g. topY=y-h/2, botY=y+h/2) so attached handles/roofs/wheels/antennas/shackles physically touch/overlap parent edges (>=0.04*R) with uniform rim lw=Math.max(2,0.032*R). Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
+- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at their true joints! ZERO floating corner dots/confetti, ZERO unrequested dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
+- Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
+  const fixNote = defectFeedback ? `\n- FIX PRIOR REJECTED DEFECT: ${defectFeedback}` : '';
 
   const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
 SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}]
 - ${geometryGuide}
-- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Kinetic: ${seed.motionExpr}.
-- ${colorStyleDirective}`;
+- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
+- ${colorStyleDirective}${fixNote}`;
 
   const config: any = {
-    temperature: 0.42,
+    temperature: highPrecision ? 0.25 : 0.35,
     maxOutputTokens: isBackground ? 1350 : 1200,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
@@ -2437,7 +2528,7 @@ async function generateAnimationBatchDirect(
 
   const geometryGuide = isBackground
     ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
-    : 'MICROSTOCK HERO ICONS (14-26 lines each): Draw via G.part(cx,cy+bobY,rot,sx,sy,fn) with commanding scale R=S*0.80 inside [-0.65*R,+0.65*R]. CENTER-ANCHOR rule (only G.bar uses yB); 4-7 connected overlapping parts (Painter Order, lw=Math.max(2,0.032*R), ZERO floating corner dots, ZERO random circles, keep upright |rot|<=0.05, NEVER hide via if(sin>0)).';
+    : 'MICROSTOCK HERO ICONS (14-26 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup.';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
   const batchPlanSeen = new Set<string>();
@@ -2447,7 +2538,7 @@ async function generateAnimationBatchDirect(
   const topicLines = prompts.map((p, idx) => {
     const seed = slotSeeds[idx];
     const picked = slotPlans[idx];
-    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Kinetic:${seed.motionExpr} | Anatomy:${picked.plan.anatomyHint} | Motion (${picked.plan.label}): ${picked.plan.codeHint}`;
+    return `// ===ANIM_${idx}=== [${seed.tag}] "${p}" | Palette: c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]} | Rhythm:${seed.motionExpr} | Anatomy:${picked.plan.anatomyHint} | Motion (${picked.plan.label}): ${picked.plan.codeHint}`;
   }).join('\n');
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -2463,7 +2554,7 @@ TOPICS:
 ${topicLines}`;
 
   const config: any = {
-    temperature: 0.42,
+    temperature: 0.35,
     maxOutputTokens: Math.min(2500, Math.max(1250, prompts.length * (isBackground ? 1250 : 1150))),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
@@ -2564,6 +2655,7 @@ export async function generateSingleAnimationCode(
   let didWaitForCooldown = false;
   let sawQuotaError = false;
   let sawRenderDefect = false;
+  let lastDefectReason = '';
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
@@ -2622,8 +2714,9 @@ export async function generateSingleAnimationCode(
             colorMode,
             motionDynamics,
             neonGlow,
-            sawRenderDefect, // Only escalate thinking if prior pass failed shape/syntax, NEVER on 429!
-            variationSalt + attempt - 1
+            sawRenderDefect, // Escalate thinking slightly ONLY if prior pass failed geometry/cohesion, NEVER on 429!
+            variationSalt + attempt - 1,
+            lastDefectReason
           );
           if (attempt < maxRetries && isCodeFingerprintDuplicate(result.html)) {
             console.warn('[Single Render Duplicate Detected]: regenerating with fresh Variation DNA...');
@@ -2693,6 +2786,7 @@ export async function generateSingleAnimationCode(
           }
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             sawRenderDefect = true;
+            lastDefectReason = classified.message.replace(/^Validasi render gagal\s*\(/i, '').replace(/\)$/, '');
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
             throw clientErr;
           }
@@ -3141,12 +3235,13 @@ HELPERS G: ${HELPERS_G_VISION_DOC}
 Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
-    : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+bobY, rot, sx, sy, fn) skala R=S*0.80.
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak |rot|<=0.05 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
+    : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
+Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
+Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
 Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/G.disc/G.oval/G.dome/G.grid/G.bolt/G.cross/G.leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam G.part(cx,cy+bobY,...), saling terhubung overlap >=0.04*R mengisi proporsional [-0.65*R,+0.65*R], ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
