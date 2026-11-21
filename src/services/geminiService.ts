@@ -406,10 +406,10 @@ export function buildModelFallbackChain(primaryModel?: string): string[] {
       ]
     : [
         primary,
-        'gemini-2.5-flash-lite',
-        'gemini-3.5-flash-lite',
-        'gemini-3.1-flash-lite',
         'gemini-2.5-flash',
+        'gemini-3.5-flash-lite',
+        'gemini-2.5-flash-lite',
+        'gemini-3.1-flash-lite',
         'gemini-flash-latest',
       ];
   return Array.from(new Set(ordered)).filter((m) => !isModelUnsupportedCached(m));
@@ -1816,34 +1816,21 @@ Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
-Generate exactly 1 professional, highly marketable, and semantically rich animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
+Generate exactly 1 crisp, recognizable, high-value standalone 3D/Flat-3D VECTOR ICON animation prompt in English (Collection item #${index + 1} of ${total}, Seed: ${dynamicSessionSeed}).
 
-MANDATORY RULES FOR STANDALONE 3D VOLUMETRIC OBJECT (STRICT ZERO RHOMBUS, ZERO BACKGROUND PLATES, ZERO BROKEN POLYGONS):
-1. STANDALONE VOLUMETRIC 3D ICON OBJECT (THE OBJECT ITSELF IS 3D):
-   - The prompt MUST describe the subject/icon itself (e.g. 3D Camera, 3D Notification Bell, 3D Studio Microphone, 3D Padlock, 3D Trophy, 3D Crypto Vault, 3D Shopping Cart) as a physical, sculpted, standalone 3D volumetric artifact.
-   - STRICT ZERO CONTAINER / ZERO RHOMBUS / ZERO SHIELD RULE:
-     * NEVER place the icon on a diamond (belah ketupat), rhombus plate, hexagon, shield plate, pedestal base, or background card!
-     * The icon must stand 100% naked and standalone on the canvas/green screen.
-   - ULTRA-REALISTIC CHIAROSCURO & VOLUMETRIC LIGHTING:
-     * Pristine native curved silhouette with smooth chamfered fillets.
-     * Crisp 1.5px specular highlight bevel rails along top-left edges catching key studio lighting.
-     * Rich multi-stop directional chiaroscuro gradients across body facets (e.g. lustrous imperial gold, chrome titanium, matte obsidian, or vivid saturated materials).
-     * Deep ambient occlusion crease shadows beneath joints and under-rims.
-     * Soft breathing elliptical ground contact shadow cast directly below the object on the canvas/green screen.
-2. DETAILED MONOLITHIC RIGGED ANATOMY (ZERO DETACHED PARTS, ZERO BUBBLES):
-   - All internal components (lens barrel on camera, clapper inside bell, mesh grille on microphone, dial on vault) are physically welded into the unified chassis.
-   - STRICT FORBIDDEN: Detached floating parts, exploded views, upright rectangle box abstractions, outer glass bubbles, or outer background cards.
-3. STRICT BAN ON GEAR WHEELS / SPROCKETS (ZERO GEARS):
-   - NEVER describe rotating gear wheels, sprockets, or cogs on icons (especially on wallets, vaults, charts, cards, devices, or documents).
-4. ELASTIC KINETIC 60 FPS SPRING DYNAMICS:
-   - Describe harmonic vertical floating with elastic squash-and-stretch spring bounce (body squashes slightly on dip), synchronized internal micro-articulation with secondary inertia, and a clipped 45-degree diagonal specular gleam sweep.
+MANDATORY RULES FOR HERO ICON PROMPTS:
+1. LITERAL RECOGNIZABLE OBJECT SILHOUETTE (4-6 JOINED PARTS):
+   - Describe one iconic object (e.g., Telephone Booth, Padlock, Coffee Mug, Microphone, Rocket, Shield with Checkmark, Smart Home with Wi-Fi) assembled from cleanly connected physical parts with balanced proportions and bold crisp rim contrast.
+   - FORBIDDEN: Diamond/rhombus/card backing plates, dark backing discs behind square/object icons, loose floating background dots, orbital debris, or detached ground ovals below the icon.
+2. NATURAL ARTICULATED MOTION (ZERO SHAPE DISTORTION):
+   - Describe upright stable framing (or natural pendulum/tilt ONLY if the object swings like a bell/plane/needle) with smooth internal mechanical animation (e.g. rotating gears, rising chart bars, pulsing signal arcs, oscillating steam waves, sliding lock shackle). NEVER ask for squash-and-stretch distortion or diagonal translucent light bars.
 ${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 
-Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`;
+Output format: Return ONLY 1 crisp, concrete single-sentence prompt (max 26 words). No bullet points, no markdown, no quotes.`;
 
   try {
     const res = await fetch('/api/gemini/generate-prompts', {
@@ -1987,9 +1974,9 @@ async function generatePromptBatchDirect(
 
   const promptContent = type === 'bg'
     ? `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompts in English (Seed: ${seed}).
-RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings.`
-    : `Motion Director. Generate ${batchCount} unique standalone 3D ICON motion prompts in English (Seed: ${seed}).
-RULES: Clean sculpted 3D icon built from 3-4 welded proportional parts, 45-deg chiaroscuro, 1.5px bevel rim; choose motion naturally matching the specific icon; ZERO rhombus/plate/card/gears/particles/floor-shadow. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings.`;
+RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 28 words each).`
+    : `Motion Director. Generate ${batchCount} unique standalone VECTOR ICON motion prompts in English (Seed: ${seed}).
+RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 26 words each).`;
 
   const config: any = {
     temperature: 0.9,
@@ -2365,18 +2352,18 @@ async function generateAnimationDirect(
   const motionPlan = picked.plan;
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC,#1E293B).`
+    ? `GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (STRICT ZERO rgba(...,0.x), ZERO translucent glass/halos/drop-shadows/glare bars!). Use ONLY solid opaque high-contrast NON-GREEN shades (${seed.palette.join(',')},#F8FAFC,#0F172A) + crisp bold rim lw=Math.max(2.4,0.036*R) so every edge keys cleanly!`
     : neonGlow
-    ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0).`
-    : `CRISP VECTOR (#080c14 cleared): shadowBlur=0.`;
+    ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0); bold crisp rim lw=Math.max(2.2,0.034*R).`
+    : `CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold crisp rim lw=Math.max(2.2,0.034*R).`;
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS):
-- Line 1 inside drawFrame MUST be a brief 1-line plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
+    : `MICROSTOCK HERO ICON (14-28 lines crisp JS):
+- Line 1 inside drawFrame MUST be a brief plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
 - Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) with scale R=S*0.80 inside [-0.58*R,+0.58*R] (NEVER mix S with R!).
-- JOINT ANCHORS & PAINTER ORDER: Compute seam coordinates (e.g. topY=y-h/2, botY=y+h/2) so attached handles/roofs/wheels/antennas/shackles physically touch/overlap parent edges (>=0.04*R) with uniform rim lw=Math.max(2,0.032*R). Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
-- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at their true joints! ZERO floating corner dots/confetti, ZERO unrequested dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
+- JOINT ANCHORS & PAINTER ORDER: Compute seam variables first — e.g. var lw=Math.max(2.2,0.034*R), bw=0.66*R, bh=0.46*R, y0=0.06*R, topY=y0-bh*0.5; then weld roof/handle/shackle directly onto topY+/-0.04*R! Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
+- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at true joints! ZERO floating corner dots/confetti, ZERO ground shadow ovals underneath, ZERO dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
 - Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -2521,14 +2508,14 @@ async function generateAnimationBatchDirect(
   const isBackground = type === 'bg';
 
   const colorStyleDirective = isGreenScreen
-    ? 'GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B).'
+    ? 'GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B) with bold rim lw=Math.max(2.4,0.036*R).'
     : neonGlow
-    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0).'
-    : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0.';
+    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0); bold rim lw=Math.max(2.2,0.034*R).'
+    : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).';
 
   const geometryGuide = isBackground
     ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
-    : 'MICROSTOCK HERO ICONS (14-26 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup.';
+    : 'MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables (e.g. topY=y0-bh*0.5) so parts weld/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots, ground ovals, or circle soup.';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
   const batchPlanSeen = new Set<string>();
@@ -2787,7 +2774,7 @@ export async function generateSingleAnimationCode(
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             sawRenderDefect = true;
             lastDefectReason = classified.message.replace(/^Validasi render gagal\s*\(/i, '').replace(/\)$/, '');
-            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            // Stay on the smart activeModel with highPrecision & lastDefectReason (never downgrade to flash-lite on shape retry!)
             throw clientErr;
           }
         }
@@ -2828,7 +2815,7 @@ export async function generateSingleAnimationCode(
       const serverCheck = verifyCanvasAnimationHtml(healedHtml, !!isGreenScreen, type);
       if (!serverCheck.ok) {
         sawRenderDefect = true;
-        modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+        lastDefectReason = serverCheck.reason || 'canvas blank';
         throw new Error(`Validasi render server gagal (${serverCheck.reason || 'canvas blank'})`);
       }
 
@@ -3238,10 +3225,10 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
     : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
 Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
+Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih FLAT-3D SOLID: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO kaca/halo/oval bayangan transparan, HANYA warna solid non-hijau + rim tegas lw=Math.max(2.4,0.036*R))' : 'BG Gelap (#080c14) + rim tegas lw=Math.max(2.2,0.034*R)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
@@ -3495,7 +3482,7 @@ export async function generateImageToMotion(
             throw lastError;
           }
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
-            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            // Keep selected smart vision model on verifier defect retries instead of downgrading to lite
             throw clientErr;
           }
         }
@@ -3535,7 +3522,6 @@ export async function generateImageToMotion(
       const healedHtml = extractHTML(data.html, effectiveGs);
       const check = verifyCanvasAnimationHtml(healedHtml, !!effectiveGs, contentType);
       if (!check.ok) {
-        modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
         throw new Error(`Validasi render vision gagal (${check.reason || 'canvas blank'})`);
       }
 

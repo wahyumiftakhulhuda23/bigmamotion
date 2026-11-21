@@ -42,20 +42,44 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
       _c: function(c) {
         if (!c || typeof c !== 'string' || typeof __bigmaGS === 'undefined' || !__bigmaGS) return c;
         var s = c.trim().toLowerCase();
+        if (s === 'transparent' || s === 'none') return 'rgba(0,0,0,0)';
         if (s.indexOf('rgba(') === 0 || s.indexOf('rgb(') === 0) {
-          var p = s.slice(s.indexOf('(') + 1).split(',');
+          var p = s.slice(s.indexOf('(') + 1).replace(')', '').split(',');
           var rr = parseInt(p[0], 10), gg = parseInt(p[1], 10), bb = parseInt(p[2], 10);
+          var al = p.length > 3 ? parseFloat(p[3]) : 1;
+          if (!isNaN(al) && al < 0.45) return 'rgba(0,0,0,0)';
           if (!isNaN(rr) && !isNaN(gg) && !isNaN(bb)) {
-            if (gg > rr + 45 && gg > bb + 45) return '#00E5FF';
+            if (gg > rr + 40 && gg > bb + 40) return '#00E5FF';
             return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
           }
           return '#38BDF8';
         }
-        if (s.indexOf('hsla(') === 0) return '#38BDF8';
-        if (s.charAt(0) === '#' && (s.length === 4 || s.length === 7)) {
-          var hx = s.length === 4 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1);
-          var r2 = parseInt(hx.slice(0,2),16), g2 = parseInt(hx.slice(2,4),16), b2 = parseInt(hx.slice(4,6),16);
-          if (!isNaN(r2) && !isNaN(g2) && !isNaN(b2) && g2 > r2 + 45 && g2 > b2 + 45) return '#00E5FF';
+        if (s.indexOf('hsla(') === 0 || s.indexOf('hsl(') === 0) {
+          var hp = s.slice(s.indexOf('(') + 1).replace(')', '').split(',');
+          var hal = hp.length > 3 ? parseFloat(hp[3]) : 1;
+          if (!isNaN(hal) && hal < 0.45) return 'rgba(0,0,0,0)';
+          var hue = parseFloat(hp[0]);
+          if (!isNaN(hue)) {
+            var nh = ((hue % 360) + 360) % 360;
+            if (nh >= 78 && nh <= 165) return '#00E5FF';
+          }
+          return s.indexOf('hsla(') === 0 ? ('hsl(' + hp.slice(0, 3).join(',') + ')') : c;
+        }
+        if (s.charAt(0) === '#') {
+          if (s.length === 5 || s.length === 9) {
+            var aHex = s.length === 5 ? s[4] + s[4] : s.slice(7, 9);
+            var aVal = parseInt(aHex, 16) / 255;
+            if (!isNaN(aVal) && aVal < 0.45) return 'rgba(0,0,0,0)';
+            var rgbHex = s.length === 5 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1, 7);
+            var rA = parseInt(rgbHex.slice(0,2),16), gA = parseInt(rgbHex.slice(2,4),16), bA = parseInt(rgbHex.slice(4,6),16);
+            if (!isNaN(rA) && !isNaN(gA) && !isNaN(bA) && gA > rA + 40 && gA > bA + 40) return '#00E5FF';
+            return '#' + rgbHex;
+          }
+          if (s.length === 4 || s.length === 7) {
+            var hx = s.length === 4 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1);
+            var r2 = parseInt(hx.slice(0,2),16), g2 = parseInt(hx.slice(2,4),16), b2 = parseInt(hx.slice(4,6),16);
+            if (!isNaN(r2) && !isNaN(g2) && !isNaN(b2) && g2 > r2 + 40 && g2 > b2 + 40) return '#00E5FF';
+          }
         }
         if (s === 'green' || s === 'lime' || s === 'limegreen' || s === 'springgreen' || s === 'chartreuse') return '#00E5FF';
         return c;

@@ -959,11 +959,11 @@ ${categoryLine}Style: ${style}${colorModeDirective}${glowDirective}
 ${typeInstruction}${keywordsDirective}${greenScreenDirective}
 Return JSON array of ${batchCount} crisp 1-sentence string(s).`;
     } else {
-      promptContent = `Motion Director. Generate ${batchCount} unique standalone 3D ICON motion prompt(s) in English (Seed: ${dynamicSessionSeed}).
-RULES: Clean sculpted 3D icon built from 3-4 welded proportional parts, 45-deg chiaroscuro, 1.5px bevel rim; choose motion naturally matching the specific icon; ZERO rhombus/plate/card/gears/particles/floor-shadow.${negativeList}
+      promptContent = `Motion Director. Generate ${batchCount} unique standalone VECTOR ICON motion prompt(s) in English (Seed: ${dynamicSessionSeed}).
+RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti.${negativeList}
 ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
 ${typeInstruction}${keywordsDirective}${greenScreenDirective}
-Return JSON array of ${batchCount} crisp 1-sentence string(s).`;
+Return JSON array of ${batchCount} crisp 1-sentence string(s) (max 26 words each).`;
     }
 
     try {
@@ -1106,18 +1106,18 @@ export async function handleGenerateAnimationLogic(body: any) {
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (${seed.palette.join(',')},#F8FAFC,#1E293B).`
+    ? `GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (STRICT ZERO rgba(...,0.x), ZERO translucent glass/halos/drop-shadows/glare bars!). Use ONLY solid opaque high-contrast NON-GREEN shades (${seed.palette.join(',')},#F8FAFC,#0F172A) + crisp bold rim lw=Math.max(2.4,0.036*R) so every edge keys cleanly!`
     : (neonGlow
-        ? "DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0)."
-        : "CRISP VECTOR (#080c14 cleared): shadowBlur=0.");
+        ? "DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0); bold crisp rim lw=Math.max(2.2,0.034*R)."
+        : "CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold crisp rim lw=Math.max(2.2,0.034*R).");
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS):
-- Line 1 inside drawFrame MUST be a brief 1-line plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
+    : `MICROSTOCK HERO ICON (14-28 lines crisp JS):
+- Line 1 inside drawFrame MUST be a brief plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
 - Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) with scale R=S*0.80 inside [-0.58*R,+0.58*R] (NEVER mix S with R!).
-- JOINT ANCHORS & PAINTER ORDER: Compute seam coordinates (e.g. topY=y-h/2, botY=y+h/2) so attached handles/roofs/wheels/antennas/shackles physically touch/overlap parent edges (>=0.04*R) with uniform rim lw=Math.max(2,0.032*R). Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
-- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at their true joints! ZERO floating corner dots/confetti, ZERO unrequested dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
+- JOINT ANCHORS & PAINTER ORDER: Compute seam variables first — e.g. var lw=Math.max(2.2,0.034*R), bw=0.66*R, bh=0.46*R, y0=0.06*R, topY=y0-bh*0.5; then weld roof/handle/shackle directly onto topY+/-0.04*R! Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
+- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at true joints! ZERO floating corner dots/confetti, ZERO ground shadow ovals underneath, ZERO dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
 - Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -1236,12 +1236,12 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
   const isBackground = type === 'bg';
 
   const colorStyleDirective = isGreenScreen
-    ? "GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B)."
-    : (neonGlow ? "DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0)." : "CRISP VECTOR (#080c14 cleared): shadowBlur=0.");
+    ? "GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B) with bold rim lw=Math.max(2.4,0.036*R)."
+    : (neonGlow ? "DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0); bold rim lw=Math.max(2.2,0.034*R)." : "CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).");
 
   const geometryGuide = isBackground
     ? "FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti."
-    : "MICROSTOCK HERO ICONS (14-26 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup.";
+    : "MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables (e.g. topY=y0-bh*0.5) so parts weld/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots, ground ovals, or circle soup.";
 
   const seeds = promptList.map((p, idx) => createUniqueVariationSeed(p, idx, Number(variationOffset) || 0));
   const batchPlanSeen = new Set<string>();
@@ -1348,14 +1348,14 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = isGreenScreen
-    ? "- GREEN SCREEN (#00ff00 cleared): NEVER fillRect(0,0,w,h); shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow lines!); ONLY solid opaque NON-GREEN colors."
+    ? "- GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h); shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN shades + bold rim lw=Math.max(2.4,0.036*R)."
     : (neonGlow
-        ? "- DARK BG (#080c14): shadowBlur=8 on accents (reset 0)."
-        : "- CRISP VECTOR (#080c14): shadowBlur=0.");
+        ? "- DARK BG (#080c14): shadowBlur=8 on accents (reset 0); bold rim lw=Math.max(2.2,0.034*R)."
+        : "- CRISP VECTOR (#080c14): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).");
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (-0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered sticker icon. ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-26 lines crisp JS): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam anchors so parts touch/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots or circle soup. ANATOMY: ${motionPlan.anatomyHint}`;
+    : `MICROSTOCK HERO ICON (14-28 lines crisp JS): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables (e.g. topY=y0-bh*0.5) so parts weld/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots, ground ovals, or circle soup. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
@@ -1471,10 +1471,10 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
       : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
 Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00 bersih: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO lapisan kaca transparan, HANYA warna solid non-hijau)' : 'BG Gelap (#080c14)'}.
+Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00 bersih FLAT-3D SOLID: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO kaca/halo/oval bayangan transparan, HANYA warna solid non-hijau + rim tegas lw=Math.max(2.4,0.036*R))' : 'BG Gelap (#080c14) + rim tegas lw=Math.max(2.2,0.034*R)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam lw=Math.max(2,0.032*R); (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
+ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
 Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
