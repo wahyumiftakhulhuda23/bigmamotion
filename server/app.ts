@@ -904,9 +904,8 @@ export async function handleGeneratePromptsLogic(body: any) {
     keywordsDirective = `\nCustom Keywords / Specific Focus Topics:\n${parsedKeywords.map((k) => `- ${k}`).join('\n')}\n(MANDATORY: Incorporate these specific user keywords/topics into the generated animation prompts.)`;
   }
 
-  const greenScreenDirective = isGreenScreen
-    ? '\nGreen Screen / Chroma Key: ACTIVE. Ensure the animation concept has high-contrast, clean visual edges ideal for green screen chroma key extraction (#00FF00 background).'
-    : '';
+  const effGs = type !== 'bg' && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
 
   const colorModeDirective = `\nColor Mode: ${colorMode.toUpperCase()} (${
     colorMode === 'flat'
@@ -922,7 +921,9 @@ export async function handleGeneratePromptsLogic(body: any) {
       : 'Vibrant dynamic gradient color transitions'
   })`;
 
-  const glowDirective = `\nNeon Glow: ${neonGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
+  const glowDirective = effGs
+    ? `\nSurface: CHROMA #00FF00 (solid non-green colors, crisp hard edges)`
+    : `\nNeon Glow: ${effGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
 
   const catMeta = findCategoryById(subCategory, type);
   const categoryLine = catMeta
@@ -956,13 +957,13 @@ export async function handleGeneratePromptsLogic(body: any) {
       promptContent = `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompt(s) in English (Seed: ${dynamicSessionSeed}).
 RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares.${negativeList}
 ${categoryLine}Style: ${style}${colorModeDirective}${glowDirective}
-${typeInstruction}${keywordsDirective}${greenScreenDirective}
+${typeInstruction}${keywordsDirective}
 Return JSON array of ${batchCount} crisp 1-sentence string(s).`;
     } else {
       promptContent = `Motion Director. Generate ${batchCount} unique standalone VECTOR ICON motion prompt(s) in English (Seed: ${dynamicSessionSeed}).
 RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti.${negativeList}
 ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
-${typeInstruction}${keywordsDirective}${greenScreenDirective}
+${typeInstruction}${keywordsDirective}
 Return JSON array of ${batchCount} crisp 1-sentence string(s) (max 26 words each).`;
     }
 
@@ -1102,14 +1103,16 @@ export async function handleGenerateAnimationLogic(body: any) {
   const catInfo = catMeta ? `${catMeta.enName} (${catMeta.name}) - ${catMeta.description}` : subCategory;
 
   const isBackground = type === 'bg';
+  const effGs = !isBackground && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, Number(index) - 1), Number(variationOffset) || 0);
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
-  const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (STRICT ZERO rgba(...,0.x), ZERO translucent glass/halos/drop-shadows/glare bars!). Use ONLY solid opaque high-contrast NON-GREEN shades (${seed.palette.join(',')},#F8FAFC,#0F172A) + crisp bold rim lw=Math.max(2.4,0.036*R) so every edge keys cleanly!`
-    : (neonGlow
-        ? "DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0); bold crisp rim lw=Math.max(2.2,0.034*R)."
-        : "CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold crisp rim lw=Math.max(2.2,0.034*R).");
+  const colorStyleDirective = effGs
+    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect.`
+    : effGlow
+    ? `DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`
+    : `CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`;
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
@@ -1146,7 +1149,7 @@ SPEC [${seed.tag}]: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: $
   );
 
   const rawText = response.text || "";
-  const cleanHTML = extractHTMLFromMarkdown(rawText, isGreenScreen);
+  const cleanHTML = extractHTMLFromMarkdown(rawText, effGs);
 
   if (!cleanHTML || (!cleanHTML.toLowerCase().includes('<script') && !cleanHTML.toLowerCase().includes('<canvas'))) {
     throw new Error('AI mengembalikan kode yang belum lengkap');
@@ -1161,9 +1164,9 @@ SPEC [${seed.tag}]: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: $
     subCategory,
     colorMode,
     motionDynamics,
-    neonGlow,
+    neonGlow: effGlow,
     html: cleanHTML,
-    isGreenScreen,
+    isGreenScreen: effGs,
   };
 }
 
@@ -1234,10 +1237,14 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
   const isBackground = type === 'bg';
+  const effGs = !isBackground && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
 
-  const colorStyleDirective = isGreenScreen
-    ? "GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B) with bold rim lw=Math.max(2.4,0.036*R)."
-    : (neonGlow ? "DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0); bold rim lw=Math.max(2.2,0.034*R)." : "CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).");
+  const colorStyleDirective = effGs
+    ? "GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect."
+    : effGlow
+    ? "DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect."
+    : "CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.";
 
   const geometryGuide = isBackground
     ? "FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti."
@@ -1292,7 +1299,7 @@ ${topicLines}`;
 
   const results = promptList.map((promptTopic, idx) => {
     const rawCode = codeItems[idx] || '';
-    const html = rawCode ? extractHTMLFromMarkdown(rawCode, isGreenScreen) : '';
+    const html = rawCode ? extractHTMLFromMarkdown(rawCode, effGs) : '';
     const valid = /\b(?:G\.\w+|ctx\.(?:fill|stroke|beginPath|roundRect|arc|ellipse|bezierCurveTo|lineTo))\s*\(/i.test(rawCode);
     if (!html || !valid) return null;
     const fp = normalizeCanvasCodeFingerprint(html);
@@ -1309,9 +1316,9 @@ ${topicLines}`;
       subCategory,
       colorMode,
       motionDynamics,
-      neonGlow,
+      neonGlow: effGlow,
       html,
-      isGreenScreen,
+      isGreenScreen: effGs,
     };
   });
 
@@ -1344,14 +1351,16 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const ai = getClient(apiKey);
   const targetModel = sanitizeModel(model);
   const isBackground = type === 'bg';
+  const effGs = !isBackground && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, Number(index) - 1), Number(variationOffset) || 0);
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
-  const colorStyleDirective = isGreenScreen
-    ? "- GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h); shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN shades + bold rim lw=Math.max(2.4,0.036*R)."
-    : (neonGlow
-        ? "- DARK BG (#080c14): shadowBlur=8 on accents (reset 0); bold rim lw=Math.max(2.2,0.034*R)."
-        : "- CRISP VECTOR (#080c14): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).");
+  const colorStyleDirective = effGs
+    ? "- GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect."
+    : effGlow
+    ? "- DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect."
+    : "- CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.";
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (-0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered sticker icon. ${motionPlan.anatomyHint}`
@@ -1391,7 +1400,7 @@ ${colorStyleDirective}`;
       res.write(`data: ${JSON.stringify({ chunk: text })}\n\n`);
     }
 
-    const cleanHTML = extractHTMLFromMarkdown(fullText, isGreenScreen);
+    const cleanHTML = extractHTMLFromMarkdown(fullText, effGs);
 
     res.write(`data: ${JSON.stringify({
       done: true,
@@ -1403,9 +1412,9 @@ ${colorStyleDirective}`;
       subCategory,
       colorMode,
       motionDynamics,
-      neonGlow,
+      neonGlow: effGlow,
       html: cleanHTML,
-      isGreenScreen,
+      isGreenScreen: effGs,
     })}\n\n`);
     res.end();
   } catch (err: any) {
@@ -1439,6 +1448,7 @@ export async function handleImageToMotionLogic(body: any) {
 
   const resolvedType: 'icon' | 'bg' = type === 'bg' ? 'bg' : 'icon';
   const effectiveGs = resolvedType === 'bg' ? false : !!isGreenScreen;
+  const effectiveGlow = effectiveGs ? false : !!neonGlow;
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
 
   // Clean base64 string
@@ -1462,7 +1472,7 @@ ATURAN FULL-BLEED BACKGROUND (-0.08*w..1.08*w, -0.08*h..1.08*h):
 1. Mulai dengan G.bgBackdrop(w, h, c0, c1, c2, dir) memakai warna HEX dominan gambar.
 2. Bangun minimal 2 lapisan struktur & elemen latar sesuai analisa detail gambar referensi (misal lengkung gelombang G.wave, pita G.capsule, kisi/perspektif garis, puncak gunung G.poly, lengkung orbit G.ring, dedaunan tepi G.leaf) yang mengisi seluruh frame dari sisi ke sisi.
 3. Berikan gerakan 60 FPS profesional sesuai karakter visual gambar (parallax kedalaman halus, arus gelombang kontinyu, geser kisi/garis kecepatan, sapuan cahaya diagonal) — JANGAN mengecilkan gambar menjadi stiker ikon di tengah canvas, JANGAN membuat partikel acak berantakan.
-${!neonGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
+${!effectiveGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
 ${customInstructions ? `Instruksi khusus: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
 Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
@@ -1471,7 +1481,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
       : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
 Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00 bersih FLAT-3D SOLID: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO kaca/halo/oval bayangan transparan, HANYA warna solid non-hijau + rim tegas lw=Math.max(2.4,0.036*R))' : 'BG Gelap (#080c14) + rim tegas lw=Math.max(2.2,0.034*R)'}.
+Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect' : effectiveGlow ? 'BG Gelap (#080c14): shadowBlur=8 accents (reset 0), rim lw=Math.max(2.2,0.034*R)' : 'BG Gelap (#080c14): shadowBlur=0 crisp vector, rim lw=Math.max(2.2,0.034*R)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
 ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
@@ -1547,7 +1557,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
     subCategory: 'image-to-motion',
     colorMode,
     motionDynamics,
-    neonGlow,
+    neonGlow: effectiveGlow,
     html: generatedHtml,
     isGreenScreen: effectiveGs,
     projectName,
@@ -1791,6 +1801,8 @@ export function createApiRouter(): Router {
       console.error("[GeneratePrompts] Recovered from error:", err);
       const body = parseSafeBody(req);
       const count = Math.max(1, body.count || 3);
+      const effGs = (body.type || 'icon') !== 'bg' && !!body.isGreenScreen;
+      const effGlow = effGs ? false : (body.neonGlow ?? true);
       const fallback = generateProceduralPrompts(
         count,
         body.type || 'icon',
@@ -1798,7 +1810,7 @@ export function createApiRouter(): Router {
         body.style || 'minimalist',
         body.colorMode || 'gradient',
         body.motionDynamics || 'flow',
-        body.neonGlow ?? true,
+        effGlow,
         body.keywords || []
       );
       res.status(200).json({ prompts: fallback });

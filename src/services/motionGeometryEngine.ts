@@ -82,45 +82,125 @@ export function wrapCanvasCodeToHtml(
   const greenShadowLock = isGreenScreen
     ? `var __bigmaGS = true;
     var __bigmaClearing = false;
+    var __gsRawFill = null;
+    var __gsRawStroke = null;
+    var __gsStateStack = [];
+    var __bigmaResetGS = function() {
+      __bigmaGSAlpha = 1;
+      __gsRawFill = null;
+      __gsRawStroke = null;
+      __gsStateStack.length = 0;
+    };
     try { Object.defineProperty(ctx, 'shadowBlur', { set: function(){}, get: function(){ return 0; }, configurable: true }); } catch(e) {}
     try {
-      var __gsAlpha = 1;
       var __origAlphaDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'globalAlpha') : null;
+      var __origFillDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'fillStyle') : null;
+      var __origStrokeDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'strokeStyle') : null;
       if (__origAlphaDesc && __origAlphaDesc.set) {
         Object.defineProperty(ctx, 'globalAlpha', {
           set: function(v){
-            var n = (typeof v === 'number' && isFinite(v)) ? v : 1;
-            __gsAlpha = n < 0.45 ? 0 : 1;
-            __origAlphaDesc.set.call(ctx, __gsAlpha);
+            var n = (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(1, v)) : 1;
+            __bigmaGSAlpha = n;
+            __origAlphaDesc.set.call(ctx, n < 0.16 ? 0 : 1);
+            if (!__bigmaClearing && typeof G !== 'undefined' && G._c) {
+              if (typeof __gsRawFill === 'string' && __origFillDesc && __origFillDesc.set) {
+                __origFillDesc.set.call(ctx, G._c(__gsRawFill));
+              }
+              if (typeof __gsRawStroke === 'string' && __origStrokeDesc && __origStrokeDesc.set) {
+                __origStrokeDesc.set.call(ctx, G._c(__gsRawStroke));
+              }
+            }
           },
-          get: function(){ return __gsAlpha; },
+          get: function(){ return (typeof __bigmaGSAlpha === 'number') ? __bigmaGSAlpha : 1; },
           configurable: true
         });
       }
-      var __origFillDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'fillStyle') : null;
       if (__origFillDesc && __origFillDesc.set) {
         Object.defineProperty(ctx, 'fillStyle', {
           set: function(v){
-            var nextV = (!__bigmaClearing && typeof v === 'string' && typeof G !== 'undefined' && G._c) ? G._c(v) : v;
+            __gsRawFill = (!__bigmaClearing && typeof v === 'string') ? v : null;
+            var nextV = (__gsRawFill && typeof G !== 'undefined' && G._c) ? G._c(__gsRawFill) : v;
             __origFillDesc.set.call(ctx, nextV);
           },
           get: function(){ return __origFillDesc.get ? __origFillDesc.get.call(ctx) : '#ffffff'; },
           configurable: true
         });
       }
-      var __origStrokeDesc = typeof CanvasRenderingContext2D !== 'undefined' ? Object.getOwnPropertyDescriptor(CanvasRenderingContext2D.prototype, 'strokeStyle') : null;
       if (__origStrokeDesc && __origStrokeDesc.set) {
         Object.defineProperty(ctx, 'strokeStyle', {
           set: function(v){
-            var nextV = (!__bigmaClearing && typeof v === 'string' && typeof G !== 'undefined' && G._c) ? G._c(v) : v;
+            __gsRawStroke = (!__bigmaClearing && typeof v === 'string') ? v : null;
+            var nextV = (__gsRawStroke && typeof G !== 'undefined' && G._c) ? G._c(__gsRawStroke) : v;
             __origStrokeDesc.set.call(ctx, nextV);
           },
           get: function(){ return __origStrokeDesc.get ? __origStrokeDesc.get.call(ctx) : '#ffffff'; },
           configurable: true
         });
       }
+      var _origSaveGS = ctx.save.bind(ctx);
+      var _origRestoreGS = ctx.restore.bind(ctx);
+      ctx.save = function() {
+        __gsStateStack.push([typeof __bigmaGSAlpha === 'number' ? __bigmaGSAlpha : 1, __gsRawFill, __gsRawStroke]);
+        return _origSaveGS();
+      };
+      ctx.restore = function() {
+        var r = _origRestoreGS();
+        if (__gsStateStack.length > 0) {
+          var st = __gsStateStack.pop();
+          __bigmaGSAlpha = st[0];
+          __gsRawFill = st[1];
+          __gsRawStroke = st[2];
+        } else {
+          __bigmaGSAlpha = 1;
+          __gsRawFill = null;
+          __gsRawStroke = null;
+        }
+        return r;
+      };
+      var _isFullCanvasWipe = function(rw, rh) {
+        var aw = Math.abs(typeof rw === 'number' && isFinite(rw) ? rw : 0);
+        var ah = Math.abs(typeof rh === 'number' && isFinite(rh) ? rh : 0);
+        var cw = (typeof w === 'number' && w > 0) ? w : 320;
+        var ch = (typeof h === 'number' && h > 0) ? h : 180;
+        var scX = 1, scY = 1;
+        try {
+          if (ctx.getTransform) {
+            var m = ctx.getTransform();
+            var d = (typeof dpr === 'number' && dpr > 0) ? dpr : 1;
+            scX = Math.hypot(m.a, m.b) / d;
+            scY = Math.hypot(m.c, m.d) / d;
+          }
+        } catch(e) {}
+        return (aw * scX >= cw * 0.80 && ah * scY >= ch * 0.80);
+      };
+      var _origFillRectGS = ctx.fillRect.bind(ctx);
+      ctx.fillRect = function(rx, ry, rw, rh) {
+        if (!__bigmaClearing && !(typeof __bigmaBgActive !== 'undefined' && __bigmaBgActive) && _isFullCanvasWipe(rw, rh)) {
+          return;
+        }
+        return _origFillRectGS(rx, ry, rw, rh);
+      };
+      var _origClearRectGS = ctx.clearRect.bind(ctx);
+      ctx.clearRect = function(rx, ry, rw, rh) {
+        if (!__bigmaClearing && !(typeof __bigmaBgActive !== 'undefined' && __bigmaBgActive) && _isFullCanvasWipe(rw, rh)) {
+          _origSaveGS();
+          try {
+            var d = (typeof dpr === 'number' && dpr > 0) ? dpr : 1;
+            ctx.setTransform(d, 0, 0, d, 0, 0);
+            __bigmaClearing = true;
+            if (__origAlphaDesc && __origAlphaDesc.set) __origAlphaDesc.set.call(ctx, 1);
+            if (__origFillDesc && __origFillDesc.set) __origFillDesc.set.call(ctx, '#00ff00');
+            _origFillRectGS(0, 0, (typeof w === 'number' && w > 0) ? w : 320, (typeof h === 'number' && h > 0) ? h : 180);
+          } finally {
+            __bigmaClearing = false;
+            _origRestoreGS();
+          }
+          return;
+        }
+        return _origClearRectGS(rx, ry, rw, rh);
+      };
     } catch(e) {}`
-    : `var __bigmaGS = false; var __bigmaClearing = false;`;
+    : `var __bigmaGS = false; var __bigmaClearing = false; var __bigmaResetGS = function(){};`;
 
   const runnerScript = detectedDrawFn
     ? `${jsBody}
@@ -135,11 +215,12 @@ export function wrapCanvasCodeToHtml(
     __bigmaT = t;
     try {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
       __bigmaClearing = true;
+      ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = ${clearFill};
-      __bigmaClearing = false;
       ctx.fillRect(0, 0, w, h);
+      __bigmaClearing = false;
+      __bigmaResetGS();
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
       ctx.lineJoin = 'round';
@@ -176,11 +257,12 @@ ${jsBody}
     __bigmaT = t;
     try {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
       __bigmaClearing = true;
+      ctx.clearRect(0, 0, w, h);
       ctx.fillStyle = ${clearFill};
-      __bigmaClearing = false;
       ctx.fillRect(0, 0, w, h);
+      __bigmaClearing = false;
+      __bigmaResetGS();
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
       ctx.lineJoin = 'round';

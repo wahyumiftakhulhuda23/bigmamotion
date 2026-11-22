@@ -278,69 +278,104 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 4. Compact Settings Row: Neon Glow, Green Screen, Prompt Count */}
+        {/* 4. Compact Settings Row: Neon Glow (Dark Studio) vs Green Screen (Mutually Exclusive), Prompt Count */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-          {/* Neon Glow Toggle */}
-          <div
-            onClick={() => onToggleNeonGlow && onToggleNeonGlow(!neonGlow)}
-            className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 ${
-              neonGlow
-                ? 'bg-purple-950/40 border-purple-500/60 shadow-md shadow-purple-950/30'
-                : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700'
-            }`}
-          >
-            <div
-              className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
-                neonGlow
-                  ? 'bg-purple-500 border-purple-400 text-white font-bold'
-                  : 'border-gray-700 bg-gray-800 text-transparent'
-              }`}
-            >
-              <i className="fa-solid fa-check text-[9px]"></i>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] font-bold text-gray-200">Neon Glow</span>
-                <span
-                  className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase ${
-                    neonGlow
-                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                      : 'bg-gray-800 text-gray-400'
+          {/* Neon Glow Toggle (Exclusive with Green Screen) */}
+          {(() => {
+            const isGsActive = currentType !== 'bg' && isGreenScreen;
+            const isGlowActive = !isGsActive && neonGlow;
+            return (
+              <button
+                type="button"
+                onClick={() => onToggleNeonGlow && onToggleNeonGlow(!isGlowActive)}
+                title={
+                  isGsActive
+                    ? 'Klik untuk mengaktifkan Neon Glow (otomatis menonaktifkan Green Screen)'
+                    : 'Toggle Neon Glow untuk latar Dark Studio'
+                }
+                className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 text-left ${
+                  isGlowActive
+                    ? 'bg-purple-950/40 border-purple-500/60 shadow-md shadow-purple-950/30'
+                    : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700 opacity-85'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                    isGlowActive
+                      ? 'bg-purple-500 border-purple-400 text-white font-bold'
+                      : 'border-gray-700 bg-gray-800 text-transparent'
                   }`}
                 >
-                  {neonGlow ? 'Aktif' : 'Off'}
-                </span>
-              </div>
-            </div>
-          </div>
+                  <i className="fa-solid fa-check text-[9px]"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-gray-200 truncate">Neon Glow</span>
+                    <span
+                      className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase shrink-0 ${
+                        isGlowActive
+                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                          : 'bg-gray-800 text-gray-400'
+                      }`}
+                    >
+                      {isGlowActive ? 'Aktif' : isGsActive ? 'Solid' : 'Off'}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })()}
 
-          {/* Green Screen Option */}
-          <div
-            onClick={() => onToggleGreenScreen && onToggleGreenScreen(!isGreenScreen)}
-            className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 ${
-              isGreenScreen
-                ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md shadow-emerald-950/30'
-                : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700'
-            }`}
-          >
-            <div
-              className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
-                isGreenScreen
-                  ? 'bg-emerald-500 border-emerald-400 text-black font-bold'
-                  : 'border-gray-700 bg-gray-800 text-transparent'
-              }`}
-            >
-              <i className="fa-solid fa-check text-[9px]"></i>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] font-bold text-gray-200">Green Screen</span>
-                <span className="text-[8px] px-1 py-0.1 rounded font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                  #00FF00
-                </span>
-              </div>
-            </div>
-          </div>
+          {/* Green Screen Option (Exclusive with Neon Glow, Disabled for BG) */}
+          {(() => {
+            const isGsDisabled = currentType === 'bg';
+            const isGsActive = !isGsDisabled && isGreenScreen;
+            return (
+              <button
+                type="button"
+                disabled={isGsDisabled}
+                onClick={() => !isGsDisabled && onToggleGreenScreen && onToggleGreenScreen(!isGsActive)}
+                title={
+                  isGsDisabled
+                    ? 'Green Screen tidak berlaku untuk mode Background'
+                    : 'Klik untuk mode Flat-3D Solid di Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
+                }
+                className={`p-2 rounded-xl border transition select-none flex items-center gap-2 text-left ${
+                  isGsDisabled
+                    ? 'bg-gray-950/60 border-gray-800/50 opacity-45 cursor-not-allowed'
+                    : isGsActive
+                    ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md shadow-emerald-950/30 cursor-pointer'
+                    : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700 cursor-pointer'
+                }`}
+              >
+                <div
+                  className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                    isGsActive
+                      ? 'bg-emerald-500 border-emerald-400 text-black font-bold'
+                      : 'border-gray-700 bg-gray-800 text-transparent'
+                  }`}
+                >
+                  <i className="fa-solid fa-check text-[9px]"></i>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-gray-200 truncate">Green Screen</span>
+                    <span
+                      className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase shrink-0 ${
+                        isGsDisabled
+                          ? 'bg-gray-800 text-gray-500'
+                          : isGsActive
+                          ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50'
+                          : 'bg-emerald-500/10 text-emerald-400/70 border border-emerald-500/30'
+                      }`}
+                    >
+                      {isGsDisabled ? 'Full BG' : '#00FF00'}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })()}
 
           {/* Prompt Count */}
           <div className="flex items-center justify-between gap-1.5 bg-gray-900/40 border border-gray-800/80 p-1 px-2 rounded-xl">

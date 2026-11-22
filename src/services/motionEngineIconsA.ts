@@ -28,6 +28,9 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
     })();
     var __bigmaT = 0;
     var __bigmaV = 0;
+    var __bigmaGSAlpha = 1;
+    var __bigmaBgActive = false;
+    var __bigmaNamedRGB = {white:[255,255,255],black:[0,0,0],cyan:[0,255,255],aqua:[0,255,255],gold:[255,215,0],red:[255,0,0],blue:[0,0,255],yellow:[255,255,0],orange:[255,165,0],purple:[128,0,128],pink:[255,192,203],silver:[192,192,192],gray:[128,128,128],grey:[128,128,128],navy:[0,0,128],indigo:[75,0,130],violet:[238,130,238],magenta:[255,0,255],teal:[0,128,128],green:[0,229,255],lime:[0,229,255],limegreen:[0,229,255],springgreen:[0,229,255],chartreuse:[0,229,255]};
     var G = {
       _n: function(v, d) { return (typeof v === 'number' && isFinite(v)) ? v : (d || 0); },
       _t: function(t) { return (typeof t === 'number' && isFinite(t)) ? t : (typeof __bigmaT === 'number' ? __bigmaT : 0); },
@@ -39,50 +42,80 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         if (typeof rimCol === 'number') return { r: defRim || '#f8fafc', t: G._t(rimCol) };
         return { r: rimCol || defRim || '#f8fafc', t: G._t(t) };
       },
+      _blendGS: function(r, g, b, ea) {
+        if (ea < 0.16) return 'rgba(0,0,0,0)';
+        var rr = Math.max(0, Math.min(255, Math.round(r)));
+        var gg = Math.max(0, Math.min(255, Math.round(g)));
+        var bb = Math.max(0, Math.min(255, Math.round(b)));
+        if (gg > rr + 40 && gg > bb + 40) { rr = 0; gg = 229; bb = 255; }
+        if (ea < 0.90) {
+          rr = Math.round(rr * ea + 24 * (1 - ea));
+          gg = Math.round(gg * ea + 34 * (1 - ea));
+          bb = Math.round(bb * ea + 56 * (1 - ea));
+        }
+        return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
+      },
       _c: function(c) {
         if (!c || typeof c !== 'string' || typeof __bigmaGS === 'undefined' || !__bigmaGS) return c;
         var s = c.trim().toLowerCase();
         if (s === 'transparent' || s === 'none') return 'rgba(0,0,0,0)';
+        var gsA = (typeof __bigmaGSAlpha === 'number' && isFinite(__bigmaGSAlpha)) ? Math.max(0, Math.min(1, __bigmaGSAlpha)) : 1;
         if (s.indexOf('rgba(') === 0 || s.indexOf('rgb(') === 0) {
           var p = s.slice(s.indexOf('(') + 1).replace(')', '').split(',');
-          var rr = parseInt(p[0], 10), gg = parseInt(p[1], 10), bb = parseInt(p[2], 10);
+          var rr = parseFloat(p[0]), gg = parseFloat(p[1]), bb = parseFloat(p[2]);
           var al = p.length > 3 ? parseFloat(p[3]) : 1;
-          if (!isNaN(al) && al < 0.45) return 'rgba(0,0,0,0)';
-          if (!isNaN(rr) && !isNaN(gg) && !isNaN(bb)) {
-            if (gg > rr + 40 && gg > bb + 40) return '#00E5FF';
-            return 'rgb(' + rr + ',' + gg + ',' + bb + ')';
-          }
-          return '#38BDF8';
+          var ea = Math.max(0, Math.min(1, (isNaN(al) ? 1 : al) * gsA));
+          if (!isNaN(rr) && !isNaN(gg) && !isNaN(bb)) return G._blendGS(rr, gg, bb, ea);
+          return ea < 0.16 ? 'rgba(0,0,0,0)' : '#38BDF8';
         }
         if (s.indexOf('hsla(') === 0 || s.indexOf('hsl(') === 0) {
           var hp = s.slice(s.indexOf('(') + 1).replace(')', '').split(',');
           var hal = hp.length > 3 ? parseFloat(hp[3]) : 1;
-          if (!isNaN(hal) && hal < 0.45) return 'rgba(0,0,0,0)';
-          var hue = parseFloat(hp[0]);
-          if (!isNaN(hue)) {
+          var hea = Math.max(0, Math.min(1, (isNaN(hal) ? 1 : hal) * gsA));
+          if (hea < 0.16) return 'rgba(0,0,0,0)';
+          var hue = parseFloat(hp[0]), sat = parseFloat(hp[1]), lit = parseFloat(hp[2]);
+          if (!isNaN(hue) && !isNaN(sat) && !isNaN(lit)) {
             var nh = ((hue % 360) + 360) % 360;
-            if (nh >= 78 && nh <= 165) return '#00E5FF';
+            if (nh >= 78 && nh <= 165) { nh = 190; sat = 100; lit = 50; }
+            var ss = Math.max(0, Math.min(1, sat / 100)), ll = Math.max(0, Math.min(1, lit / 100));
+            var cc = (1 - Math.abs(2 * ll - 1)) * ss, xx = cc * (1 - Math.abs((nh / 60) % 2 - 1)), mm = ll - cc / 2;
+            var rp = 0, gp = 0, bp = 0;
+            if (nh < 60) { rp = cc; gp = xx; }
+            else if (nh < 120) { rp = xx; gp = cc; }
+            else if (nh < 180) { gp = cc; bp = xx; }
+            else if (nh < 240) { gp = xx; bp = cc; }
+            else if (nh < 300) { rp = xx; bp = cc; }
+            else { rp = cc; bp = xx; }
+            return G._blendGS((rp + mm) * 255, (gp + mm) * 255, (bp + mm) * 255, hea);
           }
-          return s.indexOf('hsla(') === 0 ? ('hsl(' + hp.slice(0, 3).join(',') + ')') : c;
+          return '#00E5FF';
         }
         if (s.charAt(0) === '#') {
-          if (s.length === 5 || s.length === 9) {
-            var aHex = s.length === 5 ? s[4] + s[4] : s.slice(7, 9);
-            var aVal = parseInt(aHex, 16) / 255;
-            if (!isNaN(aVal) && aVal < 0.45) return 'rgba(0,0,0,0)';
-            var rgbHex = s.length === 5 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1, 7);
-            var rA = parseInt(rgbHex.slice(0,2),16), gA = parseInt(rgbHex.slice(2,4),16), bA = parseInt(rgbHex.slice(4,6),16);
-            if (!isNaN(rA) && !isNaN(gA) && !isNaN(bA) && gA > rA + 40 && gA > bA + 40) return '#00E5FF';
-            return '#' + rgbHex;
+          var hex = s.slice(1);
+          var rH = 0, gH = 0, bH = 0, aH = 1, parsedHex = false;
+          if (hex.length === 3 || hex.length === 4) {
+            rH = parseInt(hex[0] + hex[0], 16);
+            gH = parseInt(hex[1] + hex[1], 16);
+            bH = parseInt(hex[2] + hex[2], 16);
+            aH = hex.length === 4 ? parseInt(hex[3] + hex[3], 16) / 255 : 1;
+            parsedHex = true;
+          } else if (hex.length === 6 || hex.length === 8) {
+            rH = parseInt(hex.slice(0, 2), 16);
+            gH = parseInt(hex.slice(2, 4), 16);
+            bH = parseInt(hex.slice(4, 6), 16);
+            aH = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
+            parsedHex = true;
           }
-          if (s.length === 4 || s.length === 7) {
-            var hx = s.length === 4 ? s[1]+s[1]+s[2]+s[2]+s[3]+s[3] : s.slice(1);
-            var r2 = parseInt(hx.slice(0,2),16), g2 = parseInt(hx.slice(2,4),16), b2 = parseInt(hx.slice(4,6),16);
-            if (!isNaN(r2) && !isNaN(g2) && !isNaN(b2) && g2 > r2 + 40 && g2 > b2 + 40) return '#00E5FF';
+          if (parsedHex && !isNaN(rH) && !isNaN(gH) && !isNaN(bH)) {
+            var eaHex = Math.max(0, Math.min(1, (isNaN(aH) ? 1 : aH) * gsA));
+            return G._blendGS(rH, gH, bH, eaHex);
           }
         }
-        if (s === 'green' || s === 'lime' || s === 'limegreen' || s === 'springgreen' || s === 'chartreuse') return '#00E5FF';
-        return c;
+        if (__bigmaNamedRGB[s]) {
+          var nc = __bigmaNamedRGB[s];
+          return G._blendGS(nc[0], nc[1], nc[2], gsA);
+        }
+        return gsA < 0.16 ? 'rgba(0,0,0,0)' : c;
       },
       grad: function(c1, c2, c3, x0, y0, x1, y1) {
         var gx0 = x0, gy0 = y0, gx1 = x1, gy1 = y1, mid = c3;
@@ -344,8 +377,13 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         g.addColorStop(0, G._c(c0 || '#080c14'));
         g.addColorStop(0.55, G._c(c1 || '#1e1b4b'));
         g.addColorStop(1, G._c(c2 || c0 || '#0f172a'));
-        ctx.fillStyle = g;
-        ctx.fillRect(0, 0, ww, hh);
+        __bigmaBgActive = true;
+        try {
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, ww, hh);
+        } finally {
+          __bigmaBgActive = false;
+        }
       },
       trap: function(x, y, tw, bw, h, r, fill, rim, lw) {
         x = G._n(x); y = G._n(y);

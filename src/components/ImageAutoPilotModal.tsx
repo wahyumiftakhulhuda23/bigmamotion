@@ -650,41 +650,60 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                       </div>
 
                       <div className="space-y-1 sm:col-span-2 flex items-end">
-                        <div className="flex items-center gap-2 w-full">
-                          <label
-                            className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-slate-950 cursor-pointer select-none text-[10px] font-bold text-purple-300"
-                            onClick={() =>
-                              handleUpdateAccount(acc.id, {
-                                neonGlow: !acc.neonGlow,
-                              })
-                            }
-                          >
-                            <input
-                              type="checkbox"
-                              checked={acc.neonGlow ?? true}
-                              onChange={() => {}}
-                              className="rounded text-purple-500 focus:ring-0"
-                            />
-                            <span>Neon Glow</span>
-                          </label>
+                        {(() => {
+                          const isGsDisabled = acc.type === 'bg';
+                          const isGsActive = !isGsDisabled && !!acc.isGreenScreen;
+                          const isGlowActive = !isGsActive && (acc.neonGlow ?? true);
+                          return (
+                            <div className="flex items-center gap-2 w-full">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateAccount(
+                                    acc.id,
+                                    !isGlowActive ? { neonGlow: true, isGreenScreen: false } : { neonGlow: false }
+                                  )
+                                }
+                                title="Aktifkan Neon Glow (otomatis menonaktifkan Chroma Green)"
+                                className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
+                                  isGlowActive
+                                    ? 'bg-purple-950/50 border-purple-500/60 text-purple-200 shadow-sm'
+                                    : 'bg-slate-950 border-gray-800 text-gray-400 hover:border-gray-700'
+                                }`}
+                              >
+                                <i className={`fa-solid fa-sun text-[9px] ${isGlowActive ? 'text-purple-400' : 'text-gray-600'}`}></i>
+                                <span>Neon Glow</span>
+                              </button>
 
-                          <label
-                            className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-slate-950 cursor-pointer select-none text-[10px] font-bold text-emerald-400"
-                            onClick={() =>
-                              handleUpdateAccount(acc.id, {
-                                isGreenScreen: !acc.isGreenScreen,
-                              })
-                            }
-                          >
-                            <input
-                              type="checkbox"
-                              checked={acc.isGreenScreen ?? false}
-                              onChange={() => {}}
-                              className="rounded text-emerald-500 focus:ring-0"
-                            />
-                            <span>Chroma Green</span>
-                          </label>
-                        </div>
+                              <button
+                                type="button"
+                                disabled={isGsDisabled}
+                                onClick={() =>
+                                  !isGsDisabled &&
+                                  handleUpdateAccount(
+                                    acc.id,
+                                    !isGsActive ? { isGreenScreen: true, neonGlow: false } : { isGreenScreen: false }
+                                  )
+                                }
+                                title={
+                                  isGsDisabled
+                                    ? 'Chroma Green dinonaktifkan untuk mode Background'
+                                    : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
+                                }
+                                className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border select-none text-[10px] font-bold transition ${
+                                  isGsDisabled
+                                    ? 'bg-slate-950/50 border-gray-800/50 text-gray-600 opacity-50 cursor-not-allowed'
+                                    : isGsActive
+                                    ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300 shadow-sm cursor-pointer'
+                                    : 'bg-slate-950 border-gray-800 text-emerald-400/70 hover:border-gray-700 cursor-pointer'
+                                }`}
+                              >
+                                <i className={`fa-solid fa-circle text-[7px] ${isGsActive ? 'text-emerald-400' : 'text-gray-600'}`}></i>
+                                <span>{isGsDisabled ? 'Full BG' : 'Chroma Green'}</span>
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>

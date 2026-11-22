@@ -199,6 +199,24 @@ export default function App() {
   const [isGreenScreen, setIsGreenScreen] = useState<boolean>(false);
   const [keywordsText, setKeywordsText] = useState<string>('');
 
+  const handleToggleNeonGlow = useCallback((nextVal: boolean) => {
+    setNeonGlow(nextVal);
+    if (nextVal) {
+      setIsGreenScreen(false);
+    }
+  }, []);
+
+  const handleToggleGreenScreen = useCallback((nextVal: boolean) => {
+    if (currentType === 'bg') {
+      setIsGreenScreen(false);
+      return;
+    }
+    setIsGreenScreen(nextVal);
+    if (nextVal) {
+      setNeonGlow(false);
+    }
+  }, [currentType]);
+
   const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([]);
   const [failedPrompts, setFailedPrompts] = useState<string[]>([]);
   const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>(() => loadFailedAutoPilotItems());
@@ -357,7 +375,12 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.map((a: ImageToMotionAutoPilotAccount) => {
+            const effGs = a.type === 'bg' ? false : !!a.isGreenScreen;
+            return { ...a, isGreenScreen: effGs, neonGlow: effGs ? false : (a.neonGlow ?? true) };
+          });
+        }
       }
     } catch {}
     return [];
@@ -369,7 +392,12 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_AUTOPILOT_ACCOUNTS);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((a: AutoPilotAccount) => {
+            const effGs = a.type === 'bg' ? false : !!a.isGreenScreen;
+            return { ...a, isGreenScreen: effGs, neonGlow: effGs ? false : (a.neonGlow ?? true) };
+          });
+        }
       }
     } catch {}
     return [
@@ -380,6 +408,8 @@ export default function App() {
         subCategory: 'business_finance',
         style: 'minimalist',
         promptCount: 2,
+        neonGlow: true,
+        isGreenScreen: false,
       },
     ];
   });
@@ -561,9 +591,12 @@ export default function App() {
       .map((k) => k.trim())
       .filter((k) => k.length > 0);
 
+    const effGs = currentType !== 'bg' && isGreenScreen;
+    const effGlow = effGs ? false : neonGlow;
+
     addLog(
       `⚡ Meminta AI generate ${promptCount} prompt animasi satu per satu (${currentType.toUpperCase()} - ${nicheCategory} - ${colorMode.toUpperCase()})${
-        isGreenScreen ? ' [Green Screen]' : ''
+        effGs ? ' [Green Screen]' : effGlow ? ' [Neon Glow]' : ''
       }${keywordLines.length > 0 ? ` [${keywordLines.length} Custom Keywords]` : ''}...`,
       'info'
     );
@@ -577,10 +610,10 @@ export default function App() {
         visualStyle,
         promptCount,
         keywordLines,
-        isGreenScreen,
+        effGs,
         colorMode,
         'auto',
-        neonGlow,
+        effGlow,
         (singlePrompt, index, total) => {
           setGeneratedPrompts((prev) => {
             const next = [...prev];
@@ -677,6 +710,9 @@ export default function App() {
       setProgressPercent(percent);
       addLog(`Render Canvas #${i + 1}/${total}: "${slice[0].substring(0, 42)}..."`, 'info');
 
+      const effGs = currentType !== 'bg' && isGreenScreen;
+      const effGlow = effGs ? false : neonGlow;
+
       let results = await generateBatchAnimationCodes(
         apiKeys,
         selectedModel,
@@ -687,10 +723,10 @@ export default function App() {
         i + 1,
         total,
         {
-          isGreenScreen,
+          isGreenScreen: effGs,
           colorMode,
           motionDynamics: 'auto',
-          neonGlow,
+          neonGlow: effGlow,
           onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
         }
       );
@@ -710,10 +746,10 @@ export default function App() {
             i + 1,
             total,
             {
-              isGreenScreen,
+              isGreenScreen: effGs,
               colorMode,
               motionDynamics: 'auto',
-              neonGlow,
+              neonGlow: effGlow,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -729,7 +765,8 @@ export default function App() {
           const newAnimItem: AnimationItem = {
             ...res.anim,
             prompt: res.anim.prompt || res.prompt,
-            isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
+            isGreenScreen: res.anim.isGreenScreen ?? effGs,
+            neonGlow: res.anim.neonGlow ?? effGlow,
             account: 'Manual',
             createdAt: Date.now(),
           };
@@ -821,6 +858,9 @@ export default function App() {
       setProgressText(`Mencoba Ulang #${i + 1}${slice.length > 1 ? `–#${endNum}` : ''} dari ${total}...`);
       setProgressPercent(Math.round((endNum / total) * 100));
 
+      const effGs = currentType !== 'bg' && isGreenScreen;
+      const effGlow = effGs ? false : neonGlow;
+
       let results = await generateBatchAnimationCodes(
         apiKeys,
         activeModel,
@@ -831,10 +871,10 @@ export default function App() {
         i + 1,
         total,
         {
-          isGreenScreen,
+          isGreenScreen: effGs,
           colorMode,
           motionDynamics: 'auto',
-          neonGlow,
+          neonGlow: effGlow,
           onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
         }
       );
@@ -854,10 +894,10 @@ export default function App() {
             i + 1,
             total,
             {
-              isGreenScreen,
+              isGreenScreen: effGs,
               colorMode,
               motionDynamics: 'auto',
-              neonGlow,
+              neonGlow: effGlow,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
           );
@@ -873,7 +913,8 @@ export default function App() {
           const newAnimItem: AnimationItem = {
             ...res.anim,
             prompt: res.anim.prompt || res.prompt,
-            isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
+            isGreenScreen: res.anim.isGreenScreen ?? effGs,
+            neonGlow: res.anim.neonGlow ?? effGlow,
             account: 'Manual Retry',
             createdAt: Date.now(),
           };
@@ -929,6 +970,9 @@ export default function App() {
     showToast(`Mencoba ulang render animasi #${index + 1}...`, 'info');
 
     try {
+      const effGs = currentType !== 'bg' && isGreenScreen;
+      const effGlow = effGs ? false : neonGlow;
+
       const anim = await generateSingleAnimationCode(
         apiKeys,
         selectedModel,
@@ -940,17 +984,18 @@ export default function App() {
         1,
         undefined,
         3,
-        isGreenScreen,
+        effGs,
         colorMode,
         'auto',
-        neonGlow
+        effGlow
       );
 
       if (anim) {
         const newAnimItem: AnimationItem = {
           ...anim,
           prompt: anim.prompt || promptText,
-          isGreenScreen: anim.isGreenScreen ?? isGreenScreen,
+          isGreenScreen: anim.isGreenScreen ?? effGs,
+          neonGlow: anim.neonGlow ?? effGlow,
           account: 'Manual Retry',
           createdAt: Date.now(),
         };
@@ -968,9 +1013,13 @@ export default function App() {
 
   // --- HANDLERS: IMAGE TO MOTION AUTO PILOT ---
   const handleSaveI2mAccounts = (accounts: ImageToMotionAutoPilotAccount[]) => {
-    setI2mAutoPilotAccounts(accounts);
+    const normalized = accounts.map((acc) => {
+      const effGs = acc.type === 'bg' ? false : !!acc.isGreenScreen;
+      return { ...acc, isGreenScreen: effGs, neonGlow: effGs ? false : (acc.neonGlow ?? true) };
+    });
+    setI2mAutoPilotAccounts(normalized);
     try {
-      localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(accounts));
+      localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(normalized));
     } catch (e) {
       console.error('Failed to save autopilot accounts', e);
     }
@@ -1042,6 +1091,8 @@ export default function App() {
     // Convert each reference image into an ImageToMotionItem
     const newItems: ImageToMotionItem[] = [];
     accounts.forEach((acc) => {
+      const effGs = acc.type === 'bg' ? false : !!acc.isGreenScreen;
+      const effGlow = effGs ? false : (acc.neonGlow ?? true);
       (acc.referenceImages || []).forEach((img, idx) => {
         newItems.push({
           id: 'i2m_item_' + Date.now() + '_' + acc.id + '_' + idx + '_' + Math.random().toString(36).substring(2, 7),
@@ -1057,8 +1108,8 @@ export default function App() {
           type: acc.type || 'icon',
           motionDynamics: 'auto',
           colorMode: acc.colorMode || 'gradient',
-          neonGlow: acc.neonGlow ?? true,
-          isGreenScreen: acc.type === 'bg' ? false : (acc.isGreenScreen ?? false),
+          neonGlow: effGlow,
+          isGreenScreen: effGs,
           customInstructions: acc.customInstructions || '',
           createdAt: Date.now(),
         });
@@ -1125,7 +1176,18 @@ export default function App() {
   const handleUpdateAccount = (index: number, updated: Partial<AutoPilotAccount>) => {
     setAutoPilotAccounts((prev) => {
       const next = [...prev];
-      next[index] = { ...next[index], ...updated };
+      const merged: AutoPilotAccount = { ...next[index], ...updated };
+      if (merged.type === 'bg') {
+        merged.isGreenScreen = false;
+      }
+      if ('isGreenScreen' in updated && updated.isGreenScreen) {
+        merged.neonGlow = false;
+      } else if ('neonGlow' in updated && updated.neonGlow) {
+        merged.isGreenScreen = false;
+      } else if (merged.isGreenScreen) {
+        merged.neonGlow = false;
+      }
+      next[index] = merged;
       try {
         localStorage.setItem(STORAGE_AUTOPILOT_ACCOUNTS, JSON.stringify(next));
       } catch (e) {}
@@ -1176,6 +1238,9 @@ export default function App() {
         setProgressText(`[${batch.name}] Prompt ${pIdx + 1}${slice.length > 1 ? `–${endNum}` : ''}/${batch.prompts.length} (${completedOverall}/${totalPromptsOverall})...`);
         setProgressPercent(percent);
 
+        const effGs = currentType !== 'bg' && isGreenScreen;
+        const effGlow = effGs ? false : neonGlow;
+
         let results = await generateBatchAnimationCodes(
           apiKeys,
           selectedModel,
@@ -1186,10 +1251,10 @@ export default function App() {
           pIdx + 1,
           batch.prompts.length,
           {
-            isGreenScreen,
+            isGreenScreen: effGs,
             colorMode,
             motionDynamics: 'auto',
-            neonGlow,
+            neonGlow: effGlow,
             onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
           }
         );
@@ -1209,10 +1274,10 @@ export default function App() {
               pIdx + 1,
               batch.prompts.length,
               {
-                isGreenScreen,
+                isGreenScreen: effGs,
                 colorMode,
                 motionDynamics: 'auto',
-                neonGlow,
+                neonGlow: effGlow,
                 onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
               }
             );
@@ -1228,7 +1293,8 @@ export default function App() {
             const newAnimItem: AnimationItem = {
               ...res.anim,
               prompt: res.anim.prompt || res.prompt,
-              isGreenScreen: res.anim.isGreenScreen ?? isGreenScreen,
+              isGreenScreen: res.anim.isGreenScreen ?? effGs,
+              neonGlow: res.anim.neonGlow ?? effGlow,
               account: batch.name,
               createdAt: Date.now(),
             };
@@ -1322,6 +1388,8 @@ export default function App() {
     try {
       for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
         const acc = accountsToRun[i];
+        const accGs = acc.type !== 'bg' && !!acc.isGreenScreen;
+        const accGlow = accGs ? false : (acc.neonGlow ?? true);
         let prompts: string[] = [];
 
         const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
@@ -1386,10 +1454,10 @@ export default function App() {
                 acc.style,
                 needFreshCount,
                 undefined,
-                acc.isGreenScreen ?? false,
+                accGs,
                 acc.colorMode ?? 'gradient',
                 'auto',
-                acc.neonGlow ?? true,
+                accGlow,
                 (singlePrompt, index, total) => {
                   if ((index + 1) % 5 === 0 || index === 0 || index === total - 1) {
                     addLog(`⚡ [${acc.name}] Siap prompt #${index + 1}/${total}: "${singlePrompt.substring(0, 38)}..."`, 'info');
@@ -1413,10 +1481,10 @@ export default function App() {
                   type: acc.type,
                   subCategory: acc.subCategory,
                   style: acc.style,
-                  isGreenScreen: acc.isGreenScreen ?? false,
+                  isGreenScreen: accGs,
                   colorMode: acc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
-                  neonGlow: acc.neonGlow ?? true,
+                  neonGlow: accGlow,
                   error: 'Tertunda karena kuota penuh saat melengkapi prompt baru — siap dicoba ulang',
                 });
               });
@@ -1427,10 +1495,10 @@ export default function App() {
                 type: acc.type,
                 subCategory: acc.subCategory,
                 style: acc.style,
-                isGreenScreen: acc.isGreenScreen ?? false,
+                isGreenScreen: accGs,
                 colorMode: acc.colorMode ?? 'gradient',
                 motionDynamics: 'auto',
-                neonGlow: acc.neonGlow ?? true,
+                neonGlow: accGlow,
                 isAutoPromptPending: true,
                 promptCount: needFreshCount,
                 error: e.message || 'Gagal menghasilkan prompt',
@@ -1439,6 +1507,8 @@ export default function App() {
             if (isQuotaFail) {
               for (let k = i + 1; k < accountsToRun.length; k++) {
                 const nextAcc = accountsToRun[k];
+                const nextGs = nextAcc.type !== 'bg' && !!nextAcc.isGreenScreen;
+                const nextGlow = nextGs ? false : (nextAcc.neonGlow ?? true);
                 const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
                 if (hasNextCustom) {
                   const seenNext = new Set<string>();
@@ -1457,10 +1527,10 @@ export default function App() {
                         type: nextAcc.type,
                         subCategory: nextAcc.subCategory,
                         style: nextAcc.style,
-                        isGreenScreen: nextAcc.isGreenScreen ?? false,
+                        isGreenScreen: nextGs,
                         colorMode: nextAcc.colorMode ?? 'gradient',
                         motionDynamics: 'auto',
-                        neonGlow: nextAcc.neonGlow ?? true,
+                        neonGlow: nextGlow,
                         error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
                       });
                     });
@@ -1475,10 +1545,10 @@ export default function App() {
                       type: nextAcc.type,
                       subCategory: nextAcc.subCategory,
                       style: nextAcc.style,
-                      isGreenScreen: nextAcc.isGreenScreen ?? false,
+                      isGreenScreen: nextGs,
                       colorMode: nextAcc.colorMode ?? 'gradient',
                       motionDynamics: 'auto',
-                      neonGlow: nextAcc.neonGlow ?? true,
+                      neonGlow: nextGlow,
                       isAutoPromptPending: true,
                       promptCount: nextRemain,
                       error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
@@ -1515,10 +1585,10 @@ export default function App() {
             j + 1,
             prompts.length,
             {
-              isGreenScreen: acc.isGreenScreen ?? false,
+              isGreenScreen: accGs,
               colorMode: acc.colorMode ?? 'gradient',
               motionDynamics: 'auto',
-              neonGlow: acc.neonGlow ?? true,
+              neonGlow: accGlow,
               variationOffset: j * 7 + i * 13,
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
@@ -1539,10 +1609,10 @@ export default function App() {
                 j + 1,
                 prompts.length,
                 {
-                  isGreenScreen: acc.isGreenScreen ?? false,
+                  isGreenScreen: accGs,
                   colorMode: acc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
-                  neonGlow: acc.neonGlow ?? true,
+                  neonGlow: accGlow,
                   variationOffset: j * 7 + i * 13 + 19,
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
@@ -1587,10 +1657,10 @@ export default function App() {
                 type: acc.type,
                 subCategory: acc.subCategory,
                 style: acc.style,
-                isGreenScreen: acc.isGreenScreen ?? false,
+                isGreenScreen: accGs,
                 colorMode: acc.colorMode ?? 'gradient',
                 motionDynamics: 'auto',
-                neonGlow: acc.neonGlow ?? true,
+                neonGlow: accGlow,
                 error: res.error || 'Gagal merender animasi',
               });
             }
@@ -1623,10 +1693,10 @@ export default function App() {
                 type: acc.type,
                 subCategory: acc.subCategory,
                 style: acc.style,
-                isGreenScreen: acc.isGreenScreen ?? false,
+                isGreenScreen: accGs,
                 colorMode: acc.colorMode ?? 'gradient',
                 motionDynamics: 'auto',
-                neonGlow: acc.neonGlow ?? true,
+                neonGlow: accGlow,
                 error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
               });
             });
@@ -1635,6 +1705,8 @@ export default function App() {
             let savedSubsequentPrompts = 0;
             for (let k = i + 1; k < accountsToRun.length; k++) {
               const nextAcc = accountsToRun[k];
+              const nextGs = nextAcc.type !== 'bg' && !!nextAcc.isGreenScreen;
+              const nextGlow = nextGs ? false : (nextAcc.neonGlow ?? true);
               const hasNextCustom = nextAcc.promptSource === 'custom' && Array.isArray(nextAcc.customPrompts) && nextAcc.customPrompts.length > 0;
               if (hasNextCustom) {
                 const seenNext = new Set<string>();
@@ -1655,10 +1727,10 @@ export default function App() {
                     type: nextAcc.type,
                     subCategory: nextAcc.subCategory,
                     style: nextAcc.style,
-                    isGreenScreen: nextAcc.isGreenScreen ?? false,
+                    isGreenScreen: nextGs,
                     colorMode: nextAcc.colorMode ?? 'gradient',
                     motionDynamics: 'auto',
-                    neonGlow: nextAcc.neonGlow ?? true,
+                    neonGlow: nextGlow,
                     error: 'Antrean akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
                   });
                 });
@@ -1675,10 +1747,10 @@ export default function App() {
                   type: nextAcc.type,
                   subCategory: nextAcc.subCategory,
                   style: nextAcc.style,
-                  isGreenScreen: nextAcc.isGreenScreen ?? false,
+                  isGreenScreen: nextGs,
                   colorMode: nextAcc.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
-                  neonGlow: nextAcc.neonGlow ?? true,
+                  neonGlow: nextGlow,
                   isAutoPromptPending: true,
                   promptCount: nextRemain,
                   error: 'Antrean Auto Prompt akun berikutnya tertunda karena kuota API Key penuh — siap dilanjutkan via Coba Ulang',
@@ -1805,6 +1877,8 @@ export default function App() {
         }
         addLog(`⚡ [${it.accountName}] Membuat ${targetPromptCount} Auto Prompt sebelum render batch...`, 'info');
         try {
+          const itGs = it.type !== 'bg' && !!it.isGreenScreen;
+          const itGlow = itGs ? false : (it.neonGlow ?? true);
           const genPrompts = await generatePromptsViaGemini(
             apiKeys,
             activeModel,
@@ -1813,10 +1887,10 @@ export default function App() {
             it.style,
             targetPromptCount,
             undefined,
-            it.isGreenScreen ?? false,
+            itGs,
             it.colorMode ?? 'gradient',
             'auto',
-            it.neonGlow ?? true
+            itGlow
           );
           genPrompts.forEach((gp, gpIdx) => {
             if (isPromptCompleted(activeLedger, currentAnimList, it.accountName, gp)) return;
@@ -1827,10 +1901,10 @@ export default function App() {
               type: it.type,
               subCategory: it.subCategory,
               style: it.style,
-              isGreenScreen: it.isGreenScreen ?? false,
+              isGreenScreen: itGs,
               colorMode: it.colorMode ?? 'gradient',
               motionDynamics: 'auto',
-              neonGlow: it.neonGlow ?? true,
+              neonGlow: itGlow,
               error: 'Siap dirender dari antrean Auto Prompt',
             });
           });
@@ -1883,6 +1957,8 @@ export default function App() {
             continue;
           }
           const lead = chunk[0];
+          const leadGs = lead.type !== 'bg' && !!lead.isGreenScreen;
+          const leadGlow = leadGs ? false : (lead.neonGlow ?? true);
           const chunkLabel = chunk.length > 1
             ? `"${lead.prompt.substring(0, 26)}..." + "${chunk[1].prompt.substring(0, 26)}..."`
             : `"${lead.prompt.substring(0, 35)}..."`;
@@ -1898,10 +1974,10 @@ export default function App() {
             processedCount - rawChunk.length + 1,
             expandedItems.length,
             {
-              isGreenScreen: lead.isGreenScreen ?? false,
+              isGreenScreen: leadGs,
               colorMode: lead.colorMode ?? 'gradient',
               motionDynamics: 'auto',
-              neonGlow: lead.neonGlow ?? true,
+              neonGlow: leadGlow,
               variationOffset: cIdx * 5 + 31 + (currentAnimList.length % 17),
               onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
             }
@@ -1922,10 +1998,10 @@ export default function App() {
                 processedCount - rawChunk.length + 1,
                 expandedItems.length,
                 {
-                  isGreenScreen: lead.isGreenScreen ?? false,
+                  isGreenScreen: leadGs,
                   colorMode: lead.colorMode ?? 'gradient',
                   motionDynamics: 'auto',
-                  neonGlow: lead.neonGlow ?? true,
+                  neonGlow: leadGlow,
                   variationOffset: cIdx * 5 + 47 + (currentAnimList.length % 17),
                   onLog: (msg, lvl) => addLog(msg, lvl || 'warn'),
                 }
@@ -2027,21 +2103,24 @@ export default function App() {
   const handleRetrySingleAutoPilotItem = async (item: FailedAutoPilotItem) => {
     try {
       const latestAnims = animationsRef.current;
+      const itemType = item.type || currentType;
+      const itemGs = itemType !== 'bg' && !!item.isGreenScreen;
+      const itemGlow = itemGs ? false : (item.neonGlow ?? neonGlow);
       const isPendingAuto = item.isAutoPromptPending || item.prompt.startsWith('(Auto Prompt:') || item.prompt.startsWith('(Generate Prompts:');
       if (isPendingAuto) {
         const targetCount = item.promptCount || 5;
         const genPrompts = await generatePromptsViaGemini(
           apiKeys,
           selectedModel,
-          item.type || currentType,
+          itemType,
           item.subCategory || nicheCategory,
           item.style || visualStyle,
           targetCount,
           undefined,
-          item.isGreenScreen ?? false,
+          itemGs,
           item.colorMode ?? colorMode,
           'auto',
-          item.neonGlow ?? neonGlow
+          itemGlow
         );
         const expanded: FailedAutoPilotItem[] = genPrompts
           .filter((gp) => !isPromptCompleted(completedLedgerRef.current, latestAnims, item.accountName, gp))
@@ -2049,13 +2128,13 @@ export default function App() {
             id: 'single_exp_' + Date.now() + '_' + gIdx + '_' + Math.random().toString(36).substring(7),
             accountName: item.accountName,
             prompt: gp,
-            type: item.type || currentType,
+            type: itemType,
             subCategory: item.subCategory || nicheCategory,
             style: item.style || visualStyle,
-            isGreenScreen: item.isGreenScreen ?? false,
+            isGreenScreen: itemGs,
             colorMode: item.colorMode ?? colorMode,
             motionDynamics: 'auto',
-            neonGlow: item.neonGlow ?? neonGlow,
+            neonGlow: itemGlow,
             error: 'Auto Prompt siap dirender',
           }));
         setFailedAutoPilotItems((prev) => {
@@ -2084,17 +2163,17 @@ export default function App() {
         apiKeys,
         selectedModel,
         item.prompt,
-        item.type || currentType,
+        itemType,
         item.subCategory || nicheCategory,
         item.style || visualStyle,
         1,
         1,
         undefined,
         3,
-        item.isGreenScreen ?? false,
+        itemGs,
         item.colorMode ?? colorMode,
         'auto',
-        item.neonGlow ?? neonGlow
+        itemGlow
       );
       if (anim) {
         const resolvedPrompt = anim.prompt || item.prompt;
@@ -2204,7 +2283,7 @@ export default function App() {
         bitrate: chosenBitrate,
         format: 'mp4',
         mode: item.type,
-        isGreenScreen: item.isGreenScreen ?? isGreenScreen,
+        isGreenScreen: item.type === 'bg' ? false : !!item.isGreenScreen,
         onProgress: (pct, msg) => {
           if (pct === 50 || pct === 90) {
             addLog(`[Export MP4] ${msg}`, 'info');
@@ -2479,6 +2558,9 @@ export default function App() {
                 onSelectType={(newType) => {
                   setCurrentType(newType);
                   setNicheCategory(getDefaultCategoryForType(newType) as NicheCategory);
+                  if (newType === 'bg') {
+                    setIsGreenScreen(false);
+                  }
                 }}
                 subCategory={nicheCategory}
                 onSelectSubCategory={(cat) => setNicheCategory(cat as NicheCategory)}
@@ -2487,11 +2569,11 @@ export default function App() {
                 colorMode={colorMode}
                 onSelectColorMode={setColorMode}
                 neonGlow={neonGlow}
-                onToggleNeonGlow={setNeonGlow}
+                onToggleNeonGlow={handleToggleNeonGlow}
                 promptCount={promptCount}
                 onChangePromptCount={setPromptCount}
                 isGreenScreen={isGreenScreen}
-                onToggleGreenScreen={setIsGreenScreen}
+                onToggleGreenScreen={handleToggleGreenScreen}
                 keywordsText={keywordsText}
                 onChangeKeywordsText={setKeywordsText}
                 onGeneratePrompts={handleGeneratePrompts}

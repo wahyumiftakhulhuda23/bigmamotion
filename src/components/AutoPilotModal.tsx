@@ -181,6 +181,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                         onUpdateAccount(index, {
                           type: newType,
                           subCategory: getDefaultCategoryForType(newType),
+                          isGreenScreen: newType === 'bg' ? false : acc.isGreenScreen,
                         });
                       }}
                       className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer font-semibold text-sky-300"
@@ -256,33 +257,60 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Efek & Background</label>
-                    <div className="flex items-center gap-2 pt-0.5">
-                      <label
-                        className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-gray-950/70 cursor-pointer select-none text-[10px] font-bold text-gray-300"
-                        onClick={() => onUpdateAccount(index, { neonGlow: acc.neonGlow === undefined ? false : !acc.neonGlow })}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={acc.neonGlow ?? true}
-                          onChange={() => {}}
-                          className="rounded text-purple-500 focus:ring-0"
-                        />
-                        <span>Neon Glow</span>
-                      </label>
-                      <label
-                        className="flex-1 flex items-center gap-1.5 p-1.5 rounded-lg border border-gray-800 bg-gray-950/70 cursor-pointer select-none text-[10px] font-bold text-emerald-400"
-                        onClick={() => onUpdateAccount(index, { isGreenScreen: !acc.isGreenScreen })}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={acc.isGreenScreen ?? false}
-                          onChange={() => {}}
-                          className="rounded text-emerald-500 focus:ring-0"
-                        />
-                        <span>Chroma</span>
-                      </label>
-                    </div>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Efek &amp; Latar (Pilih Salah Satu)</label>
+                    {(() => {
+                      const isGsDisabled = acc.type === 'bg';
+                      const isGsActive = !isGsDisabled && !!acc.isGreenScreen;
+                      const isGlowActive = !isGsActive && (acc.neonGlow ?? true);
+                      return (
+                        <div className="flex items-center gap-2 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onUpdateAccount(
+                                index,
+                                !isGlowActive ? { neonGlow: true, isGreenScreen: false } : { neonGlow: false }
+                              )
+                            }
+                            title="Aktifkan Neon Glow (otomatis menonaktifkan Chroma Green)"
+                            className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
+                              isGlowActive
+                                ? 'bg-purple-950/50 border-purple-500/60 text-purple-200 shadow-sm'
+                                : 'bg-gray-950/70 border-gray-800 text-gray-400 hover:border-gray-700'
+                            }`}
+                          >
+                            <i className={`fa-solid fa-sun text-[9px] ${isGlowActive ? 'text-purple-400' : 'text-gray-600'}`}></i>
+                            <span>Neon Glow</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isGsDisabled}
+                            onClick={() =>
+                              !isGsDisabled &&
+                              onUpdateAccount(
+                                index,
+                                !isGsActive ? { isGreenScreen: true, neonGlow: false } : { isGreenScreen: false }
+                              )
+                            }
+                            title={
+                              isGsDisabled
+                                ? 'Chroma Green tidak berlaku untuk Background'
+                                : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
+                            }
+                            className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border select-none text-[10px] font-bold transition ${
+                              isGsDisabled
+                                ? 'bg-gray-950/40 border-gray-800/50 text-gray-600 opacity-50 cursor-not-allowed'
+                                : isGsActive
+                                ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300 shadow-sm cursor-pointer'
+                                : 'bg-gray-950/70 border-gray-800 text-emerald-400/70 hover:border-gray-700 cursor-pointer'
+                            }`}
+                          >
+                            <i className={`fa-solid fa-circle text-[7px] ${isGsActive ? 'text-emerald-400' : 'text-gray-600'}`}></i>
+                            <span>{isGsDisabled ? 'Full BG' : 'Chroma'}</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="space-y-1">

@@ -540,7 +540,7 @@ export function getCostOptimizedThinkingConfig(
   const m = (targetModel || '').toLowerCase();
   if (unsupportedThinkingModels.has(m)) return undefined;
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 320 : highPrecision ? 384 : purpose === 'animation' ? 128 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 320 : highPrecision ? 224 : purpose === 'animation' ? 128 : 0 };
   }
   if (m.includes('3.1-pro') || m.includes('4-')) {
     return { thinkingLevel: ThinkingLevel.LOW };
@@ -979,7 +979,8 @@ export function verifyCanvasAnimationHtml(
     const minVis = Math.min(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
     const maxVis = Math.max(m1.visiblePixels, m2.visiblePixels, m3.visiblePixels);
 
-    if (m3.nonZeroAlphaPixels === 0 || minVis < (type === 'bg' ? 3200 : 1050)) {
+    const minIconPixels = isGreenScreen ? 760 : 1050;
+    if (m3.nonZeroAlphaPixels === 0 || minVis < (type === 'bg' ? 3200 : minIconPixels)) {
       return {
         ok: false,
         visiblePixels,
@@ -1044,7 +1045,8 @@ export function verifyCanvasAnimationHtml(
 
       // Cohesion & Anti-Fragmentation Checks on frame #3
       const fillRatio = m3.visiblePixels / Math.max(1, m3.bboxW * m3.bboxH);
-      if (fillRatio < 0.085) {
+      const minFillRatio = isGreenScreen ? 0.065 : 0.085;
+      if (fillRatio < minFillRatio) {
         return {
           ok: false,
           visiblePixels,
@@ -1110,7 +1112,7 @@ export function verifyCanvasAnimationHtml(
           }
         }
         const largestShare = maxBlobPixels / Math.max(1, m3.visiblePixels);
-        if (blobCount >= 5 || (blobCount >= 3 && largestShare < 0.40)) {
+        if (blobCount >= 5 || (blobCount >= 4 && largestShare < 0.34)) {
           return {
             ok: false,
             visiblePixels,
@@ -1142,7 +1144,7 @@ export function verifyCanvasAnimationHtml(
         }
       }
       const maxChanged = Math.max(changed13, changed12);
-      const minMotionSamples = type === 'bg' ? 14 : 26;
+      const minMotionSamples = type === 'bg' ? 14 : (isGreenScreen ? 18 : 26);
       if (maxChanged < minMotionSamples) {
         return {
           ok: false,
@@ -1759,9 +1761,8 @@ export async function generateSinglePromptDirect(
     }
   }
 
-  const greenScreenDirective = isGreenScreen
-    ? '\nGreen Screen / Chroma Key: ACTIVE. Ensure the animation concept will have high-contrast, clean visual edges ideal for green screen chroma key extraction (#00FF00 background).'
-    : '';
+  const effGs = type !== 'bg' && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
 
   const colorModeDirective = `\nColor Mode: ${colorMode.toUpperCase()} (${
     colorMode === 'flat'
@@ -1777,7 +1778,9 @@ export async function generateSinglePromptDirect(
       : 'Vibrant dynamic gradient color transitions'
   })`;
 
-  const glowDirective = `\nNeon Glow: ${neonGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
+  const glowDirective = effGs
+    ? `\nSurface: CHROMA #00FF00 (solid non-green colors, crisp hard edges)`
+    : `\nNeon Glow: ${effGlow ? 'ENABLED (luminous aura & radiant highlights)' : 'DISABLED (sharp crisp vector borders, zero blur/shadow)'}`;
 
   const catMeta = findCategoryById(subCategory, type);
   const categoryLine = catMeta
@@ -1812,7 +1815,7 @@ ${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
 Visual Style: ${style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`
     : `You are a Principal Motion Graphic Director for Adobe Stock & Shutterstock.
@@ -1828,7 +1831,7 @@ ${negativeList}
 
 ${categoryLine}Animation Type: ${String(type).toUpperCase()}
 Visual Style: ${style === 'minimalist' ? '3d_crest' : style}${colorModeDirective}${glowDirective}
-Special Directives: ${typeInstruction}${keywordsDirective}${greenScreenDirective}
+Special Directives: ${typeInstruction}${keywordsDirective}
 
 Output format: Return ONLY 1 crisp, concrete single-sentence prompt (max 26 words). No bullet points, no markdown, no quotes.`;
 
@@ -1969,14 +1972,16 @@ async function generatePromptBatchDirect(
     : '';
   const recentAvoid = previousPrompts.slice(0, 8).map((p) => p.substring(0, 65));
   const avoidText = recentAvoid.length > 0 ? `Avoid repeating: ${recentAvoid.join(' | ')}. ` : '';
-  const gsText = isGreenScreen ? 'High-contrast non-green colors suitable for #00FF00 Green Screen. ' : '';
+  const effGs = type !== 'bg' && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
+  const glowModeStr = effGs ? 'CHROMA #00FF00 (non-green solid)' : (effGlow ? 'ON' : 'OFF');
   const seed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 99999).toString(36)}`;
 
   const promptContent = type === 'bg'
     ? `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompts in English (Seed: ${seed}).
-RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 28 words each).`
+RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${glowModeStr}. ${kwText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 28 words each).`
     : `Motion Director. Generate ${batchCount} unique standalone VECTOR ICON motion prompts in English (Seed: ${seed}).
-RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${neonGlow ? 'ON' : 'OFF'}. ${kwText}${gsText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 26 words each).`;
+RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${glowModeStr}. ${kwText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 26 words each).`;
 
   const config: any = {
     temperature: 0.9,
@@ -2346,16 +2351,18 @@ async function generateAnimationDirect(
 
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
+  const effGs = !isBackground && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
   const seed = createUniqueVariationSeed(promptTopic, Math.max(0, (index || 1) - 1), variationOffset);
   const picked = pickNonCollidingMotionPlan(promptTopic, type, style, motionDynamics, seed, subCategory);
   const assignedV = picked.variantIdx;
   const motionPlan = picked.plan;
 
-  const colorStyleDirective = isGreenScreen
-    ? `GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; ctx.shadowBlur=0; ctx.globalAlpha=1 (STRICT ZERO rgba(...,0.x), ZERO translucent glass/halos/drop-shadows/glare bars!). Use ONLY solid opaque high-contrast NON-GREEN shades (${seed.palette.join(',')},#F8FAFC,#0F172A) + crisp bold rim lw=Math.max(2.4,0.036*R) so every edge keys cleanly!`
-    : neonGlow
-    ? `DARK BG (#080c14 cleared): NEVER fillRect(0,0,w,h) for icons; shadowBlur=8 on bright accents (reset 0); bold crisp rim lw=Math.max(2.2,0.034*R).`
-    : `CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold crisp rim lw=Math.max(2.2,0.034*R).`;
+  const colorStyleDirective = effGs
+    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect.`
+    : effGlow
+    ? `DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`
+    : `CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`;
 
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
@@ -2418,8 +2425,8 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
   }
 
   const rawText = response?.text || '';
-  const cleanHTML = extractHTML(rawText, isGreenScreen);
-  const check = verifyCanvasAnimationHtml(cleanHTML, !!isGreenScreen, type);
+  const cleanHTML = extractHTML(rawText, effGs);
+  const check = verifyCanvasAnimationHtml(cleanHTML, effGs, type);
   if (!check.ok) {
     throw new Error(`Validasi render gagal (${check.reason || 'canvas blank'})`);
   }
@@ -2434,9 +2441,9 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
     subCategory,
     colorMode,
     motionDynamics,
-    neonGlow,
+    neonGlow: effGlow,
     html: cleanHTML,
-    isGreenScreen,
+    isGreenScreen: effGs,
   };
 }
 
@@ -2506,12 +2513,14 @@ async function generateAnimationBatchDirect(
 
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const isBackground = type === 'bg';
+  const effGs = !isBackground && !!isGreenScreen;
+  const effGlow = effGs ? false : neonGlow;
 
-  const colorStyleDirective = isGreenScreen
-    ? 'GREEN SCREEN (#00ff00 cleared) FLAT-3D SOLID PARITY: NEVER fillRect(0,0,w,h)/clearRect; shadowBlur=0; globalAlpha=1 (NO rgba(...,0.x), NO translucent glass/shadow ovals/glare bars!); ONLY solid opaque NON-GREEN colors (#FFD700,#00E5FF,#9333EA,#F43F5E,#F8FAFC,#F97316,#1E293B) with bold rim lw=Math.max(2.4,0.036*R).'
-    : neonGlow
-    ? 'DARK BG (#080c14 cleared): shadowBlur=8 on bright accents (reset 0); bold rim lw=Math.max(2.2,0.034*R).'
-    : 'CRISP VECTOR (#080c14 cleared): shadowBlur=0; bold rim lw=Math.max(2.2,0.034*R).';
+  const colorStyleDirective = effGs
+    ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect.'
+    : effGlow
+    ? 'DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.'
+    : 'CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.';
 
   const geometryGuide = isBackground
     ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
@@ -2587,8 +2596,8 @@ ${topicLines}`;
   return prompts.map((promptTopic, idx) => {
     const rawCode = codeItems[idx] || '';
     if (!rawCode) return null;
-    const html = extractHTML(rawCode, isGreenScreen);
-    const check = verifyCanvasAnimationHtml(html, !!isGreenScreen, type);
+    const html = extractHTML(rawCode, effGs);
+    const check = verifyCanvasAnimationHtml(html, effGs, type);
     if (!check.ok) {
       console.warn(`[Batch Slot #${idx} Rejected by Offscreen Verifier]:`, check.reason);
       return null;
@@ -2607,9 +2616,9 @@ ${topicLines}`;
       subCategory,
       colorMode,
       motionDynamics,
-      neonGlow,
+      neonGlow: effGlow,
       html,
-      isGreenScreen,
+      isGreenScreen: effGs,
     };
   });
 }
@@ -3209,6 +3218,8 @@ async function generateImageToMotionDirect(
   const cleanTitle = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   const ai = new GoogleGenAI({ apiKey: cleanKey });
   const resolvedType: AnimationType = contentType === 'bg' ? 'bg' : 'icon';
+  const effectiveGs = resolvedType === 'bg' ? false : !!isGreenScreen;
+  const effectiveGlow = effectiveGs ? false : neonGlow;
 
   const visionPrompt = resolvedType === 'bg'
     ? `Microstock Background Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME seluruh komposisi GAMBAR REFERENSI BACKGROUND ini menjadi animasi Canvas 2D 60 FPS murni yang hampir identik secara visual (tata letak, lapisan kedalaman, horizon, pola garis/gelombang/kisi, arah cahaya, dan palet warna HEX persis gambar).
@@ -3216,7 +3227,7 @@ ATURAN FULL-BLEED BACKGROUND (-0.08*w..1.08*w, -0.08*h..1.08*h):
 1. Mulai dengan G.bgBackdrop(w, h, c0, c1, c2, dir) memakai warna HEX dominan gambar.
 2. Bangun minimal 2 lapisan struktur & elemen latar sesuai analisa detail gambar referensi (misal lengkung gelombang G.wave, pita G.capsule, kisi/perspektif garis, puncak gunung G.poly, lengkung orbit G.ring, dedaunan tepi G.leaf) yang mengisi seluruh frame dari sisi ke sisi.
 3. Berikan gerakan 60 FPS profesional sesuai karakter visual gambar (parallax kedalaman halus, arus gelombang kontinyu, geser kisi/garis kecepatan, sapuan cahaya diagonal) — JANGAN mengecilkan gambar menjadi stiker ikon di tengah canvas, JANGAN membuat partikel acak berantakan.
-${!neonGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
+${!effectiveGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
 ${customInstructions ? `Instruksi khusus: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
 Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
@@ -3225,7 +3236,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
     : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
 Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
 Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${isGreenScreen ? 'GREEN SCREEN (#00ff00 bersih FLAT-3D SOLID: JANGAN fillRect(0,0,w,h), shadowBlur=0, globalAlpha=1, NO rgba(...,0.x) / NO kaca/halo/oval bayangan transparan, HANYA warna solid non-hijau + rim tegas lw=Math.max(2.4,0.036*R))' : 'BG Gelap (#080c14) + rim tegas lw=Math.max(2.2,0.034*R)'}.
+Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect' : effectiveGlow ? 'BG Gelap (#080c14): shadowBlur=8 accents (reset 0), rim lw=Math.max(2.2,0.034*R)' : 'BG Gelap (#080c14): shadowBlur=0 crisp vector, rim lw=Math.max(2.2,0.034*R)'}.
 ${customInstructions ? `Instruksi: ${customInstructions}` : ''}
 HELPERS G: ${HELPERS_G_VISION_DOC}
 ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
@@ -3290,9 +3301,8 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
   }
 
   const rawText = response?.text || '';
-  const effectiveGs = resolvedType === 'bg' ? false : isGreenScreen;
   const cleanHTML = extractHTML(rawText, effectiveGs);
-  const check = verifyCanvasAnimationHtml(cleanHTML, !!effectiveGs, resolvedType);
+  const check = verifyCanvasAnimationHtml(cleanHTML, effectiveGs, resolvedType);
   if (check.ok) {
     let detectedSubject = cleanTitle;
     let shapeAnalysis: ShapeAnalysis | undefined = undefined;
@@ -3323,7 +3333,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
       isGreenScreen: effectiveGs,
       colorMode,
       motionDynamics,
-      neonGlow,
+      neonGlow: effectiveGlow,
       projectName,
       fileName,
       detectedSubject,

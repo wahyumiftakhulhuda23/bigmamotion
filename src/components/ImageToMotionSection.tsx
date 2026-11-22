@@ -258,6 +258,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         const base64Data = (e.target?.result as string) || '';
         const formattedSize = (file.size / 1024).toFixed(1) + ' KB';
 
+        const effGs = batchType === 'bg' ? false : batchGreenScreen;
+        const effGlow = effGs ? false : batchNeonGlow;
+
         newItems.push({
           id: 'i2m_item_' + Date.now() + '_' + fIdx + '_' + Math.random().toString(36).substring(2, 9),
           projectId: 'proj_' + currentAccountName.toLowerCase().replace(/[^a-z0-9]/g, '_'),
@@ -272,8 +275,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           type: batchType,
           motionDynamics: 'auto',
           colorMode: batchColorMode,
-          neonGlow: batchNeonGlow,
-          isGreenScreen: batchType === 'bg' ? false : batchGreenScreen,
+          neonGlow: effGlow,
+          isGreenScreen: effGs,
           customInstructions: batchCustomInstructions,
           createdAt: Date.now(),
         });
@@ -341,6 +344,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       );
 
       const resolvedType: AnimationType = item.type === 'bg' ? 'bg' : 'icon';
+      const resolvedGs = resolvedType === 'bg' ? false : !!item.isGreenScreen;
+      const resolvedGlow = resolvedGs ? false : !!item.neonGlow;
       const animResult = await generateImageToMotion(
         apiKeys,
         selectedModel,
@@ -352,8 +357,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           type: resolvedType,
           motionDynamics: item.motionDynamics,
           colorMode: item.colorMode,
-          neonGlow: item.neonGlow,
-          isGreenScreen: resolvedType === 'bg' ? false : item.isGreenScreen,
+          neonGlow: resolvedGlow,
+          isGreenScreen: resolvedGs,
           customInstructions: item.customInstructions,
         },
         (attempt, max, errMsg) => {
@@ -380,11 +385,11 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         subCategory: 'image-to-motion',
         colorMode: item.colorMode,
         motionDynamics: item.motionDynamics,
-        neonGlow: item.neonGlow,
+        neonGlow: animResult.neonGlow ?? resolvedGlow,
         html: animResult.html,
         account: accName,
         createdAt: Date.now(),
-        isGreenScreen: animResult.isGreenScreen ?? (resolvedType === 'bg' ? false : item.isGreenScreen),
+        isGreenScreen: animResult.isGreenScreen ?? resolvedGs,
       };
 
       let itemShapeAnalysis = animResult.shapeAnalysis;
@@ -946,30 +951,41 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               </select>
             </div>
 
-            {/* Neon Glow Toggle */}
+            {/* Neon Glow Toggle (Mutually Exclusive with Green Screen) */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Neon / Glow</label>
               <button
                 type="button"
-                onClick={() => setBatchNeonGlow(!batchNeonGlow)}
+                onClick={() => {
+                  const nextGlow = !(batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen));
+                  setBatchNeonGlow(nextGlow);
+                  if (nextGlow) setBatchGreenScreen(false);
+                }}
+                title="Aktifkan Neon Glow (otomatis menonaktifkan Green Screen)"
                 className={`w-full text-[11px] font-bold rounded-lg px-2 py-1 border flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  batchNeonGlow
+                  batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen)
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
                     : 'bg-slate-900 text-gray-400 border-gray-700'
                 }`}
               >
-                <i className={`fa-solid fa-${batchNeonGlow ? 'sun text-amber-400' : 'circle-xmark'}`}></i>
-                <span>{batchNeonGlow ? 'Glow ON' : 'Glow OFF'}</span>
+                <i className={`fa-solid fa-${batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen) ? 'sun text-amber-400' : 'circle-xmark'}`}></i>
+                <span>{batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen) ? 'Glow ON' : 'Solid / Off'}</span>
               </button>
             </div>
 
-            {/* Green Screen Toggle */}
+            {/* Green Screen Toggle (Mutually Exclusive with Neon Glow) */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Green Screen</label>
               <button
                 type="button"
                 disabled={batchType === 'bg'}
-                onClick={() => setBatchGreenScreen(!batchGreenScreen)}
+                onClick={() => {
+                  if (batchType === 'bg') return;
+                  const nextGs = !batchGreenScreen;
+                  setBatchGreenScreen(nextGs);
+                  if (nextGs) setBatchNeonGlow(false);
+                }}
+                title={batchType === 'bg' ? 'Green Screen dinonaktifkan untuk mode Background' : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'}
                 className={`w-full text-[11px] font-bold rounded-lg px-2 py-1 border flex items-center justify-center gap-1.5 transition ${
                   batchType === 'bg'
                     ? 'bg-slate-950 text-gray-600 border-gray-800 cursor-not-allowed'
@@ -977,7 +993,6 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm cursor-pointer'
                     : 'bg-slate-900 text-gray-400 border-gray-700 cursor-pointer'
                 }`}
-                title={batchType === 'bg' ? 'Green Screen dinonaktifkan untuk mode Background' : 'Toggle Green Screen #00FF00'}
               >
                 <i className={`fa-solid fa-circle text-[8px] ${batchType !== 'bg' && batchGreenScreen ? 'text-emerald-400' : 'text-gray-500'}`}></i>
                 <span>{batchType === 'bg' ? 'Full BG' : batchGreenScreen ? '#00FF00' : 'Dark Studio'}</span>
