@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GeminiModel } from '../types';
+import { getModelExecutionProfile } from '../services/geminiService';
 
 interface ModelRotationModalProps {
   isOpen: boolean;
@@ -63,10 +64,16 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
   if (!isOpen) return null;
 
   const currentLabel = getModelName(currentModel);
+  const getQuotaBadgeText = (m: GeminiModel) => {
+    const p = getModelExecutionProfile(m);
+    const tpmK = Math.round(p.tpmLimitPerKey / 1000);
+    const rpdStr = p.rpdLimitPerKey >= 1000 ? '1K RPD' : `${p.rpdLimitPerKey} RPD`;
+    return `${p.rpmLimitPerKey} RPM • ${tpmK}K TPM • ${rpdStr} / key`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-      <div className="glass-card w-full max-w-lg rounded-2xl border border-amber-500/40 p-6 bg-slate-900/95 shadow-2xl shadow-amber-500/20 text-gray-200 relative overflow-hidden">
+      <div className="glass-card w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-amber-500/40 p-6 bg-slate-900/95 shadow-2xl shadow-amber-500/20 text-gray-200 relative">
         {/* Glow Header Accent */}
         <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-500 via-rose-500 to-purple-600 animate-pulse"></div>
 
@@ -82,13 +89,13 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
               <span className="text-xs text-gray-400 font-medium">{keyCount} API Key Terdaftar</span>
             </div>
             <h2 className="text-lg font-black text-white tracking-tight mt-1">
-              Semua API Key Limit pada {currentLabel}
+              Kuota Harian / Jalur Penuh pada {currentLabel}
             </h2>
           </div>
         </div>
 
         <p className="text-xs text-gray-300 leading-relaxed mb-4 bg-slate-950/60 p-3.5 rounded-xl border border-gray-800">
-          Google memberlakukan kuota limit pemanggilan (RPM/TPM) per-model. Seluruh API Key yang tersimpan saat ini telah mencapai batas kuota pada <strong className="text-amber-300">{currentLabel}</strong>.
+          Seluruh jalur aktif untuk <strong className="text-amber-300">{currentLabel}</strong> telah mencapai batas harian (RPD) atau pendinginan beruntun. Jika penyebabnya hanya lonjakan RPM/TPM sementara, model ini dapat dipakai kembali setelah jeda 1–2 menit.
           <br /><br />
           <span className="text-emerald-300 font-semibold">Solusi Otomatis:</span> Alihkan ke model alternatif di bawah lalu lanjutkan {(failedCount + failedManualCount) > 0 ? <strong className="text-white">{failedCount + failedManualCount} item gagal/tertunda</strong> : 'antrean'} agar hanya prompt yang belum selesai yang diproses. Seluruh prompt yang sudah berhasil di akun sebelumnya otomatis terkunci aman &amp; tidak akan diulang.
         </p>
@@ -96,7 +103,7 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
         {/* Model Options */}
         <div className="space-y-2.5 mb-5">
           <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
-            Pilih Model AI Tujuan Rotasi:
+            Pilih Model AI Tujuan Rotasi (RPM / TPM / RPD):
           </label>
 
           {/* Option: Gemini 3.8 Flash */}
@@ -119,14 +126,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-3.8-flash' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.8 Flash</span>
                   <span className="px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-black uppercase">
                     Flagship Ultra Pintar
                   </span>
+                  <span className="text-[10px] font-mono text-cyan-300/80">{getQuotaBadgeText('gemini-3.8-flash')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Model flagship terbaru dengan daya analisa ultra cerdas & pergerakan animasi paling kompleks.
+                  Model flagship dengan analisa kompleks & hemat token (~850 tok/animasi).
                 </p>
               </div>
             </div>
@@ -153,14 +161,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-3.6-flash' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.6 Flash</span>
                   <span className="px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[9px] font-black uppercase">
                     Berbagi Jalur 3.8
                   </span>
+                  <span className="text-[10px] font-mono text-sky-300/80">{getQuotaBadgeText('gemini-3.6-flash')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Model modern berkapasitas tinggi (berbagi kuota jalur 3.8 Flash — jika 3.8 limit, disarankan pilih 3.5 Flash Lite / 3.1 Flash Lite).
+                  Berbagi kuota jalur 3.8 Flash — jika 3.8 penuh, pilih 3.5 Flash Lite / 3.1 Flash Lite (1K RPD).
                 </p>
               </div>
             </div>
@@ -187,14 +196,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-3.5-flash-lite' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.5 Flash Lite</span>
                   <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black uppercase">
                     Next-Gen Pintar
                   </span>
+                  <span className="text-[10px] font-mono text-amber-300/80">{getQuotaBadgeText('gemini-3.5-flash-lite')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Ultra cepat, penalaran lebih cerdas, kuota RPM luas, dan efisiensi token maksimal.
+                  Ultra cepat, kuota harian 4x lebih besar (1K RPD/key), & efisiensi token maksimal (~720 tok).
                 </p>
               </div>
             </div>
@@ -221,14 +231,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-3.1-flash-lite' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.1 Flash Lite</span>
                   <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[9px] font-black uppercase">
                     Paling Hemat Kuota
                   </span>
+                  <span className="text-[10px] font-mono text-amber-300/80">{getQuotaBadgeText('gemini-3.1-flash-lite')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Super ringan, kuota RPM sangat tinggi, efisiensi maksimal agar API Key awet tahan lama.
+                  RPM tertinggi (30/menit/key) & kuota harian 1.000 RPD agar antrean panjang tidak terhenti.
                 </p>
               </div>
             </div>
@@ -255,14 +266,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-2.5-flash' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 2.5 Flash</span>
                   <span className="px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] font-black uppercase">
                     Stabil
                   </span>
+                  <span className="text-[10px] font-mono text-emerald-300/80">{getQuotaBadgeText('gemini-2.5-flash')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Eksekusi stabil, kuota pemanggilan besar, cocok untuk batch rendering.
+                  Eksekusi stabil dengan thinking hemat (~820 tok/animasi), cocok untuk antrean besar.
                 </p>
               </div>
             </div>
@@ -289,14 +301,15 @@ export const ModelRotationModal: React.FC<ModelRotationModalProps> = ({
                 {selectedTarget === 'gemini-3.1-pro-preview' && <i className="fa-solid fa-check text-[10px]"></i>}
               </div>
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center flex-wrap gap-1.5">
                   <span className="text-xs font-bold text-gray-100">Gemini 3.1 Pro Preview</span>
                   <span className="px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-black uppercase">
-                    Asli
+                    Presisi Tinggi
                   </span>
+                  <span className="text-[10px] font-mono text-purple-300/80">{getQuotaBadgeText('gemini-3.1-pro-preview')}</span>
                 </div>
                 <p className="text-[11px] text-gray-400 mt-0.5">
-                  Coba lagi pada 3.1 Pro (pilih ini jika Anda baru saja memasukkan API Key baru).
+                  Kuota ketat (5 RPM / 100 RPD per key); cocok bila Anda memakai banyak key terpisah.
                 </p>
               </div>
             </div>

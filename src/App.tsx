@@ -21,7 +21,7 @@ import {
   generatePromptsViaGemini,
   generateSingleAnimationCode,
   generateBatchAnimationCodes,
-  getEarliestCooldownWaitMs,
+  getKeyPoolCooldownStatus,
   buildModelFallbackChain,
   getAdaptiveModelPacingDelay,
   getModelCooldownRecoveryMs,
@@ -732,10 +732,10 @@ export default function App() {
       );
 
       if (results.every((r) => r.exhausted)) {
-        const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
-        if (waitMs > 0 && waitMs <= 68000) {
-          addLog(`⏳ Kuota RPM/TPM penuh — jeda pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu mencoba batch #${i + 1} kembali...`, 'warn');
-          await new Promise((res) => setTimeout(res, waitMs));
+        const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+          addLog(`⏳ Kuota RPM/TPM sementara penuh (${poolStatus.validKeys} key aktif) — menunggu pemulihan otomatis ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s lalu mencoba #${i + 1} kembali...`, 'warn');
+          await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
           results = await generateBatchAnimationCodes(
             apiKeys,
             selectedModel,
@@ -787,9 +787,15 @@ export default function App() {
         consecutiveExhaustedBatches++;
       }
 
-      const remainingWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
-      if (hadExhausted && (remainingWait === 0 || consecutiveExhaustedBatches >= 2)) {
-        // Daily RPD or shared-project quota genuinely exhausted — stop cleanly & keep remaining prompts
+      const poolAfter = hadExhausted ? getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel)) : null;
+      const shouldStopForQuota =
+        !!poolAfter &&
+        (poolAfter.allDailyExhausted ||
+          poolAfter.allInvalid ||
+          (consecutiveExhaustedBatches >= 3 && !poolAfter.availableNow) ||
+          consecutiveExhaustedBatches >= 5);
+
+      if (shouldStopForQuota) {
         const remaining = generatedPrompts.slice(endNum);
         if (remaining.length > 0) {
           caughtFailures.push(...remaining);
@@ -801,9 +807,14 @@ export default function App() {
       }
 
       if (endNum < total) {
-        const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
-        if (extraBreath > 0) {
-          addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Jeda pemulihan ${Math.round(extraBreath / 1000)}s sebelum batch berikutnya agar kuota 429 tidak beruntun...`, 'warn');
+        let extraBreath = 0;
+        if (hadExhausted && poolAfter) {
+          extraBreath = poolAfter.earliestWaitMs > 0 ? poolAfter.earliestWaitMs : (poolAfter.availableNow ? 1200 : getModelCooldownRecoveryMs(selectedModel));
+          if (poolAfter.earliestWaitMs > 0) {
+            addLog(`⏳ Semua key sedang pendinginan RPM/TPM — menunggu pemulihan ${Math.ceil(extraBreath / 1000)}s agar tetap bisa lanjut...`, 'warn');
+          } else {
+            addLog(`🔄 Masih ada ${poolAfter.readyPairs} jalur key sehat — jeda singkat ${(extraBreath / 1000).toFixed(1)}s lalu lanjut antrean berikutnya...`, 'cyan');
+          }
         }
         await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
@@ -880,10 +891,10 @@ export default function App() {
       );
 
       if (results.every((r) => r.exhausted)) {
-        const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel));
-        if (waitMs > 0 && waitMs <= 68000) {
-          addLog(`⏳ Menunggu pemulihan kuota ${Math.ceil(waitMs / 1000)}s sebelum mencoba ulang #${i + 1}...`, 'warn');
-          await new Promise((res) => setTimeout(res, waitMs));
+        const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(activeModel));
+        if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+          addLog(`⏳ Menunggu pemulihan kuota RPM/TPM ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s sebelum mencoba ulang #${i + 1}...`, 'warn');
+          await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
           results = await generateBatchAnimationCodes(
             apiKeys,
             activeModel,
@@ -931,15 +942,24 @@ export default function App() {
       if (hadSuccess) consecutiveExhaustedBatches = 0;
       else if (hadExhausted) consecutiveExhaustedBatches++;
 
-      const remWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel)) : 0;
-      if (hadExhausted && (remWait === 0 || consecutiveExhaustedBatches >= 2)) {
+      const poolAfter = hadExhausted ? getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(activeModel)) : null;
+      const shouldStopForQuota =
+        !!poolAfter &&
+        (poolAfter.allDailyExhausted ||
+          poolAfter.allInvalid ||
+          (consecutiveExhaustedBatches >= 3 && !poolAfter.availableNow) ||
+          consecutiveExhaustedBatches >= 5);
+
+      if (shouldStopForQuota) {
         remainingFailed.push(...promptsToRetry.slice(endNum));
         handleModelQuotaExceeded(activeModel);
         break;
       }
 
       if (endNum < total) {
-        const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(activeModel) : 0;
+        const extraBreath = hadExhausted && poolAfter
+          ? (poolAfter.earliestWaitMs > 0 ? poolAfter.earliestWaitMs : 1200)
+          : 0;
         await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
       }
     }
@@ -1260,10 +1280,10 @@ export default function App() {
         );
 
         if (results.every((r) => r.exhausted)) {
-          const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
-          if (waitMs > 0 && waitMs <= 68000) {
-            addLog(`⏳ [${batch.name}] Semua API Key pendinginan kuota — menunggu ${Math.ceil(waitMs / 1000)}s...`, 'warn');
-            await new Promise((res) => setTimeout(res, waitMs));
+          const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+          if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+            addLog(`⏳ [${batch.name}] Pendinginan kuota RPM/TPM sementara — menunggu ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`, 'warn');
+            await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
             results = await generateBatchAnimationCodes(
               apiKeys,
               selectedModel,
@@ -1311,8 +1331,15 @@ export default function App() {
         if (hadSuccess) consecutiveExhaustedBatches = 0;
         else if (hadExhausted) consecutiveExhaustedBatches++;
 
-        const remWait = hadExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
-        if (hadExhausted && (remWait === 0 || consecutiveExhaustedBatches >= 2)) {
+        const poolAfter = hadExhausted ? getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel)) : null;
+        const shouldStopForQuota =
+          !!poolAfter &&
+          (poolAfter.allDailyExhausted ||
+            poolAfter.allInvalid ||
+            (consecutiveExhaustedBatches >= 3 && !poolAfter.availableNow) ||
+            consecutiveExhaustedBatches >= 5);
+
+        if (shouldStopForQuota) {
           const remainingPrompts = batch.prompts.slice(endNum);
           if (remainingPrompts.length > 0) {
             setFailedPrompts((prev) => [...prev, ...remainingPrompts]);
@@ -1323,7 +1350,9 @@ export default function App() {
         }
 
         if (completedOverall < totalPromptsOverall) {
-          const extraBreath = hadExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
+          const extraBreath = hadExhausted && poolAfter
+            ? (poolAfter.earliestWaitMs > 0 ? poolAfter.earliestWaitMs : 1200)
+            : 0;
           await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
         }
       }
@@ -1595,10 +1624,10 @@ export default function App() {
           );
 
           if (results.every((r) => r.exhausted)) {
-            const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel));
-            if (waitMs > 0 && waitMs <= 68000) {
-              addLog(`⏳ [${acc.name}] Semua API Key pendinginan kuota. Menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s lalu melanjutkan #${j + 1}...`, 'warn');
-              await new Promise((res) => setTimeout(res, waitMs));
+            const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+            if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+              addLog(`⏳ [${acc.name}] Pendinginan kuota RPM/TPM sementara. Menunggu pemulihan otomatis ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s lalu melanjutkan #${j + 1}...`, 'warn');
+              await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
               results = await generateBatchAnimationCodes(
                 apiKeys,
                 selectedModel,
@@ -1682,8 +1711,15 @@ export default function App() {
             consecutiveExhaustedBatches++;
           }
 
-          const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(selectedModel)) : 0;
-          if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
+          const poolAfter = stillExhausted ? getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel)) : null;
+          const shouldStopForQuota =
+            !!poolAfter &&
+            (poolAfter.allDailyExhausted ||
+              poolAfter.allInvalid ||
+              (consecutiveExhaustedBatches >= 3 && !poolAfter.availableNow) ||
+              consecutiveExhaustedBatches >= 5);
+
+          if (shouldStopForQuota) {
             const remainingPrompts = prompts.slice(endNum).filter((remP) => !isPromptCompleted(activeLedger, currentAnimList, acc.name, remP));
             remainingPrompts.forEach((remP, remIdx) => {
               newFailedItems.push({
@@ -1697,7 +1733,7 @@ export default function App() {
                 colorMode: acc.colorMode ?? 'gradient',
                 motionDynamics: 'auto',
                 neonGlow: accGlow,
-                error: 'Kuota harian (RPD) / batas proyek bersama pada API Key tercapai — disimpan aman untuk dicoba ulang',
+                error: 'Kuota harian (RPD) / seluruh jalur model aktif telah tercapai — disimpan aman untuk dicoba ulang',
               });
             });
 
@@ -1767,9 +1803,14 @@ export default function App() {
           }
 
           if (endNum < prompts.length) {
-            const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(selectedModel) : 0;
-            if (extraBreath > 0) {
-              addLog(`⏸️ [Adaptive Backoff ${selectedModel}] Memberi jeda pemulihan ${Math.round(extraBreath / 1000)}s agar batas RPM/TPM Google benar-benar pulih sebelum animasi berikutnya...`, 'warn');
+            let extraBreath = 0;
+            if (stillExhausted && poolAfter) {
+              extraBreath = poolAfter.earliestWaitMs > 0 ? poolAfter.earliestWaitMs : (poolAfter.availableNow ? 1200 : getModelCooldownRecoveryMs(selectedModel));
+              if (poolAfter.earliestWaitMs > 0) {
+                addLog(`⏸️ [Pemulihan RPM/TPM ${selectedModel}] Menunggu ${Math.ceil(extraBreath / 1000)}s agar kuota pulih sebelum animasi berikutnya...`, 'warn');
+              } else {
+                addLog(`🔄 Masih tersedia ${poolAfter.readyPairs} jalur key sehat — jeda singkat ${(extraBreath / 1000).toFixed(1)}s lalu melanjutkan antrean...`, 'cyan');
+              }
             }
             await new Promise((res) => setTimeout(res, pacingDelay + extraBreath));
           }
@@ -1984,10 +2025,10 @@ export default function App() {
           );
 
           if (results.every((r) => r.exhausted)) {
-            const waitMs = getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel));
-            if (waitMs > 0 && waitMs <= 68000) {
-              addLog(`⏳ [${lead.accountName}] Menunggu pemulihan cooldown ${Math.ceil(waitMs / 1000)}s sebelum lanjut...`, 'warn');
-              await new Promise((res) => setTimeout(res, waitMs));
+            const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(activeModel));
+            if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+              addLog(`⏳ [${lead.accountName}] Menunggu pemulihan cooldown RPM/TPM ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s sebelum lanjut...`, 'warn');
+              await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
               results = await generateBatchAnimationCodes(
                 apiKeys,
                 activeModel,
@@ -2062,8 +2103,15 @@ export default function App() {
             consecutiveExhaustedBatches++;
           }
 
-          const remWaitMs = stillExhausted ? getEarliestCooldownWaitMs(apiKeys, buildModelFallbackChain(activeModel)) : 0;
-          if (stillExhausted && (remWaitMs === 0 || consecutiveExhaustedBatches >= 2)) {
+          const poolAfter = stillExhausted ? getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(activeModel)) : null;
+          const shouldStopForQuota =
+            !!poolAfter &&
+            (poolAfter.allDailyExhausted ||
+              poolAfter.allInvalid ||
+              (consecutiveExhaustedBatches >= 3 && !poolAfter.availableNow) ||
+              consecutiveExhaustedBatches >= 5);
+
+          if (shouldStopForQuota) {
             const unretried = chunks.slice(cIdx + 1).flat().filter((c) => !isPromptCompleted(activeLedger, currentAnimList, c.accountName, c.prompt));
             remainingFailed.push(...unretried);
             addLog(`⏸️ Kuota penuh saat coba ulang — ${unretried.length} item tersisa dari semua akun tetap disimpan aman.`, 'warn');
@@ -2072,8 +2120,10 @@ export default function App() {
           }
 
           if (cIdx < chunks.length - 1) {
-            const extraBreath = stillExhausted ? getModelCooldownRecoveryMs(activeModel) : 0;
-            await new Promise((res) => setTimeout(res, Math.max(800, Math.round(pacingDelay * 0.7)) + extraBreath));
+            const extraBreath = stillExhausted && poolAfter
+              ? (poolAfter.earliestWaitMs > 0 ? poolAfter.earliestWaitMs : 1200)
+              : 0;
+            await new Promise((res) => setTimeout(res, Math.max(600, Math.round(pacingDelay * 0.7)) + extraBreath));
           }
         }
       }

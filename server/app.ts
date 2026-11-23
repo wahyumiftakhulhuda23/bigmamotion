@@ -59,9 +59,12 @@ export function getSmartThinkingConfig(
   const m = (targetModel || '').toLowerCase();
   if (unsupportedServerThinkingModels.has(m)) return undefined;
 
-  // Gemini 2.5 series: lightweight 128-token scratchpad avoids garbled spatial math without excessive cost
+  // Gemini 2.5 series: lean 48-token scratchpad on animation first pass cuts ~60% thinking overhead
+  if (m.includes('2.5-flash-lite')) {
+    return { thinkingBudget: purpose === 'vision' ? 160 : 0 };
+  }
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 320 : purpose === 'animation' ? 128 : 0 };
+    return { thinkingBudget: purpose === 'vision' ? 256 : purpose === 'animation' ? 48 : 0 };
   }
 
   // Gemini 3.1-Pro / 4.x Pro series: uses ThinkingLevel.LOW
@@ -69,11 +72,8 @@ export function getSmartThinkingConfig(
     return { thinkingLevel: ThinkingLevel.LOW };
   }
 
-  // Gemini 3.8 uses LOW for geometric consistency; Flash-Lite keeps MINIMAL on first pass
-  if (m.includes('3.8')) {
-    return { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+  // Gemini 3.8 / 3.6 / Flash-Lite: MINIMAL on text/animation, LOW only for multimodal vision
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
     return { thinkingLevel: purpose === 'vision' ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
 
@@ -1109,36 +1109,35 @@ export async function handleGenerateAnimationLogic(body: any) {
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = effGs
-    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, contrasting rim (NEVER fill===rim!) lw=Math.max(2.4,0.036*R), NO bg fillRect.`
+    ? `GS(#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R) (NEVER fill===rim!), no bg fillRect.`
     : effGlow
-    ? `DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`
-    : `CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`;
+    ? `DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect.`
+    : `CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.`;
 
   const geometryGuide = isBackground
-    ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-28 lines crisp JS):
-- Line 1 inside drawFrame MUST be: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
-- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) inside [-0.58*R,+0.58*R]; inner sub-groups use G.part(ax,ay,r2,sx,sy,function(){ ... }) WITHOUT re-passing R!
-- JOINT ANCHORS & SIGNATURES: Use seam vars (topY=y0-bh*0.5); weld attachments +/-0.04*R. Use G.percent for %; G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for segments; G.trap takes 9 args; ONLY G.bar takes yBottom.
-- ZERO SLOP: Upright icons stay upright (rot=0); ZERO floating corner dots, ground ovals, or dark circular discs behind non-round icons; NEVER hide parts via if(sin>0).
-- Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
+    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker, NO loose dot confetti). Plan: ${motionPlan.anatomyHint}`
+    : `HERO ICON (14-26 lines crisp JS):
+- Line1 inside drawFrame: // PLAN: base=<shape>; joints=<connect>; move=<motion>
+- ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R]; inner G.part(ax,ay,r2,sx,sy,function(){...}) WITHOUT re-passing R.
+- Welded seam vars (topY=y0-bh*0.5, overlap>=0.04*R). G.percent for %; G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for segments; G.trap 9 args; ONLY G.bar takes yB. Upright icons stay rot=0; NO floating corner dots/ground ovals/dark backing discs/if(sin>0).
+- Anatomy (${promptTopic.slice(0, 60)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
-  const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
+  const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC [${seed.tag}]: "${promptTopic}" (${catInfo}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] (match prompt colors first!)
-- ${geometryGuide}
-- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
-- ${colorStyleDirective}`;
+SPEC[${seed.tag}]: "${promptTopic}" (${catInfo},${style},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
+${geometryGuide}
+Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}
+${colorStyleDirective}`;
 
   const { response } = await generateContentWithFallback(
     ai,
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.35,
-        maxOutputTokens: isBackground ? 1350 : 1200,
+        temperature: 0.32,
+        maxOutputTokens: isBackground ? 980 : 780,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -1357,20 +1356,20 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
   const motionPlan = resolvePromptMotionPlan(promptTopic, type, style, motionDynamics, seed.variantIdx, seed.compMode, subCategory);
 
   const colorStyleDirective = effGs
-    ? "- GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, contrasting rim (NEVER fill===rim!) lw=Math.max(2.4,0.036*R), NO bg fillRect."
+    ? "- GS(#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R) (NEVER fill===rim!), no bg fillRect."
     : effGlow
-    ? "- DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect."
-    : "- CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.";
+    ? "- DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect."
+    : "- CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.";
 
   const geometryGuide = isBackground
-    ? `FULL-BLEED MICROSTOCK BACKGROUND (-0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered sticker icon. ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-28 lines crisp JS): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R] (inner G.part uses function(){} without shadowing R!). Use seam variables so parts weld/overlap >=0.04*R; use G.percent for %, G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for lines, G.trap takes 9 args, ONLY G.bar uses yB; ZERO floating corner dots or ground ovals. ANATOMY: ${motionPlan.anatomyHint}`;
+    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker). ${motionPlan.anatomyHint}`
+    : `HERO ICON (14-26 lines crisp JS): Line1: // PLAN: base=...; joints=...; move=... ONE G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R] (inner G.part uses function(){} without R). Welded seam vars overlap>=0.04*R; G.percent for %; G.capsule vs G.pill; G.trap 9 args; ONLY G.bar takes yB; ZERO corner dots/ground ovals. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
-  const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
+  const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC [${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] (match prompt colors first!) | Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
+SPEC[${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style:${style} | Palette:${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] | Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
 ${colorStyleDirective}`;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -1379,8 +1378,8 @@ ${colorStyleDirective}`;
 
   try {
     const animConfig: any = {
-      temperature: 0.35,
-      maxOutputTokens: isBackground ? 1350 : 1200,
+      temperature: 0.32,
+      maxOutputTokens: isBackground ? 980 : 780,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
     if (smartThinking) {
@@ -1467,25 +1466,20 @@ export async function handleImageToMotionLogic(body: any) {
     const targetModel = sanitizeModel(model);
 
     const masterMultimodalPrompt = resolvedType === 'bg'
-      ? `Microstock Background Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME seluruh komposisi GAMBAR REFERENSI BACKGROUND ini menjadi animasi Canvas 2D 60 FPS murni yang hampir identik secara visual (tata letak, lapisan kedalaman, horizon, pola garis/gelombang/kisi, arah cahaya, dan palet warna HEX persis gambar).
-ATURAN FULL-BLEED BACKGROUND (-0.08*w..1.08*w, -0.08*h..1.08*h):
-1. Mulai dengan G.bgBackdrop(w, h, c0, c1, c2, dir) memakai warna HEX dominan gambar.
-2. Bangun minimal 2 lapisan struktur & elemen latar sesuai analisa detail gambar referensi (misal lengkung gelombang G.wave, pita G.capsule, kisi/perspektif garis, puncak gunung G.poly, lengkung orbit G.ring, dedaunan tepi G.leaf) yang mengisi seluruh frame dari sisi ke sisi.
-3. Berikan gerakan 60 FPS profesional sesuai karakter visual gambar (parallax kedalaman halus, arus gelombang kontinyu, geser kisi/garis kecepatan, sapuan cahaya diagonal) — JANGAN mengecilkan gambar menjadi stiker ikon di tengah canvas, JANGAN membuat partikel acak berantakan.
-${!effectiveGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
-${customInstructions ? `Instruksi khusus: ${customInstructions}` : ''}
-HELPERS G: ${HELPERS_G_VISION_DOC}
-Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
+      ? `BG Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME gambar referensi menjadi Canvas 2D 60 FPS (tata letak, lapisan kedalaman, horizon/gelombang/kisi, HEX palette persis).
+ATURAN (-0.08*w..1.08*w,-0.08*h..1.08*h): (1) G.bgBackdrop(w,h,c0,c1,c2,dir) warna dominan; (2) min 2 lapisan gerak tepi-ke-tepi (G.wave/G.capsule/G.poly/G.ring/G.leaf/kisi); (3) parallax/arus halus, NO center sticker, NO loose dots.
+${!effectiveGlow ? 'shadowBlur=0.' : 'shadowBlur=8 accents(reset 0).'}${customInstructions ? ` Catatan: ${customInstructions}` : ''}
+${HELPERS_G_VISION_DOC}
+Output HANYA JSON + RAW JS (no md/HTML/canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
-      : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
-Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect' : effectiveGlow ? 'BG Gelap (#080c14): shadowBlur=8 accents (reset 0), rim lw=Math.max(2.2,0.034*R)' : 'BG Gelap (#080c14): shadowBlur=0 crisp vector, rim lw=Math.max(2.2,0.034*R)'}.
-${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
-Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
+      : `Canvas 2D Motion Coder. Rekonstruksi objek gambar menjadi ikon microstock 60 FPS dalam ONE G.part(cx,cy+hoverY,rot,1,1,fn) skala R=S*0.80.
+Line1 drawFrame: // PLAN: base=...; joints=...; move=...
+Gerak sesuai karakter objek (bel ayun, gear/roda putar, G.bar/G.pie naik halus>=0.14*R, atau floating tegak rot=0; JANGAN rotasi 360 objek tegak, JANGAN kedip if(sin>0)).
+Mode:${colorMode} | ${effectiveGs ? 'GS(#00ff00): solid non-green, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), no bg fillRect' : effectiveGlow ? 'DARK(#080c14): shadowBlur=8 accents(reset 0), rim lw=Math.max(2.2,0.034*R)' : 'CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R)'}.${customInstructions ? ` Catatan: ${customInstructions}` : ''}
+${HELPERS_G_VISION_DOC}
+ATURAN: (1) Semua (x,y) di G adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (belakang->badan->emblem depan); (3) Semua shape wajib di dalam ONE root G.part bersambungan rapat (overlap>=0.04*R di [-0.58*R,+0.58*R]), ZERO part lepas pojok/piringan latar belakang/kotak transparan.
+Output HANYA JSON + RAW JS (no md/HTML/canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
@@ -1495,7 +1489,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
       (currentModel) => {
         const config: any = {
           temperature: 0.15,
-          maxOutputTokens: resolvedType === 'bg' ? 1900 : 1750,
+          maxOutputTokens: resolvedType === 'bg' ? 1450 : 1250,
         };
         const smartThinking = getSmartThinkingConfig(currentModel, 'vision');
         if (smartThinking) config.thinkingConfig = smartThinking;

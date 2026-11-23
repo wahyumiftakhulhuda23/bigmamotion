@@ -124,17 +124,153 @@ export function isPromptDuplicateInBank(prompt: string, bank?: string[]): boolea
 
 let currentKeyIndex = 0;
 
-// --- SMART API KEY HEALTH, COOLDOWN & UNSUPPORTED-MODEL POOL (ANTI-BAN & ZERO-WASTE) ---
+// --- SMART API KEY HEALTH, SLIDING-WINDOW RPM/TPM/RPD & COOLDOWN POOL ---
 const quarantinedKeys = new Set<string>(); // 401/403 dead/suspended keys - never hammered again
 const keyModelCooldowns = new Map<string, number>(); // `${key}::${model}` -> timestamp until cooldown ends
 const keyModelStrikeCount = new Map<string, number>(); // consecutive 429 strikes for adaptive escalation
 const keyModelDailyExhausted = new Map<string, number>(); // `${key}::${model}` -> timestamp when RPD cooldown ends
 const keyLastUsedAt = new Map<string, number>(); // global LRU spacing
 const keyModelLastUsedAt = new Map<string, number>(); // per-key+model reuse gap tracking
-const modelGlobalCooldowns = new Map<string, number>(); // Burst guard if 3+ keys hit 429 on same model within 10s
-const recentModelQuotaHits = new Map<string, number[]>(); // Timestamps of recent 429 hits per model
+const modelGlobalCooldowns = new Map<string, number>(); // Scaled burst guard if majority of active pool hits 429 within 10s
+const recentModelQuotaHits = new Map<string, Array<{ ts: number; key: string }>>(); // Distinct-key 429 hits per model
 const unsupportedClientModels = new Map<string, number>(); // model -> timestamp (5 min TTL for 404/unsupported)
 const unsupportedThinkingModels = new Set<string>(); // models where thinkingConfig threw invalid_argument
+
+// Sliding-window 60s RPM & TPM logs per (key::model) + daily RPD counters
+const keyModelMinuteWindow = new Map<string, Array<{ ts: number; tokens: number }>>();
+const keyModelDailyUsage = new Map<string, { dateStr: string; count: number; tokens: number }>();
+const STORAGE_KEY_RPD_USAGE = 'bigma_key_rpd_usage_v1';
+let __hydratedRpdUsage = false;
+let __activePoolSizeHint = 1;
+let __unusedKeyStrideIndex = 0;
+
+function getTodayDateStr(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function hashPairStorageKey(key: string, model: string): string {
+  const raw = `${key.slice(-8)}::${model}`;
+  let h = 2166136261;
+  for (let i = 0; i < raw.length; i++) {
+    h ^= raw.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return `${(h >>> 0).toString(36)}:${model}`;
+}
+
+function hydrateRpdUsageOnce(): void {
+  if (__hydratedRpdUsage) return;
+  __hydratedRpdUsage = true;
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const raw = localStorage.getItem(STORAGE_KEY_RPD_USAGE);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    const today = getTodayDateStr();
+    if (parsed && parsed.dateStr === today && parsed.entries && typeof parsed.entries === 'object') {
+      for (const [k, v] of Object.entries<any>(parsed.entries)) {
+        if (v && typeof v.count === 'number') {
+          keyModelDailyUsage.set(k, { dateStr: today, count: v.count, tokens: Number(v.tokens) || 0 });
+        }
+      }
+    }
+  } catch {
+    // Ignore storage read errors
+  }
+}
+
+function persistRpdUsageSafely(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const today = getTodayDateStr();
+    const entries: Record<string, { count: number; tokens: number }> = {};
+    let kept = 0;
+    keyModelDailyUsage.forEach((v, k) => {
+      if (v.dateStr === today && kept < 800) {
+        entries[k] = { count: v.count, tokens: v.tokens };
+        kept++;
+      }
+    });
+    localStorage.setItem(STORAGE_KEY_RPD_USAGE, JSON.stringify({ dateStr: today, entries }));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function getMinuteWindowStats(key: string, model: string, now: number = Date.now()): { rpmUsed: number; tpmUsed: number; oldestTs: number } {
+  const pair = `${key}::${model}`;
+  const list = keyModelMinuteWindow.get(pair);
+  if (!list || list.length === 0) return { rpmUsed: 0, tpmUsed: 0, oldestTs: 0 };
+  const cutoff = now - 60000;
+  let writeIdx = 0;
+  let tpmUsed = 0;
+  let oldestTs = Infinity;
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i];
+    if (entry.ts > cutoff) {
+      list[writeIdx++] = entry;
+      tpmUsed += entry.tokens;
+      if (entry.ts < oldestTs) oldestTs = entry.ts;
+    }
+  }
+  list.length = writeIdx;
+  if (writeIdx === 0) {
+    keyModelMinuteWindow.delete(pair);
+    return { rpmUsed: 0, tpmUsed: 0, oldestTs: 0 };
+  }
+  return { rpmUsed: writeIdx, tpmUsed, oldestTs };
+}
+
+function getDailyUsageCount(key: string, model: string): number {
+  hydrateRpdUsageOnce();
+  const hKey = hashPairStorageKey(key, model);
+  const rec = keyModelDailyUsage.get(hKey);
+  if (!rec || rec.dateStr !== getTodayDateStr()) return 0;
+  return rec.count;
+}
+
+export function recordKeyModelDispatch(key: string, model: string, estimatedTokens: number): void {
+  if (!key || !model) return;
+  const normModel = sanitizeModel(model);
+  const now = Date.now();
+  const pair = `${key}::${normModel}`;
+  const list = keyModelMinuteWindow.get(pair) || [];
+  list.push({ ts: now, tokens: Math.max(200, Math.round(estimatedTokens)) });
+  keyModelMinuteWindow.set(pair, list);
+
+  hydrateRpdUsageOnce();
+  const today = getTodayDateStr();
+  const hKey = hashPairStorageKey(key, normModel);
+  const prev = keyModelDailyUsage.get(hKey);
+  const next =
+    prev && prev.dateStr === today
+      ? { dateStr: today, count: prev.count + 1, tokens: prev.tokens + Math.round(estimatedTokens) }
+      : { dateStr: today, count: 1, tokens: Math.round(estimatedTokens) };
+  keyModelDailyUsage.set(hKey, next);
+  if (next.count % 3 === 1) persistRpdUsageSafely();
+}
+
+function adjustRecentDispatchActualTokens(key: string, model: string, usageMetadata: any): void {
+  if (!key || !model || !usageMetadata) return;
+  const total = Number(usageMetadata.totalTokenCount) ||
+    ((Number(usageMetadata.promptTokenCount) || 0) + (Number(usageMetadata.candidatesTokenCount) || 0) + (Number(usageMetadata.thoughtsTokenCount) || 0));
+  if (!total || total <= 0) return;
+
+  const normModel = sanitizeModel(model);
+  const pair = `${key}::${normModel}`;
+  const list = keyModelMinuteWindow.get(pair);
+  if (list && list.length > 0) {
+    const last = list[list.length - 1];
+    const delta = total - last.tokens;
+    last.tokens = total;
+    const hKey = hashPairStorageKey(key, normModel);
+    const daily = keyModelDailyUsage.get(hKey);
+    if (daily && daily.dateStr === getTodayDateStr()) {
+      daily.tokens = Math.max(0, daily.tokens + delta);
+    }
+  }
+}
 
 export function resetKeyHealthPool(): void {
   quarantinedKeys.clear();
@@ -147,6 +283,7 @@ export function resetKeyHealthPool(): void {
   recentModelQuotaHits.clear();
   unsupportedClientModels.clear();
   unsupportedThinkingModels.clear();
+  keyModelMinuteWindow.clear();
 }
 
 export function resetKeyHealthForModelSwitch(newModel?: string): void {
@@ -195,7 +332,7 @@ function parseRetryDelayMs(err: any): number | null {
   if (retryInMatch && retryInMatch[1]) {
     const secs = parseFloat(retryInMatch[1]);
     if (!Number.isNaN(secs) && secs > 0) {
-      return Math.min(65000, Math.max(8000, Math.ceil(secs * 1000) + 1000));
+      return Math.min(65000, Math.max(6000, Math.ceil(secs * 1000) + 1000));
     }
   }
   return null;
@@ -203,6 +340,15 @@ function parseRetryDelayMs(err: any): number | null {
 
 function isDailyQuotaMessage(msg: string): boolean {
   const lower = (msg || '').toLowerCase();
+  // Explicitly rule out per-minute / per-second bursts first
+  if (
+    lower.includes('perminute') ||
+    lower.includes('per_minute') ||
+    lower.includes('requestsperminute') ||
+    lower.includes('tokensperminute')
+  ) {
+    return false;
+  }
   return (
     lower.includes('per day') ||
     lower.includes('per_day') ||
@@ -219,25 +365,27 @@ function isDailyQuotaMessage(msg: string): boolean {
 
 function recordKeyModelSuccess(key: string, model: string): void {
   if (!key || !model) return;
-  const pair = `${key}::${model}`;
+  const normModel = sanitizeModel(model);
+  const pair = `${key}::${normModel}`;
   keyModelStrikeCount.delete(pair);
   keyModelCooldowns.delete(pair);
-  recentModelQuotaHits.delete(model);
-  modelGlobalCooldowns.delete(model);
+  recentModelQuotaHits.delete(normModel);
+  modelGlobalCooldowns.delete(normModel);
 }
 
 function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any = 28000): void {
   if (!key || !model) return;
-  const pair = `${key}::${model}`;
+  const normModel = sanitizeModel(model);
+  const pair = `${key}::${normModel}`;
   const now = Date.now();
   const msg = typeof errOrDurationMs === 'string'
     ? errOrDurationMs
     : (errOrDurationMs?.message || errOrDurationMs?.error?.message || '');
 
   if (typeof errOrDurationMs !== 'number' && isDailyQuotaMessage(msg)) {
-    // Daily quota exhausted on this model for this key — avoid hammering it for 15 minutes
-    keyModelDailyExhausted.set(pair, now + 15 * 60 * 1000);
-    keyModelCooldowns.set(pair, now + 15 * 60 * 1000);
+    // True daily RPD quota exhausted on this model for this key — cool for 2 hours (still resettable on model switch / key reload)
+    keyModelDailyExhausted.set(pair, now + 2 * 60 * 60 * 1000);
+    keyModelCooldowns.set(pair, now + 2 * 60 * 60 * 1000);
     return;
   }
 
@@ -248,33 +396,38 @@ function markKeyModelCooldown(key: string, model: string, errOrDurationMs: any =
     const parsed = parseRetryDelayMs(errOrDurationMs);
     const strikes = (keyModelStrikeCount.get(pair) || 0) + 1;
     keyModelStrikeCount.set(pair, strikes);
-    const profile = getModelExecutionProfile(model);
+    const profile = getModelExecutionProfile(normModel);
     if (parsed) {
-      durationMs = Math.max(parsed, profile.cooldownStepsMs[0]);
+      durationMs = Math.max(parsed, Math.min(profile.cooldownStepsMs[0], 22000));
     } else {
       // Model-tier adaptive escalation (lite warms up quickly, flagship/pro rest longer)
       durationMs = profile.cooldownStepsMs[Math.min(strikes - 1, profile.cooldownStepsMs.length - 1)];
     }
 
-    // Shared-project / RPM burst detector: if >= 3 keys hit 429 on this model within 10s, cool the whole model briefly
-    const hits = (recentModelQuotaHits.get(model) || []).filter((ts) => now - ts < 10000);
-    hits.push(now);
-    recentModelQuotaHits.set(model, hits);
-    if (hits.length >= 3) {
-      modelGlobalCooldowns.set(model, now + Math.min(durationMs, profile.postQuotaRecoveryMs));
+    // Scaled burst guard: only pause the ENTIRE model if a huge share of active keys fail in 10s
+    // (Prevents 3 keys from 1 shared project out of 108 keys from freezing all 108 keys!)
+    const hits = (recentModelQuotaHits.get(normModel) || []).filter((h) => now - h.ts < 10000);
+    if (!hits.some((h) => h.key === key)) {
+      hits.push({ ts: now, key });
+    }
+    recentModelQuotaHits.set(normModel, hits);
+    const burstThreshold = Math.max(3, Math.min(18, Math.ceil(__activePoolSizeHint * 0.45)));
+    if (hits.length >= burstThreshold) {
+      modelGlobalCooldowns.set(normModel, now + Math.min(durationMs, profile.postQuotaRecoveryMs));
     }
   }
   keyModelCooldowns.set(pair, now + durationMs);
 }
 
 function isKeyModelInCooldown(key: string, model: string): boolean {
+  const normModel = sanitizeModel(model);
   const now = Date.now();
-  const globalUntil = modelGlobalCooldowns.get(model);
+  const globalUntil = modelGlobalCooldowns.get(normModel);
   if (globalUntil) {
     if (now < globalUntil) return true;
-    modelGlobalCooldowns.delete(model);
+    modelGlobalCooldowns.delete(normModel);
   }
-  const pair = `${key}::${model}`;
+  const pair = `${key}::${normModel}`;
   const dailyUntil = keyModelDailyExhausted.get(pair);
   if (dailyUntil) {
     if (now < dailyUntil) return true;
@@ -290,7 +443,15 @@ function isKeyModelInCooldown(key: string, model: string): boolean {
 }
 
 export interface ModelExecutionProfile {
+  modelId: string;
+  displayName: string;
   tier: 'ultra_lite' | 'smart_lite' | 'balanced_flash' | 'flagship_flash' | 'pro_rigging';
+  rpmLimitPerKey: number;
+  safeRpmPerKey: number;
+  tpmLimitPerKey: number;
+  safeTpmPerKey: number;
+  rpdLimitPerKey: number;
+  estimatedTokensPerAnim: number;
   pacingManyKeysMs: number;
   pacingFewKeysMs: number;
   pacingSingleKeyMs: number;
@@ -302,75 +463,128 @@ export interface ModelExecutionProfile {
 }
 
 export function getModelExecutionProfile(model?: string): ModelExecutionProfile {
-  const m = sanitizeModel(model || 'gemini-3.8-flash').toLowerCase();
+  const raw = (model || 'gemini-3.8-flash').toLowerCase();
+  const m = sanitizeModel(raw).toLowerCase();
   if (m.includes('3.1-pro') || m.includes('4-')) {
     return {
+      modelId: 'gemini-3.1-pro-preview',
+      displayName: 'Gemini 3.1 Pro Preview',
       tier: 'pro_rigging',
-      pacingManyKeysMs: 3800,
-      pacingFewKeysMs: 6200,
-      pacingSingleKeyMs: 9500,
-      minKeyReuseGapMs: 12000,
-      retryDelaysMs: [3200, 6200, 9500],
-      cooldownStepsMs: [45000, 75000, 110000],
-      postQuotaRecoveryMs: 26000,
+      rpmLimitPerKey: 5,
+      safeRpmPerKey: 3,
+      tpmLimitPerKey: 250000,
+      safeTpmPerKey: 180000,
+      rpdLimitPerKey: 100,
+      estimatedTokensPerAnim: 1300,
+      pacingManyKeysMs: 2000,
+      pacingFewKeysMs: 4800,
+      pacingSingleKeyMs: 11000,
+      minKeyReuseGapMs: 19500,
+      retryDelaysMs: [2800, 5600, 8800],
+      cooldownStepsMs: [40000, 70000, 105000],
+      postQuotaRecoveryMs: 24000,
       timeoutMs: 46000,
     };
   }
-  if (m.includes('3.8') || m.includes('3.6')) {
+  if (m.includes('3.8') || raw.includes('3.6')) {
     return {
+      modelId: raw.includes('3.6') ? 'gemini-3.6-flash' : 'gemini-3.8-flash',
+      displayName: raw.includes('3.6') ? 'Gemini 3.6 Flash' : 'Gemini 3.8 Flash',
       tier: 'flagship_flash',
-      pacingManyKeysMs: 2600,
-      pacingFewKeysMs: 4400,
-      pacingSingleKeyMs: 7000,
+      rpmLimitPerKey: 10,
+      safeRpmPerKey: 8,
+      tpmLimitPerKey: 250000,
+      safeTpmPerKey: 200000,
+      rpdLimitPerKey: 250,
+      estimatedTokensPerAnim: 850,
+      pacingManyKeysMs: 1100,
+      pacingFewKeysMs: 3600,
+      pacingSingleKeyMs: 7500,
       minKeyReuseGapMs: 7500,
-      retryDelaysMs: [2400, 4800, 7500],
-      cooldownStepsMs: [36000, 62000, 90000],
-      postQuotaRecoveryMs: 22000,
-      timeoutMs: 40000,
+      retryDelaysMs: [1800, 3800, 6200],
+      cooldownStepsMs: [26000, 48000, 72000],
+      postQuotaRecoveryMs: 18000,
+      timeoutMs: 38000,
     };
   }
   if (m.includes('2.5-flash-lite') || m.includes('3.1-flash-lite')) {
     return {
+      modelId: m.includes('2.5-flash-lite') ? 'gemini-2.5-flash-lite' : 'gemini-3.1-flash-lite',
+      displayName: m.includes('2.5-flash-lite') ? 'Gemini 2.5 Flash Lite' : 'Gemini 3.1 Flash Lite',
       tier: 'ultra_lite',
-      pacingManyKeysMs: 900,
-      pacingFewKeysMs: 2000,
-      pacingSingleKeyMs: 3400,
-      minKeyReuseGapMs: 3200,
-      retryDelaysMs: [1000, 2200, 3800],
-      cooldownStepsMs: [18000, 34000, 55000],
-      postQuotaRecoveryMs: 12000,
-      timeoutMs: 30000,
+      rpmLimitPerKey: 30,
+      safeRpmPerKey: 20,
+      tpmLimitPerKey: 250000,
+      safeTpmPerKey: 225000,
+      rpdLimitPerKey: 1000,
+      estimatedTokensPerAnim: 700,
+      pacingManyKeysMs: 500,
+      pacingFewKeysMs: 1600,
+      pacingSingleKeyMs: 3200,
+      minKeyReuseGapMs: 3000,
+      retryDelaysMs: [900, 1800, 3200],
+      cooldownStepsMs: [14000, 28000, 46000],
+      postQuotaRecoveryMs: 10000,
+      timeoutMs: 28000,
     };
   }
   if (m.includes('3.5-flash-lite')) {
     return {
+      modelId: 'gemini-3.5-flash-lite',
+      displayName: 'Gemini 3.5 Flash Lite',
       tier: 'smart_lite',
-      pacingManyKeysMs: 1300,
-      pacingFewKeysMs: 2600,
+      rpmLimitPerKey: 15,
+      safeRpmPerKey: 13,
+      tpmLimitPerKey: 250000,
+      safeTpmPerKey: 220000,
+      rpdLimitPerKey: 1000,
+      estimatedTokensPerAnim: 720,
+      pacingManyKeysMs: 650,
+      pacingFewKeysMs: 2100,
       pacingSingleKeyMs: 4400,
-      minKeyReuseGapMs: 4200,
-      retryDelaysMs: [1400, 2800, 4600],
-      cooldownStepsMs: [24000, 44000, 68000],
-      postQuotaRecoveryMs: 15000,
-      timeoutMs: 32000,
+      minKeyReuseGapMs: 4500,
+      retryDelaysMs: [1100, 2200, 3800],
+      cooldownStepsMs: [18000, 34000, 52000],
+      postQuotaRecoveryMs: 12000,
+      timeoutMs: 30000,
     };
   }
   // gemini-2.5-flash / gemini-flash-latest
   return {
+    modelId: 'gemini-2.5-flash',
+    displayName: 'Gemini 2.5 Flash',
     tier: 'balanced_flash',
-    pacingManyKeysMs: 1800,
-    pacingFewKeysMs: 3400,
-    pacingSingleKeyMs: 5600,
-    minKeyReuseGapMs: 5500,
-    retryDelaysMs: [1800, 3600, 5800],
-    cooldownStepsMs: [30000, 52000, 78000],
-    postQuotaRecoveryMs: 18000,
+    rpmLimitPerKey: 10,
+    safeRpmPerKey: 9,
+    tpmLimitPerKey: 250000,
+    safeTpmPerKey: 210000,
+    rpdLimitPerKey: 250,
+    estimatedTokensPerAnim: 820,
+    pacingManyKeysMs: 900,
+    pacingFewKeysMs: 2900,
+    pacingSingleKeyMs: 6600,
+    minKeyReuseGapMs: 6800,
+    retryDelaysMs: [1400, 2800, 4800],
+    cooldownStepsMs: [22000, 42000, 65000],
+    postQuotaRecoveryMs: 15000,
     timeoutMs: 32000,
   };
 }
 
+export function getAllModelQuotaProfiles(): ModelExecutionProfile[] {
+  return [
+    getModelExecutionProfile('gemini-3.8-flash'),
+    getModelExecutionProfile('gemini-3.6-flash'),
+    getModelExecutionProfile('gemini-3.5-flash-lite'),
+    getModelExecutionProfile('gemini-3.1-flash-lite'),
+    getModelExecutionProfile('gemini-2.5-flash'),
+    getModelExecutionProfile('gemini-3.1-pro-preview'),
+  ];
+}
+
 export function getAdaptiveModelPacingDelay(model: string | undefined, keyCount: number): number {
   const profile = getModelExecutionProfile(model);
+  if (keyCount >= 25) return Math.max(400, Math.round(profile.pacingManyKeysMs * 0.7));
   if (keyCount >= 5) return profile.pacingManyKeysMs;
   if (keyCount >= 2) return profile.pacingFewKeysMs;
   return profile.pacingSingleKeyMs;
@@ -415,9 +629,34 @@ export function buildModelFallbackChain(primaryModel?: string): string[] {
   return Array.from(new Set(ordered)).filter((m) => !isModelUnsupportedCached(m));
 }
 
-export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]): number {
-  const uniqueKeys = getCleanUniqueKeys(apiKeys).filter((k) => !quarantinedKeys.has(k));
-  if (uniqueKeys.length === 0) return 0;
+export interface KeyPoolCooldownStatus {
+  availableNow: boolean;
+  readyPairs: number;
+  totalKeys: number;
+  validKeys: number;
+  earliestWaitMs: number;
+  allDailyExhausted: boolean;
+  allInvalid: boolean;
+  reason: 'ready' | 'rpm_tpm_cooldown' | 'daily_exhausted' | 'no_valid_keys';
+}
+
+export function getKeyPoolCooldownStatus(apiKeys: string[], models?: string[]): KeyPoolCooldownStatus {
+  const uniqueKeys = getCleanUniqueKeys(apiKeys);
+  const validKeys = uniqueKeys.filter((k) => !quarantinedKeys.has(k));
+  __activePoolSizeHint = Math.max(1, validKeys.length);
+
+  if (validKeys.length === 0) {
+    return {
+      availableNow: false,
+      readyPairs: 0,
+      totalKeys: uniqueKeys.length,
+      validKeys: 0,
+      earliestWaitMs: 0,
+      allDailyExhausted: false,
+      allInvalid: uniqueKeys.length > 0,
+      reason: 'no_valid_keys',
+    };
+  }
 
   const targetModels = (models && models.length > 0
     ? models
@@ -425,23 +664,83 @@ export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]):
   ).map((m) => sanitizeModel(m)).filter((m) => !isModelUnsupportedCached(m));
 
   const now = Date.now();
+  let readyPairs = 0;
   let minWait = Infinity;
 
-  for (const k of uniqueKeys) {
+  for (const k of validKeys) {
     for (const m of targetModels) {
       const pair = `${k}::${m}`;
       const dailyUntil = keyModelDailyExhausted.get(pair);
-      if (dailyUntil && dailyUntil > now) continue; // skip daily-exhausted pairs
-      const globalUntil = modelGlobalCooldowns.get(m);
+      if (dailyUntil && dailyUntil > now) continue; // truly RPD-exhausted for this (key, model)
+
+      const profile = getModelExecutionProfile(m);
+      const win = getMinuteWindowStats(k, m, now);
+      let windowWaitUntil = 0;
+      if (win.rpmUsed >= profile.safeRpmPerKey || win.tpmUsed + profile.estimatedTokensPerAnim > profile.safeTpmPerKey) {
+        if (win.oldestTs > 0) {
+          windowWaitUntil = win.oldestTs + 60200;
+        }
+      }
+
+      const globalUntil = modelGlobalCooldowns.get(m) || 0;
       const keyUntil = keyModelCooldowns.get(pair) || 0;
-      const effectiveUntil = Math.max(keyUntil, globalUntil && globalUntil > now ? globalUntil : 0);
-      if (!effectiveUntil || effectiveUntil <= now) return 0; // already available!
-      const wait = effectiveUntil - now;
-      if (wait < minWait) minWait = wait;
+      const effectiveUntil = Math.max(
+        keyUntil > now ? keyUntil : 0,
+        globalUntil > now ? globalUntil : 0,
+        windowWaitUntil > now ? windowWaitUntil : 0
+      );
+
+      if (!effectiveUntil || effectiveUntil <= now) {
+        readyPairs++;
+      } else {
+        const wait = effectiveUntil - now;
+        if (wait < minWait) minWait = wait;
+      }
     }
   }
 
-  return Number.isFinite(minWait) && minWait > 0 ? Math.min(minWait + 800, 68000) : 0;
+  if (readyPairs > 0) {
+    return {
+      availableNow: true,
+      readyPairs,
+      totalKeys: uniqueKeys.length,
+      validKeys: validKeys.length,
+      earliestWaitMs: 0,
+      allDailyExhausted: false,
+      allInvalid: false,
+      reason: 'ready',
+    };
+  }
+
+  if (Number.isFinite(minWait) && minWait > 0) {
+    return {
+      availableNow: false,
+      readyPairs: 0,
+      totalKeys: uniqueKeys.length,
+      validKeys: validKeys.length,
+      earliestWaitMs: Math.min(minWait + 1000, 75000),
+      allDailyExhausted: false,
+      allInvalid: false,
+      reason: 'rpm_tpm_cooldown',
+    };
+  }
+
+  return {
+    availableNow: false,
+    readyPairs: 0,
+    totalKeys: uniqueKeys.length,
+    validKeys: validKeys.length,
+    earliestWaitMs: 0,
+    allDailyExhausted: true,
+    allInvalid: false,
+    reason: 'daily_exhausted',
+  };
+}
+
+export function getEarliestCooldownWaitMs(apiKeys: string[], models?: string[]): number {
+  const status = getKeyPoolCooldownStatus(apiKeys, models);
+  if (status.availableNow) return 0;
+  return status.earliestWaitMs;
 }
 
 function getCleanUniqueKeys(apiKeys: string[]): string[] {
@@ -457,47 +756,81 @@ function getCleanUniqueKeys(apiKeys: string[]): string[] {
   return out;
 }
 
-export function getBestHealthyKey(apiKeys: string[], model?: string): string | undefined {
+export function getBestHealthyKey(apiKeys: string[], model?: string, estimatedTokens?: number): string | undefined {
   const uniqueKeys = getCleanUniqueKeys(apiKeys);
   if (uniqueKeys.length === 0) return undefined;
 
   const targetModel = model ? sanitizeModel(model) : '';
   const now = Date.now();
-  const gapMs = targetModel ? getModelExecutionProfile(targetModel).minKeyReuseGapMs : 0;
+  const profile = targetModel ? getModelExecutionProfile(targetModel) : null;
+  const gapMs = profile ? profile.minKeyReuseGapMs : 0;
+  const estTok = estimatedTokens || (profile ? profile.estimatedTokensPerAnim : 850);
+
+  const nonQuarantined = uniqueKeys.filter((k) => !quarantinedKeys.has(k));
+  __activePoolSizeHint = Math.max(1, nonQuarantined.length);
 
   if (targetModel) {
     const globalUntil = modelGlobalCooldowns.get(targetModel);
     if (globalUntil && now < globalUntil) return undefined;
   }
 
-  // Filter out quarantined keys and keys cooling down on this model
-  const healthy = uniqueKeys.filter((k) => {
-    if (quarantinedKeys.has(k)) return false;
+  // Filter out keys cooling down on this model or currently saturated in 60s RPM/TPM window
+  const healthy = nonQuarantined.filter((k) => {
     if (targetModel && isKeyModelInCooldown(k, targetModel)) return false;
+    if (targetModel && profile) {
+      const win = getMinuteWindowStats(k, targetModel, now);
+      if (win.rpmUsed >= profile.safeRpmPerKey) return false;
+      if (win.tpmUsed + estTok > profile.safeTpmPerKey) return false;
+    }
     return true;
   });
 
   if (healthy.length > 0) {
-    // Prefer keys that already cleared the per-model minimum reuse gap to prevent RPM spikes
+    // Prefer keys that cleared the per-model minimum reuse gap
     const rested = targetModel
       ? healthy.filter((k) => now - (keyModelLastUsedAt.get(`${k}::${targetModel}`) || 0) >= gapMs)
       : healthy;
     const pool = rested.length > 0 ? rested : healthy;
 
-    let best = pool[0];
-    let oldestTs = targetModel
-      ? (keyModelLastUsedAt.get(`${best}::${targetModel}`) || keyLastUsedAt.get(best) || 0)
-      : (keyLastUsedAt.get(best) || 0);
-    for (let i = 1; i < pool.length; i++) {
-      const candidate = pool[i];
-      const ts = targetModel
-        ? (keyModelLastUsedAt.get(`${candidate}::${targetModel}`) || keyLastUsedAt.get(candidate) || 0)
-        : (keyLastUsedAt.get(candidate) || 0);
-      if (ts < oldestTs) {
-        oldestTs = ts;
-        best = candidate;
+    // Never-used-yet keys: spread via golden-ratio stride across the pool so adjacent keys from same GCP project aren't hammered in a row
+    const unused = pool.filter((k) => !(targetModel ? keyModelLastUsedAt.get(`${k}::${targetModel}`) : keyLastUsedAt.get(k)));
+    let best: string;
+    if (unused.length > 0) {
+      // Also sort unused by fewest daily requests recorded today
+      const sortedUnused = unused.length > 1 && targetModel && profile
+        ? [...unused].sort((a, b) => getDailyUsageCount(a, targetModel) - getDailyUsageCount(b, targetModel))
+        : unused;
+      const minDaily = targetModel ? getDailyUsageCount(sortedUnused[0], targetModel) : 0;
+      const freshestTier = targetModel
+        ? sortedUnused.filter((k) => getDailyUsageCount(k, targetModel) <= minDaily + 2)
+        : sortedUnused;
+      const stride = freshestTier.length > 4 ? Math.max(1, Math.round(freshestTier.length * 0.381966)) : 1;
+      __unusedKeyStrideIndex = (__unusedKeyStrideIndex + stride) % freshestTier.length;
+      best = freshestTier[__unusedKeyStrideIndex];
+    } else {
+      // Score active pool by lowest combined (minute RPM load + normalized RPD load + recency)
+      best = pool[0];
+      let bestScore = Infinity;
+      for (let i = 0; i < pool.length; i++) {
+        const cand = pool[i];
+        const ts = targetModel
+          ? (keyModelLastUsedAt.get(`${cand}::${targetModel}`) || keyLastUsedAt.get(cand) || 0)
+          : (keyLastUsedAt.get(cand) || 0);
+        const recencyNorm = Math.max(0, 1 - (now - ts) / 60000);
+        let loadScore = recencyNorm * 2.0;
+        if (targetModel && profile) {
+          const win = getMinuteWindowStats(cand, targetModel, now);
+          const daily = getDailyUsageCount(cand, targetModel);
+          loadScore += (win.rpmUsed / Math.max(1, profile.safeRpmPerKey)) * 3.0;
+          loadScore += (daily / Math.max(1, profile.rpdLimitPerKey)) * 1.5;
+        }
+        if (loadScore < bestScore) {
+          bestScore = loadScore;
+          best = cand;
+        }
       }
     }
+
     keyLastUsedAt.set(best, now);
     if (targetModel) {
       keyModelLastUsedAt.set(`${best}::${targetModel}`, now);
@@ -512,10 +845,15 @@ export async function waitForKeyReuseGapIfNeeded(apiKeys: string[], model?: stri
   const uniqueKeys = getCleanUniqueKeys(apiKeys);
   if (uniqueKeys.length === 0) return 0;
   const targetModel = sanitizeModel(model || 'gemini-3.8-flash');
-  const gapMs = getModelExecutionProfile(targetModel).minKeyReuseGapMs;
+  const profile = getModelExecutionProfile(targetModel);
+  const gapMs = profile.minKeyReuseGapMs;
   const now = Date.now();
 
-  const healthy = uniqueKeys.filter((k) => !quarantinedKeys.has(k) && !isKeyModelInCooldown(k, targetModel));
+  const healthy = uniqueKeys.filter((k) => {
+    if (quarantinedKeys.has(k) || isKeyModelInCooldown(k, targetModel)) return false;
+    const win = getMinuteWindowStats(k, targetModel, now);
+    return win.rpmUsed < profile.safeRpmPerKey && win.tpmUsed + profile.estimatedTokensPerAnim <= profile.safeTpmPerKey;
+  });
   if (healthy.length === 0) return 0;
 
   let oldestUsed = Infinity;
@@ -539,16 +877,18 @@ export function getCostOptimizedThinkingConfig(
 ): any {
   const m = (targetModel || '').toLowerCase();
   if (unsupportedThinkingModels.has(m)) return undefined;
+  if (m.includes('2.5-flash-lite')) {
+    return { thinkingBudget: purpose === 'vision' ? 160 : highPrecision ? 96 : 0 };
+  }
   if (m.includes('2.5')) {
-    return { thinkingBudget: purpose === 'vision' ? 320 : highPrecision ? 224 : purpose === 'animation' ? 128 : 0 };
+    // Lean 48-token thinking scratchpad on first pass cuts ~60% thinking overhead while preserving retry escalation
+    return { thinkingBudget: purpose === 'vision' ? 256 : highPrecision ? 160 : purpose === 'animation' ? 48 : 0 };
   }
   if (m.includes('3.1-pro') || m.includes('4-')) {
     return { thinkingLevel: ThinkingLevel.LOW };
   }
-  if (m.includes('3.8')) {
-    return { thinkingLevel: ThinkingLevel.LOW };
-  }
-  if (m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+  if (m.includes('3.8') || m.includes('3.6') || m.includes('3.5') || m.includes('3.1-flash-lite') || m.includes('flash-lite')) {
+    // First-pass uses MINIMAL thinking (motionPlan already supplies exact coordinates & joints); escalates to LOW only on defect retry or vision
     return { thinkingLevel: purpose === 'vision' || highPrecision ? ThinkingLevel.LOW : ThinkingLevel.MINIMAL };
   }
   return undefined;
@@ -1999,6 +2339,8 @@ RULES: Recognizable object built from 4-6 welded proportional parts with bold cr
   const thinkingCfg = getCostOptimizedThinkingConfig(targetModel, 'prompt');
   if (thinkingCfg) config.thinkingConfig = thinkingCfg;
 
+  recordKeyModelDispatch(cleanKey, targetModel, Math.ceil(promptContent.length / 4) + (batchCount * 40));
+
   let response: any;
   try {
     response = await ai.models.generateContent({
@@ -2022,6 +2364,7 @@ RULES: Recognizable object built from 4-6 welded proportional parts with bold cr
     }
   }
 
+  adjustRecentDispatchActualTokens(cleanKey, targetModel, response?.usageMetadata);
   const rawText = (response?.text || '').trim();
   let parsedArr: string[] = [];
   try {
@@ -2085,49 +2428,55 @@ export async function generatePromptsViaGemini(
 
     const historySlice = [...sessionGeneratedSoFar, ...getPromptHistoryBank()].slice(0, 8);
 
-    // 1. Try direct browser call with healthy rotated key + compatible model
+    // 1. Try direct browser call with healthy rotated keys on primary candidate before falling back
+    const maxKeyTriesPerModel = Math.min(6, Math.max(1, getCleanUniqueKeys(apiKeys).length));
     for (const candidateModel of fallbackChain.slice(0, 2)) {
-      const apiKey = getBestHealthyKey(apiKeys, candidateModel);
-      if (!apiKey) continue;
+      let stopModelLoop = false;
+      for (let kTry = 0; kTry < maxKeyTriesPerModel; kTry++) {
+        const apiKey = getBestHealthyKey(apiKeys, candidateModel, 420);
+        if (!apiKey) break;
 
-      try {
-        batchPrompts = await generatePromptBatchDirect(
-          apiKey,
-          candidateModel,
-          type,
-          subCategory,
-          style,
-          batchCount,
-          keywords,
-          isGreenScreen,
-          colorMode,
-          motionDynamics,
-          neonGlow,
-          historySlice
-        );
-        if (batchPrompts.length > 0) break;
-      } catch (err: any) {
-        const classified = classifyGeminiError(err);
-        if (classified.isInvalidKey) {
-          markKeyInvalidOrSuspended(apiKey);
-          continue;
-        }
-        if (classified.isPermissionDenied) {
-          markModelUnsupportedCached(candidateModel);
-          continue;
-        }
-        if (classified.isQuota) {
-          markKeyModelCooldown(apiKey, candidateModel);
-          continue;
-        }
-        if (classified.isNotFound) {
-          markModelUnsupportedCached(candidateModel);
-          continue;
-        }
-        if (classified.isNetworkError || classified.message === 'NETWORK_OR_NO_CLIENT_KEY') {
-          break;
+        try {
+          batchPrompts = await generatePromptBatchDirect(
+            apiKey,
+            candidateModel,
+            type,
+            subCategory,
+            style,
+            batchCount,
+            keywords,
+            isGreenScreen,
+            colorMode,
+            motionDynamics,
+            neonGlow,
+            historySlice
+          );
+          if (batchPrompts.length > 0) {
+            recordKeyModelSuccess(apiKey, candidateModel);
+            stopModelLoop = true;
+            break;
+          }
+        } catch (err: any) {
+          const classified = classifyGeminiError(err);
+          if (classified.isInvalidKey) {
+            markKeyInvalidOrSuspended(apiKey);
+            continue;
+          }
+          if (classified.isPermissionDenied || classified.isNotFound) {
+            markModelUnsupportedCached(candidateModel);
+            break;
+          }
+          if (classified.isQuota) {
+            markKeyModelCooldown(apiKey, candidateModel, err);
+            continue;
+          }
+          if (classified.isNetworkError || classified.message === 'NETWORK_OR_NO_CLIENT_KEY') {
+            stopModelLoop = true;
+            break;
+          }
         }
       }
+      if (stopModelLoop || batchPrompts.length > 0) break;
     }
 
     // 2. Server fallback only if direct yielded nothing (e.g. no client key or network/CORS issue)
@@ -2363,33 +2712,32 @@ async function generateAnimationDirect(
   const motionPlan = picked.plan;
 
   const colorStyleDirective = effGs
-    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, contrasting rim (NEVER fill===rim!) lw=Math.max(2.4,0.036*R), NO bg fillRect.`
+    ? `GS(#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R) (NEVER fill===rim!), no bg fillRect.`
     : effGlow
-    ? `DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`
-    : `CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`;
+    ? `DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect.`
+    : `CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.`;
 
   const geometryGuide = isBackground
-    ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
-    : `MICROSTOCK HERO ICON (14-28 lines crisp JS):
-- Line 1 inside drawFrame MUST be: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
-- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) inside [-0.58*R,+0.58*R]; inner sub-groups use G.part(ax,ay,r2,sx,sy,function(){ ... }) WITHOUT re-passing R!
-- JOINT ANCHORS & SIGNATURES: Use seam vars (topY=y0-bh*0.5); weld attachments +/-0.04*R. Use G.percent for %; G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for segments; G.trap takes 9 args; ONLY G.bar takes yBottom.
-- ZERO SLOP: Upright icons stay upright (rot=0); ZERO floating corner dots, ground ovals, or dark circular discs behind non-round icons; NEVER hide parts via if(sin>0).
-- Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
+    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker, NO loose dot confetti). Plan: ${motionPlan.anatomyHint}`
+    : `HERO ICON (14-26 lines crisp JS):
+- Line1 inside drawFrame: // PLAN: base=<shape>; joints=<connect>; move=<motion>
+- ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R]; inner G.part(ax,ay,r2,sx,sy,function(){...}) WITHOUT re-passing R.
+- Welded seam vars (topY=y0-bh*0.5, overlap>=0.04*R). G.percent for %; G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for segments; G.trap 9 args; ONLY G.bar takes yB. Upright icons stay rot=0; NO floating corner dots/ground ovals/dark backing discs/if(sin>0).
+- Anatomy: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
-  const fixNote = defectFeedback ? `\n- FIX PRIOR REJECTED DEFECT: ${defectFeedback}` : '';
+  const fixNote = defectFeedback ? `\nFIX DEFECT: ${defectFeedback}` : '';
 
-  const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
+  const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] (match prompt colors first!)
-- ${geometryGuide}
-- Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
-- ${colorStyleDirective}${fixNote}`;
+SPEC[${seed.tag}]: "${promptTopic}" (${subCategory},${style},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
+${geometryGuide}
+Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}
+${colorStyleDirective}${fixNote}`;
 
   const config: any = {
-    temperature: highPrecision ? 0.25 : 0.35,
-    maxOutputTokens: isBackground ? 1350 : 1200,
+    temperature: highPrecision ? 0.22 : 0.32,
+    maxOutputTokens: isBackground ? 980 : 780,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -2397,6 +2745,9 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
   }
 
   const profile = getModelExecutionProfile(targetModel);
+  const estInputTok = Math.ceil(systemPrompt.length / 3.8);
+  recordKeyModelDispatch(cleanKey, targetModel, estInputTok + (highPrecision ? 460 : 340));
+
   let response: any;
   try {
     response = await withModelTimeout(
@@ -2428,6 +2779,7 @@ SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palett
     }
   }
 
+  adjustRecentDispatchActualTokens(cleanKey, targetModel, response?.usageMetadata);
   const rawText = response?.text || '';
   const cleanHTML = extractHTML(rawText, effGs);
   const check = verifyCanvasAnimationHtml(cleanHTML, effGs, type);
@@ -2652,12 +3004,16 @@ export async function generateSingleAnimationCode(
   const modelsAvailable = modelChain.length > 0 ? modelChain : ['gemini-2.5-flash-lite', 'gemini-2.5-flash'];
   let modelCursor = 0;
   let lastError: any = null;
-  let didWaitForCooldown = false;
+  let cooldownWaitCount = 0;
   let sawQuotaError = false;
   let sawRenderDefect = false;
   let lastDefectReason = '';
+  let renderAttempts = 0;
+  let quotaOrAuthHops = 0;
+  const maxQuotaHops = hasClientKeys ? Math.min(36, Math.max(maxRetries * 2, Math.ceil(uniqueClientKeys.length * 0.35))) : maxRetries;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  while (renderAttempts < maxRetries && quotaOrAuthHops < maxQuotaHops) {
+    const attempt = renderAttempts + 1;
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
     const activeProfile = getModelExecutionProfile(activeModel);
     let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
@@ -2678,22 +3034,25 @@ export async function generateSingleAnimationCode(
       }
 
       if (!foundAlt) {
-        const allDead = uniqueClientKeys.every((k) => quarantinedKeys.has(k));
-        if (allDead) {
+        const poolStatus = getKeyPoolCooldownStatus(uniqueClientKeys, modelsAvailable);
+        if (poolStatus.allInvalid || poolStatus.reason === 'no_valid_keys') {
           throw new Error('Semua API Key tidak valid atau ditolak (401/403). Periksa daftar API Key Anda.');
         }
-        // Check if we only have a short RPM/TPM cooldown we can wait out cleanly
-        const waitMs = !didWaitForCooldown ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
-        if (waitMs > 0 && waitMs <= 68000) {
-          didWaitForCooldown = true;
+        // Automatically wait out temporary RPM/TPM cooldown instead of falsely popping up model switch!
+        if (!poolStatus.allDailyExhausted && poolStatus.earliestWaitMs > 0 && cooldownWaitCount < 2) {
+          cooldownWaitCount++;
           if (onRetry) {
-            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`);
+            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh — menunggu pemulihan otomatis ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`);
           }
-          await new Promise((r) => setTimeout(r, waitMs));
-          attempt = Math.max(0, attempt - 1);
+          await new Promise((r) => setTimeout(r, poolStatus.earliestWaitMs));
+          modelCursor = 0; // retry user's chosen primary model after RPM/TPM recovery
           continue;
         }
-        throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
+        throw new AllKeysExhaustedError(
+          poolStatus.allDailyExhausted
+            ? 'Kuota harian (RPD) seluruh API Key pada model ini telah tercapai.'
+            : 'Semua API Key sedang dalam masa pendinginan kuota (429).'
+        );
       }
     }
 
@@ -2715,12 +3074,13 @@ export async function generateSingleAnimationCode(
             motionDynamics,
             neonGlow,
             sawRenderDefect, // Escalate thinking slightly ONLY if prior pass failed geometry/cohesion, NEVER on 429!
-            variationSalt + attempt - 1,
+            variationSalt + renderAttempts,
             lastDefectReason
           );
-          if (attempt < maxRetries && isCodeFingerprintDuplicate(result.html)) {
+          if (renderAttempts + 1 < maxRetries && isCodeFingerprintDuplicate(result.html)) {
+            renderAttempts++;
             console.warn('[Single Render Duplicate Detected]: regenerating with fresh Variation DNA...');
-            if (onRetry) onRetry(attempt, maxRetries, 'Mendeteksi kemiripan desain, menyusun variasi unik baru...');
+            if (onRetry) onRetry(renderAttempts, maxRetries, 'Mendeteksi kemiripan desain, menyusun variasi unik baru...');
             continue;
           }
           recordCodeFingerprint(result.html);
@@ -2730,8 +3090,9 @@ export async function generateSingleAnimationCode(
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
             markKeyInvalidOrSuspended(selectedKey);
+            quotaOrAuthHops++;
             lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
               continue;
             }
@@ -2740,8 +3101,9 @@ export async function generateSingleAnimationCode(
           if (classified.isPermissionDenied) {
             markModelUnsupportedCached(activeModel);
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            quotaOrAuthHops++;
             lastError = new Error(diagnoseGooglePermissionReason(classified.message));
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, `Akses model ${activeModel} dibatasi, beralih model...`);
               continue;
             }
@@ -2749,36 +3111,42 @@ export async function generateSingleAnimationCode(
           }
           if (classified.isQuota) {
             sawQuotaError = true;
+            quotaOrAuthHops++;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
-            lastError = new Error(`Limit 429 di ${activeModel}, memutar/mendinginkan key...`);
-            // Shift model on repeated 429 or global model cooldown
-            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
-              modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            lastError = new Error(`Limit 429 di ${activeModel}, memutar ke key sehat lain...`);
+
+            const nextHealthyOnSame = getBestHealthyKey(uniqueClientKeys, activeModel);
+            if (nextHealthyOnSame) {
+              // Fast hop to another key in the pool without sleeping several seconds
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              await new Promise((r) => setTimeout(r, 280));
+              continue;
             }
-            if (attempt < maxRetries) {
-              const quotaPause = activeProfile.retryDelaysMs[attempt - 1] || 2000;
+
+            // No healthy key left on activeModel -> shift to next model in chain if available
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            if (quotaOrAuthHops < maxQuotaHops) {
+              const quotaPause = uniqueClientKeys.length >= 10 ? 450 : (activeProfile.retryDelaysMs[Math.min(2, attempt - 1)] || 1800);
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
               await new Promise((r) => setTimeout(r, quotaPause));
               continue;
             }
-            // Attempt wait-and-retry once before giving up on 429
-            if (!didWaitForCooldown) {
-              const waitMs = getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable);
-              if (waitMs > 0 && waitMs <= 68000) {
-                didWaitForCooldown = true;
-                if (onRetry) onRetry(attempt, maxRetries, `Menunggu pemulihan kuota 429 selama ${Math.ceil(waitMs / 1000)}s...`);
-                await new Promise((r) => setTimeout(r, waitMs));
-                attempt = maxRetries - 1;
-                continue;
-              }
+            const poolStatus = getKeyPoolCooldownStatus(uniqueClientKeys, modelsAvailable);
+            if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && poolStatus.earliestWaitMs > 0 && cooldownWaitCount < 2) {
+              cooldownWaitCount++;
+              if (onRetry) onRetry(attempt, maxRetries, `Menunggu pemulihan kuota 429 selama ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`);
+              await new Promise((r) => setTimeout(r, poolStatus.earliestWaitMs));
+              quotaOrAuthHops = Math.max(0, quotaOrAuthHops - 4);
+              continue;
             }
             throw new AllKeysExhaustedError(`Limit kuota 429 di ${activeModel} — seluruh jalur sedang pendinginan.`);
           }
           if (classified.isNotFound) {
             markModelUnsupportedCached(activeModel);
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            quotaOrAuthHops++;
             lastError = new Error(`Model ${activeModel} belum tersedia, beralih model...`);
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
               continue;
             }
@@ -2787,7 +3155,6 @@ export async function generateSingleAnimationCode(
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
             sawRenderDefect = true;
             lastDefectReason = classified.message.replace(/^Validasi render gagal\s*\(/i, '').replace(/\)$/, '');
-            // Stay on the smart activeModel with highPrecision & lastDefectReason (never downgrade to flash-lite on shape retry!)
             throw clientErr;
           }
         }
@@ -2810,7 +3177,7 @@ export async function generateSingleAnimationCode(
           colorMode,
           motionDynamics,
           neonGlow,
-          variationOffset: variationSalt + attempt - 1,
+          variationOffset: variationSalt + renderAttempts,
         }),
       });
 
@@ -2832,8 +3199,9 @@ export async function generateSingleAnimationCode(
         throw new Error(`Validasi render server gagal (${serverCheck.reason || 'canvas blank'})`);
       }
 
-      if (attempt < maxRetries && isCodeFingerprintDuplicate(healedHtml)) {
-        if (onRetry) onRetry(attempt, maxRetries, 'Mendeteksi kemiripan desain dari server, menyusun variasi unik baru...');
+      if (renderAttempts + 1 < maxRetries && isCodeFingerprintDuplicate(healedHtml)) {
+        renderAttempts++;
+        if (onRetry) onRetry(renderAttempts, maxRetries, 'Mendeteksi kemiripan desain dari server, menyusun variasi unik baru...');
         sawRenderDefect = true;
         continue;
       }
@@ -2855,35 +3223,42 @@ export async function generateSingleAnimationCode(
       const classified = classifyGeminiError(err);
       if (classified.isQuota) {
         sawQuotaError = true;
+        quotaOrAuthHops++;
         if (selectedKey) markKeyModelCooldown(selectedKey, activeModel, err);
+        continue;
       }
-      if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
+      if (selectedKey && classified.isInvalidKey) {
+        markKeyInvalidOrSuspended(selectedKey);
+        quotaOrAuthHops++;
+        continue;
+      }
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+        quotaOrAuthHops++;
+        continue;
       }
 
-      const delayMs = activeProfile.retryDelaysMs[attempt - 1] || 2000;
+      renderAttempts++;
+      const delayMs = activeProfile.retryDelaysMs[Math.min(2, renderAttempts - 1)] || 1800;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
-      if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
+      if (renderAttempts < maxRetries) {
+        if (onRetry) onRetry(renderAttempts, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
+        if (onRetry) onRetry(renderAttempts, maxRetries, `${cleanErr} (final sebelum lewati)`);
       }
     }
   }
 
-  // Always classify repeated 429 failures as AllKeysExhaustedError so AutoPilot pauses/recovers instead of skipping 40 items!
-  if (sawQuotaError) {
-    throw new AllKeysExhaustedError('Kuota/Rate Limit (429) aktif di jalur Gemini — mengaktifkan jeda pemulihan...');
-  }
-
-  if (hasClientKeys && !uniqueClientKeys.every((k) => quarantinedKeys.has(k))) {
-    const anyHealthy = modelsAvailable.some((m) => !!getBestHealthyKey(uniqueClientKeys, m));
-    if (!anyHealthy) {
-      throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
-    }
+  // Always classify exhausted key pool / repeated 429s as AllKeysExhaustedError cleanly
+  const finalPoolStatus = hasClientKeys ? getKeyPoolCooldownStatus(uniqueClientKeys, modelsAvailable) : null;
+  if (sawQuotaError || (finalPoolStatus && !finalPoolStatus.availableNow && !finalPoolStatus.allInvalid)) {
+    throw new AllKeysExhaustedError(
+      finalPoolStatus?.allDailyExhausted
+        ? 'Kuota harian (RPD) seluruh API Key pada model ini telah tercapai.'
+        : 'Kuota/Rate Limit (429) aktif di jalur Gemini — mengaktifkan jeda pemulihan...'
+    );
   }
 
   throw new Error(`Gagal setelah ${maxRetries}x percobaan cerdas: ${lastError?.message || 'API limit/timeout'}. Prompt dilewati dan tersimpan untuk dicoba ulang.`);
@@ -3226,37 +3601,33 @@ async function generateImageToMotionDirect(
   const effectiveGlow = effectiveGs ? false : neonGlow;
 
   const visionPrompt = resolvedType === 'bg'
-    ? `Microstock Background Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME seluruh komposisi GAMBAR REFERENSI BACKGROUND ini menjadi animasi Canvas 2D 60 FPS murni yang hampir identik secara visual (tata letak, lapisan kedalaman, horizon, pola garis/gelombang/kisi, arah cahaya, dan palet warna HEX persis gambar).
-ATURAN FULL-BLEED BACKGROUND (-0.08*w..1.08*w, -0.08*h..1.08*h):
-1. Mulai dengan G.bgBackdrop(w, h, c0, c1, c2, dir) memakai warna HEX dominan gambar.
-2. Bangun minimal 2 lapisan struktur & elemen latar sesuai analisa detail gambar referensi (misal lengkung gelombang G.wave, pita G.capsule, kisi/perspektif garis, puncak gunung G.poly, lengkung orbit G.ring, dedaunan tepi G.leaf) yang mengisi seluruh frame dari sisi ke sisi.
-3. Berikan gerakan 60 FPS profesional sesuai karakter visual gambar (parallax kedalaman halus, arus gelombang kontinyu, geser kisi/garis kecepatan, sapuan cahaya diagonal) — JANGAN mengecilkan gambar menjadi stiker ikon di tengah canvas, JANGAN membuat partikel acak berantakan.
-${!effectiveGlow ? 'Matikan glow berlebihan (shadowBlur=0).' : 'Gunakan shadowBlur=8 secukupnya pada aksen cahaya terang lalu reset 0.'}
-${customInstructions ? `Instruksi khusus: ${customInstructions}` : ''}
-HELPERS G: ${HELPERS_G_VISION_DOC}
-Outputkan HANYA blok metadata JSON + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
+    ? `BG Vision-to-Motion Engineer. Rekonstruksi FULL-FRAME gambar referensi menjadi Canvas 2D 60 FPS (tata letak, lapisan kedalaman, horizon/gelombang/kisi, HEX palette persis).
+ATURAN (-0.08*w..1.08*w,-0.08*h..1.08*h): (1) G.bgBackdrop(w,h,c0,c1,c2,dir) warna dominan; (2) min 2 lapisan gerak tepi-ke-tepi (G.wave/G.capsule/G.poly/G.ring/G.leaf/kisi); (3) parallax/arus halus, NO center sticker, NO loose dots.
+${!effectiveGlow ? 'shadowBlur=0.' : 'shadowBlur=8 accents(reset 0).'}${customInstructions ? ` Catatan: ${customInstructions}` : ''}
+${HELPERS_G_VISION_DOC}
+Output HANYA JSON + RAW JS (no md/HTML/canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`
-    : `Canvas 2D Motion Coder. Rekonstruksi objek GAMBAR REFERENSI menjadi animasi ikon microstock 60 FPS JS murni berpusat via G.part(cx, cy+hoverY, rot, 1, 1, fn) skala R=S*0.80.
-Mulai isi drawFrame dengan 1 baris komentar // PLAN: base=...; joints=...; move=...
-Gerak OTOMATIS sesuai karakter objek gambar (mis. bel berayun, roda/gearWheel berputar, grafik G.bar/G.pie naik halus tanpa <0.14*R, jantung berdenyut, atau floating tegak rot=0 — JANGAN memutar objek tegak 360 derajat, JANGAN berkedip hilang via if(sin>0)).
-Mode: ${colorMode} | ${effectiveGs ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect' : effectiveGlow ? 'BG Gelap (#080c14): shadowBlur=8 accents (reset 0), rim lw=Math.max(2.2,0.034*R)' : 'BG Gelap (#080c14): shadowBlur=0 crisp vector, rim lw=Math.max(2.2,0.034*R)'}.
-${customInstructions ? `Instruksi: ${customInstructions}` : ''}
-HELPERS G: ${HELPERS_G_VISION_DOC}
-ATURAN: (1) Semua (x,y) pada G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (lapisan belakang dulu -> badan utama -> emblem/ikon depan TERAKHIR) dengan rim seragam; (3) Semua shape WAJIB berada di dalam ONE root G.part(cx,cy+hoverY,...) memakai anchor sambungan rapat (overlap >=0.04*R mengisi proporsional [-0.58*R,+0.58*R]), ZERO bagian lepas di pojok luar, ZERO piringan lingkaran latar gelap di belakang ikon, ZERO kotak/garis transparan, ZERO gerigi liar.
-Outputkan HANYA blok metadata + fungsi RAW JS (tanpa markdown/HTML/deklarasi canvas/ctx/w/h/cx/cy/S/G):
+    : `Canvas 2D Motion Coder. Rekonstruksi objek gambar menjadi ikon microstock 60 FPS dalam ONE G.part(cx,cy+hoverY,rot,1,1,fn) skala R=S*0.80.
+Line1 drawFrame: // PLAN: base=...; joints=...; move=...
+Gerak sesuai karakter objek (bel ayun, gear/roda putar, G.bar/G.pie naik halus>=0.14*R, atau floating tegak rot=0; JANGAN rotasi 360 objek tegak, JANGAN kedip if(sin>0)).
+Mode:${colorMode} | ${effectiveGs ? 'GS(#00ff00): solid non-green, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), no bg fillRect' : effectiveGlow ? 'DARK(#080c14): shadowBlur=8 accents(reset 0), rim lw=Math.max(2.2,0.034*R)' : 'CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R)'}.${customInstructions ? ` Catatan: ${customInstructions}` : ''}
+${HELPERS_G_VISION_DOC}
+ATURAN: (1) Semua (x,y) di G adalah TITIK TENGAH (HANYA G.bar pakai yBottom); (2) PAINTER ORDER (belakang->badan->emblem depan); (3) Semua shape wajib di dalam ONE root G.part bersambungan rapat (overlap>=0.04*R di [-0.58*R,+0.58*R]), ZERO part lepas pojok/piringan latar belakang/kotak transparan.
+Output HANYA JSON + RAW JS (no md/HTML/canvas/ctx/w/h/cx/cy/S/G):
 <script type="application/json" id="shape-analysis">{"objectName":"...","shapeDescription":"...","detectedElements":[],"professionalMotionPlan":"...","similaritySynthesis":"...","glowColor":"#38bdf8"}</script>
 function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
 
   const config: any = {
     temperature: 0.15,
-    maxOutputTokens: resolvedType === 'bg' ? 1900 : 1750,
+    maxOutputTokens: resolvedType === 'bg' ? 1450 : 1250,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'vision');
   if (smartThinking) config.thinkingConfig = smartThinking;
 
   const visionProfile = getModelExecutionProfile(targetModel);
   const visionTimeoutMs = Math.min(48000, visionProfile.timeoutMs + 6000);
+  recordKeyModelDispatch(cleanKey, targetModel, 950);
   let response: any;
   try {
     response = await withModelTimeout(
@@ -3304,6 +3675,7 @@ function drawFrame(ctx, w, h, cx, cy, S, t) { ... }`;
     }
   }
 
+  adjustRecentDispatchActualTokens(cleanKey, targetModel, response?.usageMetadata);
   const rawText = response?.text || '';
   const cleanHTML = extractHTML(rawText, effectiveGs);
   const check = verifyCanvasAnimationHtml(cleanHTML, effectiveGs, resolvedType);
@@ -3393,18 +3765,22 @@ export async function generateImageToMotion(
   let modelCursor = 0;
 
   let lastError: any = null;
-  let didWaitForCooldown = false;
+  let cooldownWaitCount = 0;
   let sawQuotaError = false;
+  let renderAttempts = 0;
+  let quotaOrAuthHops = 0;
+  const maxQuotaHops = hasClientKeys ? Math.min(30, Math.max(maxRetries * 2, Math.ceil(uniqueClientKeys.length * 0.3))) : maxRetries;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+  while (renderAttempts < maxRetries && quotaOrAuthHops < maxQuotaHops) {
+    const attempt = renderAttempts + 1;
     let activeModel = modelsAvailable[Math.min(modelCursor, modelsAvailable.length - 1)];
     const activeProfile = getModelExecutionProfile(activeModel);
-    let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel) : undefined;
+    let selectedKey = hasClientKeys ? getBestHealthyKey(uniqueClientKeys, activeModel, 1200) : undefined;
 
     if (hasClientKeys && !selectedKey) {
       let foundAlt = false;
       for (let mIdx = 0; mIdx < modelsAvailable.length; mIdx++) {
-        const altKey = getBestHealthyKey(uniqueClientKeys, modelsAvailable[mIdx]);
+        const altKey = getBestHealthyKey(uniqueClientKeys, modelsAvailable[mIdx], 1200);
         if (altKey) {
           activeModel = modelsAvailable[mIdx];
           selectedKey = altKey;
@@ -3414,17 +3790,24 @@ export async function generateImageToMotion(
         }
       }
       if (!foundAlt) {
-        const waitMs = !didWaitForCooldown ? getEarliestCooldownWaitMs(uniqueClientKeys, modelsAvailable) : 0;
-        if (waitMs > 0 && waitMs <= 68000) {
-          didWaitForCooldown = true;
+        const poolStatus = getKeyPoolCooldownStatus(uniqueClientKeys, modelsAvailable);
+        if (poolStatus.allInvalid || poolStatus.reason === 'no_valid_keys') {
+          throw new Error('Semua API Key tidak valid atau ditolak (401/403). Periksa daftar API Key Anda.');
+        }
+        if (!poolStatus.allDailyExhausted && poolStatus.earliestWaitMs > 0 && cooldownWaitCount < 2) {
+          cooldownWaitCount++;
           if (onRetry) {
-            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(waitMs / 1000)}s...`);
+            onRetry(attempt, maxRetries, `Kuota RPM/TPM penuh, menunggu pemulihan otomatis ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`);
           }
-          await new Promise((r) => setTimeout(r, waitMs));
-          attempt = Math.max(0, attempt - 1);
+          await new Promise((r) => setTimeout(r, poolStatus.earliestWaitMs));
+          modelCursor = 0;
           continue;
         }
-        throw new AllKeysExhaustedError('Semua API Key sedang dalam masa pendinginan kuota (429).');
+        throw new AllKeysExhaustedError(
+          poolStatus.allDailyExhausted
+            ? 'Kuota harian (RPD) seluruh API Key pada model ini telah tercapai.'
+            : 'Semua API Key sedang dalam masa pendinginan kuota (429).'
+        );
       }
     }
 
@@ -3454,8 +3837,9 @@ export async function generateImageToMotion(
           const classified = classifyGeminiError(clientErr);
           if (classified.isInvalidKey) {
             markKeyInvalidOrSuspended(selectedKey);
+            quotaOrAuthHops++;
             lastError = new Error('API Key tidak valid/dibatasi, memutar ke key sehat...');
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
               continue;
             }
@@ -3464,8 +3848,9 @@ export async function generateImageToMotion(
           if (classified.isPermissionDenied) {
             markModelUnsupportedCached(activeModel);
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            quotaOrAuthHops++;
             lastError = new Error(diagnoseGooglePermissionReason(classified.message));
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, `Akses model ${activeModel} dibatasi, beralih model...`);
               continue;
             }
@@ -3473,14 +3858,28 @@ export async function generateImageToMotion(
           }
           if (classified.isQuota) {
             sawQuotaError = true;
+            quotaOrAuthHops++;
             markKeyModelCooldown(selectedKey, activeModel, clientErr);
-            if (!getBestHealthyKey(uniqueClientKeys, activeModel) || attempt >= 2) {
-              modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
-            }
-            lastError = new Error(`Key kena limit 429 di ${activeModel}, memutar ke key/model lain`);
-            if (attempt < maxRetries) {
+            lastError = new Error(`Key kena limit 429 di ${activeModel}, memutar ke key sehat lain`);
+            const nextHealthyOnSame = getBestHealthyKey(uniqueClientKeys, activeModel, 1200);
+            if (nextHealthyOnSame) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
-              await new Promise((r) => setTimeout(r, activeProfile.retryDelaysMs[attempt - 1] || 2000));
+              await new Promise((r) => setTimeout(r, 280));
+              continue;
+            }
+            modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            if (quotaOrAuthHops < maxQuotaHops) {
+              const quotaPause = uniqueClientKeys.length >= 10 ? 450 : (activeProfile.retryDelaysMs[Math.min(2, attempt - 1)] || 1800);
+              if (onRetry) onRetry(attempt, maxRetries, lastError.message);
+              await new Promise((r) => setTimeout(r, quotaPause));
+              continue;
+            }
+            const poolStatus = getKeyPoolCooldownStatus(uniqueClientKeys, modelsAvailable);
+            if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && poolStatus.earliestWaitMs > 0 && cooldownWaitCount < 2) {
+              cooldownWaitCount++;
+              if (onRetry) onRetry(attempt, maxRetries, `Menunggu pemulihan kuota 429 selama ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`);
+              await new Promise((r) => setTimeout(r, poolStatus.earliestWaitMs));
+              quotaOrAuthHops = Math.max(0, quotaOrAuthHops - 4);
               continue;
             }
             throw new AllKeysExhaustedError(`Limit kuota 429 di ${activeModel} — seluruh jalur pendinginan.`);
@@ -3488,15 +3887,15 @@ export async function generateImageToMotion(
           if (classified.isNotFound) {
             markModelUnsupportedCached(activeModel);
             modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+            quotaOrAuthHops++;
             lastError = new Error(`Model ${activeModel} belum tersedia, beralih model...`);
-            if (attempt < maxRetries) {
+            if (quotaOrAuthHops < maxQuotaHops) {
               if (onRetry) onRetry(attempt, maxRetries, lastError.message);
               continue;
             }
             throw lastError;
           }
           if (!classified.isNetworkError && classified.message !== 'NETWORK_OR_NO_CLIENT_KEY') {
-            // Keep selected smart vision model on verifier defect retries instead of downgrading to lite
             throw clientErr;
           }
         }
@@ -3547,21 +3946,30 @@ export async function generateImageToMotion(
       const classified = classifyGeminiError(err);
       if (classified.isQuota) {
         sawQuotaError = true;
+        quotaOrAuthHops++;
         if (selectedKey) markKeyModelCooldown(selectedKey, activeModel, err);
+        continue;
       }
-      if (selectedKey && classified.isInvalidKey) markKeyInvalidOrSuspended(selectedKey);
+      if (selectedKey && classified.isInvalidKey) {
+        markKeyInvalidOrSuspended(selectedKey);
+        quotaOrAuthHops++;
+        continue;
+      }
       if (classified.isNotFound) {
         markModelUnsupportedCached(activeModel);
         modelCursor = Math.min(modelCursor + 1, modelsAvailable.length - 1);
+        quotaOrAuthHops++;
+        continue;
       }
 
-      const delayMs = activeProfile.retryDelaysMs[attempt - 1] || 2000;
+      renderAttempts++;
+      const delayMs = activeProfile.retryDelaysMs[Math.min(2, renderAttempts - 1)] || 2000;
       const cleanErr = err?.message || 'Kendala jaringan/kuota';
-      if (attempt < maxRetries) {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
+      if (renderAttempts < maxRetries) {
+        if (onRetry) onRetry(renderAttempts, maxRetries, `${cleanErr} (jeda ${(delayMs / 1000).toFixed(1)}s)`);
         await new Promise((res) => setTimeout(res, delayMs));
       } else {
-        if (onRetry) onRetry(attempt, maxRetries, `${cleanErr} (final sebelum lewati)`);
+        if (onRetry) onRetry(renderAttempts, maxRetries, `${cleanErr} (final sebelum lewati)`);
       }
     }
   }

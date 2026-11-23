@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GeminiModel, ApiKeyTestResult, ModelHealthDiagnostic } from '../types';
-import { testSingleApiKey, testKeyAcrossModels, extractCleanApiKey } from '../services/geminiService';
+import { testSingleApiKey, testKeyAcrossModels, extractCleanApiKey, getModelExecutionProfile } from '../services/geminiService';
 import { detectDeviceHardware, HardwareProfile } from '../services/hardwareService';
 
 interface ApiKeyModalProps {
@@ -294,16 +294,39 @@ export const ApiKeyModal: React.FC<ApiKeyModalProps> = ({
                   onChange={(e) => setModelValue(e.target.value as GeminiModel)}
                   className="w-full bg-gray-950 border border-gray-800 rounded-xl p-3 text-xs font-semibold text-gray-200 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
-                  <option value="gemini-3.8-flash">Gemini 3.8 Flash (Next-Gen Flagship • Animasi Super Pintar & Detail Kompleks)</option>
-                  <option value="gemini-3.6-flash">Gemini 3.6 Flash (Pintar, Elegan & Animasi Modern Kompleks)</option>
-                  <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (Next-Gen Ultra Cepat • Super Pintar & Hemat Kuota)</option>
-                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Super Ringan & Efisiensi Token Tinggi)</option>
-                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Cepat ~1.2s • Hemat Kuota • Direkomendasikan)</option>
-                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (Kualitas Tinggi, Detail Kompleks & Rigging Presisi)</option>
+                  <option value="gemini-3.8-flash">Gemini 3.8 Flash (10 RPM • 250K TPM • 250 RPD | Flagship Cerdas)</option>
+                  <option value="gemini-3.6-flash">Gemini 3.6 Flash (10 RPM • 250K TPM • 250 RPD | Jalur 3.8)</option>
+                  <option value="gemini-3.5-flash-lite">Gemini 3.5 Flash Lite (15 RPM • 250K TPM • 1.000 RPD | Hemat Kuota)</option>
+                  <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (30 RPM • 250K TPM • 1.000 RPD | RPM Tertinggi)</option>
+                  <option value="gemini-2.5-flash">Gemini 2.5 Flash (10 RPM • 250K TPM • 250 RPD | Stabil)</option>
+                  <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview (5 RPM • 250K TPM • 100 RPD | Rigging Pro)</option>
                 </select>
 
+                {(() => {
+                  const prof = getModelExecutionProfile(modelValue);
+                  const activeKeyTotal = Math.max(1, currentLines.length);
+                  return (
+                    <div className="bg-slate-950/70 border border-gray-800 rounded-xl p-2.5 text-[11px] flex flex-wrap items-center justify-between gap-2 text-gray-300">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-sky-500/15 text-sky-300 border border-sky-500/30 font-mono">
+                          {prof.rpmLimitPerKey} RPM (Aman: {prof.safeRpmPerKey})/key
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-mono">
+                          {Math.round(prof.tpmLimitPerKey / 1000)}K TPM (~{prof.estimatedTokensPerAnim} tok/anim)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-mono">
+                          {prof.rpdLimitPerKey} RPD/key
+                        </span>
+                      </div>
+                      <span className="text-[10.5px] text-gray-400 font-medium">
+                        Kapasitas {activeKeyTotal} key: ~{(prof.safeRpmPerKey * activeKeyTotal).toLocaleString()} req/mnt • {(prof.rpdLimitPerKey * activeKeyTotal).toLocaleString()} RPD
+                      </span>
+                    </div>
+                  );
+                })()}
+
                 <p className="text-[11px] text-sky-400/90 flex items-center gap-1">
-                  <i className="fa-solid fa-circle-check"></i> Seluruh model kini dilengkapi Hierarchical Rigid Rigging (bentuk proporsional, bebas salah gerak, dan objek tidak terpisah).
+                  <i className="fa-solid fa-circle-check"></i> Rotasi multi-key menyebar beban melampaui batas proyek &amp; menjaga token tetap irit tanpa mengorbankan detail bentuk animasi.
                 </p>
 
                 {/* Model Compatibility Diagnostic Card */}

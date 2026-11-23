@@ -7,7 +7,13 @@ import {
   AnimationItem,
   GeminiModel,
 } from '../types';
-import { generateImageToMotion, getAdaptiveModelPacingDelay, AllKeysExhaustedError } from '../services/geminiService';
+import {
+  generateImageToMotion,
+  getAdaptiveModelPacingDelay,
+  getKeyPoolCooldownStatus,
+  buildModelFallbackChain,
+  AllKeysExhaustedError,
+} from '../services/geminiService';
 import { renderHtmlToVideo } from '../services/videoRenderer';
 import JSZip from 'jszip';
 
@@ -311,7 +317,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   };
 
   // Process a single item (returns 'ok' | 'error' | 'exhausted')
-  const processSingleItem = async (item: ImageToMotionItem): Promise<'ok' | 'error' | 'exhausted'> => {
+  const processSingleItem = async (item: ImageToMotionItem, suppressQuotaPopup = false): Promise<'ok' | 'error' | 'exhausted'> => {
     setCurrentProcessingId(item.id);
     const accName = item.projectName || currentAccountName || 'Akun Utama';
 
@@ -440,8 +446,16 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       return 'ok';
     } catch (err: any) {
       const isExhausted = err instanceof AllKeysExhaustedError || !!err?.isAllKeysExhausted;
-      if (isExhausted && onModelQuotaExceeded) {
-        onModelQuotaExceeded(selectedModel);
+      if (isExhausted && !suppressQuotaPopup) {
+        const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+          addLog(`⏳ [Image to Motion] Kuota RPM/TPM sementara penuh — menunggu pemulihan ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s lalu mencoba "${item.fileName}" lagi...`, 'warn');
+          await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
+          return processSingleItem(item, true);
+        }
+        if ((poolStatus.allDailyExhausted || poolStatus.allInvalid) && onModelQuotaExceeded) {
+          onModelQuotaExceeded(selectedModel);
+        }
       }
       const errorMsg = err?.message || 'Gagal memproses animasi gambar';
       onUpdateItem(item.id, { status: 'error', progress: 0, error: errorMsg });
@@ -497,6 +511,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     );
 
     // Loop through pending items sequentially from top (index 0) downwards
+    let consecutiveExhausted = 0;
     for (let i = 0; i < targetItems.length; i++) {
       if (!autoPilotRef.current.isRunning) {
         addLog('[Auto Pilot] Proses dihentikan oleh pengguna.', 'warn');
@@ -530,8 +545,19 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         'info'
       );
 
-      const statusRes = await processSingleItem(currentItem);
+      let statusRes = await processSingleItem(currentItem, true);
+      if (statusRes === 'exhausted') {
+        const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+          addLog(`⏳ [Auto Pilot] Kuota RPM/TPM penuh sementara — menunggu ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s lalu mencoba "${currentItem.fileName}" lagi...`, 'warn');
+          await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
+          statusRes = await processSingleItem(currentItem, true);
+        }
+      }
+
       const success = statusRes === 'ok';
+      if (success) consecutiveExhausted = 0;
+      else if (statusRes === 'exhausted') consecutiveExhausted++;
       completedOverall++;
 
       const updatedPercent = Math.round((completedOverall / totalToProcess) * 100);
@@ -558,11 +584,24 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           'success'
         );
       } else if (statusRes === 'exhausted') {
+        const poolAfter = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        const mustStop =
+          poolAfter.allDailyExhausted ||
+          poolAfter.allInvalid ||
+          (consecutiveExhausted >= 3 && !poolAfter.availableNow) ||
+          consecutiveExhausted >= 5;
+        if (mustStop) {
+          addLog(
+            `⏸️ [Auto Pilot Dijeda] Kuota harian (RPD) / seluruh jalur API Key tercapai pada "${currentItem.fileName}". Silakan ganti model atau tambahkan API Key lalu lanjutkan antrian.`,
+            'warn'
+          );
+          if (onModelQuotaExceeded) onModelQuotaExceeded(selectedModel);
+          break;
+        }
         addLog(
-          `⏸️ [Auto Pilot Dijeda] Kuota seluruh API Key habis pada "${currentItem.fileName}". Silakan ganti model atau tambahkan API Key lalu lanjutkan antrian.`,
+          `⚠️ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" sementara limit 429 (${poolAfter.readyPairs} jalur key masih siap) — lanjut ke antrian berikutnya...`,
           'warn'
         );
-        break;
       } else {
         addLog(
           `⚠️ [Antrian #${i + 1}/${totalToProcess}] "${currentItem.fileName}" kendala, otomatis lanjut ke antrian berikutnya...`,
@@ -619,6 +658,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
     );
     showToast(`🔄 Mencoba ulang ${totalToRetry} item yang gagal...`, 'info');
 
+    let consecutiveExhausted = 0;
     for (let i = 0; i < failedItems.length; i++) {
       if (!autoPilotRef.current.isRunning) break;
 
@@ -644,15 +684,34 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
       });
 
       addLog(`🔄 [Coba Ulang #${i + 1}/${totalToRetry}] Memproses "${currentItem.fileName}"...`, 'info');
-      const statusRes = await processSingleItem(currentItem);
+      let statusRes = await processSingleItem(currentItem, true);
+      if (statusRes === 'exhausted') {
+        const poolStatus = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        if (!poolStatus.availableNow && !poolStatus.allDailyExhausted && !poolStatus.allInvalid && poolStatus.earliestWaitMs > 0) {
+          addLog(`⏳ [Coba Ulang] Menunggu pemulihan kuota RPM/TPM ${Math.ceil(poolStatus.earliestWaitMs / 1000)}s...`, 'warn');
+          await new Promise((res) => setTimeout(res, poolStatus.earliestWaitMs));
+          statusRes = await processSingleItem(currentItem, true);
+        }
+      }
       completedRetries++;
 
       if (statusRes === 'ok') {
+        consecutiveExhausted = 0;
         addLog(`✅ [Coba Ulang #${i + 1}] Berhasil memperbaiki "${currentItem.fileName}"!`, 'success');
         showToast(`✅ Berhasil memperbaiki "${currentItem.fileName}"!`, 'success');
       } else if (statusRes === 'exhausted') {
-        addLog(`⏸️ [Coba Ulang Dijeda] Kuota seluruh API Key sedang habis.`, 'warn');
-        break;
+        consecutiveExhausted++;
+        const poolAfter = getKeyPoolCooldownStatus(apiKeys, buildModelFallbackChain(selectedModel));
+        const mustStop =
+          poolAfter.allDailyExhausted ||
+          poolAfter.allInvalid ||
+          (consecutiveExhausted >= 3 && !poolAfter.availableNow) ||
+          consecutiveExhausted >= 5;
+        if (mustStop) {
+          addLog(`⏸️ [Coba Ulang Dijeda] Kuota harian (RPD) / seluruh jalur API Key tercapai.`, 'warn');
+          if (onModelQuotaExceeded) onModelQuotaExceeded(selectedModel);
+          break;
+        }
       }
 
       if (autoPilotRef.current.isRunning && i < failedItems.length - 1) {
