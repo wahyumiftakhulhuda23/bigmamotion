@@ -854,6 +854,7 @@ export function verifyCanvasAnimationHtml(
       innerWidth: testW,
       innerHeight: testH,
       devicePixelRatio: 1,
+      __bigmaAudit: [],
       addEventListener: () => {},
       removeEventListener: () => {},
       requestAnimationFrame: (cb: (t: number) => void) => {
@@ -909,6 +910,9 @@ export function verifyCanvasAnimationHtml(
       (rafCallback as (t: number) => void)(350);
       if (capturedRenderError) {
         return { ok: false, reason: `Runtime error frame #1: ${capturedRenderError}` };
+      }
+      if (Array.isArray(mockWindow.__bigmaAudit) && mockWindow.__bigmaAudit.length > 0) {
+        return { ok: false, reason: `Geometri G tidak valid: ${mockWindow.__bigmaAudit[0]}` };
       }
       frame1Data = new Uint8ClampedArray(offCtx.getImageData(0, 0, offscreen.width, offscreen.height).data);
       (rafCallback as (t: number) => void)(1050);
@@ -2359,7 +2363,7 @@ async function generateAnimationDirect(
   const motionPlan = picked.plan;
 
   const colorStyleDirective = effGs
-    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect.`
+    ? `GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, contrasting rim (NEVER fill===rim!) lw=Math.max(2.4,0.036*R), NO bg fillRect.`
     : effGlow
     ? `DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`
     : `CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.`;
@@ -2367,10 +2371,10 @@ async function generateAnimationDirect(
   const geometryGuide = isBackground
     ? `FULL-BLEED MICROSTOCK BACKGROUND (must span -0.08*w..1.08*w & -0.08*h..1.08*h): Start with G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'), then paint 2 cohesive edge-to-edge depth & foreground motion layers tailored literally to "${promptTopic.slice(0, 75)}". NO centered hero sticker icon, NO sparse noisy dot confetti. Palette: c0="${seed.palette[0]}", c1="${seed.palette[1]}", c2="${seed.palette[2]}", c3="${seed.palette[3]}". Plan: ${motionPlan.anatomyHint}`
     : `MICROSTOCK HERO ICON (14-28 lines crisp JS):
-- Line 1 inside drawFrame MUST be a brief plan comment: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
-- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) with scale R=S*0.80 inside [-0.58*R,+0.58*R] (NEVER mix S with R!).
-- JOINT ANCHORS & PAINTER ORDER: Compute seam variables first — e.g. var lw=Math.max(2.2,0.034*R), bw=0.66*R, bh=0.46*R, y0=0.06*R, topY=y0-bh*0.5; then weld roof/handle/shackle directly onto topY+/-0.04*R! Center-anchored helpers: G.box/trap/uArc/crest/cloudShape/gearWheel/heartShape/dropShape/disc/oval/dome/grid/bolt/cross/leaf/ngon/star take center (x,y); ONLY G.bar takes yBottom.
-- ZERO SLOP & ARTICULATED MOTION: Keep upright icons upright (rot=0); animate ONLY functional sub-parts anchored at true joints! ZERO floating corner dots/confetti, ZERO ground shadow ovals underneath, ZERO dark circular backing discs behind square/object icons, NEVER hide parts via if(sin>0).
+- Line 1 inside drawFrame MUST be: // PLAN: base=<shape>; joints=<how parts connect>; move=<what moves>
+- Draw inside ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) inside [-0.58*R,+0.58*R]; inner sub-groups use G.part(ax,ay,r2,sx,sy,function(){ ... }) WITHOUT re-passing R!
+- JOINT ANCHORS & SIGNATURES: Use seam vars (topY=y0-bh*0.5); weld attachments +/-0.04*R. Use G.percent for %; G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for segments; G.trap takes 9 args; ONLY G.bar takes yBottom.
+- ZERO SLOP: Upright icons stay upright (rot=0); ZERO floating corner dots, ground ovals, or dark circular discs behind non-round icons; NEVER hide parts via if(sin>0).
 - Anatomy (${promptTopic.slice(0, 70)}): ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
@@ -2378,7 +2382,7 @@ async function generateAnimationDirect(
 
   const systemPrompt = `Senior Microstock 60 FPS Canvas 2D Motion Designer. Return ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no markdown/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}]
+SPEC [${seed.tag}]: "${promptTopic}" (${subCategory}) | Style: ${style} | Palette: ${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] (match prompt colors first!)
 - ${geometryGuide}
 - Motion (${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
 - ${colorStyleDirective}${fixNote}`;
@@ -2517,14 +2521,14 @@ async function generateAnimationBatchDirect(
   const effGlow = effGs ? false : neonGlow;
 
   const colorStyleDirective = effGs
-    ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, rim lw=Math.max(2.4,0.036*R), NO bg fillRect.'
+    ? 'GREEN SCREEN (#00ff00): solid non-green colors, shadowBlur=0, contrasting rim (NEVER fill===rim!) lw=Math.max(2.4,0.036*R), NO bg fillRect.'
     : effGlow
     ? 'DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.'
     : 'CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.';
 
   const geometryGuide = isBackground
     ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
-    : 'MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R]. Use shared seam variables (e.g. topY=y0-bh*0.5) so parts weld/overlap >=0.04*R (ONLY G.bar uses yB); keep upright icons upright (rot=0) & articulate connected sub-parts logically; ZERO floating corner dots, ground ovals, or circle soup.';
+    : 'MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R] (inner G.part uses function(){} without shadowing R!). Use seam variables so parts weld/overlap >=0.04*R; use G.percent for %, G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for lines, G.trap takes 9 args, ONLY G.bar uses yB; ZERO floating corner dots or ground ovals.';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
   const batchPlanSeen = new Set<string>();
@@ -2543,7 +2547,7 @@ async function generateAnimationBatchDirect(
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
 ${helpersDoc}
 SPEC: ${geometryGuide}
-Style: ${style} | Palette: ${colorMode} | ${colorStyleDirective}
+Style: ${style} | Palette: ${colorMode} (match prompt colors first!) | ${colorStyleDirective}
 STRICT ANTI-CLONE RULE: Each ANIM_i MUST depict the exact, literal distinct object/scene of its own prompt with different primary silhouette geometry, proportions & sub-part layout from all other slots! NEVER reuse the same layout/shape between ANIM_0 and ANIM_1!
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:

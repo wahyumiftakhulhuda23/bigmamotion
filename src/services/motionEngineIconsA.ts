@@ -42,6 +42,21 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         if (typeof rimCol === 'number') return { r: defRim || '#f8fafc', t: G._t(rimCol) };
         return { r: rimCol || defRim || '#f8fafc', t: G._t(t) };
       },
+      _audit: function(msg) {
+        if (typeof window !== 'undefined' && window.__bigmaAudit && window.__bigmaAudit.length < 4) {
+          window.__bigmaAudit.push(msg);
+        }
+      },
+      _gsRim: function(fill, rim) {
+        if (!rim) return rim;
+        if (typeof __bigmaGS === 'undefined' || !__bigmaGS) return rim;
+        if (typeof fill === 'string' && typeof rim === 'string' && fill.trim().toLowerCase() === rim.trim().toLowerCase()) {
+          var hx = fill.trim().toLowerCase();
+          var isLight = hx === '#ffffff' || hx === '#fff' || hx === '#f8fafc' || hx === '#fef08a' || hx === '#fffbeb' || hx === '#facc15' || hx === '#fde047';
+          return isLight ? '#0f172a' : '#f8fafc';
+        }
+        return rim;
+      },
       _blendGS: function(r, g, b, ea) {
         if (ea < 0.16) return 'rgba(0,0,0,0)';
         var rr = Math.max(0, Math.min(255, Math.round(r)));
@@ -118,18 +133,24 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         return gsA < 0.16 ? 'rgba(0,0,0,0)' : c;
       },
       grad: function(c1, c2, c3, x0, y0, x1, y1) {
-        var gx0 = x0, gy0 = y0, gx1 = x1, gy1 = y1, mid = c3;
-        if (typeof c3 === 'number') { gx0 = c3; gy0 = x0; gx1 = y0; gy1 = x1; mid = null; }
-        if (typeof gx0 !== 'number' || !isFinite(gx0)) gx0 = -100;
-        if (typeof gy0 !== 'number' || !isFinite(gy0)) gy0 = -100;
-        if (typeof gx1 !== 'number' || !isFinite(gx1)) gx1 = 100;
-        if (typeof gy1 !== 'number' || !isFinite(gy1)) gy1 = 100;
+        var args = Array.prototype.slice.call(arguments);
+        var cols = [];
+        var nums = [];
+        for (var ai = 0; ai < args.length; ai++) {
+          if (typeof args[ai] === 'number' && isFinite(args[ai])) nums.push(args[ai]);
+          else if (typeof args[ai] === 'string' && args[ai].trim()) cols.push(args[ai]);
+        }
+        var gx0 = nums.length >= 1 ? nums[0] : (typeof x0 === 'number' && isFinite(x0) ? x0 : -100);
+        var gy0 = nums.length >= 2 ? nums[1] : (typeof y0 === 'number' && isFinite(y0) ? y0 : -100);
+        var gx1 = nums.length >= 3 ? nums[2] : (typeof x1 === 'number' && isFinite(x1) ? x1 : 100);
+        var gy1 = nums.length >= 4 ? nums[3] : (typeof y1 === 'number' && isFinite(y1) ? y1 : 100);
         if (gx0 === gx1 && gy0 === gy1) { gx1 = gx0 + 1; gy1 = gy0 + 1; }
         var g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
-        var sc1 = G._c(c1 || '#ffffff'), sc2 = G._c(c2 || c1 || '#888888');
-        g.addColorStop(0, sc1);
-        if (mid) { g.addColorStop(0.52, sc2); g.addColorStop(1, G._c(mid)); }
-        else { g.addColorStop(1, sc2); }
+        if (cols.length === 0) cols = ['#ffffff', '#888888'];
+        else if (cols.length === 1) cols = [cols[0], cols[0]];
+        for (var ci = 0; ci < cols.length; ci++) {
+          g.addColorStop(cols.length === 1 ? 0 : ci / (cols.length - 1), G._c(cols[ci]));
+        }
         return g;
       },
       box: function(x, y, bw, bh, r, fill, rim, lw) {
@@ -140,6 +161,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         if (ctx.roundRect) ctx.roundRect(x - bw / 2, y - bh / 2, bw, bh, rr);
         else ctx.rect(x - bw / 2, y - bh / 2, bw, bh);
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       bar: function(x, yBase, bw, bh, r, fill, rim, lw) {
@@ -155,6 +177,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         x = G._n(x); y = G._n(y); r = Math.max(0.5, Math.abs(G._n(r, 1)));
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       oval: function(x, y, rx, ry, rot, fill, rim, lw) {
@@ -165,6 +188,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         if (ctx.ellipse) ctx.ellipse(x, y, rx, ry, G._n(rot, 0), 0, Math.PI * 2);
         else ctx.arc(x, y, (rx + ry) * 0.5, 0, Math.PI * 2);
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ring: function(x, y, r, thick, a0, a1, col) {
@@ -174,10 +198,14 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
       },
       poly: function(pts, fill, rim, lw, close) {
         if (!pts || pts.length < 2) return;
+        if (close === false && fill) {
+          G._audit('G.poly dengan fill wajib closed (jangan isi close=false)');
+        }
         ctx.beginPath(); ctx.moveTo(G._n(pts[0][0]), G._n(pts[0][1]));
         for (var i = 1; i < pts.length; i++) ctx.lineTo(G._n(pts[i][0]), G._n(pts[i][1]));
         if (close !== false) ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.5, G._n(lw, 1.5)); ctx.stroke(); }
       },
       ngon: function(x, y, r, n, rot, fill, rim, lw) {
@@ -195,8 +223,31 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         G.poly(pts, fill, rim, lw, true);
       },
       pill: function(x1, y1, x2, y2, thick, col) {
+        if (typeof thick === 'string' || (thick && typeof thick === 'object') || arguments.length < 6) {
+          G._audit('G.pill butuh 6 argumen garis (x1,y1,x2,y2,th,col); gunakan G.capsule(cx,cy,bw,bh,f,rim,lw) untuk bentuk pil');
+          if (typeof thick === 'string' && typeof col === 'number') {
+            G.capsule(x1, y1, Math.max(2, Math.abs(G._n(x2, 8))), Math.max(2, Math.abs(G._n(y2, 4))), thick, null, 0);
+            return;
+          }
+          if (typeof thick === 'string' && col == null) {
+            col = thick;
+            thick = 4;
+          }
+        }
         ctx.beginPath(); ctx.moveTo(G._n(x1), G._n(y1)); ctx.lineTo(G._n(x2), G._n(y2));
         ctx.strokeStyle = G._c(col || '#ffffff'); ctx.lineWidth = Math.max(1, Math.abs(G._n(thick, 4))); ctx.lineCap = 'round'; ctx.stroke();
+      },
+      line: function(x1, y1, x2, y2, thick, col) {
+        G.pill(x1, y1, x2, y2, thick, col);
+      },
+      percent: function(x, y, s, col, dotCol) {
+        x = G._n(x); y = G._n(y); s = Math.max(10, Math.abs(G._n(s, 32)));
+        var c1 = col || '#ffffff', c2 = dotCol || c1;
+        var th = Math.max(1.8, s * 0.125);
+        G.pill(x - s * 0.25, y + s * 0.34, x + s * 0.25, y - s * 0.34, th, c1);
+        var r = Math.max(1.8, s * 0.13);
+        G.ring(x - s * 0.23, y - s * 0.22, r, Math.max(1.5, th * 0.85), 0, Math.PI * 2, c2);
+        G.ring(x + s * 0.23, y + s * 0.22, r, Math.max(1.5, th * 0.85), 0, Math.PI * 2, c2);
       },
       arrow: function(x1, y1, x2, y2, thick, headLen, col) {
         x1 = G._n(x1); y1 = G._n(y1); x2 = G._n(x2); y2 = G._n(y2);
@@ -277,6 +328,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.lineTo(x + hx, y + hy);
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
       },
       wave: function(x, y, w, amp, freq, phase, th, col) {
@@ -386,8 +438,17 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         }
       },
       trap: function(x, y, tw, bw, h, r, fill, rim, lw) {
+        if (typeof r === 'string' || (r && typeof r === 'object')) {
+          G._audit('G.trap butuh 9 argumen: G.trap(x,y,tw,bw,h,r,f,rim,lw)');
+          if (arguments.length <= 8 && Math.abs(G._n(h, 0)) <= Math.abs(G._n(bw, 0)) * 0.28) {
+            lw = rim; rim = fill; fill = r; r = h; h = bw; bw = tw;
+          } else {
+            lw = rim; rim = fill; fill = r; r = 0;
+          }
+        }
         x = G._n(x); y = G._n(y);
         var utw = Math.max(2, Math.abs(G._n(tw, 40))), ubw = Math.max(2, Math.abs(G._n(bw, 60))), hh = Math.max(2, Math.abs(G._n(h, 40)));
+        if (hh < 4) G._audit('Tinggi G.trap terlalu pipih (<4px)');
         var hxT = utw * 0.5, hxB = ubw * 0.5, hy = hh * 0.5;
         var cr = Math.min(Math.max(0, G._n(r, 0)), hxT * 0.45, hxB * 0.45, hy * 0.45);
         ctx.beginPath();
@@ -407,6 +468,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         }
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(0.8, G._n(lw, 1.8)); ctx.stroke(); }
       },
       uArc: function(x, y, bw, bh, th, dir, col) {
@@ -454,6 +516,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.quadraticCurveTo(x - hw * 0.55, y - hh * 0.92, x, y - hh);
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
       },
       cloudShape: function(x, y, bw, bh, fill, rim, lw) {
@@ -467,6 +530,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.bezierCurveTo(x + hw * 0.98, y - h2 * 0.24, x + hw * 1.00, bot, x + hw * 0.56, bot);
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
       },
       gearWheel: function(x, y, r, teeth, rot, fill, holeCol, rim, lw) {
@@ -487,6 +551,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         }
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
         if (holeCol !== false) {
           G.disc(x, y, ro * 0.33, holeCol || '#0f172a', rim || null, Math.max(1, G._n(lw, 2) * 0.85));
@@ -501,6 +566,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.bezierCurveTo(x + hs * 0.56, y - hs * 0.48, x + hs * 0.62, y + hs * 0.04, x, y + hs * 0.44);
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
       },
       dropShape: function(x, y, s, rot, fill, rim, lw) {
@@ -515,6 +581,7 @@ export const ENGINE_BASE_PRIMITIVES_JS = `
         ctx.bezierCurveTo(-ds * 0.44, ds * 0.48, -ds * 0.46, -ds * 0.02, 0, -ds * 0.54);
         ctx.closePath();
         if (fill) { ctx.fillStyle = G._c(fill); ctx.fill(); }
+        rim = G._gsRim(fill, rim);
         if (rim) { ctx.strokeStyle = G._c(rim); ctx.lineWidth = Math.max(1, G._n(lw, 2)); ctx.stroke(); }
         ctx.restore();
       },

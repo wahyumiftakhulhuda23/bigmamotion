@@ -9,7 +9,7 @@ export const STUDIO_GEOMETRY_ENGINE_JS = `${ENGINE_BASE_PRIMITIVES_JS}${ENGINE_H
     };`;
 
 export const HELPERS_G_BASE_DOC =
-  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.trap(x,y,tw,bw,h,r,f,rim,lw) | G.uArc(x,y,w,h,th,dir,col) | G.crest(x,y,bw,bh,f,rim,lw) | G.cloudShape(x,y,bw,bh,f,rim,lw) | G.gearWheel(x,y,r,teeth,rot,f,hC,rim,lw) | G.heartShape(x,y,s,f,rim,lw) | G.dropShape(x,y,s,rot,f,rim,lw) | G.curveArc(x1,y1,cx1,cy1,x2,y2,th,col) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.dome(x,y,bw,bh,f,rim,lw) | G.wave(x,y,w,amp,freq,ph,th,col) | G.grid(x,y,bw,bh,cols,rows,r,act,f,aF,rim,lw) | G.bolt(x,y,s,f,rim,lw) | G.cross(x,y,s,th,f,rim,lw) | G.leaf(x,y,s,rot,f,rim,lw) | G.part(tx,ty,rot,sx,sy,fn)';
+  'G.grad(c1,c2,c3,x0,y0,x1,y1) | G.box(x,y,bw,bh,r,f,rim,lw) | G.bar(x,yB,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.poly(pts,f,rim,lw,cl) | G.trap(x,y,tw,bw,h,r,f,rim,lw) | G.uArc(x,y,w,h,th,dir,col) | G.crest(x,y,bw,bh,f,rim,lw) | G.cloudShape(x,y,bw,bh,f,rim,lw) | G.gearWheel(x,y,r,teeth,rot,f,hC,rim,lw) | G.heartShape(x,y,s,f,rim,lw) | G.dropShape(x,y,s,rot,f,rim,lw) | G.curveArc(x1,y1,cx1,cy1,x2,y2,th,col) | G.ngon(x,y,r,n,rot,f,rim) | G.star(x,y,ro,ri,n,rot,f,rim) | G.pill(x1,y1,x2,y2,th,col) | G.percent(x,y,s,col,dC) | G.arrow(x1,y1,x2,y2,th,hL,col) | G.person(x,y,s,b,h,rim) | G.check(x,y,s,th,col) | G.pie(x,y,r,a0,sw,sC,bC,rim) | G.rays(x,y,rI,rO,n,rot,th,col) | G.dome(x,y,bw,bh,f,rim,lw) | G.wave(x,y,w,amp,freq,ph,th,col) | G.grid(x,y,bw,bh,cols,rows,r,act,f,aF,rim,lw) | G.bolt(x,y,s,f,rim,lw) | G.cross(x,y,s,th,f,rim,lw) | G.leaf(x,y,s,rot,f,rim,lw) | G.part(tx,ty,rot,sx,sy,fn)';
 
 export const HELPERS_G_HERO_DOC = '';
 
@@ -371,6 +371,75 @@ export interface VariationSeed {
   tag: string;
 }
 
+export const PROMPT_COLOR_FAMILIES: Array<{ re: RegExp; palettes: string[][] }> = [
+  {
+    re: /\b(red|crimson|scarlet|ruby|vermilion|maroon|merah)\b/i,
+    palettes: [
+      ['#450A0A', '#DC2626', '#F87171', '#FDE047'],
+      ['#7F1D1D', '#E11D48', '#FB7185', '#F8FAFC'],
+    ],
+  },
+  {
+    re: /\b(gold|golden|amber|yellow|brass|emas|kuning)\b/i,
+    palettes: [
+      ['#451A03', '#D97706', '#FBBF24', '#FEF08A'],
+      ['#422006', '#CA8A04', '#FACC15', '#FFFBEB'],
+    ],
+  },
+  {
+    re: /\b(blue|cobalt|azure|sapphire|navy|royal\s*blue|biru)\b/i,
+    palettes: [
+      ['#0F172A', '#2563EB', '#38BDF8', '#F8FAFC'],
+      ['#172554', '#0284C7', '#60A5FA', '#FACC15'],
+    ],
+  },
+  {
+    re: /\b(purple|violet|lavender|magenta|plum|ungu)\b/i,
+    palettes: [
+      ['#2E1065', '#7C3AED', '#C084FC', '#FDE047'],
+      ['#1E1B4B', '#9333EA', '#E879F9', '#F8FAFC'],
+    ],
+  },
+  {
+    re: /\b(orange|tangerine|coral|apricot|oranye|jingga)\b/i,
+    palettes: [
+      ['#431407', '#EA580C', '#FB923C', '#FEF08A'],
+      ['#7C2D12', '#F97316', '#FDBA74', '#F8FAFC'],
+    ],
+  },
+  {
+    re: /\b(pink|rose|fuchsia|blush|merah\s*muda)\b/i,
+    palettes: [
+      ['#500724', '#DB2777', '#F472B6', '#F8FAFC'],
+      ['#831843', '#EC4899', '#F9A8D4', '#FDE047'],
+    ],
+  },
+  {
+    re: /\b(teal|cyan|turquoise|aqua|tosca|biru\s*muda)\b/i,
+    palettes: [
+      ['#083344', '#0891B2', '#22D3EE', '#F8FAFC'],
+      ['#164E63', '#0EA5E9', '#38BDF8', '#FDE047'],
+    ],
+  },
+  {
+    re: /\b(emerald|mint|forest|green|hijau)\b/i,
+    palettes: [
+      ['#083344', '#0D9488', '#2DD4BF', '#FDE047'],
+      ['#0F172A', '#0891B2', '#00E5FF', '#FACC15'],
+    ],
+  },
+];
+
+export function resolvePromptColorPalette(promptTopic: string, mixIndex: number): string[] {
+  const cleaned = String(promptTopic || '').replace(/\bgreen\s*screen\b/gi, '');
+  for (const fam of PROMPT_COLOR_FAMILIES) {
+    if (fam.re.test(cleaned)) {
+      return fam.palettes[Math.abs(mixIndex) % fam.palettes.length];
+    }
+  }
+  return VARIATION_PALETTES[Math.abs(mixIndex) % VARIATION_PALETTES.length];
+}
+
 export function createUniqueVariationSeed(
   promptTopic: string,
   slotIndex: number = 0,
@@ -399,7 +468,7 @@ export function createUniqueVariationSeed(
   // Coprime rotation guarantees every consecutive prompt rotates v=0..5 and cm=0..2 even across unique prompt strings
   const variantIdx = (absHash + __variationSeq * 5 + bucketSeq + slot * 3 + salt) % 6;
   const compMode = ((absHash >> 2) + __variationSeq * 2 + bucketSeq + slot + salt) % 3;
-  const paletteIdx = (absMix + bucketSeq * 3 + slot * 5 + salt * 7) % VARIATION_PALETTES.length;
+  const paletteSeed = absMix + bucketSeq * 3 + slot * 5 + salt * 7;
   const motionIdx = (absHash + __variationSeq + bucketSeq + slot * 2 + salt * 3) % VARIATION_MOTIONS.length;
   const tag = `V${variantIdx}C${compMode}-${(absMix % 8999) + 1000}-${__variationSeq}`;
 
@@ -407,7 +476,7 @@ export function createUniqueVariationSeed(
     seedId: tag,
     variantIdx,
     compMode,
-    palette: VARIATION_PALETTES[paletteIdx],
+    palette: resolvePromptColorPalette(promptTopic, paletteSeed),
     motionExpr: VARIATION_MOTIONS[motionIdx],
     tag,
   };
@@ -561,11 +630,16 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'HORSESHOE MAGNET: Bold thick U-shaped horseshoe body G.uArc(...,"d" or "u", th=0.18*R) -> twin metallic pole tips G.box welded flush onto both open arm ends + small crisp energy G.bolt or pulled G.disc dot anchored right between poles.';
     themeMotion = 'upright subtle magnetic pulse + attracted particle/bolt pull strictly toward pole gap';
+  } else if (/\b(shopping\s*bag\w*|tote\s*bag\w*|gift\s*bag\w*|paper\s*bag\w*|handbag\w*|bag\w*)\b/.test(topic)) {
+    primaryKey = 'shopping_bag';
+    structuralGuide =
+      'SHOPPING BAG (NO CART WHEELS!): Top arched twin handle G.uArc(0,-0.26*R,0.32*R,0.20*R,lw*1.25,"d",c3) rooted cleanly inside upper rim -> sturdy bag body G.trap(0,0.08*R,0.52*R,0.68*R,0.56*R,0.06*R,c1,rim,lw) + folded top cuff G.box(0,-0.16*R,0.54*R,0.10*R,0.03*R,c2,rim,lw*0.8) + centered emblem (G.percent if discount/percent, G.star if star) inside bag front.';
+    themeMotion = 'upright gentle carry bounce (hoverY=-Math.abs(Math.sin(t*2.4))*0.04*R, rot=0) + subtle inner emblem/star sparkle inside bounds (ZERO cart wheels!)';
   } else if (/\b(gift\w*|present\w*|reward\w*|bonus|prize\s*box)\b/.test(topic)) {
     primaryKey = 'gift';
     structuralGuide =
-      'GIFT BOX: Rounded square parcel G.box -> wider overhanging lid G.box overlapping top seam + vertical & horizontal ribbon bands G.box/G.pill -> twin symmetric bow loops G.oval/G.leaf seated cleanly atop lid center.';
-    themeMotion = 'upright rot=0 joyful bounce + lid hover gap lifting slightly revealing glowing sparkle inside seam';
+      'GIFT BOX: Parcel body G.box(0,0.13*R,0.62*R,0.46*R,0.05*R,c3,rim,lw) + crisp vertical ribbon G.box(0,0.13*R,0.13*R,0.46*R,0,c1,rim,lw*0.7) -> wider lid G.box(0,-0.13*R+lidY,0.70*R,0.14*R,0.04*R,c2,rim,lw) + lid ribbon G.box(0,-0.13*R+lidY,0.15*R,0.14*R,0,c1,null,0) + twin bow loops G.oval(-0.12*R,-0.24*R+lidY,0.11*R,0.06*R,-0.35,c1,rim,lw*0.8) & (+0.12*R,...) + knot G.disc(0,-0.22*R+lidY,0.055*R,c1,rim,lw*0.8).';
+    themeMotion = 'upright rot=0 hover + smooth lid lift revealing crisp G.star sparkle strictly inside [-0.52*R,+0.52*R]';
   } else if (/\b(coffee|mug|teacup|cup|espresso|cafe)\b/.test(topic)) {
     primaryKey = 'coffee';
     structuralGuide =
@@ -581,6 +655,11 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'THERMOMETER: Tall vertical pill stem G.capsule overlapping circular lower bulb G.disc cleanly -> rising inner red/gold mercury G.bar & bulb G.disc inside + 4 crisp horizontal tick G.pill marks welded along stem edge.';
     themeMotion = 'upright rot=0; smooth rising/falling inner mercury G.bar level + warm core glow inside bulb';
+  } else if (/\b(coupon\w*|voucher\w*|ticket\w*|promo\s*code)\b/.test(topic)) {
+    primaryKey = 'coupon';
+    structuralGuide =
+      'COUPON TICKET: Wide notched ticket G.box(-0.04*R,0,0.78*R,0.46*R,0.06*R,c1,rim,lw) + darker stub panel G.box(-0.28*R,0,0.22*R,0.42*R,0.04*R,c0,null,0) + dashed G.pill perforation dots at x=-0.16*R + centered G.percent(0.08*R,0,0.25*R,c3,"#f8fafc"). If scissors mentioned: weld crossed blade G.pill shafts pivoting on screw G.disc + 2 G.ring loops snipping cleanly along ticket edge seam.';
+    themeMotion = 'upright rot=0 hover + articulated scissor snipping along ticket perforation/edge (or subtle shimmer)';
   } else if (/\b(scissor\w*|shear\w*|trim\w*)\b/.test(topic)) {
     primaryKey = 'scissors';
     structuralGuide =
@@ -611,11 +690,12 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'QR / BARCODE SCANNER: Outer 4 crisp L-corner bracket viewfinder + dense interior G.grid/G.box pattern matrix -> glowing horizontal laser scanline G.capsule sweeping cleanly top-to-bottom across code.';
     themeMotion = 'upright rot=0; continuous smooth vertical laser scanline bar + corner bracket breath';
-  } else if (/\b(price\s*tag|tag\w*|label\w*|coupon\w*|ticket\w*|discount\w*)\b/.test(topic)) {
+  } else if (/\b(price\s*tag|tag\w*|label\w*|discount\s*tag)\b/.test(topic)) {
     primaryKey = 'tag';
-    structuralGuide =
-      'PRICE TAG / TICKET: Angled beveled pentagonal tag G.poly (or notched ticket G.box) with reinforced punch hole G.disc/G.ring + interior horizontal line G.pill & star/percent emblem.';
-    themeMotion = 'gentle hanging pendulum swing around hole ring (|rot|<=0.08) + interior shimmer';
+    structuralGuide = /\b(compar\w*|dual|two|pair)\b/.test(topic)
+      ? 'DUAL PRICE COMPARISON TAGS: Two overlapping upright 5-point closed G.poly tags (back tag shifted left tilted -0.15 rad in c0/c2, front tag shifted right tilted +0.08 rad in c1/c3) both with small top eyelet G.disc + crisp horizontal G.capsule detail bars or G.percent inside front tag (ALL polygons strictly closed!).'
+      : 'HANGING PRICE TAG: Crisp 5-point closed beveled tag G.poly([[0,-0.46*R],[0.32*R,-0.22*R],[0.32*R,0.44*R],[-0.32*R,0.44*R],[-0.32*R,-0.22*R]],c1,rim,lw,true) -> small top eyelet G.disc(0,-0.32*R,0.06*R,c0,c3,lw*0.7) WELL ABOVE center + bold G.percent(0,0.11*R,0.34*R,c3,"#f8fafc") centered in lower body (ZERO overlap with eyelet!).';
+    themeMotion = 'gentle hanging pendulum swing around top eyelet (rot=Math.sin(t*2.1)*0.09) + interior G.percent shimmer';
   } else if (/\b(target\w*|bullseye|archery|goal|aim|focus)\b/.test(topic)) {
     primaryKey = 'target';
     structuralGuide =
@@ -656,10 +736,15 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'UNIFIED CLOUD SILHOUETTE: Single crisp G.cloudShape contour (never jagged disconnected blobs!) -> centered directional G.arrow (upload/download) or interlocking circular sync G.ring arcs seated cleanly inside cloud.';
     themeMotion = 'upright rot=0 soft float; vertical arrow transfer glide or continuous rotating sync arcs inside cloud';
-  } else if (/\b(wallet\w*|purse|payment\w*|credit\s*card\w*)\b/.test(topic)) {
+  } else if (/\b(credit\s*card\w*|debit\s*card\w*|bank\s*card\w*|payment\s*card\w*|atm\s*card\w*|card\s*icon)\b/.test(topic)) {
+    primaryKey = 'credit_card';
+    structuralGuide =
+      'CREDIT CARD: Wide horizontal rounded card G.box(0,0,0.88*R,0.56*R,0.07*R,c1,rim,lw) -> crisp accent stripe G.box(0,-0.12*R,0.84*R,0.11*R,0,c0,null,0) + metallic EMV chip G.box(-0.24*R,0.06*R,0.16*R,0.12*R,0.02*R,c3,rim,lw*0.6) + card line G.capsule + bottom-right cashback badge G.disc(0.30*R,0.18*R,0.16*R,c2,rim,lw) containing crisp G.percent(0.30*R,0.18*R,0.18*R,c3,"#f8fafc").';
+    themeMotion = 'upright rot=0 hover + pulsing corner cashback G.percent badge gleam';
+  } else if (/\b(wallet\w*|purse|payment\w*)\b/.test(topic)) {
     primaryKey = 'wallet';
     structuralGuide =
-      'WALLET & PEEKING CARD: Slightly tilted peeking card G.box tucked into top edge of wide rounded leather G.box wallet body -> overlapping right clasp strap G.capsule + metallic snap G.disc.';
+      'WALLET & PEEKING CARD: Peeking card G.box(0,-0.18*R,0.58*R,0.32*R,0.05*R,c2,rim,lw) emerging ABOVE top edge of leather wallet G.box(0,0.08*R,0.78*R,0.50*R,0.08*R,c1,rim,lw) -> right-anchored clasp strap G.capsule(0.28*R,0.08*R,0.26*R,0.16*R,c0,rim,lw) + snap G.disc(0.22*R,0.08*R,0.045*R,c3,rim,lw*0.6).';
     themeMotion = 'upright rot=0; smooth vertical card peek glide + clasp metallic gleam';
   } else if (/\b(browser\w*|webpage\w*|website\w*|internet|tab|window)\b/.test(topic)) {
     primaryKey = 'browser';
@@ -736,16 +821,16 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'TROPHY / AWARD CHALICE: Wide-top G.trap chalice bowl -> twin curved C-handles G.uArc(...,"l"/"r") touching upper bowl flanks -> narrow stem G.box + stepped G.trap/G.box pedestal base + shining G.star on bowl face.';
     themeMotion = 'upright rot=0 proud float; twinkling G.star gleam + subtle shimmer sweep across chalice rim';
-  } else if (/\b(wallet\w*|purse|payment\w*|credit\s*card\w*)\b/.test(topic)) {
-    primaryKey = 'wallet';
-    structuralGuide =
-      'WALLET & PEEKING CARD: Slightly tilted peeking card G.box tucked into top edge of wide rounded leather G.box wallet body -> overlapping right clasp strap G.capsule + metallic snap G.disc.';
-    themeMotion = 'upright rot=0; smooth vertical card peek glide + clasp metallic gleam';
   } else if (/\b(coin\w*|money|dollar\w*|crypto\w*|revenue|profit|cash|blockchain|cube|dice)\b/.test(topic)) {
     primaryKey = 'coin';
     structuralGuide =
-      'COIN / FINANCE STACK OR CUBE: Layered cylindrical coin G.oval discs stacked cleanly from bottom up (overlapping vertically) + bold front circular coin G.disc with inner G.ring rim & G.star/G.bolt emblem (or isometric G.ngon(6) cube with inner 3-face Y edges).';
-    themeMotion = 'upright rot=0; staggered gentle stack settle + upward value G.arrow / rim shine';
+      '3D COIN STACK / CUBE: Paint bottom-up (y=0.34*R up to -0.14*R) using 3D perspective G.oval(cxCoin,y+0.04*R,0.28*R,0.095*R,0,c1,rim,lw) + bright top face G.oval(cxCoin,y,0.28*R,0.095*R,0,c2,rim,lw) (NEVER flat vertical circles!). If percent/discount requested: weld crisp front-right badge G.disc(0.22*R,0.16*R,0.18*R,c0,rim,lw) with G.percent(0.22*R,0.16*R,0.19*R,c3,"#f8fafc").';
+    themeMotion = 'upright rot=0; staggered gentle coin stack settle + upward G.arrow or gleaming G.percent badge';
+  } else if (/\b(percent\w*|discount\w*|circular\s*badge|promo\s*badge|badge|seal|sticker)\b/.test(topic)) {
+    primaryKey = 'badge';
+    structuralGuide =
+      'CIRCULAR / SCALLOPED BADGE: Outer rotating fluted seal G.star(0,0,0.52*R,0.44*R,12,t*0.45,c2,rim,lw) framing crisp upright inner G.disc(0,0,0.38*R,c1,rim,lw) + thin inner G.ring(0,0,0.31*R,lw*0.6,0,Math.PI*2,c3) + bold upright G.percent(0,0,0.38*R,c3,"#f8fafc") centered cleanly inside.';
+    themeMotion = 'smooth continuous rotation ONLY on outer fluted seal/ring while inner disc & G.percent stay upright and crisp';
   } else if (/\b(camera\w*|photo\w*|lens\w*|snapshot\w*)\b/.test(topic)) {
     primaryKey = 'camera';
     structuralGuide =
@@ -806,7 +891,7 @@ export function resolvePromptMotionPlan(
     structuralGuide =
       'DELIVERY TRUCK: Large rectangular cargo box G.box + front angled cab G.trap snapped flush side-by-side + horizontal chassis bar -> 2 circular wheels G.disc seated cleanly at chassis bottom line.';
     themeMotion = 'smooth road suspension bounce (y only) + spinning spoke dots inside grounded wheels';
-  } else if (/\b(cart\w*|basket\w*|trolley\w*|shopp\w*)\b/.test(topic)) {
+  } else if (/\b(shopping\s*cart\w*|cart\w*|shopping\s*basket\w*|basket\w*|trolley\w*)\b/.test(topic)) {
     primaryKey = 'cart';
     structuralGuide =
       'SHOPPING CART: Angled push handle G.pill entering upper-left rim of wide-top G.trap basket frame + horizontal basket slots -> bottom axle + 2 wheels G.disc touching axle underneath.';
