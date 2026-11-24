@@ -83,11 +83,10 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
   const [autoPilotStatus, setAutoPilotStatus] = useState<AutoPilotProgressState | null>(null);
   const [currentProcessingId, setCurrentProcessingId] = useState<string | null>(null);
 
-  // Global settings for newly uploaded batch (motion is derived automatically from each image subject)
-  const [batchType, setBatchType] = useState<AnimationType>('icon');
+  // Global settings for newly uploaded batch (Background motion only)
+  const batchType: AnimationType = 'bg';
   const [batchColorMode, setBatchColorMode] = useState<ColorMode>('gradient');
   const [batchNeonGlow, setBatchNeonGlow] = useState<boolean>(true);
-  const [batchGreenScreen, setBatchGreenScreen] = useState<boolean>(false);
   const [batchCustomInstructions, setBatchCustomInstructions] = useState<string>('');
   
   // Real accounts from user's autoPilotAccounts + items in queue (Strictly NO dummy accounts)
@@ -242,7 +241,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [batchType, batchColorMode, batchNeonGlow, batchGreenScreen, batchCustomInstructions, currentAccountName]);
+  }, [batchType, batchColorMode, batchNeonGlow, batchCustomInstructions, currentAccountName]);
 
   // Read files and convert to ImageToMotion items
   const processFiles = (files: FileList | File[]) => {
@@ -264,8 +263,8 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
         const base64Data = (e.target?.result as string) || '';
         const formattedSize = (file.size / 1024).toFixed(1) + ' KB';
 
-        const effGs = batchType === 'bg' ? false : batchGreenScreen;
-        const effGlow = effGs ? false : batchNeonGlow;
+        const effGs = false;
+        const effGlow = batchNeonGlow;
 
         newItems.push({
           id: 'i2m_item_' + Date.now() + '_' + fIdx + '_' + Math.random().toString(36).substring(2, 9),
@@ -278,7 +277,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           mimeType: file.type || 'image/png',
           status: 'pending',
           progress: 0,
-          type: batchType,
+          type: 'bg',
           motionDynamics: 'auto',
           colorMode: batchColorMode,
           neonGlow: effGlow,
@@ -349,9 +348,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
           : null
       );
 
-      const resolvedType: AnimationType = item.type === 'bg' ? 'bg' : 'icon';
-      const resolvedGs = resolvedType === 'bg' ? false : !!item.isGreenScreen;
-      const resolvedGlow = resolvedGs ? false : !!item.neonGlow;
+      const resolvedType: AnimationType = 'bg';
+      const resolvedGs = false;
+      const resolvedGlow = !!item.neonGlow;
       const animResult = await generateImageToMotion(
         apiKeys,
         selectedModel,
@@ -975,24 +974,7 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-            {/* Jenis Animasi */}
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-semibold block">Jenis Konten</label>
-              <select
-                value={batchType}
-                onChange={(e) => {
-                  const nextType = e.target.value as AnimationType;
-                  setBatchType(nextType);
-                  if (nextType === 'bg') setBatchGreenScreen(false);
-                }}
-                className="w-full bg-slate-900 text-amber-300 border border-amber-500/40 text-[11px] rounded-lg px-2 py-1 font-bold focus:ring-1 focus:ring-amber-400 focus:outline-none"
-              >
-                <option value="icon">🎯 Ikon (Tengah)</option>
-                <option value="bg">🌌 Background (Full Frame)</option>
-              </select>
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {/* Color Mode */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Palet Warna</label>
@@ -1010,51 +992,21 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
               </select>
             </div>
 
-            {/* Neon Glow Toggle (Mutually Exclusive with Green Screen) */}
+            {/* Neon Glow Toggle */}
             <div className="space-y-1">
               <label className="text-[10px] text-gray-400 font-semibold block">Neon / Glow</label>
               <button
                 type="button"
-                onClick={() => {
-                  const nextGlow = !(batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen));
-                  setBatchNeonGlow(nextGlow);
-                  if (nextGlow) setBatchGreenScreen(false);
-                }}
-                title="Aktifkan Neon Glow (otomatis menonaktifkan Green Screen)"
+                onClick={() => setBatchNeonGlow(!batchNeonGlow)}
+                title="Aktifkan atau matikan Neon Glow untuk latar Background"
                 className={`w-full text-[11px] font-bold rounded-lg px-2 py-1 border flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                  batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen)
+                  batchNeonGlow
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
                     : 'bg-slate-900 text-gray-400 border-gray-700'
                 }`}
               >
-                <i className={`fa-solid fa-${batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen) ? 'sun text-amber-400' : 'circle-xmark'}`}></i>
-                <span>{batchNeonGlow && !(batchType !== 'bg' && batchGreenScreen) ? 'Glow ON' : 'Solid / Off'}</span>
-              </button>
-            </div>
-
-            {/* Green Screen Toggle (Mutually Exclusive with Neon Glow) */}
-            <div className="space-y-1">
-              <label className="text-[10px] text-gray-400 font-semibold block">Green Screen</label>
-              <button
-                type="button"
-                disabled={batchType === 'bg'}
-                onClick={() => {
-                  if (batchType === 'bg') return;
-                  const nextGs = !batchGreenScreen;
-                  setBatchGreenScreen(nextGs);
-                  if (nextGs) setBatchNeonGlow(false);
-                }}
-                title={batchType === 'bg' ? 'Green Screen dinonaktifkan untuk mode Background' : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'}
-                className={`w-full text-[11px] font-bold rounded-lg px-2 py-1 border flex items-center justify-center gap-1.5 transition ${
-                  batchType === 'bg'
-                    ? 'bg-slate-950 text-gray-600 border-gray-800 cursor-not-allowed'
-                    : batchGreenScreen
-                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm cursor-pointer'
-                    : 'bg-slate-900 text-gray-400 border-gray-700 cursor-pointer'
-                }`}
-              >
-                <i className={`fa-solid fa-circle text-[8px] ${batchType !== 'bg' && batchGreenScreen ? 'text-emerald-400' : 'text-gray-500'}`}></i>
-                <span>{batchType === 'bg' ? 'Full BG' : batchGreenScreen ? '#00FF00' : 'Dark Studio'}</span>
+                <i className={`fa-solid fa-${batchNeonGlow ? 'sun text-amber-400' : 'circle-xmark'}`}></i>
+                <span>{batchNeonGlow ? 'Glow ON' : 'Solid / Off'}</span>
               </button>
             </div>
           </div>
@@ -1469,40 +1421,9 @@ export const ImageToMotionSection: React.FC<ImageToMotionSectionProps> = ({
                       {/* Row 2: Compact Meta Tags & Status */}
                       <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
                         <span className="text-gray-400 font-mono text-[9px]">{item.fileSize}</span>
-                        {(item.status === 'pending' || item.status === 'error') ? (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onUpdateItem(item.id, {
-                                type: item.type === 'bg' ? 'icon' : 'bg',
-                                isGreenScreen: item.type === 'bg' ? item.isGreenScreen : false,
-                              })
-                            }
-                            className={`px-1.5 py-0.2 rounded border text-[8px] font-black cursor-pointer transition ${
-                              item.type === 'bg'
-                                ? 'bg-purple-950/90 text-purple-300 border-purple-700/60 hover:bg-purple-900'
-                                : 'bg-indigo-950/90 text-indigo-300 border-indigo-700/60 hover:bg-indigo-900'
-                            }`}
-                            title="Klik untuk ganti antara mode Ikon (Tengah) dan Background (Full Frame)"
-                          >
-                            {item.type === 'bg' ? 'BG' : 'ICON'}
-                          </button>
-                        ) : (
-                          <span
-                            className={`px-1.5 py-0.2 rounded border text-[8px] font-black ${
-                              item.type === 'bg'
-                                ? 'bg-purple-950/80 text-purple-300 border-purple-800/50'
-                                : 'bg-indigo-950/80 text-indigo-300 border-indigo-800/50'
-                            }`}
-                          >
-                            {item.type === 'bg' ? 'BG' : 'ICON'}
-                          </span>
-                        )}
-                        {item.isGreenScreen && item.type !== 'bg' && (
-                          <span className="px-1 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800/40 text-[8px] font-bold" title="Green Screen">
-                            GS
-                          </span>
-                        )}
+                        <span className="px-1.5 py-0.2 rounded border text-[8px] font-black bg-purple-950/80 text-purple-300 border-purple-800/50">
+                          BG
+                        </span>
                         {item.shapeAnalysis && (
                           <button
                             type="button"

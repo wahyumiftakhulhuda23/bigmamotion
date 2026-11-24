@@ -221,7 +221,7 @@ export function findCategoryById(catId: string, type?: AnimationType): Microstoc
 /**
  * Derives crisp, subject-matched motion physics automatically for any topic (no manual preset needed).
  */
-export function resolveSubjectMotionSnippet(subject: string, type: AnimationType = 'icon'): string {
+export function resolveSubjectMotionSnippet(subject: string, type: AnimationType = 'bg'): string {
   if (type === 'bg') {
     return 'seamless harmonic 60 FPS ribbon flow and smooth periodic depth wave';
   }
@@ -256,8 +256,8 @@ export function resolveSubjectMotionSnippet(subject: string, type: AnimationType
  */
 export function generateProceduralPrompts(
   count: number,
-  type: AnimationType = 'icon',
-  subCategory: string = 'business_finance',
+  type: AnimationType = 'bg',
+  subCategory: string = 'abstract_geometric',
   style: string = 'minimalist',
   colorMode: string = 'gradient',
   _motionDynamics: string = 'auto',

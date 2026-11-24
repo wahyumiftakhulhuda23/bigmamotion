@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   ImageToMotionAutoPilotAccount,
   ReferenceImageUpload,
-  AnimationType,
   ColorMode,
 } from '../types';
 
@@ -116,7 +115,7 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
     const newAcc: ImageToMotionAutoPilotAccount = {
       id: 'acc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
       name: trimmed,
-      type: 'icon',
+      type: 'bg',
       motionDynamics: 'auto',
       colorMode: 'gradient',
       neonGlow: true,
@@ -326,7 +325,7 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-extrabold text-gray-100 text-base">
-                  Auto Pilot Multi-Akun (IMAGE TO PROMPT / MOTION)
+                  Auto Pilot Multi-Akun (IMAGE TO MOTION)
                 </h3>
                 <span className="text-[10px] bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold px-2 py-0.5 rounded-full uppercase">
                   Batch Queue
@@ -603,29 +602,8 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                       )}
                     </div>
 
-                    {/* Per-Account Visual Options (Motion automatically matched per image subject) */}
-                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-amber-300 uppercase flex items-center gap-1">
-                          <i className="fa-solid fa-layer-group text-[9px]"></i>
-                          <span>Jenis Konten</span>
-                        </label>
-                        <select
-                          value={acc.type || 'icon'}
-                          onChange={(e) => {
-                            const nextType = e.target.value as AnimationType;
-                            handleUpdateAccount(acc.id, {
-                              type: nextType,
-                              isGreenScreen: nextType === 'bg' ? false : acc.isGreenScreen,
-                            });
-                          }}
-                          className="w-full bg-slate-950 border border-amber-500/40 rounded-lg p-1.5 text-xs text-amber-200 font-bold focus:border-amber-400 focus:outline-none cursor-pointer"
-                        >
-                          <option value="icon">Ikon (Tengah)</option>
-                          <option value="bg">Background (Full Frame)</option>
-                        </select>
-                      </div>
-
+                    {/* Per-Account Visual Options (Background Only) */}
+                    <div className="pt-2 border-t border-gray-800/60 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-pink-400 uppercase flex items-center gap-1">
                           <i className="fa-solid fa-palette text-[9px]"></i>
@@ -635,6 +613,8 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                           value={acc.colorMode || 'gradient'}
                           onChange={(e) =>
                             handleUpdateAccount(acc.id, {
+                              type: 'bg',
+                              isGreenScreen: false,
                               colorMode: e.target.value as ColorMode,
                             })
                           }
@@ -649,59 +629,25 @@ export const ImageAutoPilotModal: React.FC<ImageAutoPilotModalProps> = ({
                         </select>
                       </div>
 
-                      <div className="space-y-1 sm:col-span-2 flex items-end">
+                      <div className="space-y-1 flex items-end">
                         {(() => {
-                          const isGsDisabled = acc.type === 'bg';
-                          const isGsActive = !isGsDisabled && !!acc.isGreenScreen;
-                          const isGlowActive = !isGsActive && (acc.neonGlow ?? true);
+                          const isGlowActive = acc.neonGlow ?? true;
                           return (
-                            <div className="flex items-center gap-2 w-full">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleUpdateAccount(
-                                    acc.id,
-                                    !isGlowActive ? { neonGlow: true, isGreenScreen: false } : { neonGlow: false }
-                                  )
-                                }
-                                title="Aktifkan Neon Glow (otomatis menonaktifkan Chroma Green)"
-                                className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
-                                  isGlowActive
-                                    ? 'bg-purple-950/50 border-purple-500/60 text-purple-200 shadow-sm'
-                                    : 'bg-slate-950 border-gray-800 text-gray-400 hover:border-gray-700'
-                                }`}
-                              >
-                                <i className={`fa-solid fa-sun text-[9px] ${isGlowActive ? 'text-purple-400' : 'text-gray-600'}`}></i>
-                                <span>Neon Glow</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                disabled={isGsDisabled}
-                                onClick={() =>
-                                  !isGsDisabled &&
-                                  handleUpdateAccount(
-                                    acc.id,
-                                    !isGsActive ? { isGreenScreen: true, neonGlow: false } : { isGreenScreen: false }
-                                  )
-                                }
-                                title={
-                                  isGsDisabled
-                                    ? 'Chroma Green dinonaktifkan untuk mode Background'
-                                    : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
-                                }
-                                className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border select-none text-[10px] font-bold transition ${
-                                  isGsDisabled
-                                    ? 'bg-slate-950/50 border-gray-800/50 text-gray-600 opacity-50 cursor-not-allowed'
-                                    : isGsActive
-                                    ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300 shadow-sm cursor-pointer'
-                                    : 'bg-slate-950 border-gray-800 text-emerald-400/70 hover:border-gray-700 cursor-pointer'
-                                }`}
-                              >
-                                <i className={`fa-solid fa-circle text-[7px] ${isGsActive ? 'text-emerald-400' : 'text-gray-600'}`}></i>
-                                <span>{isGsDisabled ? 'Full BG' : 'Chroma Green'}</span>
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateAccount(acc.id, { type: 'bg', neonGlow: !isGlowActive, isGreenScreen: false })
+                              }
+                              title="Aktifkan atau matikan Neon Glow"
+                              className={`w-full flex items-center justify-center gap-1.5 p-1.5 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
+                                isGlowActive
+                                  ? 'bg-purple-950/50 border-purple-500/60 text-purple-200 shadow-sm'
+                                  : 'bg-slate-950 border-gray-800 text-gray-400 hover:border-gray-700'
+                              }`}
+                            >
+                              <i className={`fa-solid fa-sun text-[9px] ${isGlowActive ? 'text-purple-400' : 'text-gray-600'}`}></i>
+                              <span>Neon Glow ({isGlowActive ? 'Aktif' : 'Off'})</span>
+                            </button>
                           );
                         })()}
                       </div>

@@ -14,7 +14,6 @@ interface HeaderProps {
   onOpenApiModal: () => void;
   onOpenAutoPilotModal: () => void;
   onOpenGalleryModal: () => void;
-  onOpenTutorialModal?: () => void;
   failedCount?: number;
   onOpenFailedModal?: () => void;
 }
@@ -32,7 +31,6 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenApiModal,
   onOpenAutoPilotModal,
   onOpenGalleryModal,
-  onOpenTutorialModal,
   failedCount = 0,
   onOpenFailedModal,
 }) => {
@@ -120,7 +118,6 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-[10px] text-gray-400 font-medium hidden sm:block">Motion Graphic AI Optimation</p>
           </div>
         </div>
 
@@ -150,27 +147,12 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
               <i className="fa-solid fa-wand-magic-sparkles text-xs"></i>
               <span>IMAGE TO MOTION</span>
-              <span className="text-[9px] bg-slate-950 text-amber-300 px-1.5 py-0.2 rounded-full font-bold uppercase tracking-wider ml-0.5">
-                Special
-              </span>
             </button>
           </div>
         )}
 
         {/* Action Controls - Compressed and optimized */}
         <div className="flex items-center space-x-1.5 sm:space-x-2">
-          {/* Tutorial / Panduan Button - Highly Visible */}
-          {onOpenTutorialModal && (
-            <button
-              onClick={onOpenTutorialModal}
-              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-sky-500/20 hover:from-emerald-500/30 hover:to-sky-500/30 text-emerald-300 border border-emerald-500/50 hover:border-emerald-400 transition text-xs font-black shadow-md shadow-emerald-500/15 cursor-pointer active:scale-95"
-              title="Buka Buku Panduan & Tutorial Lengkap Seluruh Fitur"
-            >
-              <i className="fa-solid fa-book-open-reader text-emerald-400 text-xs"></i>
-              <span className="hidden sm:inline tracking-wide">TUTORIAL</span>
-              <span className="sm:hidden">Panduan</span>
-            </button>
-          )}
 
           {/* Active AI Model Indicator */}
           <button

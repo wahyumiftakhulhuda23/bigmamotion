@@ -17,8 +17,6 @@ interface WorkflowSectionProps {
   onChangePromptCount: (count: number) => void;
   isGreenScreen?: boolean;
   onToggleGreenScreen?: (val: boolean) => void;
-  keywordsText?: string;
-  onChangeKeywordsText?: (text: string) => void;
   onGeneratePrompts: () => void;
   isGeneratingPrompts: boolean;
   generatedPrompts: string[];
@@ -50,8 +48,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   onChangePromptCount,
   isGreenScreen = false,
   onToggleGreenScreen,
-  keywordsText = '',
-  onChangeKeywordsText,
   onGeneratePrompts,
   isGeneratingPrompts,
   generatedPrompts,
@@ -69,7 +65,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
 }) => {
   const [manualText, setManualText] = useState('');
   const [showManualSection, setShowManualSection] = useState(false);
-  const [showKeywordSection, setShowKeywordSection] = useState(false);
   const [notepadBatches, setNotepadBatches] = useState<NotepadBatch[]>([]);
   const [isNotepadDragging, setIsNotepadDragging] = useState(false);
   const [expandedNotepadId, setExpandedNotepadId] = useState<string | null>(null);
@@ -77,11 +72,6 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
   const notepadFileInputRef = useRef<HTMLInputElement>(null);
 
   const manualLines = manualText
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  const keywordLines = (keywordsText || '')
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
@@ -166,55 +156,19 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
             <span className="w-6 h-6 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">
               <i className="fa-solid fa-sliders"></i>
             </span>
-            <span>Generator Parameter</span>
+            <span>Generator Animasi Background</span>
           </h2>
-          <span className="text-[10px] bg-sky-950/60 text-sky-300 border border-sky-800/60 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-            AI Workflow
-          </span>
         </div>
 
-        {/* 1. Animation Type Selection - Sleek 2-Column Tabs */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block">
-            1. Tipe Animasi Microstock
-          </label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => onSelectType('icon')}
-              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
-                currentType === 'icon'
-                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
-                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
-              }`}
-            >
-              <i className="fa-solid fa-shapes text-sm text-sky-400"></i>
-              <span className="text-center leading-none text-[11px]">Icon Motion</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onSelectType('bg')}
-              className={`p-2.5 rounded-xl border flex flex-col items-center gap-1 transition text-xs font-semibold cursor-pointer active:scale-95 ${
-                currentType === 'bg'
-                  ? 'bg-gradient-to-b from-sky-500/20 to-indigo-500/20 border-sky-400 text-sky-200 shadow-md shadow-sky-500/15'
-                  : 'border-gray-800/80 bg-gray-900/40 text-gray-400 hover:border-gray-700 hover:text-gray-200'
-              }`}
-            >
-              <i className="fa-solid fa-cubes-stacked text-sm text-amber-400"></i>
-              <span className="text-center leading-none text-[11px]">Background</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Kategori Populer (10 Kategori Dinamis per Tipe) */}
+        {/* 1. Kategori Background (10 Kategori Populer Adobe Stock & Shutterstock) */}
         {(() => {
-          const categories = getCategoriesForType(currentType);
-          const activeCat = findCategoryById(subCategory || '', currentType) || categories[0];
+          const categories = getCategoriesForType('bg');
+          const activeCat = findCategoryById(subCategory || '', 'bg') || categories[0];
           return (
             <div className="space-y-1.5 p-3 rounded-xl bg-gray-900/60 border border-gray-800">
               <label className="text-[11px] font-extrabold text-amber-300 uppercase tracking-wider block flex items-center gap-1.5">
                 <i className="fa-solid fa-layer-group text-amber-400 text-[10px]"></i>
-                <span>Kategori</span>
+                <span>1. Kategori Background</span>
               </label>
               <select
                 value={activeCat.id}
@@ -237,14 +191,14 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           <div className="space-y-1">
             <label className="text-[11px] font-extrabold text-gray-300 uppercase tracking-wider block flex items-center gap-1.5">
               <i className="fa-solid fa-wand-magic-sparkles text-sky-400 text-[10px]"></i>
-              <span>3. Gaya Visual Preset</span>
+              <span>2. Gaya Visual Preset</span>
             </label>
             <select
               value={visualStyle}
               onChange={(e) => onSelectStyle(e.target.value as VisualStyle)}
               className="w-full glass-input rounded-xl px-2.5 py-2 text-xs text-gray-200 cursor-pointer font-medium"
             >
-              <option value="3d_crest">💎 3D Ultra-Realistis Volumetrik (Murni Objek 3D Standalone)</option>
+              <option value="3d_crest">💎 3D Volumetric Depth (Full Frame)</option>
               <option value="isometric">Isometric 3D Projection</option>
               <option value="minimalist">Minimalist Vector (Clean)</option>
               <option value="flat_vector">Flat Vector Art (Modern Flat)</option>
@@ -278,107 +232,46 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
           </div>
         </div>
 
-        {/* 4. Compact Settings Row: Neon Glow (Dark Studio) vs Green Screen (Mutually Exclusive), Prompt Count */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-          {/* Neon Glow Toggle (Exclusive with Green Screen) */}
-          {(() => {
-            const isGsActive = currentType !== 'bg' && isGreenScreen;
-            const isGlowActive = !isGsActive && neonGlow;
-            return (
-              <button
-                type="button"
-                onClick={() => onToggleNeonGlow && onToggleNeonGlow(!isGlowActive)}
-                title={
-                  isGsActive
-                    ? 'Klik untuk mengaktifkan Neon Glow (otomatis menonaktifkan Green Screen)'
-                    : 'Toggle Neon Glow untuk latar Dark Studio'
-                }
-                className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 text-left ${
-                  isGlowActive
-                    ? 'bg-purple-950/40 border-purple-500/60 shadow-md shadow-purple-950/30'
-                    : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700 opacity-85'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
-                    isGlowActive
-                      ? 'bg-purple-500 border-purple-400 text-white font-bold'
-                      : 'border-gray-700 bg-gray-800 text-transparent'
+        {/* 3. Compact Settings Row: Neon Glow & Prompt Count (Background Only) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-center">
+          {/* Neon Glow Toggle */}
+          <button
+            type="button"
+            onClick={() => onToggleNeonGlow && onToggleNeonGlow(!neonGlow)}
+            title="Toggle Neon Glow untuk latar animasi Background"
+            className={`p-2 rounded-xl border transition cursor-pointer select-none flex items-center gap-2 text-left ${
+              neonGlow
+                ? 'bg-purple-950/40 border-purple-500/60 shadow-md shadow-purple-950/30'
+                : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700 opacity-85'
+            }`}
+          >
+            <div
+              className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
+                neonGlow
+                  ? 'bg-purple-500 border-purple-400 text-white font-bold'
+                  : 'border-gray-700 bg-gray-800 text-transparent'
+              }`}
+            >
+              <i className="fa-solid fa-check text-[9px]"></i>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] font-bold text-gray-200 truncate">Neon Glow</span>
+                <span
+                  className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase shrink-0 ${
+                    neonGlow
+                      ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                      : 'bg-gray-800 text-gray-400'
                   }`}
                 >
-                  <i className="fa-solid fa-check text-[9px]"></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] font-bold text-gray-200 truncate">Neon Glow</span>
-                    <span
-                      className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase shrink-0 ${
-                        isGlowActive
-                          ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                          : 'bg-gray-800 text-gray-400'
-                      }`}
-                    >
-                      {isGlowActive ? 'Aktif' : isGsActive ? 'Solid' : 'Off'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            );
-          })()}
-
-          {/* Green Screen Option (Exclusive with Neon Glow, Disabled for BG) */}
-          {(() => {
-            const isGsDisabled = currentType === 'bg';
-            const isGsActive = !isGsDisabled && isGreenScreen;
-            return (
-              <button
-                type="button"
-                disabled={isGsDisabled}
-                onClick={() => !isGsDisabled && onToggleGreenScreen && onToggleGreenScreen(!isGsActive)}
-                title={
-                  isGsDisabled
-                    ? 'Green Screen tidak berlaku untuk mode Background'
-                    : 'Klik untuk mode Flat-3D Solid di Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
-                }
-                className={`p-2 rounded-xl border transition select-none flex items-center gap-2 text-left ${
-                  isGsDisabled
-                    ? 'bg-gray-950/60 border-gray-800/50 opacity-45 cursor-not-allowed'
-                    : isGsActive
-                    ? 'bg-emerald-950/40 border-emerald-500/60 shadow-md shadow-emerald-950/30 cursor-pointer'
-                    : 'bg-gray-900/40 border-gray-800/80 hover:border-gray-700 cursor-pointer'
-                }`}
-              >
-                <div
-                  className={`w-4 h-4 rounded flex items-center justify-center border transition shrink-0 ${
-                    isGsActive
-                      ? 'bg-emerald-500 border-emerald-400 text-black font-bold'
-                      : 'border-gray-700 bg-gray-800 text-transparent'
-                  }`}
-                >
-                  <i className="fa-solid fa-check text-[9px]"></i>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] font-bold text-gray-200 truncate">Green Screen</span>
-                    <span
-                      className={`text-[8px] px-1 py-0.1 rounded font-bold uppercase shrink-0 ${
-                        isGsDisabled
-                          ? 'bg-gray-800 text-gray-500'
-                          : isGsActive
-                          ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/50'
-                          : 'bg-emerald-500/10 text-emerald-400/70 border border-emerald-500/30'
-                      }`}
-                    >
-                      {isGsDisabled ? 'Full BG' : '#00FF00'}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            );
-          })()}
+                  {neonGlow ? 'Aktif' : 'Off'}
+                </span>
+              </div>
+            </div>
+          </button>
 
           {/* Prompt Count */}
-          <div className="flex items-center justify-between gap-1.5 bg-gray-900/40 border border-gray-800/80 p-1 px-2 rounded-xl">
+          <div className="flex items-center justify-between gap-1.5 bg-gray-900/40 border border-gray-800/80 p-1.5 px-2.5 rounded-xl">
             <span className="text-[11px] font-bold text-gray-300 whitespace-nowrap">Jml Prompt:</span>
             <input
               type="number"
@@ -386,41 +279,9 @@ export const WorkflowSection: React.FC<WorkflowSectionProps> = ({
               max="200"
               value={promptCount}
               onChange={(e) => onChangePromptCount(Math.max(1, parseInt(e.target.value) || 1))}
-              className="w-14 bg-gray-950/80 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
+              className="w-16 bg-gray-950/80 border border-gray-700 rounded-lg px-1.5 py-1 text-xs text-center text-sky-300 font-bold focus:outline-none focus:border-sky-500"
             />
           </div>
-        </div>
-
-        {/* Collapsible Keyword Section */}
-        <div className="border-t border-gray-800/80 pt-2">
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setShowKeywordSection(!showKeywordSection)}
-              className="text-xs font-bold text-gray-300 hover:text-sky-300 flex items-center gap-1.5 transition cursor-pointer"
-            >
-              <i className={`fa-solid fa-chevron-${showKeywordSection ? 'down' : 'right'} text-[10px] text-sky-400`}></i>
-              <i className="fa-solid fa-tags text-sky-400 text-xs"></i>
-              <span>Keyword Khusus <span className="text-gray-500 font-normal">(Opsional)</span></span>
-            </button>
-            {keywordLines.length > 0 && (
-              <span className="text-[10px] bg-sky-950 text-sky-300 border border-sky-800/60 px-2 py-0.2 rounded-full font-bold">
-                {keywordLines.length} keyword
-              </span>
-            )}
-          </div>
-
-          {showKeywordSection && (
-            <div className="mt-2 space-y-1.5 animate-fadeIn">
-              <textarea
-                rows={2}
-                value={keywordsText}
-                onChange={(e) => onChangeKeywordsText && onChangeKeywordsText(e.target.value)}
-                placeholder="Pisahkan per baris... Contoh:&#10;cyber security shield&#10;cloud server sync"
-                className="w-full glass-input rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none placeholder-gray-600 font-mono resize-y"
-              ></textarea>
-            </div>
-          )}
         </div>
 
         {/* Primary Action Button: Generate Prompts */}

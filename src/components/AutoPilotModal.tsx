@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimationItem, AutoPilotAccount, AnimationType, NicheCategory, VisualStyle, ColorMode, MotionDynamics } from '../types';
-import { getCategoriesForType, getDefaultCategoryForType, findCategoryById } from '../constants/categories';
+import { getCategoriesForType, findCategoryById } from '../constants/categories';
 import { CompletedLedger, getAccountCompletedCount, normalizePromptKey } from '../utils/autoPilotLedger';
 
 export interface FailedAutoPilotItem {
@@ -71,10 +71,10 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-gray-100 text-base">Prompt AI Auto Pilot Engine</h3>
                 <span className="text-[10px] bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold px-2 py-0.5 rounded-full uppercase">
-                  Text to Motion
+                  Background Motion
                 </span>
               </div>
-              <p className="text-xs text-gray-400">Otomatis buat prompt & render animasi secara serial multi-akun dengan variasi visual.</p>
+              <p className="text-xs text-gray-400">Otomatis buat prompt & render animasi background 60 FPS secara serial multi-akun.</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-lg cursor-pointer">
@@ -160,8 +160,8 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                     </div>
                   )}
 
-                {/* Row 1: Nama Akun, Tipe Animasi, Kategori Microstock & Gaya Visual */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pr-8">
+                {/* Row 1: Nama Akun, Kategori Microstock & Gaya Visual */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-8">
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-gray-400 uppercase">Nama Akun / Folder</label>
                     <input
@@ -172,29 +172,10 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                     />
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Tipe Animasi</label>
-                    <select
-                      value={acc.type}
-                      onChange={(e) => {
-                        const newType = e.target.value as AnimationType;
-                        onUpdateAccount(index, {
-                          type: newType,
-                          subCategory: getDefaultCategoryForType(newType),
-                          isGreenScreen: newType === 'bg' ? false : acc.isGreenScreen,
-                        });
-                      }}
-                      className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer font-semibold text-sky-300"
-                    >
-                      <option value="icon">Icon Motion</option>
-                      <option value="bg">Background Motion</option>
-                    </select>
-                  </div>
-
                   {/* 10 Kategori Populer Adobe Stock / Shutterstock */}
                   {(() => {
-                    const categories = getCategoriesForType(acc.type);
-                    const activeCat = findCategoryById(acc.subCategory as string || '', acc.type) || categories[0];
+                    const categories = getCategoriesForType('bg');
+                    const activeCat = findCategoryById(acc.subCategory as string || '', 'bg') || categories[0];
                     return (
                       <div className="space-y-1">
                         <label className="text-[10px] font-bold text-amber-400 uppercase flex items-center justify-between">
@@ -202,7 +183,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                         </label>
                         <select
                           value={activeCat.id}
-                          onChange={(e) => onUpdateAccount(index, { subCategory: e.target.value })}
+                          onChange={(e) => onUpdateAccount(index, { type: 'bg', subCategory: e.target.value, isGreenScreen: false })}
                           className="w-full bg-gray-950 border border-gray-700 rounded-lg p-2 text-xs text-gray-200 focus:border-sky-500 focus:outline-none cursor-pointer"
                         >
                           {categories.map((cat, catIdx) => (
@@ -257,56 +238,25 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase">Efek &amp; Latar (Pilih Salah Satu)</label>
+                    <label className="text-[10px] font-bold text-gray-400 uppercase">Efek Cahaya</label>
                     {(() => {
-                      const isGsDisabled = acc.type === 'bg';
-                      const isGsActive = !isGsDisabled && !!acc.isGreenScreen;
-                      const isGlowActive = !isGsActive && (acc.neonGlow ?? true);
+                      const isGlowActive = acc.neonGlow ?? true;
                       return (
                         <div className="flex items-center gap-2 pt-0.5">
                           <button
                             type="button"
                             onClick={() =>
-                              onUpdateAccount(
-                                index,
-                                !isGlowActive ? { neonGlow: true, isGreenScreen: false } : { neonGlow: false }
-                              )
+                              onUpdateAccount(index, { neonGlow: !isGlowActive, isGreenScreen: false })
                             }
-                            title="Aktifkan Neon Glow (otomatis menonaktifkan Chroma Green)"
-                            className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
+                            title="Aktifkan atau matikan Neon Glow pada animasi Background"
+                            className={`flex-1 flex items-center justify-center gap-1.5 p-2 rounded-lg border cursor-pointer select-none text-[10px] font-bold transition ${
                               isGlowActive
                                 ? 'bg-purple-950/50 border-purple-500/60 text-purple-200 shadow-sm'
                                 : 'bg-gray-950/70 border-gray-800 text-gray-400 hover:border-gray-700'
                             }`}
                           >
                             <i className={`fa-solid fa-sun text-[9px] ${isGlowActive ? 'text-purple-400' : 'text-gray-600'}`}></i>
-                            <span>Neon Glow</span>
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isGsDisabled}
-                            onClick={() =>
-                              !isGsDisabled &&
-                              onUpdateAccount(
-                                index,
-                                !isGsActive ? { isGreenScreen: true, neonGlow: false } : { isGreenScreen: false }
-                              )
-                            }
-                            title={
-                              isGsDisabled
-                                ? 'Chroma Green tidak berlaku untuk Background'
-                                : 'Aktifkan Green Screen #00FF00 (otomatis menonaktifkan Neon Glow)'
-                            }
-                            className={`flex-1 flex items-center justify-center gap-1.5 p-1.5 rounded-lg border select-none text-[10px] font-bold transition ${
-                              isGsDisabled
-                                ? 'bg-gray-950/40 border-gray-800/50 text-gray-600 opacity-50 cursor-not-allowed'
-                                : isGsActive
-                                ? 'bg-emerald-950/50 border-emerald-500/60 text-emerald-300 shadow-sm cursor-pointer'
-                                : 'bg-gray-950/70 border-gray-800 text-emerald-400/70 hover:border-gray-700 cursor-pointer'
-                            }`}
-                          >
-                            <i className={`fa-solid fa-circle text-[7px] ${isGsActive ? 'text-emerald-400' : 'text-gray-600'}`}></i>
-                            <span>{isGsDisabled ? 'Full BG' : 'Chroma'}</span>
+                            <span>Neon Glow ({isGlowActive ? 'Aktif' : 'Off'})</span>
                           </button>
                         </div>
                       );
@@ -445,7 +395,7 @@ export const AutoPilotModal: React.FC<AutoPilotModalProps> = ({
                               promptCount: Math.max(1, lines.length),
                             });
                           }}
-                          placeholder={`Paste kumpulan prompt Anda di sini (1 baris = 1 animasi):\nContoh:\n3D Golden Vault with volumetric bevel highlights on clean background\nSculpted Studio Microphone in isometric 3D with smooth elastic bounce\nFloating Isometric Camera with clean specular reflections`}
+                          placeholder={`Paste kumpulan prompt background Anda di sini (1 baris = 1 animasi):\nContoh:\nFull-frame undulating 3D golden silk ribbons with warm specular sheen\nPerspective neon cyberpunk wireframe grid receding smoothly toward horizon\nSeamless chromatic liquid wave layers flowing left to right at 60 FPS`}
                           className="w-full bg-slate-900 border border-gray-700 focus:border-amber-500 rounded-lg p-2.5 text-xs text-gray-200 font-mono focus:outline-none placeholder:text-gray-600 resize-y"
                         />
                         <p className="text-[10px] text-gray-400">

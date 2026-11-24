@@ -33,7 +33,6 @@ import {
 import { renderHtmlToVideo } from './services/videoRenderer';
 import { Header } from './components/Header';
 import { WorkflowSection } from './components/WorkflowSection';
-import { ImageToPromptSection } from './components/ImageToPromptSection';
 import { ImageToMotionSection } from './components/ImageToMotionSection';
 import { RightPanel } from './components/RightPanel';
 import { ApiKeyModal } from './components/ApiKeyModal';
@@ -42,12 +41,11 @@ import { AutoPilotModal, FailedAutoPilotItem } from './components/AutoPilotModal
 import { ImageAutoPilotModal } from './components/ImageAutoPilotModal';
 import { GalleryModal } from './components/GalleryModal';
 import { FullscreenModal } from './components/FullscreenModal';
-import { TutorialModal } from './components/TutorialModal';
 import { FailedAnimationsModal } from './components/FailedAnimationsModal';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { LicenseGate, STORAGE_LICENSE_ACTIVE } from './components/LicenseGate';
 import { checkLocalTrialStatus, formatRemainingTime } from './services/trialService';
-import { getDefaultCategoryForType } from './constants/categories';
+import { findCategoryById, getDefaultCategoryForType } from './constants/categories';
 import { detectDeviceHardware, HardwareProfile } from './services/hardwareService';
 import {
   CompletedLedger,
@@ -69,7 +67,6 @@ const STORAGE_ANIMATIONS = 'bigma_saved_animations';
 const STORAGE_I2M_PROJECTS = 'bigma_i2m_projects';
 const STORAGE_I2M_ITEMS = 'bigma_i2m_items';
 const STORAGE_ACTIVE_TAB = 'bigma_active_tab';
-const STORAGE_PROMPT_SUB_TAB = 'bigma_prompt_sub_tab';
 const STORAGE_I2M_AUTOPILOT_ACCOUNTS = 'bigma_i2m_autopilot_accounts_flow';
 const STORAGE_AUTOPILOT_ACCOUNTS = 'bigma_prompt_autopilot_accounts';
 
@@ -117,22 +114,6 @@ export default function App() {
     } catch {}
   };
 
-  // Sub-tab inside Prompt AI: 'prompt_to_motion' vs 'image_to_prompt'
-  const [promptSubTab, setPromptSubTab] = useState<'prompt_to_motion' | 'image_to_prompt'>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_PROMPT_SUB_TAB);
-      if (saved === 'image_to_prompt' || saved === 'prompt_to_motion') return saved;
-    } catch {}
-    return 'prompt_to_motion';
-  });
-
-  const handleSelectPromptSubTab = (subTab: 'prompt_to_motion' | 'image_to_prompt') => {
-    setPromptSubTab(subTab);
-    try {
-      localStorage.setItem(STORAGE_PROMPT_SUB_TAB, subTab);
-    } catch {}
-  };
-
   // Image to Motion Projects & Items (Starts empty, no dummy projects)
   const [i2mProjects, setI2mProjects] = useState<ImageToMotionProject[]>(() => {
     try {
@@ -156,11 +137,17 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           const seen = new Set<string>();
-          return parsed.filter((item: ImageToMotionItem) => {
-            if (!item || !item.id || seen.has(item.id)) return false;
-            seen.add(item.id);
-            return true;
-          });
+          return parsed
+            .filter((item: ImageToMotionItem) => {
+              if (!item || !item.id || seen.has(item.id)) return false;
+              seen.add(item.id);
+              return true;
+            })
+            .map((item: ImageToMotionItem) => ({
+              ...item,
+              type: 'bg' as AnimationType,
+              isGreenScreen: false,
+            }));
         }
       }
     } catch {}
@@ -190,36 +177,28 @@ export default function App() {
   const [hasServerKey, setHasServerKey] = useState<boolean>(true);
   const [selectedModel, setSelectedModel] = useState<GeminiModel>('gemini-2.5-flash');
 
-  const [currentType, setCurrentType] = useState<AnimationType>('icon');
-  const [nicheCategory, setNicheCategory] = useState<NicheCategory>('business_finance');
+  const currentType: AnimationType = 'bg';
+  const [nicheCategory, setNicheCategory] = useState<NicheCategory>(getDefaultCategoryForType('bg') as NicheCategory);
   const [visualStyle, setVisualStyle] = useState<VisualStyle>('3d_crest');
   const [colorMode, setColorMode] = useState<ColorMode>('gradient');
   const [neonGlow, setNeonGlow] = useState<boolean>(true);
   const [promptCount, setPromptCount] = useState<number>(3);
-  const [isGreenScreen, setIsGreenScreen] = useState<boolean>(false);
-  const [keywordsText, setKeywordsText] = useState<string>('');
+  const isGreenScreen = false;
 
   const handleToggleNeonGlow = useCallback((nextVal: boolean) => {
     setNeonGlow(nextVal);
-    if (nextVal) {
-      setIsGreenScreen(false);
-    }
   }, []);
-
-  const handleToggleGreenScreen = useCallback((nextVal: boolean) => {
-    if (currentType === 'bg') {
-      setIsGreenScreen(false);
-      return;
-    }
-    setIsGreenScreen(nextVal);
-    if (nextVal) {
-      setNeonGlow(false);
-    }
-  }, [currentType]);
 
   const [generatedPrompts, setGeneratedPrompts] = useState<string[]>([]);
   const [failedPrompts, setFailedPrompts] = useState<string[]>([]);
-  const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>(() => loadFailedAutoPilotItems());
+  const [failedAutoPilotItems, setFailedAutoPilotItems] = useState<FailedAutoPilotItem[]>(() =>
+    loadFailedAutoPilotItems().map((it) => ({
+      ...it,
+      type: 'bg' as AnimationType,
+      subCategory: findCategoryById(String(it.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg'),
+      isGreenScreen: false,
+    }))
+  );
   const failedAutoPilotItemsRef = useRef<FailedAutoPilotItem[]>(failedAutoPilotItems);
   failedAutoPilotItemsRef.current = failedAutoPilotItems;
   const [completedLedger, setCompletedLedger] = useState<CompletedLedger>(() => loadCompletedLedger());
@@ -319,7 +298,6 @@ export default function App() {
   const [isPromptAutoPilotModalOpen, setIsPromptAutoPilotModalOpen] = useState<boolean>(false);
   const [isImageAutoPilotModalOpen, setIsImageAutoPilotModalOpen] = useState<boolean>(false);
   const [isGalleryModalOpen, setIsGalleryModalOpen] = useState<boolean>(false);
-  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState<boolean>(false);
   const [isFailedAnimationsModalOpen, setIsFailedAnimationsModalOpen] = useState<boolean>(false);
   const [fullscreenItem, setFullscreenItem] = useState<AnimationItem | null>(null);
 
@@ -376,27 +354,32 @@ export default function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.map((a: ImageToMotionAutoPilotAccount) => {
-            const effGs = a.type === 'bg' ? false : !!a.isGreenScreen;
-            return { ...a, isGreenScreen: effGs, neonGlow: effGs ? false : (a.neonGlow ?? true) };
-          });
+          return parsed.map((a: ImageToMotionAutoPilotAccount) => ({
+            ...a,
+            type: 'bg' as AnimationType,
+            isGreenScreen: false,
+            neonGlow: a.neonGlow ?? true,
+          }));
         }
       }
     } catch {}
     return [];
   });
 
-  // Prompt AI Auto Pilot Accounts
+  // Prompt AI Auto Pilot Accounts (Background Animation Only)
   const [autoPilotAccounts, setAutoPilotAccounts] = useState<AutoPilotAccount[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_AUTOPILOT_ACCOUNTS);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((a: AutoPilotAccount) => {
-            const effGs = a.type === 'bg' ? false : !!a.isGreenScreen;
-            return { ...a, isGreenScreen: effGs, neonGlow: effGs ? false : (a.neonGlow ?? true) };
-          });
+          return parsed.map((a: AutoPilotAccount) => ({
+            ...a,
+            type: 'bg' as AnimationType,
+            subCategory: (findCategoryById(String(a.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg')) as NicheCategory,
+            isGreenScreen: false,
+            neonGlow: a.neonGlow ?? true,
+          }));
         }
       }
     } catch {}
@@ -404,8 +387,8 @@ export default function App() {
       {
         id: 'acc_1',
         name: 'Account_1',
-        type: 'icon',
-        subCategory: 'business_finance',
+        type: 'bg',
+        subCategory: getDefaultCategoryForType('bg') as NicheCategory,
         style: 'minimalist',
         promptCount: 2,
         neonGlow: true,
@@ -586,18 +569,13 @@ export default function App() {
     setProgressPercent(2);
     setGeneratedPrompts([]);
 
-    const keywordLines = keywordsText
-      .split('\n')
-      .map((k) => k.trim())
-      .filter((k) => k.length > 0);
-
     const effGs = currentType !== 'bg' && isGreenScreen;
     const effGlow = effGs ? false : neonGlow;
 
     addLog(
       `⚡ Meminta AI generate ${promptCount} prompt animasi satu per satu (${currentType.toUpperCase()} - ${nicheCategory} - ${colorMode.toUpperCase()})${
         effGs ? ' [Green Screen]' : effGlow ? ' [Neon Glow]' : ''
-      }${keywordLines.length > 0 ? ` [${keywordLines.length} Custom Keywords]` : ''}...`,
+      }...`,
       'info'
     );
 
@@ -609,7 +587,7 @@ export default function App() {
         nicheCategory,
         visualStyle,
         promptCount,
-        keywordLines,
+        undefined,
         effGs,
         colorMode,
         'auto',
@@ -1033,10 +1011,12 @@ export default function App() {
 
   // --- HANDLERS: IMAGE TO MOTION AUTO PILOT ---
   const handleSaveI2mAccounts = (accounts: ImageToMotionAutoPilotAccount[]) => {
-    const normalized = accounts.map((acc) => {
-      const effGs = acc.type === 'bg' ? false : !!acc.isGreenScreen;
-      return { ...acc, isGreenScreen: effGs, neonGlow: effGs ? false : (acc.neonGlow ?? true) };
-    });
+    const normalized = accounts.map((acc) => ({
+      ...acc,
+      type: 'bg' as AnimationType,
+      isGreenScreen: false,
+      neonGlow: acc.neonGlow ?? true,
+    }));
     setI2mAutoPilotAccounts(normalized);
     try {
       localStorage.setItem(STORAGE_I2M_AUTOPILOT_ACCOUNTS, JSON.stringify(normalized));
@@ -1111,8 +1091,8 @@ export default function App() {
     // Convert each reference image into an ImageToMotionItem
     const newItems: ImageToMotionItem[] = [];
     accounts.forEach((acc) => {
-      const effGs = acc.type === 'bg' ? false : !!acc.isGreenScreen;
-      const effGlow = effGs ? false : (acc.neonGlow ?? true);
+      const effGs = false;
+      const effGlow = acc.neonGlow ?? true;
       (acc.referenceImages || []).forEach((img, idx) => {
         newItems.push({
           id: 'i2m_item_' + Date.now() + '_' + acc.id + '_' + idx + '_' + Math.random().toString(36).substring(2, 7),
@@ -1125,7 +1105,7 @@ export default function App() {
           mimeType: img.mimeType || 'image/png',
           status: 'pending',
           progress: 0,
-          type: acc.type || 'icon',
+          type: 'bg',
           motionDynamics: 'auto',
           colorMode: acc.colorMode || 'gradient',
           neonGlow: effGlow,
@@ -1169,10 +1149,12 @@ export default function App() {
         {
           id: 'acc_' + Date.now(),
           name: `Account_${prev.length + 1}`,
-          type: 'icon' as AnimationType,
-          subCategory: 'teknologi' as NicheCategory,
+          type: 'bg' as AnimationType,
+          subCategory: getDefaultCategoryForType('bg') as NicheCategory,
           style: 'minimalist' as VisualStyle,
           promptCount: 2,
+          neonGlow: true,
+          isGreenScreen: false,
         },
       ];
       try {
@@ -1196,17 +1178,13 @@ export default function App() {
   const handleUpdateAccount = (index: number, updated: Partial<AutoPilotAccount>) => {
     setAutoPilotAccounts((prev) => {
       const next = [...prev];
-      const merged: AutoPilotAccount = { ...next[index], ...updated };
-      if (merged.type === 'bg') {
-        merged.isGreenScreen = false;
-      }
-      if ('isGreenScreen' in updated && updated.isGreenScreen) {
-        merged.neonGlow = false;
-      } else if ('neonGlow' in updated && updated.neonGlow) {
-        merged.isGreenScreen = false;
-      } else if (merged.isGreenScreen) {
-        merged.neonGlow = false;
-      }
+      const merged: AutoPilotAccount = {
+        ...next[index],
+        ...updated,
+        type: 'bg',
+        isGreenScreen: false,
+      };
+      merged.subCategory = (findCategoryById(String(merged.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg')) as NicheCategory;
       next[index] = merged;
       try {
         localStorage.setItem(STORAGE_AUTOPILOT_ACCOUNTS, JSON.stringify(next));
@@ -1364,12 +1342,6 @@ export default function App() {
     showToast(`🏁 Selesai! Animasi dari ${batches.length} file Notepad telah tersimpan di Galeri!`, 'success');
   };
 
-  const handleSendPromptsToWorkflow = (prompts: string[]) => {
-    setGeneratedPrompts((prev) => [...prompts, ...prev]);
-    setPromptSubTab('prompt_to_motion');
-    showToast(`${prompts.length} prompt berhasil dimuat ke daftar siap render!`, 'success');
-  };
-
   // Run Auto Pilot batch sequentially account by account (2-in-1 batching + auto cooldown wait — never repeats completed prompts!)
   const handleStartAutoPilot = async (targetAccountName: string = 'ALL') => {
     const accountsSnapshot = autoPilotAccountsRef.current;
@@ -1416,9 +1388,15 @@ export default function App() {
 
     try {
       for (let i = 0; i < accountsToRun.length && !stopAllForQuota; i++) {
-        const acc = accountsToRun[i];
-        const accGs = acc.type !== 'bg' && !!acc.isGreenScreen;
-        const accGlow = accGs ? false : (acc.neonGlow ?? true);
+        const rawAcc = accountsToRun[i];
+        const acc: AutoPilotAccount = {
+          ...rawAcc,
+          type: 'bg',
+          subCategory: (findCategoryById(String(rawAcc.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg')) as NicheCategory,
+          isGreenScreen: false,
+        };
+        const accGs = false;
+        const accGlow = acc.neonGlow ?? true;
         let prompts: string[] = [];
 
         const hasCustomPrompts = acc.promptSource === 'custom' && Array.isArray(acc.customPrompts) && acc.customPrompts.length > 0;
@@ -1918,13 +1896,15 @@ export default function App() {
         }
         addLog(`⚡ [${it.accountName}] Membuat ${targetPromptCount} Auto Prompt sebelum render batch...`, 'info');
         try {
-          const itGs = it.type !== 'bg' && !!it.isGreenScreen;
-          const itGlow = itGs ? false : (it.neonGlow ?? true);
+          const itType: AnimationType = 'bg';
+          const itSub = findCategoryById(String(it.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg');
+          const itGs = false;
+          const itGlow = it.neonGlow ?? true;
           const genPrompts = await generatePromptsViaGemini(
             apiKeys,
             activeModel,
-            it.type,
-            it.subCategory,
+            itType,
+            itSub,
             it.style,
             targetPromptCount,
             undefined,
@@ -1939,8 +1919,8 @@ export default function App() {
               id: 'retry_exp_' + Date.now() + '_' + idx + '_' + gpIdx + '_' + Math.random().toString(36).substring(7),
               accountName: it.accountName,
               prompt: gp,
-              type: it.type,
-              subCategory: it.subCategory,
+              type: itType,
+              subCategory: itSub,
               style: it.style,
               isGreenScreen: itGs,
               colorMode: it.colorMode ?? 'gradient',
@@ -1998,8 +1978,10 @@ export default function App() {
             continue;
           }
           const lead = chunk[0];
-          const leadGs = lead.type !== 'bg' && !!lead.isGreenScreen;
-          const leadGlow = leadGs ? false : (lead.neonGlow ?? true);
+          const leadType: AnimationType = 'bg';
+          const leadSub = findCategoryById(String(lead.subCategory || ''), 'bg')?.id || getDefaultCategoryForType('bg');
+          const leadGs = false;
+          const leadGlow = lead.neonGlow ?? true;
           const chunkLabel = chunk.length > 1
             ? `"${lead.prompt.substring(0, 26)}..." + "${chunk[1].prompt.substring(0, 26)}..."`
             : `"${lead.prompt.substring(0, 35)}..."`;
@@ -2009,8 +1991,8 @@ export default function App() {
             apiKeys,
             activeModel,
             chunk.map((c) => c.prompt),
-            lead.type,
-            lead.subCategory,
+            leadType,
+            leadSub,
             lead.style,
             processedCount - rawChunk.length + 1,
             expandedItems.length,
@@ -2033,8 +2015,8 @@ export default function App() {
                 apiKeys,
                 activeModel,
                 chunk.map((c) => c.prompt),
-                lead.type,
-                lead.subCategory,
+                leadType,
+                leadSub,
                 lead.style,
                 processedCount - rawChunk.length + 1,
                 expandedItems.length,
@@ -2153,9 +2135,10 @@ export default function App() {
   const handleRetrySingleAutoPilotItem = async (item: FailedAutoPilotItem) => {
     try {
       const latestAnims = animationsRef.current;
-      const itemType = item.type || currentType;
-      const itemGs = itemType !== 'bg' && !!item.isGreenScreen;
-      const itemGlow = itemGs ? false : (item.neonGlow ?? neonGlow);
+      const itemType: AnimationType = 'bg';
+      const itemSub = findCategoryById(String(item.subCategory || ''), 'bg')?.id || nicheCategory;
+      const itemGs = false;
+      const itemGlow = item.neonGlow ?? neonGlow;
       const isPendingAuto = item.isAutoPromptPending || item.prompt.startsWith('(Auto Prompt:') || item.prompt.startsWith('(Generate Prompts:');
       if (isPendingAuto) {
         const targetCount = item.promptCount || 5;
@@ -2163,7 +2146,7 @@ export default function App() {
           apiKeys,
           selectedModel,
           itemType,
-          item.subCategory || nicheCategory,
+          itemSub,
           item.style || visualStyle,
           targetCount,
           undefined,
@@ -2179,7 +2162,7 @@ export default function App() {
             accountName: item.accountName,
             prompt: gp,
             type: itemType,
-            subCategory: item.subCategory || nicheCategory,
+            subCategory: itemSub,
             style: item.style || visualStyle,
             isGreenScreen: itemGs,
             colorMode: item.colorMode ?? colorMode,
@@ -2214,7 +2197,7 @@ export default function App() {
         selectedModel,
         item.prompt,
         itemType,
-        item.subCategory || nicheCategory,
+        itemSub,
         item.style || visualStyle,
         1,
         1,
@@ -2476,7 +2459,6 @@ export default function App() {
           }
         }}
         onOpenGalleryModal={() => setIsGalleryModalOpen(true)}
-        onOpenTutorialModal={() => setIsTutorialModalOpen(true)}
         failedCount={failedPrompts.length + failedAutoPilotItems.length}
         onOpenFailedModal={() => setIsFailedAnimationsModalOpen(true)}
       />
@@ -2516,143 +2498,39 @@ export default function App() {
         {/* Left Panel: Workflow OR Image to Motion */}
         {activeTab === 'prompt' ? (
           <div className="lg:col-span-5 flex flex-col gap-4">
-            {/* Sidebar Tambahan: 2 Menu Besar Prompt AI */}
-            <div className="glass-card rounded-2xl p-2.5 sm:p-3 border border-gray-800 bg-slate-950/75 shadow-xl space-y-2">
-              <div className="flex items-center justify-between px-1">
-                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <i className="fa-solid fa-layer-group text-sky-400 text-xs"></i>
-                  <span>Menu Utama Prompt AI</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsTutorialModalOpen(true)}
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1 cursor-pointer"
-                    title="Buka panduan lengkap fitur Prompt AI"
-                  >
-                    <i className="fa-solid fa-circle-question"></i>
-                    <span>Panduan</span>
-                  </button>
-                  <span className="text-[9px] font-bold text-sky-300 bg-sky-950/80 border border-sky-800/60 px-2 py-0.5 rounded-full">
-                    2 Mode
-                  </span>
-                </div>
-              </div>
-
-              {/* 2 Big Menus */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {/* Menu 1: Prompt to Motion */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectPromptSubTab('prompt_to_motion')}
-                  className={`p-3 rounded-xl border text-left transition flex items-center gap-2.5 cursor-pointer relative overflow-hidden group ${
-                    promptSubTab === 'prompt_to_motion'
-                      ? 'bg-gradient-to-br from-sky-500/20 via-indigo-500/15 to-slate-900 border-sky-400 text-white shadow-lg shadow-sky-500/15 ring-1 ring-sky-400/40'
-                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-transform group-hover:scale-105 ${
-                    promptSubTab === 'prompt_to_motion'
-                      ? 'bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-md shadow-sky-500/30'
-                      : 'bg-slate-800 text-gray-400'
-                  }`}>
-                    <i className="fa-solid fa-wand-magic-sparkles"></i>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className={`text-xs font-black tracking-tight ${promptSubTab === 'prompt_to_motion' ? 'text-sky-200' : 'text-gray-200'}`}>
-                        1. Prompt to Motion
-                      </span>
-                      <span className="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-sky-950 text-sky-300 border border-sky-800/60">
-                        Generator
-                      </span>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Menu 2: Image To Prompt Motion */}
-                <button
-                  type="button"
-                  onClick={() => handleSelectPromptSubTab('image_to_prompt')}
-                  className={`p-3 rounded-xl border text-left transition flex items-center gap-2.5 cursor-pointer relative overflow-hidden group ${
-                    promptSubTab === 'image_to_prompt'
-                      ? 'bg-gradient-to-br from-indigo-500/20 via-purple-500/15 to-slate-900 border-indigo-400 text-white shadow-lg shadow-indigo-500/15 ring-1 ring-indigo-400/40'
-                      : 'bg-slate-900/40 border-gray-800/80 hover:border-gray-700 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black shrink-0 transition-transform group-hover:scale-105 ${
-                    promptSubTab === 'image_to_prompt'
-                      ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-500/30'
-                      : 'bg-slate-800 text-gray-400'
-                  }`}>
-                    <i className="fa-solid fa-file-waveform"></i>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-1">
-                      <span className={`text-xs font-black tracking-tight ${promptSubTab === 'image_to_prompt' ? 'text-indigo-200' : 'text-gray-200'}`}>
-                        2. Image To Prompt
-                      </span>
-                      <span className="text-[8px] px-1.5 py-0.2 rounded font-bold uppercase tracking-wider bg-purple-950 text-purple-300 border border-purple-800/60">
-                        Vision AI
-                      </span>
-                    </div>
-                  </div>
-                </button>
-              </div>
-            </div>
-
-            {/* Active Sub-Menu View */}
-            {promptSubTab === 'prompt_to_motion' ? (
-              <WorkflowSection
-                currentType={currentType}
-                onSelectType={(newType) => {
-                  setCurrentType(newType);
-                  setNicheCategory(getDefaultCategoryForType(newType) as NicheCategory);
-                  if (newType === 'bg') {
-                    setIsGreenScreen(false);
-                  }
-                }}
-                subCategory={nicheCategory}
-                onSelectSubCategory={(cat) => setNicheCategory(cat as NicheCategory)}
-                visualStyle={visualStyle}
-                onSelectStyle={setVisualStyle}
-                colorMode={colorMode}
-                onSelectColorMode={setColorMode}
-                neonGlow={neonGlow}
-                onToggleNeonGlow={handleToggleNeonGlow}
-                promptCount={promptCount}
-                onChangePromptCount={setPromptCount}
-                isGreenScreen={isGreenScreen}
-                onToggleGreenScreen={handleToggleGreenScreen}
-                keywordsText={keywordsText}
-                onChangeKeywordsText={setKeywordsText}
-                onGeneratePrompts={handleGeneratePrompts}
-                isGeneratingPrompts={isGeneratingPrompts}
-                generatedPrompts={generatedPrompts}
-                onUpdatePrompt={handleUpdatePrompt}
-                onDeletePrompt={handleDeletePrompt}
-                onGenerateAnimations={handleGenerateAnimations}
-                isGeneratingAnimations={isGeneratingAnimations}
-                onProcessManualPrompts={handleProcessManualPrompts}
-                onProcessNotepadBatches={handleProcessNotepadBatches}
-                onClearPrompts={() => {
-                  setGeneratedPrompts([]);
-                  showToast('Daftar prompt siap render berhasil di-reset.', 'info');
-                }}
-                failedPrompts={failedPrompts}
-                onRetryFailedPrompts={handleRetryFailedPrompts}
-                onRetrySinglePrompt={handleRetrySinglePrompt}
-                showToast={showToast}
-              />
-            ) : (
-              <ImageToPromptSection
-                apiKeys={apiKeys}
-                selectedModel={selectedModel}
-                onSendToPromptToMotion={handleSendPromptsToWorkflow}
-                showToast={showToast}
-                addLog={addLog}
-              />
-            )}
+            <WorkflowSection
+              currentType={currentType}
+              onSelectType={() => {}}
+              subCategory={nicheCategory}
+              onSelectSubCategory={(cat) => setNicheCategory(cat as NicheCategory)}
+              visualStyle={visualStyle}
+              onSelectStyle={setVisualStyle}
+              colorMode={colorMode}
+              onSelectColorMode={setColorMode}
+              neonGlow={neonGlow}
+              onToggleNeonGlow={handleToggleNeonGlow}
+              promptCount={promptCount}
+              onChangePromptCount={setPromptCount}
+              isGreenScreen={isGreenScreen}
+              onToggleGreenScreen={() => {}}
+              onGeneratePrompts={handleGeneratePrompts}
+              isGeneratingPrompts={isGeneratingPrompts}
+              generatedPrompts={generatedPrompts}
+              onUpdatePrompt={handleUpdatePrompt}
+              onDeletePrompt={handleDeletePrompt}
+              onGenerateAnimations={handleGenerateAnimations}
+              isGeneratingAnimations={isGeneratingAnimations}
+              onProcessManualPrompts={handleProcessManualPrompts}
+              onProcessNotepadBatches={handleProcessNotepadBatches}
+              onClearPrompts={() => {
+                setGeneratedPrompts([]);
+                showToast('Daftar prompt siap render berhasil di-reset.', 'info');
+              }}
+              failedPrompts={failedPrompts}
+              onRetryFailedPrompts={handleRetryFailedPrompts}
+              onRetrySinglePrompt={handleRetrySinglePrompt}
+              showToast={showToast}
+            />
           </div>
         ) : (
           <ImageToMotionSection
@@ -2707,7 +2585,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="glass-card border-t border-gray-800/80 px-4 py-3 text-center text-xs text-gray-500">
-        <p>BigMA &copy; 2026. Motion Graphic AI Optimation.</p>
+        <p>BigMA &copy; 2026.</p>
       </footer>
 
       {/* Modals */}
@@ -2799,7 +2677,7 @@ export default function App() {
         onResetAccountProgress={handleResetAccountProgress}
       />
 
-      {/* Image to Prompt / Motion Auto Pilot Modal (Drag & Drop + Import dari Komputer) */}
+      {/* Image to Motion Auto Pilot Modal (Drag & Drop + Import dari Komputer) */}
       <ImageAutoPilotModal
         isOpen={isImageAutoPilotModalOpen}
         onClose={() => setIsImageAutoPilotModalOpen(false)}
@@ -2831,20 +2709,6 @@ export default function App() {
         renderDuration={renderDuration}
       />
 
-      <TutorialModal
-        isOpen={isTutorialModalOpen}
-        onClose={() => setIsTutorialModalOpen(false)}
-        onNavigateToTab={(tab, subTab) => {
-          handleSelectTab(tab);
-          if (subTab) handleSelectPromptSubTab(subTab);
-          setIsTutorialModalOpen(false);
-        }}
-        onOpenApiModal={() => {
-          setIsTutorialModalOpen(false);
-          setIsApiModalOpen(true);
-        }}
-      />
-
       <FailedAnimationsModal
         isOpen={isFailedAnimationsModalOpen}
         onClose={() => setIsFailedAnimationsModalOpen(false)}
@@ -2860,7 +2724,9 @@ export default function App() {
           showToast('Daftar animasi gagal dibersihkan.', 'info');
         }}
         onSendToPromptList={(prompts) => {
-          handleSendPromptsToWorkflow(prompts);
+          setGeneratedPrompts((prev) => Array.from(new Set([...prompts, ...prev])));
+          setActiveTab('prompt');
+          showToast(`${prompts.length} prompt dimuat ke daftar Prompt AI!`, 'success');
         }}
         isProcessing={isGeneratingAnimations || isAutoPilotRunning}
       />
