@@ -1111,7 +1111,8 @@ function extractHTML(text: string, isGreenScreen: boolean = false): string {
 export function verifyCanvasAnimationHtml(
   html: string,
   isGreenScreen: boolean = false,
-  type: AnimationType = 'icon'
+  type: AnimationType = 'icon',
+  promptTopic?: string
 ): { ok: boolean; reason?: string; visiblePixels?: number } {
   if (!html || html.trim().length < 80) {
     return { ok: false, reason: 'HTML animasi kosong/terlalu pendek' };
@@ -1133,6 +1134,22 @@ export function verifyCanvasAnimationHtml(
   }
 
   const combinedScript = scriptBlocks.join('\n;\n');
+
+  // Guard against icon-sticker degeneration or non-isometric flat 2D grids in Background mode
+  if (type === 'bg') {
+    if (/\bG\.(?:crest|gearWheel|shield|percent|cloudShape)\s*\(/.test(combinedScript)) {
+      return {
+        ok: false,
+        reason: 'Background menggunakan emblem ikon (crest/gear/cloudShape), harus pemandangan penuh edge-to-edge',
+      };
+    }
+    if (promptTopic && /\bisometric\b/i.test(promptTopic) && !/\bG\.iso(?:Box|Tile|Floor|Cyl|Path|Car|Tree|Pt)\s*\(/.test(combinedScript)) {
+      return {
+        ok: false,
+        reason: 'Prompt isometric wajib memakai proyeksi 3D G.isoBox/G.isoFloor/G.isoCyl, bukan grid 2D datar',
+      };
+    }
+  }
 
   // Step 1: Compile-time JS syntax verification (works in both browser & SSR)
   try {
@@ -1488,7 +1505,7 @@ export function verifyCanvasAnimationHtml(
         }
       }
       const maxChanged = Math.max(changed13, changed12);
-      const minMotionSamples = type === 'bg' ? 14 : (isGreenScreen ? 18 : 26);
+      const minMotionSamples = type === 'bg' ? 18 : (isGreenScreen ? 18 : 26);
       if (maxChanged < minMotionSamples) {
         return {
           ok: false,
@@ -2158,7 +2175,7 @@ MANDATORY RULES FOR FULL-FRAME MOTION BACKGROUNDS (STRICT ZERO PARTICLES & ZERO 
 ${negativeList}
 
 ${categoryLine}Animation Type: FULL-FRAME BACKGROUND MOTION
-Visual Style: ${style}${colorModeDirective}${glowDirective}
+Visual Style: ${style === '3d_crest' ? 'volumetric_3d_scene' : style}${colorModeDirective}${glowDirective}
 Special Directives: ${typeInstruction}${keywordsDirective}
 
 Output format: Return ONLY the prompt text string, concise, descriptive and studio-grade. No bullet points, no markdown code block, no quotes. Just the clean single prompt text.`
@@ -2321,9 +2338,10 @@ async function generatePromptBatchDirect(
   const glowModeStr = effGs ? 'CHROMA #00FF00 (non-green solid)' : (effGlow ? 'ON' : 'OFF');
   const seed = `${Date.now().toString(36)}-${Math.floor(Math.random() * 99999).toString(36)}`;
 
+  const bgStyleStr = style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const promptContent = type === 'bg'
     ? `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompts in English (Seed: ${seed}).
-RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${style}, Color: ${colorMode}, Glow: ${glowModeStr}. ${kwText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 28 words each).`
+RULES: Edge-to-edge waves/grids/isometric 3D dioramas/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares. ${categoryLine}Style: ${bgStyleStr}, Color: ${colorMode}, Glow: ${glowModeStr}. ${kwText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 28 words each).`
     : `Motion Director. Generate ${batchCount} unique standalone VECTOR ICON motion prompts in English (Seed: ${seed}).
 RULES: Recognizable object built from 4-6 welded proportional parts with bold crisp rim contrast & internal mechanical motion; ZERO background plate/disc, ZERO ground oval shadow, ZERO squash distortion, ZERO diagonal glare bars or loose confetti. ${categoryLine}Style: ${style === 'minimalist' ? '3d_crest' : style}, Color: ${colorMode}, Glow: ${glowModeStr}. ${kwText}${avoidText}Return JSON array of ${batchCount} crisp 1-sentence strings (max 26 words each).`;
 
@@ -2717,8 +2735,9 @@ async function generateAnimationDirect(
     ? `DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect.`
     : `CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.`;
 
+  const effectiveStyleLabel = isBackground && style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const geometryGuide = isBackground
-    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker, NO loose dot confetti). Plan: ${motionPlan.anatomyHint}`
+    ? `FULL-BLEED WIDESCREEN SCENE (18-38 lines crisp JS, -0.08*w..1.08*w): (1) G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(assignedV + picked.compMode) % 4]}'); (2) Multi-depth scenery matching "${promptTopic.slice(0, 75)}". For ISOMETRIC prompts use ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072 with G.isoFloor + back-to-front (u+v) Painter-sorted G.isoBox/G.isoCyl/G.isoTree/G.isoPath/G.isoCar. Plan: ${motionPlan.anatomyHint} FORBIDDEN: flat 2D square checkerboards, giant centered icon emblems/gears, loose dot confetti.`
     : `HERO ICON (14-26 lines crisp JS):
 - Line1 inside drawFrame: // PLAN: base=<shape>; joints=<connect>; move=<motion>
 - ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R]; inner G.part(ax,ay,r2,sx,sy,function(){...}) WITHOUT re-passing R.
@@ -2730,14 +2749,14 @@ async function generateAnimationDirect(
 
   const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC[${seed.tag}]: "${promptTopic}" (${subCategory},${style},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
+SPEC[${seed.tag}]: "${promptTopic}" (${subCategory},${effectiveStyleLabel},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
 ${geometryGuide}
 Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}
 ${colorStyleDirective}${fixNote}`;
 
   const config: any = {
-    temperature: highPrecision ? 0.22 : 0.32,
-    maxOutputTokens: isBackground ? 980 : 780,
+    temperature: highPrecision ? 0.22 : 0.30,
+    maxOutputTokens: isBackground ? 1350 : 780,
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', highPrecision);
   if (smartThinking) {
@@ -2782,7 +2801,7 @@ ${colorStyleDirective}${fixNote}`;
   adjustRecentDispatchActualTokens(cleanKey, targetModel, response?.usageMetadata);
   const rawText = response?.text || '';
   const cleanHTML = extractHTML(rawText, effGs);
-  const check = verifyCanvasAnimationHtml(cleanHTML, effGs, type);
+  const check = verifyCanvasAnimationHtml(cleanHTML, effGs, type, promptTopic);
   if (!check.ok) {
     throw new Error(`Validasi render gagal (${check.reason || 'canvas blank'})`);
   }
@@ -2878,8 +2897,9 @@ async function generateAnimationBatchDirect(
     ? 'DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect.'
     : 'CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.';
 
+  const effectiveStyleLabel = isBackground && style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const geometryGuide = isBackground
-    ? 'FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti.'
+    ? 'FULL-BLEED WIDESCREEN SCENES (18-38 lines each, -0.08*w..1.08*w): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + multi-depth edge-to-edge scenery. For ISOMETRIC scenes use ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072 with G.isoFloor + back-to-front Painter-sorted G.isoBox/G.isoCyl/G.isoTree/G.isoPath/G.isoCar. ZERO flat 2D square checkerboards, ZERO centered icon emblems/gears, ZERO loose dot confetti.'
     : 'MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R] (inner G.part uses function(){} without shadowing R!). Use seam variables so parts weld/overlap >=0.04*R; use G.percent for %, G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for lines, G.trap takes 9 args, ONLY G.bar uses yB; ZERO floating corner dots or ground ovals.';
 
   const slotSeeds = prompts.map((p, idx) => createUniqueVariationSeed(p, idx, variationOffset));
@@ -2899,15 +2919,15 @@ async function generateAnimationBatchDirect(
 ${prompts.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h, cx, cy, S, t) { ... }`).join('\n')}
 ${helpersDoc}
 SPEC: ${geometryGuide}
-Style: ${style} | Palette: ${colorMode} (match prompt colors first!) | ${colorStyleDirective}
+Style: ${effectiveStyleLabel} | Palette: ${colorMode} (match prompt colors first!) | ${colorStyleDirective}
 STRICT ANTI-CLONE RULE: Each ANIM_i MUST depict the exact, literal distinct object/scene of its own prompt with different primary silhouette geometry, proportions & sub-part layout from all other slots! NEVER reuse the same layout/shape between ANIM_0 and ANIM_1!
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;
 
   const config: any = {
-    temperature: 0.35,
-    maxOutputTokens: Math.min(2500, Math.max(1250, prompts.length * (isBackground ? 1250 : 1150))),
+    temperature: 0.32,
+    maxOutputTokens: Math.min(2800, Math.max(1350, prompts.length * (isBackground ? 1400 : 1150))),
   };
   const smartThinking = getCostOptimizedThinkingConfig(targetModel, 'animation', false);
   if (smartThinking) config.thinkingConfig = smartThinking;
@@ -2953,7 +2973,7 @@ ${topicLines}`;
     const rawCode = codeItems[idx] || '';
     if (!rawCode) return null;
     const html = extractHTML(rawCode, effGs);
-    const check = verifyCanvasAnimationHtml(html, effGs, type);
+    const check = verifyCanvasAnimationHtml(html, effGs, type, promptTopic);
     if (!check.ok) {
       console.warn(`[Batch Slot #${idx} Rejected by Offscreen Verifier]:`, check.reason);
       return null;

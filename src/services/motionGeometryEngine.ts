@@ -14,12 +14,12 @@ export const HELPERS_G_BASE_DOC =
 export const HELPERS_G_HERO_DOC = '';
 
 export const HELPERS_G_BG_DOC =
-  `${HELPERS_G_BASE_DOC} | G.bgBackdrop(w,h,c0,c1,c2,dir)`;
+  'G.grad(c1,c2,x0,y0,x1,y1) | G.bgBackdrop(w,h,c0,c1,c2,dir) | G.isoPt(u,v,z,ox,oy,sc) | G.isoTile(u,v,z,du,dv,ox,oy,sc,fill,rim,lw) | G.isoFloor(ox,oy,sc,u0,u1,v0,v1,step,cA,cB,rim) | G.isoBox(u,v,z,du,dv,dz,ox,oy,sc,topC,leftC,rightC,rim,opt) [opt:"win"|"glass"; omit leftC/rightC to auto-shade!] | G.isoCyl(u,v,z,r,h,ox,oy,sc,topC,sideC,rim) | G.isoTree(u,v,z,sz,ox,oy,sc,trunkC,leafC,t,isPalm) | G.isoCar(u,v,z,axis,sz,ox,oy,sc,bodyC,winC,glowC) | G.isoPath(pts3d,ox,oy,sc,th,col,pulseC,t) | G.isoCloud(x,y,sz,col,a) | G.bgWaves(w,h,c1,c2,c3,t,v) | G.bgGrid(w,h,c1,c2,c3,t,v) | G.poly(pts,f,rim,lw,cl) | G.box(x,y,bw,bh,r,f,rim,lw) | G.capsule(x,y,bw,bh,f,rim,lw) | G.disc(x,y,r,f,rim,lw) | G.oval(x,y,rx,ry,rot,f,rim,lw) | G.ring(x,y,r,th,a0,a1,col) | G.pill(x1,y1,x2,y2,th,col) | G.wave(x,y,w,amp,freq,ph,th,col) | G.part(tx,ty,rot,sx,sy,fn)';
 
 export const HELPERS_G_DOC = HELPERS_G_BASE_DOC;
 
 export const HELPERS_G_VISION_DOC =
-  `${HELPERS_G_BASE_DOC} | G.bgBackdrop(w,h,c0,c1,c2,dir)`;
+  `${HELPERS_G_BASE_DOC} | G.bgBackdrop(w,h,c0,c1,c2,dir) | G.isoBox(u,v,z,du,dv,dz,ox,oy,sc,topC,leftC,rightC,rim,opt)`;
 
 export function stripLeadingCodeFenceAndLang(raw: string): string {
   const tick3 = String.fromCharCode(96, 96, 96);
@@ -532,10 +532,78 @@ export function resolvePromptMotionPlan(
   if (type === 'bg') {
     const bgDirection = ['v', 'd', 'r', 'h'][(v + cm) % 4];
     const motionDrift = [
-      'smooth diagonal phase drift + depth parallax waves',
-      'continuous horizontal perspective scroll + atmospheric gleam',
-      'breathing concentric horizon waves + synchronized kinetic ribbons',
+      'smooth diagonal phase drift + depth parallax',
+      'continuous seamless loop scroll + atmospheric light',
+      'rhythmic wave oscillation + synchronized kinetic flow',
     ][cm];
+
+    const isIso = /\b(isometric|3d\s*city|miniature|diorama|voxel|city\s*block|blocks|platforms)\b/.test(topic) || _style === 'isometric';
+
+    if (isIso) {
+      const isoBaseSetup = 'Setup ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072; PAINTER ORDER: draw floor/terrain first, then iterate s=u+v from back(-5) to front(+5) so closer 3D objects cleanly overlap back ones! ZERO flat 2D squares/wallpaper tiles, ZERO centered icon emblems!';
+      if (/\b(data\s*center|server|circuit|blockchain|network\s*city|cyber|maze|coding|developer|workspace|tech|holo|laboratory|studio)\b/.test(topic)) {
+        return {
+          label: 'isometric tech architecture',
+          helperName: 'iso_tech',
+          anatomyHint: `${isoBaseSetup} (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}') + G.isoFloor(ox,oy,sc,-6,6,-6,6,1.2,c0,c1,c2); (2) Glowing circuit traces G.isoPath([...],ox,oy,sc,sc*0.14,c1,c2,t); (3) Painter-sorted 3D server racks / lab units / workstations via G.isoBox(...,c1,null,null,c2,'win') + cylindrical holo-nodes G.isoCyl + hovering levitating 3D panels/cubes (z+0.25*Math.sin(t*2+u)).`,
+          codeHint: `animated energy pulse along G.isoPath + blinking server/holo lights & levitating 3D modules (${motionDrift})`,
+        };
+      }
+      if (/\b(financial|chart\s*bars|market|stock|trading)\b/.test(topic)) {
+        return {
+          label: 'isometric financial chart cityscape',
+          helperName: 'iso_finance',
+          anatomyHint: `${isoBaseSetup} (1) G.bgBackdrop + G.isoFloor(ox,oy,sc,-6,6,-6,6,1.2,c0,c1,c2); (2) Painter-sorted 3D city towers G.isoBox(...,'win') framing central rising/falling 3D bar columns G.isoBox(u,v,0,0.75,0.75,1.2+1.4*(0.5+0.5*Math.sin(t*2+u*0.8+v*0.6)),ox,oy,sc,c2,null,null,c3); (3) Glowing upward G.isoPath market trend ribbon.`,
+          codeHint: `smooth rising & falling 3D chart columns + flowing upward G.isoPath market indicator (${motionDrift})`,
+        };
+      }
+      if (/\b(ocean|island|waterfall|coral|underwater|resort|tropical|pool|pond|lake|river|beach)\b/.test(topic)) {
+        return {
+          label: 'isometric island & water diorama',
+          helperName: 'iso_water',
+          anatomyHint: `${isoBaseSetup} (1) Full-bleed ocean/water G.bgBackdrop(w,h,c0,c1,c2,'v') + animated G.bgWaves(w,h,c1,c2,c3,t,0) or isometric water tiles; (2) Multi-tiered stepped 3D island/coral/resort decks via G.isoBox + floating cliff blocks; (3) Cascading waterfall G.capsule/G.pill ribbons, swaying G.isoTree(...,true) palms or coral G.isoCyl + drifting G.isoCloud / rising bubbles.`,
+          codeHint: `rippling water waves + swaying palms/foliage + cascading waterfall/drifting clouds (${motionDrift})`,
+        };
+      }
+      if (/\b(factory|warehouse|robotic|construction|crane|airport|airplane|metro|train|railway|highway|intersection|bridge|harbor|port|cargo|delivery|logistics)\b/.test(topic)) {
+        return {
+          label: 'isometric logistics & transit scene',
+          helperName: 'iso_transit',
+          anatomyHint: `${isoBaseSetup} (1) G.bgBackdrop + G.isoFloor(ox,oy,sc,-6,6,-6,6,1.2,c0,c1,c2); (2) Road/conveyor/runway tracks G.isoPath([...],ox,oy,sc,sc*0.36,c0,c2,t); (3) Painter-sorted 3D halls/towers/cranes via G.isoBox(...,'win') + G.isoCyl; (4) Smoothly moving G.isoCar / cargo crates / trains looping along tracks ((pos+t*speed)%10 - 5).`,
+          codeHint: `continuous seamless traffic/conveyor/train loop along isometric U/V tracks + rotating machinery (${motionDrift})`,
+        };
+      }
+      if (/\b(space|orbital|satellite|planet|rocket|arcade|gaming|stage|music|equalizer|gallery)\b/.test(topic)) {
+        return {
+          label: 'isometric cosmic / dynamic stage',
+          helperName: 'iso_space',
+          anatomyHint: `${isoBaseSetup} (1) Deep atmospheric G.bgBackdrop(w,h,c0,c1,c2,'r'); (2) Floating modular 3D station / stage G.isoBox & G.isoCyl clusters at elevated z=1.0+0.25*Math.sin(t*1.8+u); (3) Tilted G.oval orbital paths / equalizer bars + orbiting G.isoBox satellites or pulsing light beams.`,
+          codeHint: `smooth orbital satellite rotation + floating 3D module bobbing (${motionDrift})`,
+        };
+      }
+      if (/\b(farm|greenhouse|desert|dune|mountain|snow|winter|autumn|park|forest|solar|wind\s*turbine|renewable)\b/.test(topic)) {
+        return {
+          label: 'isometric nature & energy landscape',
+          helperName: 'iso_nature',
+          anatomyHint: `${isoBaseSetup} (1) G.bgBackdrop + stepped terrain G.isoTile / G.isoFloor plots; (2) Painter-sorted 3D cottages/barns/turbines/solar arrays via G.isoBox & G.isoCyl + spinning wind-turbine blades (3 radial G.pill rotating via Math.cos/sin(t*2.4)); (3) Swaying G.isoTree + drifting G.isoCloud & flowing irrigation/fog G.wave.`,
+          codeHint: `spinning turbines / swaying trees & crops + drifting clouds or mountain fog (${motionDrift})`,
+        };
+      }
+      if (/\b(cube|cubes|platform|platforms|stairs|stair|pastel\s*geometric|abstract\s*landscape|shapes)\b/.test(topic)) {
+        return {
+          label: 'isometric floating 3D cubes & platforms',
+          helperName: 'iso_cubes',
+          anatomyHint: `${isoBaseSetup} (1) Soft wide G.bgBackdrop(w,h,c0,c1,c2,'d') + subtle ground shadow G.isoTile grid; (2) 5x5 Painter-sorted (u=-2..2, v=-2..2) stepped 3D cubes/platforms/stairs G.isoBox(u*1.35,v*1.35,zBob,1.0,1.0,hBox,ox,oy,sc,col,null,null,c3,'glass') where zBob=0.6+0.45*Math.sin(t*1.8+u*0.7+v*0.9); (3) Smooth floating G.disc spheres/ribbons gliding across levels.`,
+          codeHint: `harmonic staggered Z-elevation wave across 3D isometric cubes & floating spheres (${motionDrift})`,
+        };
+      }
+      return {
+        label: 'isometric miniature city & architecture',
+        helperName: 'iso_city',
+        anatomyHint: `${isoBaseSetup} (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}') + full G.isoFloor(ox,oy,sc,-6,6,-6,6,1.2,c0,c1,c2); (2) Crisp orthogonal road avenues via G.isoPath([[-6,0,0.02],[6,0,0.02]],ox,oy,sc,sc*0.42,'#334155',c3,t) and [[0,-6,0.02],[0,6,0.02]]; (3) Painter-sorted varied-height 3D buildings/skyscrapers/houses G.isoBox(...,c1,null,null,c3,'win') + park G.isoTree; (4) Moving miniature G.isoCar vehicles gliding smoothly along u/v roads + drifting G.isoCloud.`,
+        codeHint: `seamless miniature cars gliding along isometric avenues + swaying trees, blinking windows & drifting clouds (${motionDrift})`,
+      };
+    }
 
     if (/\b(retro|synthwave|vaporwave|80s|sunset|horizon|neon\s*grid)\b/.test(topic) || sub.includes('retro')) {
       return {
@@ -549,7 +617,7 @@ export function resolvePromptMotionPlan(
       return {
         label: 'cyber telemetry architecture',
         helperName: 'custom_bg',
-        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Edge-to-edge architectural G.grid/circuit trace G.pill lines spanning -0.05*w..1.05*w; (3) Off-center sweeping radar G.ring arcs + sliding G.capsule telemetry beams.`,
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Edge-to-edge architectural G.bgGrid + circuit trace G.pill lines spanning -0.05*w..1.05*w; (3) Sweeping radar G.ring arcs + sliding G.capsule telemetry beams.`,
         codeHint: `continuous circuit/lattice travel + smooth ring arc precession (${motionDrift})`,
       };
     }
@@ -557,15 +625,15 @@ export function resolvePromptMotionPlan(
       return {
         label: 'botanical layered canopy',
         helperName: 'custom_bg',
-        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'d'); (2) Oversized layered G.leaf silhouettes anchored from bottom/side frame edges (-0.05*w..1.05*w, -0.05*h..1.05*h) swaying softly; (3) Flowing G.wave breeze currents across whole viewport.`,
-        codeHint: `gentle wind-sway rotation on perimeter G.leaf stems + smooth breeze wave (${motionDrift})`,
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'d'); (2) Multi-plane organic hills/foliage G.poly + swaying G.isoTree silhouettes anchored from perimeter edges; (3) Flowing G.wave breeze currents across whole viewport.`,
+        codeHint: `gentle wind-sway rotation + smooth breeze wave (${motionDrift})`,
       };
     }
     if (/\b(gold|silk|luxury|champagne|satin|ribbon|marble|royal|premium)\b/.test(topic) || sub.includes('luxury')) {
       return {
         label: 'luxury flowing silk ribbons',
         helperName: 'custom_bg',
-        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) 5-7 full-width overlapping multi-amplitude G.wave satin caustics sweeping corner-to-corner (-0.08*w..1.08*w); (3) Slow diagonal metallic gleam bands.`,
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Full-width overlapping multi-amplitude G.bgWaves satin caustics sweeping corner-to-corner (-0.08*w..1.08*w); (3) Slow diagonal metallic gleam bands.`,
         codeHint: `velvety low-frequency sine drape phase + subtle diagonal luster sweep (${motionDrift})`,
       };
     }
@@ -573,22 +641,22 @@ export function resolvePromptMotionPlan(
       return {
         label: 'dynamic kinetic energy streaks',
         helperName: 'custom_bg',
-        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'r'); (2) Full-frame diagonal or radial velocity G.capsule streaks wrapping smoothly from edge to edge (-0.1*w..1.1*w); (3) Expanding concentric pulse G.ring + G.rays sweeps.`,
-        codeHint: `continuous velocity warp wrap + pulsing kinetic rays (${motionDrift})`,
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'r'); (2) Full-frame diagonal or radial velocity G.capsule streaks wrapping smoothly from edge to edge (-0.1*w..1.1*w); (3) Expanding concentric pulse G.ring sweeps.`,
+        codeHint: `continuous velocity warp wrap + pulsing kinetic rings (${motionDrift})`,
       };
     }
-    if (/\b(geo|geometric|isometric|prism|mosaic|triangle|hexagon|polygon|bauhaus|abstract)\b/.test(topic) || sub.includes('abstract')) {
+    if (/\b(geo|geometric|prism|mosaic|triangle|hexagon|polygon|bauhaus|abstract)\b/.test(topic) || sub.includes('abstract')) {
       return {
         label: 'full-frame architectural geometric field',
         helperName: 'custom_bg',
-        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Repeating tessellated G.ngon / G.poly / G.capsule architectural ribbons filling -0.06*w..1.06*w & -0.06*h..1.06*h; (3) Coordinated depth-shifted foreground geometric sweeps.`,
-        codeHint: `synchronized geometric glide + scale/phase wave across full canvas (${motionDrift})`,
+        anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Depth-layered 3D architectural G.isoBox / G.poly prism ribbons spanning -0.06*w..1.06*w & -0.06*h..1.06*h (NEVER flat checkerboard tiles!); (3) Coordinated foreground geometric sweeps.`,
+        codeHint: `synchronized 3D geometric glide + elevation/phase wave across full canvas (${motionDrift})`,
       };
     }
     return {
       label: 'atmospheric multi-layer motion',
       helperName: 'custom_bg',
-      anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Custom edge-to-edge thematic geometry matching "${promptTopic.slice(0, 60)}" spanning -0.08*w..1.08*w & -0.08*h..1.08*h with smooth overlapping G.wave/G.poly/G.oval/G.grid depth planes; (3) Continuous corner-to-corner foreground light flow.`,
+      anatomyHint: `3 FULL-BLEED LAYERS (0..w,0..h): (1) G.bgBackdrop(w,h,c0,c1,c2,'${bgDirection}'); (2) Custom edge-to-edge thematic scenery matching "${promptTopic.slice(0, 60)}" spanning -0.08*w..1.08*w & -0.08*h..1.08*h with smooth overlapping G.bgWaves/G.poly/G.isoBox depth planes (ZERO flat checkerboard icon stamps, ZERO centered crest); (3) Continuous corner-to-corner foreground light flow.`,
       codeHint: `bespoke theme-matched seamless 60 FPS motion (${motionDrift})`,
     };
   }

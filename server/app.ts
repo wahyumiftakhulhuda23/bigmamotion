@@ -954,9 +954,10 @@ export async function handleGeneratePromptsLogic(body: any) {
     const isSingle = batchCount === 1;
     let promptContent = '';
     if (type === 'bg') {
+      const bgStyleStr = style === '3d_crest' ? 'volumetric_3d_scene' : style;
       promptContent = `Motion Director. Generate ${batchCount} unique FULL-FRAME 60 FPS looping MOTION BACKGROUND prompt(s) in English (Seed: ${dynamicSessionSeed}).
-RULES: Edge-to-edge waves/grids/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares.${negativeList}
-${categoryLine}Style: ${style}${colorModeDirective}${glowDirective}
+RULES: Edge-to-edge waves/grids/isometric 3D dioramas/silk caustics; match motion organically to each scene; NO centered icons, NO particles, NO white flares.${negativeList}
+${categoryLine}Style: ${bgStyleStr}${colorModeDirective}${glowDirective}
 ${typeInstruction}${keywordsDirective}
 Return JSON array of ${batchCount} crisp 1-sentence string(s).`;
     } else {
@@ -1114,8 +1115,9 @@ export async function handleGenerateAnimationLogic(body: any) {
     ? `DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect.`
     : `CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.`;
 
+  const effectiveStyleLabel = isBackground && style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const geometryGuide = isBackground
-    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker, NO loose dot confetti). Plan: ${motionPlan.anatomyHint}`
+    ? `FULL-BLEED WIDESCREEN SCENE (18-38 lines crisp JS, -0.08*w..1.08*w): (1) G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'); (2) Multi-depth scenery matching "${promptTopic.slice(0, 75)}". For ISOMETRIC prompts use ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072 with G.isoFloor + back-to-front (u+v) Painter-sorted G.isoBox/G.isoCyl/G.isoTree/G.isoPath/G.isoCar. Plan: ${motionPlan.anatomyHint} FORBIDDEN: flat 2D square checkerboards, giant centered icon emblems/gears, loose dot confetti.`
     : `HERO ICON (14-26 lines crisp JS):
 - Line1 inside drawFrame: // PLAN: base=<shape>; joints=<connect>; move=<motion>
 - ONE root G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R]; inner G.part(ax,ay,r2,sx,sy,function(){...}) WITHOUT re-passing R.
@@ -1126,7 +1128,7 @@ export async function handleGenerateAnimationLogic(body: any) {
 
   const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC[${seed.tag}]: "${promptTopic}" (${catInfo},${style},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
+SPEC[${seed.tag}]: "${promptTopic}" (${catInfo},${effectiveStyleLabel},${colorMode}) Palette[c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}](match prompt colors!)
 ${geometryGuide}
 Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}
 ${colorStyleDirective}`;
@@ -1136,8 +1138,8 @@ ${colorStyleDirective}`;
     targetModel,
     (currentModel) => {
       const animConfig: any = {
-        temperature: 0.32,
-        maxOutputTokens: isBackground ? 980 : 780,
+        temperature: 0.30,
+        maxOutputTokens: isBackground ? 1350 : 780,
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) {
@@ -1245,8 +1247,9 @@ export async function handleGenerateAnimationBatchLogic(body: any) {
     ? "DARK BG (#080c14): shadowBlur=8 on bright accents (reset 0), rim lw=Math.max(2.2,0.034*R), NO bg fillRect."
     : "CRISP VECTOR (#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), NO bg fillRect.";
 
+  const effectiveStyleLabel = isBackground && style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const geometryGuide = isBackground
-    ? "FULL-BLEED MICROSTOCK BACKGROUNDS (-0.08*w..1.08*w & -0.08*h..1.08*h): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + 2 distinct edge-to-edge custom thematic motion layers. ZERO centered icon stickers, ZERO loose noisy confetti."
+    ? "FULL-BLEED WIDESCREEN SCENES (18-38 lines each, -0.08*w..1.08*w): Each ANIM_i MUST start with G.bgBackdrop(w,h,c0,c1,c2,dir) + multi-depth edge-to-edge scenery. For ISOMETRIC scenes use ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072 with G.isoFloor + back-to-front Painter-sorted G.isoBox/G.isoCyl/G.isoTree/G.isoPath/G.isoCar. ZERO flat 2D square checkerboards, ZERO centered icon emblems/gears, ZERO loose dot confetti."
     : "MICROSTOCK HERO ICONS (14-28 lines each): Start drawFrame with // PLAN: base=...; joints=...; move=... Draw inside ONE G.part(cx,cy+hoverY,rot,1,1,function(R){ ... }) spanning [-0.58*R,+0.58*R] (inner G.part uses function(){} without shadowing R!). Use seam variables so parts weld/overlap >=0.04*R; use G.percent for %, G.capsule for pil-boxes vs G.pill(x1,y1,x2,y2,th,col) for lines, G.trap takes 9 args, ONLY G.bar uses yB; ZERO floating corner dots or ground ovals.";
 
   const seeds = promptList.map((p, idx) => createUniqueVariationSeed(p, idx, Number(variationOffset) || 0));
@@ -1273,7 +1276,7 @@ ${promptList.map((_, idx) => `// ===ANIM_${idx}===\nfunction drawFrame(ctx, w, h
 STRICT ANTI-CLONE RULE: Each ANIM_i MUST depict the exact, literal distinct object/scene of its own prompt with different primary silhouette geometry, proportions & sub-part layout from all other slots! NEVER reuse the same layout/shape between ANIM_0 and ANIM_1!
 ${helpersDoc}
 SPEC: ${geometryGuide}
-Style: ${style} | Palette: ${colorMode} (match prompt colors first!) | ${colorStyleDirective}
+Style: ${effectiveStyleLabel} | Palette: ${colorMode} (match prompt colors first!) | ${colorStyleDirective}
 NO markdown/HTML/canvas/resize/rAF or redeclaring canvas/ctx/w/h/cx/cy/S/G.
 TOPICS:
 ${topicLines}`;
@@ -1283,8 +1286,8 @@ ${topicLines}`;
     targetModel,
     (currentModel) => {
       const cfg: any = {
-        temperature: 0.35,
-        maxOutputTokens: Math.min(2500, Math.max(1250, promptList.length * (isBackground ? 1250 : 1150))),
+        temperature: 0.32,
+        maxOutputTokens: Math.min(2800, Math.max(1350, promptList.length * (isBackground ? 1400 : 1150))),
       };
       const smartThinking = getSmartThinkingConfig(currentModel, 'animation');
       if (smartThinking) cfg.thinkingConfig = smartThinking;
@@ -1361,15 +1364,16 @@ export async function handleStreamAnimationLogic(body: any, res: Response) {
     ? "- DARK(#080c14): shadowBlur=8 on bright accents(reset 0), rim lw=Math.max(2.2,0.034*R), no bg fillRect."
     : "- CRISP(#080c14): shadowBlur=0, rim lw=Math.max(2.2,0.034*R), no bg fillRect.";
 
+  const effectiveStyleLabel = isBackground && style === '3d_crest' ? 'volumetric_3d_scene' : style;
   const geometryGuide = isBackground
-    ? `FULL-BLEED BG (-0.08*w..1.08*w,-0.08*h..1.08*h): G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}') + 2 cohesive edge-to-edge layers matching "${promptTopic.slice(0, 75)}" (NO center sticker). ${motionPlan.anatomyHint}`
+    ? `FULL-BLEED WIDESCREEN SCENE (18-38 lines crisp JS, -0.08*w..1.08*w): (1) G.bgBackdrop(w,h,c0,c1,c2,'${['v', 'd', 'r', 'h'][(seed.variantIdx + seed.compMode) % 4]}'); (2) Multi-depth scenery matching "${promptTopic.slice(0, 75)}". For ISOMETRIC prompts use ox=cx, oy=cy*0.36, sc=Math.min(w,h)*0.072 with G.isoFloor + back-to-front (u+v) Painter-sorted G.isoBox/G.isoCyl/G.isoTree/G.isoPath/G.isoCar. ${motionPlan.anatomyHint} FORBIDDEN: flat 2D square checkerboards, giant centered icon emblems/gears, loose dot confetti.`
     : `HERO ICON (14-26 lines crisp JS): Line1: // PLAN: base=...; joints=...; move=... ONE G.part(cx,cy+hoverY,rot,1,1,function(R){...}) inside [-0.58*R,+0.58*R] (inner G.part uses function(){} without R). Welded seam vars overlap>=0.04*R; G.percent for %; G.capsule vs G.pill; G.trap 9 args; ONLY G.bar takes yB; ZERO corner dots/ground ovals. ANATOMY: ${motionPlan.anatomyHint}`;
 
   const helpersDoc = isBackground ? HELPERS_G_BG_DOC : HELPERS_G_DOC;
 
   const systemPrompt = `60FPS Canvas2D Motion Designer. Output ONLY RAW JS: function drawFrame(ctx, w, h, cx, cy, S, t) { ... } (no md/HTML/canvas/resize/rAF; never redeclare canvas/ctx/w/h/cx/cy/S/G).
 ${helpersDoc}
-SPEC[${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style:${style} | Palette:${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] | Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
+SPEC[${seed.tag}]: "${promptTopic}" | ${geometryGuide} | Style:${effectiveStyleLabel} | Palette:${colorMode} [c0=${seed.palette[0]},c1=${seed.palette[1]},c2=${seed.palette[2]},c3=${seed.palette[3]}] | Motion(${motionPlan.label}): ${motionPlan.codeHint} | Rhythm: ${seed.motionExpr}.
 ${colorStyleDirective}`;
 
   res.setHeader("Content-Type", "text/event-stream");
@@ -1378,8 +1382,8 @@ ${colorStyleDirective}`;
 
   try {
     const animConfig: any = {
-      temperature: 0.32,
-      maxOutputTokens: isBackground ? 980 : 780,
+      temperature: 0.30,
+      maxOutputTokens: isBackground ? 1350 : 780,
     };
     const smartThinking = getSmartThinkingConfig(targetModel, 'animation');
     if (smartThinking) {
